@@ -1,2 +1,2 @@
 # HeishaMonKaskade
- Variante von HeishaMon optimiert für Kaskade
+ Variante von HeishaMon optimiert für Kaskadenbetrieb
