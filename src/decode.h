@@ -30,99 +30,99 @@ String getDHWHeaterHour(char *data);
 String getErrorInfo(char *data);
 
 static const char *topics[] = {
-    States::TOP0,  //TOP0
-    States::TOP1,  //TOP1
-    States::TOP2,  //TOP2
-    States::TOP3,  //TOP3
-    States::TOP4,  //TOP4
-    States::TOP5,  //TOP5
-    States::TOP6,  //TOP6
-    States::TOP7,  //TOP7
-    States::TOP8,  //TOP8
-    States::TOP9,  //TOP9
-    States::TOP10, //TOP10
-    States::TOP11, //TOP11
-    States::TOP12, //TOP12
-    States::TOP13, //TOP13
-    States::TOP14, //TOP14
-    States::TOP15, //TOP15
-    States::TOP16, //TOP16
-    States::TOP17, //TOP17
-    States::TOP18, //TOP18
-    States::TOP19, //TOP19
-    States::TOP20, //TOP20
-    States::TOP21, //TOP21
-    States::TOP22, //TOP22
-    States::TOP23, //TOP23
-    States::TOP24, //TOP24
-    States::TOP25, //TOP25
-    States::TOP26, //TOP26
-    States::TOP27, //TOP27
-    States::TOP28, //TOP28
-    States::TOP29, //TOP29
-    States::TOP30, //TOP30
-    States::TOP31, //TOP31
-    States::TOP32, //TOP32
-    States::TOP33, //TOP33
-    States::TOP34, //TOP34
-    States::TOP35, //TOP35
-    States::TOP36, //TOP36
-    States::TOP37, //TOP37
-    States::TOP38, //TOP38
-    States::TOP39, //TOP39
-    States::TOP40, //TOP40
-    States::TOP41, //TOP41
-    States::TOP42, //TOP42
-    States::TOP43, //TOP43
-    States::TOP44, //TOP44
-    States::TOP45, //TOP45
-    States::TOP46, //TOP46
-    States::TOP47, //TOP47
-    States::TOP48, //TOP48
-    States::TOP49, //TOP49
-    States::TOP50, //TOP50
-    States::TOP51, //TOP51
-    States::TOP52, //TOP52
-    States::TOP53, //TOP53
-    States::TOP54, //TOP54
-    States::TOP55, //TOP55
-    States::TOP56, //TOP56
-    States::TOP57, //TOP57
-    States::TOP58, //TOP58
-    States::TOP59, //TOP59
-    States::TOP60, //TOP60
-    States::TOP61, //TOP61
-    States::TOP62, //TOP62
-    States::TOP63, //TOP63
-    States::TOP64, //TOP64
-    States::TOP65, //TOP65
-    States::TOP66, //TOP66
-    States::TOP67, //TOP67
-    States::TOP68, //TOP68
-    States::TOP69, //TOP69
-    States::TOP70, //TOP70
-    States::TOP71, //TOP71
-    States::TOP72, //TOP72
-    States::TOP73, //TOP73
-    States::TOP74, //TOP74
-    States::TOP75, //TOP75
-    States::TOP76, //TOP76
-    States::TOP77, //TOP77
-    States::TOP78, //TOP78
-    States::TOP79, //TOP79
-    States::TOP80, //TOP80
-    States::TOP81, //TOP81
-    States::TOP82, //TOP82
-    States::TOP83, //TOP83
-    States::TOP84, //TOP84
-    States::TOP85, //TOP85
-    States::TOP86, //TOP86
-    States::TOP87, //TOP87
-    States::TOP88, //TOP88
-    States::TOP89, //TOP89
-    States::TOP90, //TOP90
-    States::TOP91, //TOP91
-    States::TOP92, //TOP92
+    States::TOP0,
+    States::TOP1,
+    States::TOP2,
+    States::TOP3,
+    States::TOP4,
+    States::TOP5,
+    States::TOP6,
+    States::TOP7,
+    States::TOP8,
+    States::TOP9,
+    States::TOP10,
+    States::TOP11,
+    States::TOP12,
+    States::TOP13,
+    States::TOP14,
+    States::TOP15,
+    States::TOP16,
+    States::TOP17,
+    States::TOP18,
+    States::TOP19,
+    States::TOP20,
+    States::TOP21,
+    States::TOP22,
+    States::TOP23,
+    States::TOP24,
+    States::TOP25,
+    States::TOP26,
+    States::TOP27,
+    States::TOP28,
+    States::TOP29,
+    States::TOP30,
+    States::TOP31,
+    States::TOP32,
+    States::TOP33,
+    States::TOP34,
+    States::TOP35,
+    States::TOP36,
+    States::TOP37,
+    States::TOP38,
+    States::TOP39,
+    States::TOP40,
+    States::TOP41,
+    States::TOP42,
+    States::TOP43,
+    States::TOP44,
+    States::TOP45,
+    States::TOP46,
+    States::TOP47,
+    States::TOP48,
+    States::TOP49,
+    States::TOP50,
+    States::TOP51,
+    States::TOP52,
+    States::TOP53,
+    States::TOP54,
+    States::TOP55,
+    States::TOP56,
+    States::TOP57,
+    States::TOP58,
+    States::TOP59,
+    States::TOP60,
+    States::TOP61,
+    States::TOP62,
+    States::TOP63,
+    States::TOP64,
+    States::TOP65,
+    States::TOP66,
+    States::TOP67,
+    States::TOP68,
+    States::TOP69,
+    States::TOP70,
+    States::TOP71,
+    States::TOP72,
+    States::TOP73,
+    States::TOP74,
+    States::TOP75,
+    States::TOP76,
+    States::TOP77,
+    States::TOP78,
+    States::TOP79,
+    States::TOP80,
+    States::TOP81,
+    States::TOP82,
+    States::TOP83,
+    States::TOP84,
+    States::TOP85,
+    States::TOP86,
+    States::TOP87,
+    States::TOP88,
+    States::TOP89,
+    States::TOP90,
+    States::TOP91,
+    States::TOP92,
 };
 
 static const byte topicBytes[] = {
