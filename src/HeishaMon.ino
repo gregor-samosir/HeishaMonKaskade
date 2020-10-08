@@ -1,14 +1,12 @@
 #include <LittleFS.h>
-//#include <Arduino.h>
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
-#include <ArduinoJson.h>
 
 #include "webfunctions.h"
 #include "decode.h"
@@ -127,12 +125,6 @@ void setupHttp()
       });
   httpServer.on("/tablerefresh", []() {
     handleTableRefresh(&httpServer, actData);
-  });
-  httpServer.on("/json", []() {
-    handleJsonOutput(&httpServer, actData);
-  });
-  httpServer.on("/factoryreset", []() {
-    handleFactoryReset(&httpServer);
   });
   httpServer.on("/reboot", []() {
     handleReboot(&httpServer);
