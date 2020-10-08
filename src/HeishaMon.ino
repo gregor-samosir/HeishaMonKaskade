@@ -199,10 +199,11 @@ boolean mqtt_reconnect()
 /*****************************************************************************/
 /* Write data to buffer                                                      */
 /*****************************************************************************/
-void push_command_buffer(byte *command)
+void push_command_buffer(byte *command, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
+    write_mqtt_log(log_msg);
     command_struct *newCommand = new command_struct;
     for (int i = 0; i < PANASONICQUERYSIZE; i++)
     {
@@ -216,6 +217,7 @@ void push_command_buffer(byte *command)
   }
   else
   {
+    write_mqtt_log(log_msg);
     write_mqtt_log((char *)"Buffer full. Ignoring this command");
   }
 }
@@ -228,7 +230,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     char *msg = (char *)malloc(sizeof(char) * length + 1);
     strncpy(msg, (char *)payload, length);
     msg[length] = '\0';
-    send_heatpump_command(topic, msg, write_mqtt_log, push_command_buffer);
+    send_heatpump_command(topic, msg, push_command_buffer);
 }
 
 /*****************************************************************************/
@@ -408,9 +410,7 @@ void read_panasonic_data()
       if (datagramchanges > 0)
       {
         //write_mqtt_log((char *)"Decode  Start");
-        topicchanges = decode_heatpump_data(data, actData, mqtt_client, write_mqtt_log);
-        //sprintf(log_msg, "Bytes  changed: %d", datagramchanges); write_mqtt_log(log_msg);
-        //sprintf(log_msg, "Topics changed: %d", topicchanges); write_mqtt_log(log_msg);
+        decode_heatpump_data(data, actData, mqtt_client, write_mqtt_log);
         //write_mqtt_log((char *)"Decode  End");
       }
       else
