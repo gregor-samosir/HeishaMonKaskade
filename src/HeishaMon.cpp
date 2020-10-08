@@ -1,5 +1,5 @@
 #include <LittleFS.h>
-#include <Arduino.h>
+//#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
@@ -99,6 +99,24 @@ void setupOTA()
 }
 
 /*****************************************************************************/
+/* MQTT Client                                                               */
+/*****************************************************************************/
+WiFiClient mqtt_wifi_client;
+PubSubClient mqtt_client(mqtt_wifi_client);
+unsigned long lastReconnectAttempt = 0;
+
+/*****************************************************************************/
+/* Write to mqtt log                                                         */
+/*****************************************************************************/
+void write_mqtt_log(char *string)
+{
+  if (outputMqttLog)
+  {
+    mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -157,12 +175,6 @@ void switchSerial()
   digitalWrite(5, HIGH);
 }
 
-/*****************************************************************************/
-/* MQTT Client                                                               */
-/*****************************************************************************/
-WiFiClient mqtt_wifi_client;
-PubSubClient mqtt_client(mqtt_wifi_client);
-unsigned long lastReconnectAttempt = 0;
 
 /*****************************************************************************/
 /* MQTT Client reconnect                                                     */
@@ -193,6 +205,30 @@ boolean mqtt_reconnect()
 }
 
 /*****************************************************************************/
+/* Write data to buffer                                                      */
+/*****************************************************************************/
+void push_command_buffer(byte *command)
+{
+  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
+  {
+    command_struct *newCommand = new command_struct;
+    for (int i = 0; i < PANASONICQUERYSIZE; i++)
+    {
+      newCommand->value[i] = command[i];
+    }
+    newCommand->next = commandBuffer;
+    commandBuffer = newCommand;
+    commandsInBuffer++;
+    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
+    nextquerytime = millis() + SERIALTIMEOUT / 2;
+  }
+  else
+  {
+    write_mqtt_log((char *)"Buffer full. Ignoring this command");
+  }
+}
+
+/*****************************************************************************/
 /* MQTT Callback                                                             */
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
@@ -212,17 +248,6 @@ void setupMqtt()
   mqtt_client.setCallback(mqtt_callback);
   mqtt_reconnect();
   lastReconnectAttempt = 0;
-}
-
-/*****************************************************************************/
-/* Write to mqtt log                                                         */
-/*****************************************************************************/
-void write_mqtt_log(char *string)
-{
-  if (outputMqttLog)
-  {
-    mqtt_client.publish(Topics::LOG.c_str(), string);
-  }
 }
 
 /*****************************************************************************/
@@ -405,29 +430,7 @@ void read_panasonic_data()
   }
 }
 
-/*****************************************************************************/
-/* Write data to buffer                                                      */
-/*****************************************************************************/
-void push_command_buffer(byte *command)
-{
-  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
-  {
-    command_struct *newCommand = new command_struct;
-    for (int i = 0; i < PANASONICQUERYSIZE; i++)
-    {
-      newCommand->value[i] = command[i];
-    }
-    newCommand->next = commandBuffer;
-    commandBuffer = newCommand;
-    commandsInBuffer++;
-    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
-    nextquerytime = millis() + SERIALTIMEOUT / 2;
-  }
-  else
-  {
-    write_mqtt_log((char *)"Buffer full. Ignoring this command");
-  }
-}
+
 
 /*****************************************************************************/
 /* handle mqtt connection                                                    */
