@@ -9,7 +9,6 @@
 #include "decode.h"
 #include "version.h"
 
-#define UPTIME_OVERFLOW 4294967295 // Uptime overflow value
 
 //flag for saving data
 bool shouldSaveConfig = false;

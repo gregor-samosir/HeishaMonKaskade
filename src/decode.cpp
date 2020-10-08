@@ -3,12 +3,12 @@
 
 unsigned long nextalldatatime = 0;
 
-int decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *))
+byte decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *))
 {
   char log_msg[256];
   std::string mqtt_topic;
   bool updatealltopics = false;
-  int topicchanges = 0;
+  byte topicchanges = 0;
   byte Input_Byte;
   String Topic_Value;
 

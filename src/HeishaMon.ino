@@ -51,9 +51,9 @@ bool outputHexDump = false; // toggle to dump raw hex data to mqtt log
 
 // instead of passing array pointers between functions we just define this in the global scope
 char data[MAXDATASIZE];
-int data_length = 0;
-int datagramchanges = 0;
-int topicchanges = 0;
+byte data_length = 0;
+byte datagramchanges = 0;
+byte topicchanges = 0;
 
 // store actual data in an String array
 String actData[NUMBER_OF_TOPICS];
@@ -228,7 +228,7 @@ void write_mqtt_log(char *string)
 /*****************************************************************************/
 /* Write raw hex data to mqtt log                                            */
 /*****************************************************************************/
-void write_mqtt_hex(char *hex, int hex_len) // New version from HeishaMon
+void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
 {
 
   for (int i = 0; i < hex_len; i += LOGHEXBYTESPERLINE)
@@ -276,7 +276,7 @@ bool validate_checksum()
 bool send_serial_command(byte *command)
 {
   byte chk = build_checksum(command);
-  int bytesSent = Serial.write(command, PANASONICQUERYSIZE);
+  size_t bytesSent = Serial.write(command, PANASONICQUERYSIZE);
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
   if (outputHexDump) write_mqtt_hex((char *)command, PANASONICQUERYSIZE);
