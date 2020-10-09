@@ -3,12 +3,11 @@
 
 unsigned long nextalldatatime = 0;
 
-int decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *))
+void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
 {
   char log_msg[256];
   std::string mqtt_topic;
   bool updatealltopics = false;
-  int topicchanges = 0;
   byte Input_Byte;
   String Topic_Value;
 
@@ -53,20 +52,12 @@ int decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client
       if (actData[Topic_Number] != Topic_Value) //write only changed topics to mqtt log
       {
         sprintf(log_msg, "Receive TOP%d \t %s: %s", Topic_Number, topics[Topic_Number], Topic_Value.c_str()); write_mqtt_log(log_msg);
-        topicchanges++;
       }
       actData[Topic_Number] = Topic_Value;
       mqtt_topic = Topics::BASIS + "/" + topics[Topic_Number];
       mqtt_client.publish(mqtt_topic.c_str(), Topic_Value.c_str(), MQTT_RETAIN_VALUES);
     }
   }
-  /*
-  if (topicchanges == 0)
-  {
-    write_mqtt_log((char *)"Receive no updates");
-  }
-  */
-  return topicchanges;
 }
 
 String getBit1and2(byte input)

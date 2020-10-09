@@ -2,13 +2,11 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
-#include <ArduinoJson.h>
 
 #include "webfunctions.h"
 #include "decode.h"
@@ -51,9 +49,9 @@ bool outputHexDump = false; // toggle to dump raw hex data to mqtt log
 
 // instead of passing array pointers between functions we just define this in the global scope
 char data[MAXDATASIZE];
-int data_length = 0;
-int datagramchanges = 0;
-int topicchanges = 0;
+byte data_length = 0;
+byte datagramchanges = 0;
+byte topicchanges = 0;
 
 // store actual data in an String array
 String actData[NUMBER_OF_TOPICS];
@@ -99,6 +97,24 @@ void setupOTA()
 }
 
 /*****************************************************************************/
+/* MQTT Client                                                               */
+/*****************************************************************************/
+WiFiClient mqtt_wifi_client;
+PubSubClient mqtt_client(mqtt_wifi_client);
+unsigned long lastReconnectAttempt = 0;
+
+/*****************************************************************************/
+/* Write to mqtt log                                                         */
+/*****************************************************************************/
+void write_mqtt_log(char *string)
+{
+  if (outputMqttLog)
+  {
+    mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -109,12 +125,6 @@ void setupHttp()
       });
   httpServer.on("/tablerefresh", []() {
     handleTableRefresh(&httpServer, actData);
-  });
-  httpServer.on("/json", []() {
-    handleJsonOutput(&httpServer, actData);
-  });
-  httpServer.on("/factoryreset", []() {
-    handleFactoryReset(&httpServer);
   });
   httpServer.on("/reboot", []() {
     handleReboot(&httpServer);
@@ -157,12 +167,6 @@ void switchSerial()
   digitalWrite(5, HIGH);
 }
 
-/*****************************************************************************/
-/* MQTT Client                                                               */
-/*****************************************************************************/
-WiFiClient mqtt_wifi_client;
-PubSubClient mqtt_client(mqtt_wifi_client);
-unsigned long lastReconnectAttempt = 0;
 
 /*****************************************************************************/
 /* MQTT Client reconnect                                                     */
@@ -193,6 +197,32 @@ boolean mqtt_reconnect()
 }
 
 /*****************************************************************************/
+/* Write data to buffer                                                      */
+/*****************************************************************************/
+void push_command_buffer(byte *command, char *log_msg)
+{
+  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
+  {
+    write_mqtt_log(log_msg);
+    command_struct *newCommand = new command_struct;
+    for (int i = 0; i < PANASONICQUERYSIZE; i++)
+    {
+      newCommand->value[i] = command[i];
+    }
+    newCommand->next = commandBuffer;
+    commandBuffer = newCommand;
+    commandsInBuffer++;
+    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
+    nextquerytime = millis() + SERIALTIMEOUT / 2;
+  }
+  else
+  {
+    write_mqtt_log(log_msg);
+    write_mqtt_log((char *)"Buffer full. Ignoring this command");
+  }
+}
+
+/*****************************************************************************/
 /* MQTT Callback                                                             */
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
@@ -200,7 +230,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     char *msg = (char *)malloc(sizeof(char) * length + 1);
     strncpy(msg, (char *)payload, length);
     msg[length] = '\0';
-    send_heatpump_command(topic, msg, write_mqtt_log, push_command_buffer);
+    send_heatpump_command(topic, msg, push_command_buffer);
 }
 
 /*****************************************************************************/
@@ -215,20 +245,9 @@ void setupMqtt()
 }
 
 /*****************************************************************************/
-/* Write to mqtt log                                                         */
-/*****************************************************************************/
-void write_mqtt_log(char *string)
-{
-  if (outputMqttLog)
-  {
-    mqtt_client.publish(Topics::LOG.c_str(), string);
-  }
-}
-
-/*****************************************************************************/
 /* Write raw hex data to mqtt log                                            */
 /*****************************************************************************/
-void write_mqtt_hex(char *hex, int hex_len) // New version from HeishaMon
+void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
 {
 
   for (int i = 0; i < hex_len; i += LOGHEXBYTESPERLINE)
@@ -276,7 +295,7 @@ bool validate_checksum()
 bool send_serial_command(byte *command)
 {
   byte chk = build_checksum(command);
-  int bytesSent = Serial.write(command, PANASONICQUERYSIZE);
+  size_t bytesSent = Serial.write(command, PANASONICQUERYSIZE);
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
   if (outputHexDump) write_mqtt_hex((char *)command, PANASONICQUERYSIZE);
@@ -391,9 +410,7 @@ void read_panasonic_data()
       if (datagramchanges > 0)
       {
         //write_mqtt_log((char *)"Decode  Start");
-        topicchanges = decode_heatpump_data(data, actData, mqtt_client, write_mqtt_log);
-        //sprintf(log_msg, "Bytes  changed: %d", datagramchanges); write_mqtt_log(log_msg);
-        //sprintf(log_msg, "Topics changed: %d", topicchanges); write_mqtt_log(log_msg);
+        decode_heatpump_data(data, actData, mqtt_client, write_mqtt_log);
         //write_mqtt_log((char *)"Decode  End");
       }
       else
@@ -405,29 +422,7 @@ void read_panasonic_data()
   }
 }
 
-/*****************************************************************************/
-/* Write data to buffer                                                      */
-/*****************************************************************************/
-void push_command_buffer(byte *command)
-{
-  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
-  {
-    command_struct *newCommand = new command_struct;
-    for (int i = 0; i < PANASONICQUERYSIZE; i++)
-    {
-      newCommand->value[i] = command[i];
-    }
-    newCommand->next = commandBuffer;
-    commandBuffer = newCommand;
-    commandsInBuffer++;
-    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
-    nextquerytime = millis() + SERIALTIMEOUT / 2;
-  }
-  else
-  {
-    write_mqtt_log((char *)"Buffer full. Ignoring this command");
-  }
-}
+
 
 /*****************************************************************************/
 /* handle mqtt connection                                                    */

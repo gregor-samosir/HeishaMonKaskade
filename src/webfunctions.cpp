@@ -1,5 +1,4 @@
 #include <LittleFS.h>
-
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
@@ -9,7 +8,6 @@
 #include "decode.h"
 #include "version.h"
 
-#define UPTIME_OVERFLOW 4294967295 // Uptime overflow value
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -211,7 +209,7 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->sendContent(httptext);
   httpServer->sendContent_P(sidebar);
   httptext = "<hr><div class='w3-text-grey w3-small'>Version: ";
-  httptext = httptext + heishamon_version + "<br><a href = 'https://github.com/gregor-samosir/HeishaNEW '>Heishamon</a></div><hr></div>";
+  httptext = httptext + heishamon_version + "<br><a href = 'https://github.com/gregor-samosir/HeishaMonKaskade '>Heishamon</a></div><hr></div>";
   httptext = httptext + "<br><div class='w3-container'><table class = 'w3-table-all w3-card-4 w3-small'><thead><tr class = 'w3-blue'><th>Topic</th><th>Name</th><th>Value</th><th>Description</th></tr></thead><tbody id =\"heishavalues\"><tr><td>... Loading...</td><td>.</td><td>.</td><td>.</td></tr></tbody></table></div>";
   httpServer->sendContent(httptext);
   httpServer->sendContent_P(webFooter);
@@ -243,66 +241,6 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
   httpServer->sendContent(tabletext);
   httpServer->sendContent("");
   httpServer->client().stop();
-}
-
-void handleJsonOutput(ESP8266WebServer *httpServer, String actData[])
-{
-  String topicdesc;
-  const char *valuetext = "value";
-  String tabletext = "{'heatpump':[";
-  for (unsigned int topic = 0; topic < NUMBER_OF_TOPICS; topic++)
-  {
-    if (strcmp(topicDescription[topic][0], valuetext) == 0)
-    {
-      topicdesc = topicDescription[topic][1];
-    }
-    else
-    {
-      int value = actData[topic].toInt();
-      topicdesc = topicDescription[topic][value];
-    }
-    tabletext = tabletext + "{";
-    tabletext = tabletext + "'Topic': 'TOP" + topic + "',";
-    tabletext = tabletext + "'Name': '" + topics[topic] + "',";
-    tabletext = tabletext + "'Value': '" + actData[topic] + "',";
-    tabletext = tabletext + "'Description': '" + topicdesc + "'";
-    tabletext = tabletext + "}";
-    if (topic < NUMBER_OF_TOPICS - 1)
-    {
-      tabletext = tabletext + ",";
-    }
-  }
-  tabletext = tabletext + "]}";
-
-  httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  httpServer->send(200, "application/json");
-  httpServer->sendContent(tabletext);
-  httpServer->sendContent("");
-  httpServer->client().stop();
-}
-
-void handleFactoryReset(ESP8266WebServer *httpServer)
-{
-  httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  httpServer->send(200, "text/html");
-  httpServer->sendContent_P(webHeader);
-  httpServer->sendContent_P(refreshMeta);
-  httpServer->sendContent_P(webBodyStart);
-
-  String httptext = "<div class='w3-container w3-center'>";
-  httptext = httptext + "<p>Removing configuration. To reconfigure please connect to WiFi hotspot after reset.</p>";
-  httptext = httptext + "</div>";
-  httpServer->sendContent(httptext);
-  httpServer->sendContent_P(menuJS);
-  httpServer->sendContent_P(webFooter);
-  httpServer->sendContent("");
-  httpServer->client().stop();
-  delay(1000);
-  LittleFS.begin();
-  LittleFS.format();
-  WiFi.disconnect(true);
-  delay(1000);
-  ESP.restart();
 }
 
 void handleReboot(ESP8266WebServer *httpServer)
@@ -440,7 +378,6 @@ void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota
   httptext = httptext + "<br><br>";
   httptext = httptext + "<input class='w3-green w3-button' type='submit' value='Save and reboot'>";
   httptext = httptext + "</form>";
-  httptext = httptext + "<br><a href='/factoryreset' class='w3-blue w3-button' onclick='return confirm('Are you sure?')' >Factory reset</a>";
   httptext = httptext + "</div>";
   httpServer->sendContent(httptext);
 
