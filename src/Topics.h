@@ -119,4 +119,8 @@ public:
     static const char *TOP90;
     static const char *TOP91;
     static const char *TOP92;
+    static const char *TOP93;
+    static const char *TOP94;
+    static const char *TOP95;
+    static const char *TOP96;
 };

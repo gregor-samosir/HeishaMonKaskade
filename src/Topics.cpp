@@ -121,3 +121,7 @@ const char *States::TOP89 = "Z2_Cool_Curve_Outside_Low_Temp";
 const char *States::TOP90 = "Room_Heater_Operations_Hours";
 const char *States::TOP91 = "DHW_Heater_Operations_Hours";
 const char *States::TOP92 = "Pump_Duty";
+const char *States::TOP93 = "SGReady_Capacity1_Heat";
+const char *States::TOP94 = "SGReady_Capacity1_DHW";
+const char *States::TOP95 = "SGReady_Capacity2_Heat";
+const char *States::TOP96 = "SGReady_Capacity2_DHW";

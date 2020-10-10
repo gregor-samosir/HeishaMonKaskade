@@ -3,7 +3,7 @@
 
 #define UPDATEALLTIME 300000 // how often all data is cleared and so resend to mqtt
 #define MQTT_RETAIN_VALUES 1
-#define NUMBER_OF_TOPICS 93 //last topic number + 1
+#define NUMBER_OF_TOPICS 97 //last topic number + 1
 
 void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *));
 
@@ -123,6 +123,10 @@ static const char *topics[] = {
     States::TOP90,
     States::TOP91,
     States::TOP92,
+    States::TOP93,
+    States::TOP94,
+    States::TOP95,
+    States::TOP96,
 };
 
 static const byte topicBytes[] = {
@@ -220,6 +224,10 @@ static const byte topicBytes[] = {
     0,   //TOP90
     0,   //TOP91
     172, //TOP92
+    71,  //TOP93
+    72,  //TOP94
+    73,  //TOP95
+    74,  //TOP96
 };
 
 typedef String (*topicFP)(byte);
@@ -318,6 +326,10 @@ static const topicFP topicFunctions[] = {
     unknown,              //TOP90
     unknown,              //TOP91
     getIntMinus1,         //TOP92
+    getIntMinus1,         //TOP93
+    getIntMinus1,         //TOP94
+    getIntMinus1,         //TOP95
+    getIntMinus1,         //TOP96
 };
 
 static const char *DisabledEnabled[] = {"Disabled", "Enabled"};
@@ -343,6 +355,7 @@ static const char *Ampere[] = {"value", "Ampere"};
 static const char *Minutes[] = {"value", "Minutes"};
 static const char *Duty[] = {"value", "Duty"};
 static const char *HeatCoolModeDesc[] = {"Comp. Curve", "Direct"};
+static const char *Percent[] = {"value", "&#37"};
 
 static const char **topicDescription[] = {
     OffOn,            //TOP0
@@ -438,4 +451,8 @@ static const char **topicDescription[] = {
     Hours,            //TOP90
     Hours,            //TOP91
     Duty,             //TOP92
+    Percent,          //TOP93
+    Percent,          //TOP94
+    Percent,          //TOP95
+    Percent,          //TOP96
 };
