@@ -40,6 +40,25 @@ void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_clien
     case 44: //Error
       Topic_Value = getErrorInfo(data);
       break;
+    case 34: // unused Topics
+    case 35:
+    case 37:
+    case 43:
+    case 46:
+    case 47:
+    case 48:
+    case 57:
+    case 63:
+    case 82:
+    case 83:
+    case 84:
+    case 85:
+    case 86:
+    case 87:
+    case 88:
+    case 89:
+      Topic_Value = "unused";
+      break;
     default:
       //call the topic function for 1 byte topics
       Input_Byte = data[topicBytes[Topic_Number]];
