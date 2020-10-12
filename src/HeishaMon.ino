@@ -353,7 +353,7 @@ bool readSerial()
     }
     data[data_length] = rc;
     // only enable this if you really want to see how the data is gathered in multiple tries
-    sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
+    // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
     data_length += 1;
   }
   if (data_length > 1)
