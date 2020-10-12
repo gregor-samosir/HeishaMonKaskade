@@ -73,7 +73,7 @@ void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_clien
         sprintf(log_msg, "Receive TOP%d \t %s: %s", Topic_Number, topics[Topic_Number], Topic_Value.c_str()); write_mqtt_log(log_msg);
       }
       actData[Topic_Number] = Topic_Value;
-      mqtt_topic = Topics::BASIS + "/" + topics[Topic_Number];
+      mqtt_topic = Topics::STATE + "/" + topics[Topic_Number];
       mqtt_client.publish(mqtt_topic.c_str(), Topic_Value.c_str(), MQTT_RETAIN_VALUES);
     }
   }

@@ -377,9 +377,16 @@ bool readSerial()
         data_length = 0;
         return true;
       }
+      else if (data_length == 20)
+      { //optional pcb acknowledge answer
+        write_mqtt_log((char *)"Datagram from optional PCB, no need to decode this.");
+        data_length = 0;
+        datagramchanges = 0;
+        return false;
+      }
       else
       {
-        write_mqtt_log((char *)"Datagram to short to decode in this version");
+        write_mqtt_log((char *)"Datagram to short to decode");
         data_length = 0;
         datagramchanges = 0;
         return false;
