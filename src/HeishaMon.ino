@@ -26,7 +26,7 @@
 #define RECONNECTTIME 30000 // next mqtt reconnect
 #define LOGHEXBYTESPERLINE 16 // please be aware of max mqtt message size - 32 bytes per line does not work
 #define MAXCOMMANDSINBUFFER 10 //can't have too much in buffer due to memory shortage
-#define MAXDATASIZE 256
+#define MAXDATASIZE 255
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
