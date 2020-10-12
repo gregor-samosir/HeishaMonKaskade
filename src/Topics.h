@@ -21,8 +21,10 @@ public:
     static const std::string SET13;
     static const std::string SET14;
     static const std::string SET15;
-    // static const std::string PCB1;
-    // static const std::string PCB2;
+    static const std::string PCB1;
+    static const std::string PCB2;
+    static const std::string PCB3;
+    static const std::string PCB4;
 };
 
 class States

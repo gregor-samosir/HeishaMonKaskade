@@ -66,6 +66,7 @@ char mqtt_topic[256];
 struct command_struct
 {
   byte value[128];
+  unsigned int length;
   command_struct *next;
 };
 command_struct *commandBuffer;
@@ -192,6 +193,10 @@ boolean mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET13.c_str());
     mqtt_client.subscribe(Topics::SET14.c_str());
     mqtt_client.subscribe(Topics::SET15.c_str());
+    mqtt_client.subscribe(Topics::PCB1.c_str());
+    mqtt_client.subscribe(Topics::PCB2.c_str());
+    mqtt_client.subscribe(Topics::PCB3.c_str());
+    mqtt_client.subscribe(Topics::PCB4.c_str());
   }
   return mqtt_client.connected();
 }
@@ -199,13 +204,14 @@ boolean mqtt_reconnect()
 /*****************************************************************************/
 /* Write data to buffer                                                      */
 /*****************************************************************************/
-void push_command_buffer(byte *command, char *log_msg)
+void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
     write_mqtt_log(log_msg);
     command_struct *newCommand = new command_struct;
-    for (int i = 0; i < PANASONICQUERYSIZE; i++)
+    newCommand->length = length;
+    for (int i = 0; i < length; i++)
     {
       newCommand->value[i] = command[i];
     }
@@ -265,10 +271,10 @@ void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
 /*****************************************************************************/
 /* Build checksum for commands and query                                     */
 /*****************************************************************************/
-byte build_checksum(byte *command)
+byte build_checksum(byte *command, int length)
 {
   byte chk = 0;
-  for (int i = 0; i < PANASONICQUERYSIZE; i++)
+  for (int i = 0; i < length; i++)
   {
     chk += command[i];
   }
@@ -292,13 +298,13 @@ bool validate_checksum()
 /*****************************************************************************/
 /* Write data to serial                                                      */
 /*****************************************************************************/
-bool send_serial_command(byte *command)
+bool send_serial_command(byte *command, int length)
 {
-  byte chk = build_checksum(command);
-  size_t bytesSent = Serial.write(command, PANASONICQUERYSIZE);
+  byte chk = build_checksum(command, length);
+  size_t bytesSent = Serial.write(command, length);
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-  if (outputHexDump) write_mqtt_hex((char *)command, PANASONICQUERYSIZE);
+  if (outputHexDump) write_mqtt_hex((char *)command, length);
   nextreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
   return true;
 }
@@ -314,7 +320,7 @@ void send_panasonic_data()
     if (commandBuffer)
     { 
       // sprintf(log_msg, "Pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
-      requesthasbeensent = send_serial_command(commandBuffer->value);
+      requesthasbeensent = send_serial_command(commandBuffer->value, commandBuffer->length);
       command_struct *nextCommand = commandBuffer->next;
       free(commandBuffer);
       commandBuffer = nextCommand;
@@ -327,7 +333,7 @@ void send_panasonic_data()
     else
     { //no command in buffer, send query
       //write_mqtt_log((char *)"Request data with query");
-      requesthasbeensent = send_serial_command(panasonicQuery);
+      requesthasbeensent = send_serial_command(mainQuery, MAINQUERYSIZE);
     }
   }
 }
@@ -347,7 +353,7 @@ bool readSerial()
     }
     data[data_length] = rc;
     // only enable this if you really want to see how the data is gathered in multiple tries
-    // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
+    sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
     data_length += 1;
   }
   if (data_length > 1)
