@@ -9,7 +9,7 @@
 #include "version.h"
 
 
-//flag for saving data
+//flag for saving
 bool shouldSaveConfig = false;
 
 static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5; url=/' />";

@@ -3,9 +3,9 @@
 
 unsigned long nextalldatatime = 0;
 
-void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
+void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
 {
-  char log_msg[256];
+  char log_msg[255];
   std::string mqtt_topic;
   bool updatealltopics = false;
   byte Input_Byte;
@@ -23,22 +23,22 @@ void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_clien
     switch (Topic_Number)
     { 
     case 1: //Pump_Flow
-      Topic_Value = getPumpFlow(data);
+      Topic_Value = getPumpFlow(serial_data);
       break;
     case 11: //Operations_Hours
-      Topic_Value = getOperationHour(data);
+      Topic_Value = getOperationHour(serial_data);
       break;
     case 12: //Operations_Counter
-      Topic_Value = getOperationCount(data);
+      Topic_Value = getOperationCount(serial_data);
       break;
     case 90: //Room_Heater_Operations_Hours
-      Topic_Value = getRoomHeaterHour(data);
+      Topic_Value = getRoomHeaterHour(serial_data);
       break;
     case 91: //DHW_Heater_Operations_Hours
-      Topic_Value = getDHWHeaterHour(data);
+      Topic_Value = getDHWHeaterHour(serial_data);
       break;
     case 44: //Error
-      Topic_Value = getErrorInfo(data);
+      Topic_Value = getErrorInfo(serial_data);
       break;
     case 34: // unused Topics
     case 35:
@@ -61,7 +61,7 @@ void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_clien
       break;
     default:
       //call the topic function for 1 byte topics
-      Input_Byte = data[topicBytes[Topic_Number]];
+      Input_Byte = serial_data[topicBytes[Topic_Number]];
       Topic_Value = topicFunctions[Topic_Number](Input_Byte);
       break;
     }
@@ -177,38 +177,38 @@ String getOpMode(byte input)
 }
 
 /* Two bytes per TOP */
-String getPumpFlow(char *data)
+String getPumpFlow(char *serial_data)
 { // TOP1 //
-  float PumpFlow1 = (float)data[170];
-  float PumpFlow2 = (((float)data[169] - 1) / 256);
+  float PumpFlow1 = (float)serial_data[170];
+  float PumpFlow2 = (((float)serial_data[169] - 1) / 256);
   float PumpFlow = PumpFlow1 + PumpFlow2;
   return String(PumpFlow, 2);
 }
 
-String getOperationHour(char *data)
+String getOperationHour(char *serial_data)
 {
-  return String(word(data[183], data[182]) - 1);
+  return String(word(serial_data[183], serial_data[182]) - 1);
 }
 
-String getOperationCount(char *data)
+String getOperationCount(char *serial_data)
 {
-  return String(word(data[180], data[179]) - 1);
+  return String(word(serial_data[180], serial_data[179]) - 1);
 }
 
-String getRoomHeaterHour(char *data)
+String getRoomHeaterHour(char *serial_data)
 {
-  return String(word(data[186], data[185]) - 1);
+  return String(word(serial_data[186], serial_data[185]) - 1);
 }
 
-String getDHWHeaterHour(char *data)
+String getDHWHeaterHour(char *serial_data)
 {
-  return String(word(data[189], data[188]) - 1);
+  return String(word(serial_data[189], serial_data[188]) - 1);
 }
 
-String getErrorInfo(char *data)
+String getErrorInfo(char *serial_data)
 { // TOP44 //
-  int Error_type = (int)(data[113]);
-  int Error_number = ((int)(data[114])) - 17;
+  int Error_type = (int)(serial_data[113]);
+  int Error_number = ((int)(serial_data[114])) - 17;
   char Error_string[10];
   switch (Error_type)
   {
