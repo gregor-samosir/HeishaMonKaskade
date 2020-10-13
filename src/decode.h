@@ -1,11 +1,11 @@
 #include <PubSubClient.h>
 #include "Topics.h"
 
-#define UPDATEALLTIME 300000 // how often all data is cleared and so resend to mqtt
+#define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
-#define NUMBER_OF_TOPICS 97 //last topic number + 1
+#define NUMBEROFTOPICS 97 //last topic number + 1
 
-void decode_heatpump_data(char *data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *));
+void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *));
 
 String unknown(byte input);
 String getBit1and2(byte input);
@@ -22,12 +22,12 @@ String getIntMinus1Times10(byte input);
 String getIntMinus1Times50(byte input);
 String getIntMinus1Times200(byte input);
 String getOpMode(byte input);
-String getPumpFlow(char *data);
-String getOperationHour(char *data);
-String getOperationCount(char *data);
-String getRoomHeaterHour(char *data);
-String getDHWHeaterHour(char *data);
-String getErrorInfo(char *data);
+String getPumpFlow(char *serial_data);
+String getOperationHour(char *serial_data);
+String getOperationCount(char *serial_data);
+String getRoomHeaterHour(char *serial_data);
+String getDHWHeaterHour(char *serial_data);
+String getErrorInfo(char *serial_data);
 
 static const char *topics[] = {
     States::TOP0,

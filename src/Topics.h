@@ -3,7 +3,7 @@
 class Topics
 {
 public:
-    static const std::string BASIS;
+    static const std::string STATE;
     static const std::string LOG;
     static const std::string WILL;
     static const std::string SET1;

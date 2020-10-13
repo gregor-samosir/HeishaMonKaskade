@@ -9,7 +9,7 @@
 #include "version.h"
 
 
-//flag for saving data
+//flag for saving
 bool shouldSaveConfig = false;
 
 static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5; url=/' />";
@@ -223,7 +223,7 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
   String tabletext;
   String topicdesc;
 
-  for (unsigned int topic = 0; topic < NUMBER_OF_TOPICS; topic++)
+  for (unsigned int topic = 0; topic < NUMBEROFTOPICS; topic++)
   {
     if (strcmp(topicDescription[topic][0], "value") == 0)
     {

@@ -21,12 +21,12 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define WAITTIME 5000      // wait for next data read from heatpump
+#define WAITTIME 5000      // wait for next read from heatpump
 #define SERIALTIMEOUT 1000 // wait until all 203 bytes are read
 #define RECONNECTTIME 30000 // next mqtt reconnect
 #define LOGHEXBYTESPERLINE 16 // please be aware of max mqtt message size - 32 bytes per line does not work
 #define MAXCOMMANDSINBUFFER 10 //can't have too much in buffer due to memory shortage
-#define MAXDATASIZE 256
+#define MAXDATASIZE 255
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
@@ -38,34 +38,33 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-bool requesthasbeensent = false;          // mutex for serial sending data
+bool requesthasbeensent = false;          // mutex for serial sending
 
 unsigned long nextquerytime = 0;          // WAITTIME
 unsigned long nextreadtime = 0;           // SERIALTIMEOUT
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
-bool outputHexDump = false; // toggle to dump raw hex data to mqtt log
+bool outputHexDump = false; // toggle to dump raw hex to mqtt log
 
 // instead of passing array pointers between functions we just define this in the global scope
-char data[MAXDATASIZE];
+char serial_data[MAXDATASIZE];
 byte data_length = 0;
-byte datagramchanges = 0;
-byte topicchanges = 0;
 
-// store actual data in an String array
-String actData[NUMBER_OF_TOPICS];
+// store actual value in an String array
+String actData[NUMBEROFTOPICS];
 
 // log message to sprintf to
-char log_msg[256];
+char log_msg[255];
 
 // mqtt topic to sprintf and then publish to
-char mqtt_topic[256];
+char mqtt_topic[255];
 
 //buffer for commands to send
 struct command_struct
 {
   byte value[128];
+  unsigned int length;
   command_struct *next;
 };
 command_struct *commandBuffer;
@@ -192,20 +191,25 @@ boolean mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET13.c_str());
     mqtt_client.subscribe(Topics::SET14.c_str());
     mqtt_client.subscribe(Topics::SET15.c_str());
+    // mqtt_client.subscribe(Topics::PCB1.c_str());
+    // mqtt_client.subscribe(Topics::PCB2.c_str());
+    // mqtt_client.subscribe(Topics::PCB3.c_str());
+    // mqtt_client.subscribe(Topics::PCB4.c_str());
   }
   return mqtt_client.connected();
 }
 
 /*****************************************************************************/
-/* Write data to buffer                                                      */
+/* Write to buffer                                                      */
 /*****************************************************************************/
-void push_command_buffer(byte *command, char *log_msg)
+void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
     write_mqtt_log(log_msg);
     command_struct *newCommand = new command_struct;
-    for (int i = 0; i < PANASONICQUERYSIZE; i++)
+    newCommand->length = length;
+    for (int i = 0; i < length; i++)
     {
       newCommand->value[i] = command[i];
     }
@@ -245,7 +249,7 @@ void setupMqtt()
 }
 
 /*****************************************************************************/
-/* Write raw hex data to mqtt log                                            */
+/* Write raw hex to mqtt log                                            */
 /*****************************************************************************/
 void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
 {
@@ -258,17 +262,17 @@ void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
     {
       sprintf(&buffer[3 * j], "%02X ", hex[i + j]);
     }
-    sprintf(log_msg, "data: %s", buffer); write_mqtt_log(log_msg);
+    sprintf(log_msg, "Data: %s", buffer); write_mqtt_log(log_msg);
   }
 }
 
 /*****************************************************************************/
 /* Build checksum for commands and query                                     */
 /*****************************************************************************/
-byte build_checksum(byte *command)
+byte build_checksum(byte *command, int length)
 {
   byte chk = 0;
-  for (int i = 0; i < PANASONICQUERYSIZE; i++)
+  for (int i = 0; i < length; i++)
   {
     chk += command[i];
   }
@@ -277,34 +281,34 @@ byte build_checksum(byte *command)
 }
 
 /*****************************************************************************/
-/* Validate checksum on serial read data                                     */
+/* Validate checksum                                                         */
 /*****************************************************************************/
 bool validate_checksum()
 {
   byte chk = 0;
   for (int i = 0; i < data_length; i++)
   {
-    chk += data[i];
+    chk += serial_data[i];
   }
   return (chk == 0); //all received bytes + checksum should result in 0
 }
 
 /*****************************************************************************/
-/* Write data to serial                                                      */
+/* Write to serial                                                      */
 /*****************************************************************************/
-bool send_serial_command(byte *command)
+bool send_serial_command(byte *command, int length)
 {
-  byte chk = build_checksum(command);
-  size_t bytesSent = Serial.write(command, PANASONICQUERYSIZE);
+  byte chk = build_checksum(command, length);
+  size_t bytesSent = Serial.write(command, length);
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-  if (outputHexDump) write_mqtt_hex((char *)command, PANASONICQUERYSIZE);
+  if (outputHexDump) write_mqtt_hex((char *)command, length);
   nextreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
   return true;
 }
 
 /*****************************************************************************/
-/* Write query (or buffer) data to pana                                      */
+/* Write query (or buffer) to pana  (called from loop)                  */
 /*****************************************************************************/
 void send_panasonic_data()
 {
@@ -314,7 +318,7 @@ void send_panasonic_data()
     if (commandBuffer)
     { 
       // sprintf(log_msg, "Pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
-      requesthasbeensent = send_serial_command(commandBuffer->value);
+      requesthasbeensent = send_serial_command(commandBuffer->value, commandBuffer->length);
       command_struct *nextCommand = commandBuffer->next;
       free(commandBuffer);
       commandBuffer = nextCommand;
@@ -326,50 +330,42 @@ void send_panasonic_data()
     }
     else
     { //no command in buffer, send query
-      //write_mqtt_log((char *)"Request data with query");
-      requesthasbeensent = send_serial_command(panasonicQuery);
+      //write_mqtt_log((char *)"Request with query");
+      requesthasbeensent = send_serial_command(mainQuery, MAINQUERYSIZE);
     }
   }
 }
 
 /*****************************************************************************/
-/* Read raw data from serial                                                 */
+/* Read raw from serial                                                 */
 /*****************************************************************************/
 bool readSerial()
 {
-  char rc;
   while (Serial.available())
   {
-    rc = Serial.read();
-    if ((data[data_length] != rc) && (data_length < 202))
-    {
-      datagramchanges += 1;
-    }
-    data[data_length] = rc;
-    // only enable this if you really want to see how the data is gathered in multiple tries
-    // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
+    serial_data[data_length] = Serial.read();
     data_length += 1;
+    // only enable this if you really want to see how the bytes gathered in multiple tries
+    // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
   }
   if (data_length > 1)
   { //should have received length part of header now
 
-    if (data_length > (data[1] + 3))
+    if (data_length > (serial_data[1] + 3))
     {
       write_mqtt_log((char *)"Datagram longer than header suggests");
       data_length = 0;
-      datagramchanges = 0;
       return false;
     }
 
-    if (data_length == (data[1] + 3))
+    if (data_length == (serial_data[1] + 3))
     { 
       requesthasbeensent = false;
-      if (outputHexDump) write_mqtt_hex(data, data_length);
+      if (outputHexDump) write_mqtt_hex(serial_data, data_length);
       if (!validate_checksum())
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
         data_length = 0;
-        datagramchanges = 0;
         return false;
       }
       if (data_length == 203)
@@ -377,11 +373,16 @@ bool readSerial()
         data_length = 0;
         return true;
       }
+      else if (data_length == 20)
+      { //optional pcb acknowledge answer
+        write_mqtt_log((char *)"Datagram from optional PCB, no need to decode this.");
+        data_length = 0;
+        return false;
+      }
       else
       {
-        write_mqtt_log((char *)"Datagram to short to decode in this version");
+        write_mqtt_log((char *)"Datagram to short to decode");
         data_length = 0;
-        datagramchanges = 0;
         return false;
       }
     }
@@ -390,34 +391,25 @@ bool readSerial()
 }
 
 /*****************************************************************************/
-/* Read data from pana and decode                                            */
+/* Read from pana and decode (call from loop)                           */
 /*****************************************************************************/
 void read_panasonic_data()
 {
-  if (requesthasbeensent) //only read data if we have sent a command so we expect an answer
+  if (requesthasbeensent) //only read if we have sent a command so we expect an answer
   {
     if (millis() > nextreadtime)
     {
       write_mqtt_log((char *)"Serial read failed due to timeout!");
-      data_length = 0; //clear any data in array
-      datagramchanges = 0;
+      data_length = 0;
       requesthasbeensent = false; //we are allowed to send a new command
       return;
     }
 
     if (readSerial())
     {
-      if (datagramchanges > 0)
-      {
-        //write_mqtt_log((char *)"Decode  Start");
-        decode_heatpump_data(data, actData, mqtt_client, write_mqtt_log);
-        //write_mqtt_log((char *)"Decode  End");
-      }
-      else
-      {
-        //write_mqtt_log((char *)"Datagram unchanged");
-      }
-      datagramchanges = 0;
+      //write_mqtt_log((char *)"Decode  Start");
+      decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+      //write_mqtt_log((char *)"Decode  End");
     }
   }
 }
@@ -425,7 +417,7 @@ void read_panasonic_data()
 
 
 /*****************************************************************************/
-/* handle mqtt connection                                                    */
+/* handle mqtt connection  (call from loop)                                  */
 /*****************************************************************************/
 void mqtt_loop()
 {
@@ -468,5 +460,5 @@ void loop()
   MDNS.update();
   mqtt_loop();
   send_panasonic_data(); // Send query or command from buffer. This trigger heisha to fill the serial buffer
-  read_panasonic_data(); // Read serial buffer, decode the received data and publish the changed states to mqtt
+  read_panasonic_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
 }

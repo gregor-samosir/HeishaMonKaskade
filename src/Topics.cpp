@@ -5,7 +5,7 @@ const std::string mqttPrefix = "panasonic_heat_pump";
 const std::string s = "/";
 const std::string setTopicPrefix = mqttPrefix + s + "set";
 const std::string infTopicPrefix = mqttPrefix + s + "info";
-const std::string Topics::BASIS = mqttPrefix + s + "state";
+const std::string Topics::STATE = mqttPrefix + s + "state";
 const std::string Topics::LOG = infTopicPrefix + s + "log";
 const std::string Topics::WILL = infTopicPrefix + s + "LWT";
 
