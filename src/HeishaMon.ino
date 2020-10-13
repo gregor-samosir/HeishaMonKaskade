@@ -52,7 +52,7 @@ char serial_data[MAXDATASIZE];
 byte data_length = 0;
 
 // store actual value in an String array
-String actData[NUMBER_OF_TOPICS];
+String actData[NUMBEROFTOPICS];
 
 // log message to sprintf to
 char log_msg[255];

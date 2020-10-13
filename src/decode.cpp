@@ -17,7 +17,7 @@ void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqt
     nextalldatatime = millis() + UPDATEALLTIME;
   }
 
-  for (unsigned int Topic_Number = 0; Topic_Number < NUMBER_OF_TOPICS; Topic_Number++)
+  for (unsigned int Topic_Number = 0; Topic_Number < NUMBEROFTOPICS; Topic_Number++)
   {
     //switch on topic numbers with 2 bytes
     switch (Topic_Number)

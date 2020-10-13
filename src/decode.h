@@ -3,7 +3,7 @@
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
-#define NUMBER_OF_TOPICS 97 //last topic number + 1
+#define NUMBEROFTOPICS 97 //last topic number + 1
 
 void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *));
 
