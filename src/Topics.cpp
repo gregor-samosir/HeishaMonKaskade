@@ -26,10 +26,10 @@ const std::string Topics::SET12 = setTopicPrefix + s + "ForceDefrost";
 const std::string Topics::SET13 = setTopicPrefix + s + "ForceSterilization";
 const std::string Topics::SET14 = setTopicPrefix + s + "WaterPump";
 const std::string Topics::SET15 = setTopicPrefix + s + "WaterPumpSpeed";
-const std::string Topics::PCB1 = pcbTopicPrefix + s + "Heat_Cool_Mode";
-const std::string Topics::PCB2 = pcbTopicPrefix + s + "Compressor_State";
-const std::string Topics::PCB3 = pcbTopicPrefix + s + "SmartGrid_Mode";
-const std::string Topics::PCB4 = pcbTopicPrefix + s + "Demand_Control";
+// const std::string Topics::PCB1 = pcbTopicPrefix + s + "Heat_Cool_Mode";
+// const std::string Topics::PCB2 = pcbTopicPrefix + s + "Compressor_State";
+// const std::string Topics::PCB3 = pcbTopicPrefix + s + "SmartGrid_Mode";
+// const std::string Topics::PCB4 = pcbTopicPrefix + s + "Demand_Control";
 
 // state topics
 // Can be configured.

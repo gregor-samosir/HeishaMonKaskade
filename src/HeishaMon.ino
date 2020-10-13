@@ -50,8 +50,6 @@ bool outputHexDump = false; // toggle to dump raw hex to mqtt log
 // instead of passing array pointers between functions we just define this in the global scope
 char serial_data[MAXDATASIZE];
 byte data_length = 0;
-byte datagramchanges = 0;
-byte topicchanges = 0;
 
 // store actual value in an String array
 String actData[NUMBER_OF_TOPICS];
@@ -193,10 +191,10 @@ boolean mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET13.c_str());
     mqtt_client.subscribe(Topics::SET14.c_str());
     mqtt_client.subscribe(Topics::SET15.c_str());
-    mqtt_client.subscribe(Topics::PCB1.c_str());
-    mqtt_client.subscribe(Topics::PCB2.c_str());
-    mqtt_client.subscribe(Topics::PCB3.c_str());
-    mqtt_client.subscribe(Topics::PCB4.c_str());
+    // mqtt_client.subscribe(Topics::PCB1.c_str());
+    // mqtt_client.subscribe(Topics::PCB2.c_str());
+    // mqtt_client.subscribe(Topics::PCB3.c_str());
+    // mqtt_client.subscribe(Topics::PCB4.c_str());
   }
   return mqtt_client.connected();
 }
@@ -343,18 +341,12 @@ void send_panasonic_data()
 /*****************************************************************************/
 bool readSerial()
 {
-  char rc;
   while (Serial.available())
   {
-    rc = Serial.read();
-    if ((serial_data[data_length] != rc) && (data_length < 202))
-    {
-      datagramchanges += 1;
-    }
-    serial_data[data_length] = rc;
+    serial_data[data_length] = Serial.read();
+    data_length += 1;
     // only enable this if you really want to see how the bytes gathered in multiple tries
     // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
-    data_length += 1;
   }
   if (data_length > 1)
   { //should have received length part of header now
@@ -363,7 +355,6 @@ bool readSerial()
     {
       write_mqtt_log((char *)"Datagram longer than header suggests");
       data_length = 0;
-      datagramchanges = 0;
       return false;
     }
 
@@ -375,7 +366,6 @@ bool readSerial()
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
         data_length = 0;
-        datagramchanges = 0;
         return false;
       }
       if (data_length == 203)
@@ -387,14 +377,12 @@ bool readSerial()
       { //optional pcb acknowledge answer
         write_mqtt_log((char *)"Datagram from optional PCB, no need to decode this.");
         data_length = 0;
-        datagramchanges = 0;
         return false;
       }
       else
       {
         write_mqtt_log((char *)"Datagram to short to decode");
         data_length = 0;
-        datagramchanges = 0;
         return false;
       }
     }
@@ -413,24 +401,15 @@ void read_panasonic_data()
     {
       write_mqtt_log((char *)"Serial read failed due to timeout!");
       data_length = 0;
-      datagramchanges = 0;
       requesthasbeensent = false; //we are allowed to send a new command
       return;
     }
 
     if (readSerial())
     {
-      if (datagramchanges > 0)
-      {
-        //write_mqtt_log((char *)"Decode  Start");
-        decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
-        //write_mqtt_log((char *)"Decode  End");
-      }
-      else
-      {
-        //write_mqtt_log((char *)"Datagram unchanged");
-      }
-      datagramchanges = 0;
+      //write_mqtt_log((char *)"Decode  Start");
+      decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+      //write_mqtt_log((char *)"Decode  End");
     }
   }
 }
