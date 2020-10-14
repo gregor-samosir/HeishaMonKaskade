@@ -191,10 +191,6 @@ boolean mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET13.c_str());
     mqtt_client.subscribe(Topics::SET14.c_str());
     mqtt_client.subscribe(Topics::SET15.c_str());
-    // mqtt_client.subscribe(Topics::PCB1.c_str());
-    // mqtt_client.subscribe(Topics::PCB2.c_str());
-    // mqtt_client.subscribe(Topics::PCB3.c_str());
-    // mqtt_client.subscribe(Topics::PCB4.c_str());
   }
   return mqtt_client.connected();
 }

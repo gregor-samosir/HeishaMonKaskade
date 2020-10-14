@@ -3,6 +3,7 @@
 #include <string>
 
 byte mainQuery[] = {0x71, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+byte pcbQuery[] = {0xF1, 0x11, 0x01, 0x50, 0x00, 0x00, 0x40, 0xFF, 0xFF, 0xE5, 0xFF, 0xFF, 0x00, 0xFF, 0xEB, 0xFF, 0xFF, 0x00, 0x00};
 
 void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte *, int, char *))
 {
@@ -25,7 +26,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set 0 for Off mode, set 1 for Quiet mode 1, set 2 for Quiet mode 2, set 3 for Quiet mode 3
-  if (Topics::SET3.compare(topic) == 0)
+  else if (Topics::SET3.compare(topic) == 0)
   {
     //pos 7
     state_byte = (state_string.toInt() + 1) * 8;
@@ -35,7 +36,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // z1 heat request temp -  set from -5 to 5 to get same temperature shift point or set direct temp
-  if (Topics::SET5.compare(topic) == 0)
+  else if (Topics::SET5.compare(topic) == 0)
   {
     //pos = 38
     state_byte = state_string.toInt() + 128;
@@ -45,7 +46,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // z1 cool request temp -  set from -5 to 5 to get same temperature shift point or set direct temp
-  if (Topics::SET6.compare(topic) == 0)
+  else if (Topics::SET6.compare(topic) == 0)
   {
     //pos 39
     state_byte = state_string.toInt() + 128;
@@ -55,7 +56,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // z2 heat request temp -  set from -5 to 5 to get same temperature shift point or set direct temp
-  if (Topics::SET7.compare(topic) == 0)
+  else if (Topics::SET7.compare(topic) == 0)
   {
     //pos 40
     state_byte = state_string.toInt() + 128;
@@ -65,7 +66,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // z2 cool request temp -  set from -5 to 5 to get same temperature shift point or set direct temp
-  if (Topics::SET8.compare(topic) == 0)
+  else if (Topics::SET8.compare(topic) == 0)
   {
     //pos 41
     state_byte = state_string.toInt() + 128;
@@ -75,7 +76,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set mode to force DHW by sending 1
-  if (Topics::SET10.compare(topic) == 0)
+  else if (Topics::SET10.compare(topic) == 0)
   {
     //pos 4
     state_byte = 64; //hex 0x40
@@ -89,7 +90,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set mode to force defrost  by sending 1
-  if (Topics::SET12.compare(topic) == 0)
+  else if (Topics::SET12.compare(topic) == 0)
   {
     //pos 8
     state_byte = 0;
@@ -103,7 +104,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set mode to force sterilization by sending 1
-  if (Topics::SET13.compare(topic) == 0)
+  else if (Topics::SET13.compare(topic) == 0)
   {
     //pos 8
     state_byte = 0;
@@ -117,7 +118,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set Holiday mode by sending 1, off will be 0
-  if (Topics::SET2.compare(topic) == 0)
+  else if (Topics::SET2.compare(topic) == 0)
   {
     //pos 5
     state_byte = 16; //hex 0x10
@@ -131,7 +132,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set Powerful mode by sending 0 = off, 1 for 30min, 2 for 60min, 3 for 90 min
-  if (Topics::SET4.compare(topic) == 0)
+  else if (Topics::SET4.compare(topic) == 0)
   {
     //pos 7
     state_byte = (state_string.toInt()) + 73;
@@ -141,7 +142,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set Heat pump operation mode 0 = heat only, 1 = cool only, 2 = Auto(Heat), 3 = DHW only, 4 = Heat+DHW, 5 = Cool+DHW, 6 = Auto(Heat) + DHW, 7 = Auto(Cool), 8 = Auto(Cool) + DHW
-  if (Topics::SET9.compare(topic) == 0)
+  else if (Topics::SET9.compare(topic) == 0)
   {
     //pos 6
     switch (state_string.toInt())
@@ -178,13 +179,12 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
       break;
     }
     sprintf(log_msg, "Command SET9 \t OperationMode: %d", state_byte);
-   
     byte command[] = {0xf1, 0x6c, 0x01, 0x10, 0x00, 0x00, state_byte, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     push_command_buffer(command, sizeof(command), log_msg);
   }
 
   // set DHW temperature by sending desired temperature between 40C-75C
-  if (Topics::SET11.compare(topic) == 0)
+  else if (Topics::SET11.compare(topic) == 0)
   {
     //pos 42
     state_byte = state_string.toInt() + 128;
@@ -194,7 +194,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set water pump state to on=1  or off=0 
-  if (Topics::SET14.compare(topic) == 0)
+  else if (Topics::SET14.compare(topic) == 0)
   {
     //pos 5
     state_byte = 16; //hex 0x10
@@ -208,7 +208,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
   }
 
   // set PumpSpeedMax 65 - 255
-  if (Topics::SET15.compare(topic) == 0)
+  else if (Topics::SET15.compare(topic) == 0)
   {
     //pos 45
     state_byte = state_string.toInt() + 1;
