@@ -219,5 +219,23 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     sprintf(log_msg, "Command SET15 \t WaterPumpSpeed: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
+  // set heat delta 1-15
+  else if (Topics::SET16.compare(topic) == 0)
+  {
+    //pos 84
+    set_pos = 84;
+    set_byte = state_string.toInt() + 128;
+    sprintf(log_msg, "Command SET16 \t Heat_Delta: %d", set_byte - 128);
+    mainCommand[set_pos] = set_byte;
+  }
+  // set cool delta 1-15
+  else if (Topics::SET17.compare(topic) == 0)
+  {
+    //pos 94
+    set_pos = 94;
+    set_byte = state_string.toInt() + 128;
+    sprintf(log_msg, "Command SET16 \t Cool_Delta: %d", set_byte - 128);
+    mainCommand[set_pos] = set_byte;
+  }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);
 }
