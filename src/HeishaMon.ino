@@ -191,6 +191,9 @@ boolean mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET13.c_str());
     mqtt_client.subscribe(Topics::SET14.c_str());
     mqtt_client.subscribe(Topics::SET15.c_str());
+    mqtt_client.subscribe(Topics::SET16.c_str());
+    mqtt_client.subscribe(Topics::SET17.c_str());
+    mqtt_client.subscribe(Topics::SET18.c_str());
   }
   return mqtt_client.connected();
 }
@@ -213,7 +216,6 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     commandBuffer = newCommand;
     commandsInBuffer++;
     // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
-    nextquerytime = millis() + SERIALTIMEOUT / 2;
   }
   else
   {
@@ -319,10 +321,6 @@ void send_panasonic_data()
       free(commandBuffer);
       commandBuffer = nextCommand;
       commandsInBuffer--;
-      if (commandsInBuffer) { 
-        nextquerytime = millis() + SERIALTIMEOUT * 2;
-        // write_mqtt_log((char *)"Buffer not empty");
-      }
     }
     else
     { //no command in buffer, send query

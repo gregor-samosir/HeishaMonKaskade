@@ -25,6 +25,9 @@ const std::string Topics::SET12 = setTopicPrefix + s + "ForceDefrost";
 const std::string Topics::SET13 = setTopicPrefix + s + "ForceSterilization";
 const std::string Topics::SET14 = setTopicPrefix + s + "WaterPump";
 const std::string Topics::SET15 = setTopicPrefix + s + "WaterPumpSpeed";
+const std::string Topics::SET16 = setTopicPrefix + s + "HeatDelta";
+const std::string Topics::SET17 = setTopicPrefix + s + "CoolDelta";
+const std::string Topics::SET18 = setTopicPrefix + s + "DHWHeatDelta";
 
 // state topics
 // Can be configured.
