@@ -225,7 +225,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 84
     set_pos = 84;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET16 \t Heat_Delta: %d", set_byte - 128);
+    sprintf(log_msg, "Command SET16 \t HeatDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set cool delta 1-15
@@ -234,7 +234,16 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 94
     set_pos = 94;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET16 \t Cool_Delta: %d", set_byte - 128);
+    sprintf(log_msg, "Command SET17 \t CoolDelta: %d", set_byte - 128);
+    mainCommand[set_pos] = set_byte;
+  }
+  // set cool delta 1-15
+  else if (Topics::SET18.compare(topic) == 0)
+  {
+    //pos 99
+    set_pos = 99;
+    set_byte = state_string.toInt() + 128;
+    sprintf(log_msg, "Command SET18 \t DHWHeatDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);
