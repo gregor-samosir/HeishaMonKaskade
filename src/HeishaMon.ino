@@ -21,11 +21,12 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define WAITTIME 3000      // wait for next read from heatpump
-#define SERIALTIMEOUT 1000 // wait until all 203 bytes are read
-#define RECONNECTTIME 30000 // next mqtt reconnect
-#define LOGHEXBYTESPERLINE 16 // please be aware of max mqtt message size - 32 bytes per line does not work
-#define MAXCOMMANDSINBUFFER 10 //can't have too much in buffer due to memory shortage
+#define COMMANDTIME 3000      // time between commands send to HP
+#define QUERYTIME 15000       // time between main querys send to HP 
+#define SERIALTIMEOUT 1000    // max. time to read 203 bytes from serial
+#define RECONNECTTIME 30000   // time between mqtt reconnect
+#define LOGHEXBYTESPERLINE 16
+#define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 255
 
 // Default settings if config does not exists
@@ -40,8 +41,9 @@ char mqtt_password[40];
 
 bool serialquerysent = false;          // mutex for serial sending
 
-unsigned long nextquerytime = 0;          // WAITTIME
-unsigned long nextreadtime = 0;           // SERIALTIMEOUT
+unsigned long nextquerytime = 0;          // QUERYTIME 
+unsigned long nextcommandtime = 0;        // COMMANDTIME
+unsigned long serialreadtime = 0;           // SERIALTIMEOUT
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
@@ -292,7 +294,7 @@ bool validate_checksum()
 }
 
 /*****************************************************************************/
-/* Write to serial                                                      */
+/* Write to serial                                                           */
 /*****************************************************************************/
 bool send_serial_command(byte *command, int length)
 {
@@ -301,32 +303,37 @@ bool send_serial_command(byte *command, int length)
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
   if (outputHexDump) write_mqtt_hex((char *)command, length);
-  nextreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
+  serialreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
   return true;
 }
 
 /*****************************************************************************/
-/* Write query (or buffer) to pana  (called from loop)                  */
+/* Send command buffer to pana  (called from loop)                           */
 /*****************************************************************************/
-void send_panasonic_data()
+void send_pana_command()
+{
+  if (millis() > nextcommandtime)
+  {
+    nextcommandtime = millis() + COMMANDTIME;
+    // sprintf(log_msg, "pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
+    serialquerysent = send_serial_command(commandBuffer->value, commandBuffer->length);
+    command_struct *nextCommand = commandBuffer->next;
+    free(commandBuffer);
+    commandBuffer = nextCommand;
+    commandsInBuffer--;
+  }
+}
+
+/*****************************************************************************/
+/* Send query to pana  (called from loop)                                    */
+/*****************************************************************************/
+void send_pana_mainquery()
 {
   if (millis() > nextquerytime)
-  { 
-    nextquerytime = millis() + WAITTIME;
-    if (commandBuffer)
-    { 
-      // sprintf(log_msg, "Pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
-      serialquerysent = send_serial_command(commandBuffer->value, commandBuffer->length);
-      command_struct *nextCommand = commandBuffer->next;
-      free(commandBuffer);
-      commandBuffer = nextCommand;
-      commandsInBuffer--;
-    }
-    else
-    { //no command in buffer, send query
-      //write_mqtt_log((char *)"Request with query");
-      serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
-    }
+  {
+    nextquerytime = millis() + QUERYTIME;
+    // write_mqtt_log((char *)"mainquery");
+    serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
   }
 }
 
@@ -376,11 +383,11 @@ bool readSerial()
 /*****************************************************************************/
 /* Read from pana and decode (call from loop)                           */
 /*****************************************************************************/
-void read_panasonic_data()
+void read_pana_data()
 {
   if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
-    if (millis() > nextreadtime)
+    if (millis() > serialreadtime)
     {
       write_mqtt_log((char *)"Serial read failed due to timeout!");
       data_length = 0;
@@ -390,9 +397,9 @@ void read_panasonic_data()
 
     if (readSerial())
     {
-      serialquerysent = false;
       //write_mqtt_log((char *)"Decode  Start");
       decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+      serialquerysent = false;
       //write_mqtt_log((char *)"Decode  End");
     }
   }
@@ -443,6 +450,15 @@ void loop()
   httpServer.handleClient();
   MDNS.update();
   mqtt_loop();
-  send_panasonic_data(); // Send query or command from buffer. This trigger heisha to fill the serial buffer
-  read_panasonic_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
+
+  if (commandBuffer)
+  {
+    send_pana_command(); // Send command from buffer.
+  }
+  else
+  {
+    send_pana_mainquery(); // Send mainquery
+  }
+
+  read_pana_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
 }
