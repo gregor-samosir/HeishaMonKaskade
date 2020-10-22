@@ -234,7 +234,9 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
       int value = actData[topic].toInt();
       topicdesc = topicDescription[topic][value];
     }
-    tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actData[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
+    if (actData[topic] != "unused") {
+      tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actData[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
+    }
   }
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");

@@ -21,7 +21,7 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define WAITTIME 5000      // wait for next read from heatpump
+#define WAITTIME 3000      // wait for next read from heatpump
 #define SERIALTIMEOUT 1000 // wait until all 203 bytes are read
 #define RECONNECTTIME 30000 // next mqtt reconnect
 #define LOGHEXBYTESPERLINE 16 // please be aware of max mqtt message size - 32 bytes per line does not work
@@ -38,7 +38,7 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-bool requesthasbeensent = false;          // mutex for serial sending
+bool serialquerysent = false;          // mutex for serial sending
 
 unsigned long nextquerytime = 0;          // WAITTIME
 unsigned long nextreadtime = 0;           // SERIALTIMEOUT
@@ -316,7 +316,7 @@ void send_panasonic_data()
     if (commandBuffer)
     { 
       // sprintf(log_msg, "Pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
-      requesthasbeensent = send_serial_command(commandBuffer->value, commandBuffer->length);
+      serialquerysent = send_serial_command(commandBuffer->value, commandBuffer->length);
       command_struct *nextCommand = commandBuffer->next;
       free(commandBuffer);
       commandBuffer = nextCommand;
@@ -325,7 +325,7 @@ void send_panasonic_data()
     else
     { //no command in buffer, send query
       //write_mqtt_log((char *)"Request with query");
-      requesthasbeensent = send_serial_command(mainQuery, MAINQUERYSIZE);
+      serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
     }
   }
 }
@@ -340,7 +340,7 @@ bool readSerial()
     serial_data[data_length] = Serial.read();
     data_length += 1;
     // only enable this if you really want to see how the bytes gathered in multiple tries
-    // sprintf(log_msg, "Receive byte : %d : %d", data_length, (int)rc); write_mqtt_log(log_msg);
+    // sprintf(log_msg, "Receive byte : %d", data_length); write_mqtt_log(log_msg);
   }
   if (data_length > 1)
   { //should have received length part of header now
@@ -354,31 +354,20 @@ bool readSerial()
 
     if (data_length == (serial_data[1] + 3))
     { 
-      requesthasbeensent = false;
-      if (outputHexDump) write_mqtt_hex(serial_data, data_length);
+      if (outputHexDump)
+      { 
+        write_mqtt_hex(serial_data, data_length);
+      }
+      
       if (!validate_checksum())
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
         data_length = 0;
         return false;
       }
-      if (data_length == 203)
-      { //for now only return true for this datagram because we can not decode the shorter datagram yet
-        data_length = 0;
-        return true;
-      }
-      else if (data_length == 20)
-      { //optional pcb acknowledge answer
-        write_mqtt_log((char *)"Datagram from optional PCB, no need to decode this.");
-        data_length = 0;
-        return false;
-      }
-      else
-      {
-        write_mqtt_log((char *)"Datagram to short to decode");
-        data_length = 0;
-        return false;
-      }
+
+      data_length = 0;
+      return true;
     }
   }
   return false;
@@ -389,18 +378,19 @@ bool readSerial()
 /*****************************************************************************/
 void read_panasonic_data()
 {
-  if (requesthasbeensent) //only read if we have sent a command so we expect an answer
+  if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
     if (millis() > nextreadtime)
     {
       write_mqtt_log((char *)"Serial read failed due to timeout!");
       data_length = 0;
-      requesthasbeensent = false; //we are allowed to send a new command
+      serialquerysent = false; //we are allowed to send a new command
       return;
     }
 
     if (readSerial())
     {
+      serialquerysent = false;
       //write_mqtt_log((char *)"Decode  Start");
       decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
       //write_mqtt_log((char *)"Decode  End");
