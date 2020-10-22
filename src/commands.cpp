@@ -24,7 +24,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 2;
     }
-    sprintf(log_msg, "Command SET1 \t Heatpump: %d", set_byte);
+    sprintf(log_msg, "SET1 Heatpump: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -34,7 +34,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 7
     set_pos = 7;
     set_byte = (state_string.toInt() + 1) * 8;
-    sprintf(log_msg, "Command SET3 \t QuietMode: %d", set_byte / 8 - 1);
+    sprintf(log_msg, "SET3 QuietMode: %d", set_byte / 8 - 1);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -44,7 +44,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos = 38
     set_pos = 38;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET5 \t Z1HeatRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET5 Z1HeatRequestTemperature: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -54,7 +54,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 39
     set_pos = 39;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET6 \t Z1CoolRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET6 Z1CoolRequestTemperature: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -64,7 +64,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 40
     set_pos = 40;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET7 \t Z2HeatRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET7 Z2HeatRequestTemperature: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -74,7 +74,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 41
     set_pos = 41;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET8 \t Z2CoolRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET8 Z2CoolRequestTemperature: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -88,7 +88,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 128; //hex 0x80
     }
-    sprintf(log_msg, "Command SET10 \t ForceDHW: %d", set_byte);
+    sprintf(log_msg, "SET10 ForceDHW: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -102,7 +102,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 2; //hex 0x02
     }
-    sprintf(log_msg, "Command SET12 \t ForceDefrost: %d", set_byte);
+    sprintf(log_msg, "SET12 ForceDefrost: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -116,7 +116,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 4; //hex 0x04
     }
-    sprintf(log_msg, "Command SET13 \t ForceSterilization: %d", set_byte);
+    sprintf(log_msg, "SET13 ForceSterilization: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -130,7 +130,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "Command SET2 \t HolidayMode: %d", set_byte);
+    sprintf(log_msg, "SET2 HolidayMode: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -140,7 +140,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 7
     set_pos = 7;
     set_byte = (state_string.toInt()) + 73;
-    sprintf(log_msg, "Command SET4 \t PowerfulMode: %d", (set_byte - 73));
+    sprintf(log_msg, "SET4 PowerfulMode: %d", (set_byte - 73));
     mainCommand[set_pos] = set_byte;
   }
 
@@ -182,7 +182,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
       set_byte = 0;
       break;
     }
-    sprintf(log_msg, "Command SET9 \t OperationMode: %d", set_byte);
+    sprintf(log_msg, "SET9 OperationMode: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -192,7 +192,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 42
     set_pos = 42;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET11 \t DHWTemp: %d", set_byte - 128);
+    sprintf(log_msg, "SET11 DHWTemp: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -206,7 +206,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "Command SET14 \t WaterPump: %d", set_byte);
+    sprintf(log_msg, "SET14 WaterPump: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -216,7 +216,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 45
     set_pos = 45;
     set_byte = state_string.toInt() + 1;
-    sprintf(log_msg, "Command SET15 \t WaterPumpSpeed: %d", set_byte);
+    sprintf(log_msg, "SET15 WaterPumpSpeed: %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
   // set heat delta 1-15
@@ -225,7 +225,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 84
     set_pos = 84;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET16 \t HeatDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET16 HeatDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set cool delta 1-15
@@ -234,7 +234,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 94
     set_pos = 94;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET17 \t CoolDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET17 CoolDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set cool delta 1-15
@@ -243,7 +243,7 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     //pos 99
     set_pos = 99;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "Command SET18 \t DHWHeatDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET18 DHWHeatDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);
