@@ -246,5 +246,14 @@ void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte
     sprintf(log_msg, "SET18 DHWHeatDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
+  // set DHW heatup time (max) 5 -240
+  else if (Topics::SET19.compare(topic) == 0)
+  {
+    //pos 98
+    set_pos = 98;
+    set_byte = state_string.toInt() + 1;
+    sprintf(log_msg, "SET19 DHWHeatuptime: %d", set_byte - 1);
+    mainCommand[set_pos] = set_byte;
+  }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);
 }
