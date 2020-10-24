@@ -24,6 +24,7 @@ public:
     static const std::string SET16;
     static const std::string SET17;
     static const std::string SET18;
+    static const std::string SET19;
 };
 
 class States
@@ -126,4 +127,5 @@ public:
     static const char *TOP94;
     static const char *TOP95;
     static const char *TOP96;
+    static const char *TOP97;
 };

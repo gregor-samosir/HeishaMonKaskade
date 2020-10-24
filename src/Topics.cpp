@@ -28,6 +28,7 @@ const std::string Topics::SET15 = setTopicPrefix + s + "WaterPumpSpeed";
 const std::string Topics::SET16 = setTopicPrefix + s + "HeatDelta";
 const std::string Topics::SET17 = setTopicPrefix + s + "CoolDelta";
 const std::string Topics::SET18 = setTopicPrefix + s + "DHWHeatDelta";
+const std::string Topics::SET19 = setTopicPrefix + s + "DHWHeatupTime";
 
 // state topics
 // Can be configured.
@@ -128,3 +129,4 @@ const char *States::TOP93 = "SGReady_Capacity1_Heat";
 const char *States::TOP94 = "SGReady_Capacity1_DHW";
 const char *States::TOP95 = "SGReady_Capacity2_Heat";
 const char *States::TOP96 = "SGReady_Capacity2_DHW";
+const char *States::TOP97 = "DHW_Heatup_Time";

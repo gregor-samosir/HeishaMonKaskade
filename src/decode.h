@@ -3,7 +3,7 @@
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
-#define NUMBEROFTOPICS 97 //last topic number + 1
+#define NUMBEROFTOPICS 98 //last topic number + 1
 
 void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void (write_mqtt_log)(char *));
 
@@ -127,6 +127,7 @@ static const char *topics[] = {
     States::TOP94,
     States::TOP95,
     States::TOP96,
+    States::TOP97,
 };
 
 static const byte topicBytes[] = {
@@ -228,6 +229,7 @@ static const byte topicBytes[] = {
     72,  //TOP94
     73,  //TOP95
     74,  //TOP96
+    98,  //TOP97
 };
 
 typedef String (*topicFP)(byte);
@@ -330,6 +332,7 @@ static const topicFP topicFunctions[] = {
     getIntMinus1,         //TOP94
     getIntMinus1,         //TOP95
     getIntMinus1,         //TOP96
+    getIntMinus1,         //TOP97
 };
 
 static const char *DisabledEnabled[] = {"Disabled", "Enabled"};
@@ -455,4 +458,5 @@ static const char **topicDescription[] = {
     Percent,          //TOP94
     Percent,          //TOP95
     Percent,          //TOP96
+    Minutes,          //TOP97
 };
