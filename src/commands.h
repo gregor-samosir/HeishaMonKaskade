@@ -3,4 +3,4 @@
 #define MAINQUERYSIZE 110
 extern byte mainQuery[MAINQUERYSIZE];
 
-void send_heatpump_command(char *topic, char *msg, void push_command_buffer(byte *, int, char *));
+void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byte *, int, char *));

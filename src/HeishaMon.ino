@@ -21,7 +21,7 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define COMMANDTIME 3000      // time between commands send to HP
+#define COMMANDTIME 1000      // time between commands send to HP
 #define QUERYTIME 15000       // time between main querys send to HP 
 #define SERIALTIMEOUT 1000    // max. time to read 203 bytes from serial
 #define RECONNECTTIME 30000   // time between mqtt reconnect
@@ -235,7 +235,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     char *msg = (char *)malloc(sizeof(char) * length + 1);
     strncpy(msg, (char *)payload, length);
     msg[length] = '\0';
-    send_heatpump_command(topic, msg, push_command_buffer);
+    build_heatpump_command(topic, msg, push_command_buffer);
 }
 
 /*****************************************************************************/
@@ -326,15 +326,16 @@ void send_pana_command()
 }
 
 /*****************************************************************************/
-/* Send query to pana  (called from loop)                                    */
+/* Send query to buffer  (called from loop)                                    */
 /*****************************************************************************/
 void send_pana_mainquery()
 {
   if (millis() > nextquerytime)
   {
     nextquerytime = millis() + QUERYTIME;
-    // write_mqtt_log((char *)"mainquery");
-    serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
+    // serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
+    sprintf(log_msg, "mainQuery: %d", nextquerytime);
+    push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
 
@@ -458,7 +459,7 @@ void loop()
   }
   else
   {
-    send_pana_mainquery(); // Send mainquery
+    send_pana_mainquery(); // Send mainquery to buffer
   }
 
   read_pana_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
