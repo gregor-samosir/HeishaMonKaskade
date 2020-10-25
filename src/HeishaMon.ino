@@ -21,10 +21,10 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define COMMANDTIME 1000      // time between commands send to HP
-#define QUERYTIME 15000       // time between main querys send to HP 
-#define SERIALTIMEOUT 1000    // max. time to read 203 bytes from serial
-#define RECONNECTTIME 30000   // time between mqtt reconnect
+#define COMMANDTIME 1000    // time between commands send to HP
+#define QUERYTIME 15000     // time between main querys send to HP
+#define SERIALTIMEOUT 1000  // max. time to read 203 bytes from serial
+#define RECONNECTTIME 30000 // time between mqtt reconnect
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 255
@@ -39,11 +39,11 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-bool serialquerysent = false;          // mutex for serial sending
+bool serialquerysent = false; // mutex for serial sending
 
-unsigned long nextquerytime = 0;          // QUERYTIME 
-unsigned long nextcommandtime = 0;        // COMMANDTIME
-unsigned long serialreadtime = 0;           // SERIALTIMEOUT
+unsigned long nextquerytime = 0;   // QUERYTIME
+unsigned long nextcommandtime = 0; // COMMANDTIME
+unsigned long serialreadtime = 0;  // SERIALTIMEOUT
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
@@ -122,8 +122,8 @@ void setupHttp()
 {
   httpUpdater.setup(&httpServer, update_path, update_username, ota_password);
   httpServer.on("/", []() {
-        handleRoot(&httpServer);
-      });
+    handleRoot(&httpServer);
+  });
   httpServer.on("/tablerefresh", []() {
     handleTableRefresh(&httpServer, actData);
   });
@@ -168,7 +168,6 @@ void switchSerial()
   digitalWrite(5, HIGH);
 }
 
-
 /*****************************************************************************/
 /* MQTT Client reconnect                                                     */
 /*****************************************************************************/
@@ -177,7 +176,7 @@ boolean mqtt_reconnect()
   if (mqtt_client.connect(wifi_hostname, mqtt_username, mqtt_password, Topics::WILL.c_str(), 1, true, "Offline"))
   {
     mqtt_client.publish(Topics::WILL.c_str(), "Online");
-    
+
     mqtt_client.subscribe(Topics::SET1.c_str());
     mqtt_client.subscribe(Topics::SET2.c_str());
     mqtt_client.subscribe(Topics::SET3.c_str());
@@ -232,10 +231,10 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-    char *msg = (char *)malloc(sizeof(char) * length + 1);
-    strncpy(msg, (char *)payload, length);
-    msg[length] = '\0';
-    build_heatpump_command(topic, msg, push_command_buffer);
+  char *msg = (char *)malloc(sizeof(char) * length + 1);
+  strncpy(msg, (char *)payload, length);
+  msg[length] = '\0';
+  build_heatpump_command(topic, msg, push_command_buffer);
 }
 
 /*****************************************************************************/
@@ -263,7 +262,8 @@ void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
     {
       sprintf(&buffer[3 * j], "%02X ", hex[i + j]);
     }
-    sprintf(log_msg, "Data: %s", buffer); write_mqtt_log(log_msg);
+    sprintf(log_msg, "Data: %s", buffer);
+    write_mqtt_log(log_msg);
   }
 }
 
@@ -303,7 +303,8 @@ bool send_serial_command(byte *command, int length)
   size_t bytesSent = Serial.write(command, length);
   bytesSent += Serial.write(chk);
   //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-  if (outputHexDump) write_mqtt_hex((char *)command, length);
+  if (outputHexDump)
+    write_mqtt_hex((char *)command, length);
   serialreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
   return true;
 }
@@ -362,12 +363,12 @@ bool readSerial()
     }
 
     if (data_length == (serial_data[1] + 3))
-    { 
+    {
       if (outputHexDump)
-      { 
+      {
         write_mqtt_hex(serial_data, data_length);
       }
-      
+
       if (!validate_checksum())
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
@@ -406,8 +407,6 @@ void read_pana_data()
     }
   }
 }
-
-
 
 /*****************************************************************************/
 /* handle mqtt connection  (call from loop)                                  */
