@@ -8,7 +8,6 @@
 #include "decode.h"
 #include "version.h"
 
-
 //flag for saving
 bool shouldSaveConfig = false;
 
@@ -204,7 +203,7 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->sendContent_P(webBodyStart);
   httpServer->sendContent_P(menuJS);
   httpServer->sendContent_P(refreshJS);
-  
+
   String httptext = "<div class='w3-sidebar w3-bar-block w3-card w3-animate-left' style='display:none' id='leftMenu'>";
   httpServer->sendContent(httptext);
   httpServer->sendContent_P(sidebar);
@@ -216,7 +215,6 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->sendContent("");
   httpServer->client().stop();
 }
-
 
 void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
 {
@@ -234,7 +232,8 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
       int value = actData[topic].toInt();
       topicdesc = topicDescription[topic][value];
     }
-    if (actData[topic] != "unused") {
+    if (actData[topic] != "unused")
+    {
       tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actData[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
     }
   }

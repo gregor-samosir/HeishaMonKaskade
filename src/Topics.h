@@ -64,7 +64,7 @@ public:
     static const char *TOP31;
     static const char *TOP32;
     static const char *TOP33;
-    static const char *TOP34; 
+    static const char *TOP34;
     static const char *TOP35;
     static const char *TOP36;
     static const char *TOP37;

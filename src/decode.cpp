@@ -21,7 +21,7 @@ void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqt
   {
     //switch on topic numbers with 2 bytes
     switch (Topic_Number)
-    { 
+    {
     case 1: //Pump_Flow
       Topic_Value = getPumpFlow(serial_data);
       break;
@@ -70,7 +70,8 @@ void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqt
     {
       if (actData[Topic_Number] != Topic_Value) //write only changed topics to mqtt log
       {
-        sprintf(log_msg, "TOP%d %s: %s", Topic_Number, topics[Topic_Number], Topic_Value.c_str()); write_mqtt_log(log_msg);
+        sprintf(log_msg, "TOP%d %s: %s", Topic_Number, topics[Topic_Number], Topic_Value.c_str());
+        write_mqtt_log(log_msg);
       }
       actData[Topic_Number] = Topic_Value;
       mqtt_topic = Topics::STATE + "/" + topics[Topic_Number];
