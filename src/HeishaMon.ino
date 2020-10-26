@@ -23,7 +23,8 @@
 
 #define COMMANDTIME 1000    // time between commands send to HP
 #define QUERYTIME 14000     // time between main querys send to HP
-#define SERIALTIMEOUT 750  // max. time to read 203 bytes from serial
+#define SERIALTIMEOUT 600   // max. time to read 203 bytes from serial buffer (> SERIALBUFFERFILLTIME)
+#define SERIALBUFFERFILLTIME 500 // wait to fill the serial buffer
 #define RECONNECTTIME 30000 // time between mqtt reconnect
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
@@ -44,6 +45,7 @@ bool serialquerysent = false; // mutex for serial sending
 unsigned long nextquerytime = 0;   // QUERYTIME
 unsigned long nextcommandtime = 0; // COMMANDTIME
 unsigned long serialreadtime = 0;  // SERIALTIMEOUT
+unsigned long bufferfilltime = 0;
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
@@ -317,6 +319,7 @@ void send_pana_command()
     commandBuffer = nextCommand;
     commandsInBuffer--;
     serialreadtime = millis() + SERIALTIMEOUT;
+    bufferfilltime = millis() + SERIALBUFFERFILLTIME;
     serialquerysent = true;
   }
 }
@@ -329,7 +332,7 @@ void send_pana_mainquery()
   if (millis() > nextquerytime)
   {
     nextquerytime = millis() + QUERYTIME;
-    sprintf(log_msg, "mainQuery: %d", nextquerytime);
+    sprintf(log_msg, "QUERY: %d", nextquerytime);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
@@ -343,13 +346,11 @@ bool readSerial()
   {
     serial_data[data_length] = Serial.read();
     data_length += 1;
-    yield();
-    // only enable this if you really want to see how the bytes gathered in multiple tries
+    // only enable next line to DEBUG
     // sprintf(log_msg, "Receive byte : %d", data_length); write_mqtt_log(log_msg);
   }
   if (data_length > 1)
-  { //should have received length part of header now
-
+  { // received length part of header now
     if (data_length > (serial_data[1] + 3))
     {
       write_mqtt_log((char *)"Datagram longer than header suggests");
@@ -370,13 +371,12 @@ bool readSerial()
         data_length = 0;
         return false;
       }
-
       data_length = 0;
       return true;
     }
   }
-  // write_mqtt_log((char *)"Datagram not received");
-  yield();
+  sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
+  write_mqtt_log(log_msg);
   return false;
 }
 
@@ -394,13 +394,16 @@ void read_pana_data()
       serialquerysent = false; //we are allowed to send a new command
       return;
     }
-    delay(200);
-    if (readSerial())
+
+    if (millis() > bufferfilltime) // wait to fill the serial buffer
     {
-      //write_mqtt_log((char *)"Decode  Start");
-      decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
-      serialquerysent = false;
-      //write_mqtt_log((char *)"Decode  End");
+      if (readSerial())
+      {
+        //write_mqtt_log((char *)"Decode  Start");
+        decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+        serialquerysent = false;
+        //write_mqtt_log((char *)"Decode  End");
+      }
     }
   }
 }
