@@ -375,8 +375,11 @@ bool readSerial()
       return true;
     }
   }
-  sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
-  write_mqtt_log(log_msg);
+  if (data_length > 0)
+  {
+    sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
+    write_mqtt_log(log_msg);
+  }
   return false;
 }
 
