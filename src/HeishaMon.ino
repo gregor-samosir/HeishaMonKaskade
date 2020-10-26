@@ -69,6 +69,7 @@ struct command_struct
 {
   byte value[128];
   unsigned int length;
+  char log_msg[128];
   command_struct *next;
 };
 command_struct *commandBuffer;
@@ -209,12 +210,13 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
-    write_mqtt_log(log_msg);
+    //write_mqtt_log(log_msg);
     command_struct *newCommand = new command_struct;
     newCommand->length = length;
     for (int i = 0; i < length; i++)
     {
       newCommand->value[i] = command[i];
+      newCommand->log_msg[i] = log_msg[i];
     }
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
@@ -304,14 +306,15 @@ void send_pana_command()
   if (millis() > nextcommandtime)
   {
     nextcommandtime = millis() + COMMANDTIME;
+    write_mqtt_log((char *) commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
     bytesSent += Serial.write(chk);
     //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-
+    
     if (outputHexDump)
     {
-      write_mqtt_hex((char *)commandBuffer->value, commandBuffer->length);
+      write_mqtt_hex((char *) commandBuffer->value, commandBuffer->length);
     }
 
     command_struct *nextCommand = commandBuffer->next;
@@ -349,7 +352,7 @@ bool readSerial()
     // only enable next line to DEBUG
     // sprintf(log_msg, "Receive byte : %d", data_length); write_mqtt_log(log_msg);
   }
-  if (data_length > 1)
+  if (data_length > 0)
   { // received length part of header now
     if (data_length > (serial_data[1] + 3))
     {
@@ -374,9 +377,6 @@ bool readSerial()
       data_length = 0;
       return true;
     }
-  }
-  if (data_length > 0)
-  {
     sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
     write_mqtt_log(log_msg);
   }
