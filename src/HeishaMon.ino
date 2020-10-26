@@ -22,8 +22,8 @@
 #define DRD_ADDRESS 0x00
 
 #define COMMANDTIME 1000    // time between commands send to HP
-#define QUERYTIME 15000     // time between main querys send to HP
-#define SERIALTIMEOUT 1000  // max. time to read 203 bytes from serial
+#define QUERYTIME 14000     // time between main querys send to HP
+#define SERIALTIMEOUT 750  // max. time to read 203 bytes from serial
 #define RECONNECTTIME 30000 // time between mqtt reconnect
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
@@ -295,21 +295,6 @@ bool validate_checksum()
 }
 
 /*****************************************************************************/
-/* Write to serial                                                           */
-/*****************************************************************************/
-bool send_serial_command(byte *command, int length)
-{
-  byte chk = build_checksum(command, length);
-  size_t bytesSent = Serial.write(command, length);
-  bytesSent += Serial.write(chk);
-  //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-  if (outputHexDump)
-    write_mqtt_hex((char *)command, length);
-  serialreadtime = millis() + SERIALTIMEOUT; //set readtime when to timeout the answer of this command
-  return true;
-}
-
-/*****************************************************************************/
 /* Send command buffer to pana  (called from loop)                           */
 /*****************************************************************************/
 void send_pana_command()
@@ -317,12 +302,22 @@ void send_pana_command()
   if (millis() > nextcommandtime)
   {
     nextcommandtime = millis() + COMMANDTIME;
-    // sprintf(log_msg, "pop %d from buffer", commandsInBuffer); write_mqtt_log(log_msg);
-    serialquerysent = send_serial_command(commandBuffer->value, commandBuffer->length);
+    byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
+    size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
+    bytesSent += Serial.write(chk);
+    //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
+
+    if (outputHexDump)
+    {
+      write_mqtt_hex((char *)commandBuffer->value, commandBuffer->length);
+    }
+
     command_struct *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
     commandsInBuffer--;
+    serialreadtime = millis() + SERIALTIMEOUT;
+    serialquerysent = true;
   }
 }
 
@@ -334,7 +329,6 @@ void send_pana_mainquery()
   if (millis() > nextquerytime)
   {
     nextquerytime = millis() + QUERYTIME;
-    // serialquerysent = send_serial_command(mainQuery, MAINQUERYSIZE);
     sprintf(log_msg, "mainQuery: %d", nextquerytime);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
@@ -349,6 +343,7 @@ bool readSerial()
   {
     serial_data[data_length] = Serial.read();
     data_length += 1;
+    yield();
     // only enable this if you really want to see how the bytes gathered in multiple tries
     // sprintf(log_msg, "Receive byte : %d", data_length); write_mqtt_log(log_msg);
   }
@@ -380,6 +375,8 @@ bool readSerial()
       return true;
     }
   }
+  // write_mqtt_log((char *)"Datagram not received");
+  yield();
   return false;
 }
 
@@ -397,7 +394,7 @@ void read_pana_data()
       serialquerysent = false; //we are allowed to send a new command
       return;
     }
-
+    delay(200);
     if (readSerial())
     {
       //write_mqtt_log((char *)"Decode  Start");
