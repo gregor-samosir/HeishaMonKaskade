@@ -54,6 +54,7 @@ bool outputHexDump = false; // toggle to dump raw hex to mqtt log
 // instead of passing array pointers between functions we just define this in the global scope
 char serial_data[MAXDATASIZE];
 byte data_length = 0;
+byte querynum = 0;
 
 // store actual value in an String array
 String actData[NUMBEROFTOPICS];
@@ -335,7 +336,8 @@ void send_pana_mainquery()
   if (millis() > nextquerytime)
   {
     nextquerytime = millis() + QUERYTIME;
-    sprintf(log_msg, "QUERY: %d", nextquerytime);
+    querynum += 1;
+    sprintf(log_msg, "QUERY: %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
