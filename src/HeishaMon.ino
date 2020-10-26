@@ -23,7 +23,7 @@
 
 #define COMMANDTIME 1000    // time between commands send to HP
 #define QUERYTIME 14000     // time between main querys send to HP
-#define SERIALTIMEOUT 600   // max. time to read 203 bytes from serial buffer (> SERIALBUFFERFILLTIME)
+#define SERIALTIMEOUT 750   // max. time to read 203 bytes from serial buffer (> SERIALBUFFERFILLTIME)
 #define SERIALBUFFERFILLTIME 500 // wait to fill the serial buffer
 #define RECONNECTTIME 30000 // time between mqtt reconnect
 #define LOGHEXBYTESPERLINE 16
@@ -342,7 +342,7 @@ void send_pana_mainquery()
 /*****************************************************************************/
 bool readSerial()
 {
-  while (Serial.available())
+  while (Serial.available() > 0)
   {
     serial_data[data_length] = Serial.read();
     data_length += 1;
@@ -375,8 +375,11 @@ bool readSerial()
       return true;
     }
   }
-  sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
-  write_mqtt_log(log_msg);
+  if (data_length > 0)
+  {
+    sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
+    write_mqtt_log(log_msg);
+  }
   return false;
 }
 
@@ -397,7 +400,7 @@ void read_pana_data()
 
     if (millis() > bufferfilltime) // wait to fill the serial buffer
     {
-      if (readSerial())
+      if (readSerial() == true)
       {
         //write_mqtt_log((char *)"Decode  Start");
         decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
