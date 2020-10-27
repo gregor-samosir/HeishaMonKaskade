@@ -237,7 +237,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     sprintf(log_msg, "SET17 CoolDelta: %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
-  // set cool delta 1-15
+  // set DHW reheat delta -5 -15
   else if (Topics::SET18.compare(topic) == 0)
   {
     //pos 99
