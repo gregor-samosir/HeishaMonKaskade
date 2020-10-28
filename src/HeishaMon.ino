@@ -51,7 +51,6 @@ bool serialquerysent = false; // mutex for serial sending
 
 // Mqtt reconnect // timer between mqtt reconnect
 // Default 30000
-// #define RECONNECTTIME 30000 // time between mqtt reconnect
 unsigned long reconnectStarttime ;
 const unsigned long reconnecttime = 30000;
 
@@ -323,7 +322,8 @@ bool validate_checksum()
 void send_pana_command()
 {
   if (currentMillis - commandStarttime >= commandtime)
-  {
+  { 
+    commandStarttime = currentMillis;
     write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
@@ -340,10 +340,9 @@ void send_pana_command()
     commandBuffer = nextCommand;
     commandsInBuffer--;
 
-    commandStarttime = currentMillis;
     serialreadStarttime = currentMillis;
     bufferfillStarttime = currentMillis;
-    
+
     serialquerysent = true;
   }
 }
@@ -399,7 +398,7 @@ bool readSerial()
       data_length = 0;
       return true;
     }
-    sprintf(log_msg, "Receive partial datagram %d, please fix SERIALBUFFERFILLTIME", data_length);
+    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfilltime", data_length);
     write_mqtt_log(log_msg);
   }
   return false;
@@ -412,14 +411,6 @@ void read_pana_data()
 {
   if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
-    if (currentMillis - serialreadStarttime >= serialreadtime)
-    {
-      write_mqtt_log((char *)"Serial read failed due to timeout!");
-      data_length = 0;
-      serialquerysent = false; //we are allowed to send a new command
-      return;
-    }
-
     if (currentMillis - bufferfillStarttime >= bufferfilltime) // wait to fill the serial buffer
     {
       if (readSerial() == true)
@@ -428,7 +419,15 @@ void read_pana_data()
         decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
         serialquerysent = false;
         //write_mqtt_log((char *)"Decode  End");
+        return;
       }
+    }
+    if (currentMillis - serialreadStarttime >= serialreadtime)
+    {
+      write_mqtt_log((char *)"Serial read failed due to timeout!");
+      data_length = 0;
+      serialquerysent = false; //we are allowed to send a new command
+      // return;
     }
   }
 }
