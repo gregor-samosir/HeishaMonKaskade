@@ -77,7 +77,7 @@ byte data_length = 0;
 unsigned int querynum = 0;
 
 // store actual value in an String array
-String actData[NUMBEROFTOPICS];
+String actual_data[NUMBEROFTOPICS];
 
 // log message to sprintf to
 char log_msg[255];
@@ -148,7 +148,7 @@ void setupHttp()
     handleRoot(&httpServer);
   });
   httpServer.on("/tablerefresh", []() {
-    handleTableRefresh(&httpServer, actData);
+    handleTableRefresh(&httpServer, actual_data);
   });
   httpServer.on("/reboot", []() {
     handleReboot(&httpServer);
@@ -425,7 +425,7 @@ void read_pana_data()
       if (readSerial() == true)
       {
         //write_mqtt_log((char *)"Decode  Start");
-        decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+        decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
         serialquerysent = false;
         //write_mqtt_log((char *)"Decode  End");
       }
