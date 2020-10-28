@@ -3,13 +3,13 @@
 
 unsigned long nextalldatatime = 0;
 
-void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
+void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
 {
   char log_msg[255];
   std::string mqtt_topic;
   bool updatealltopics = false;
-  byte Input_Byte;
-  String Topic_Value;
+  byte input_pos;
+  String top_value;
 
   if (millis() > nextalldatatime)
   {
@@ -17,28 +17,28 @@ void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqt
     nextalldatatime = millis() + UPDATEALLTIME;
   }
 
-  for (unsigned int Topic_Number = 0; Topic_Number < NUMBEROFTOPICS; Topic_Number++)
+  for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
     //switch on topic numbers with 2 bytes
-    switch (Topic_Number)
+    switch (top_num)
     {
     case 1: //Pump_Flow
-      Topic_Value = getPumpFlow(serial_data);
+      top_value = getPumpFlow(serial_data);
       break;
     case 11: //Operations_Hours
-      Topic_Value = getOperationHour(serial_data);
+      top_value = getOperationHour(serial_data);
       break;
     case 12: //Operations_Counter
-      Topic_Value = getOperationCount(serial_data);
+      top_value = getOperationCount(serial_data);
       break;
     case 90: //Room_Heater_Operations_Hours
-      Topic_Value = getRoomHeaterHour(serial_data);
+      top_value = getRoomHeaterHour(serial_data);
       break;
     case 91: //DHW_Heater_Operations_Hours
-      Topic_Value = getDHWHeaterHour(serial_data);
+      top_value = getDHWHeaterHour(serial_data);
       break;
     case 44: //Error
-      Topic_Value = getErrorInfo(serial_data);
+      top_value = getErrorInfo(serial_data);
       break;
     case 34: // unused Topics
     case 35:
@@ -57,25 +57,25 @@ void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqt
     case 87:
     case 88:
     case 89:
-      Topic_Value = "unused";
+      top_value = "unused";
       break;
     default:
       //call the topic function for 1 byte topics
-      Input_Byte = serial_data[topicBytes[Topic_Number]];
-      Topic_Value = topicFunctions[Topic_Number](Input_Byte);
+      input_pos = serial_data[topicBytes[top_num]];
+      top_value = topicFunctions[top_num](input_pos);
       break;
     }
 
-    if ((updatealltopics) || (actData[Topic_Number] != Topic_Value))
+    if ((updatealltopics) || (actual_data[top_num] != top_value))
     {
-      if (actData[Topic_Number] != Topic_Value) //write only changed topics to mqtt log
+      if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
       {
-        sprintf(log_msg, "TOP%d %s: %s", Topic_Number, topics[Topic_Number], Topic_Value.c_str());
+        sprintf(log_msg, "TOP%d %s: %s", top_num, topics[top_num], top_value.c_str());
         write_mqtt_log(log_msg);
       }
-      actData[Topic_Number] = Topic_Value;
-      mqtt_topic = Topics::STATE + "/" + topics[Topic_Number];
-      mqtt_client.publish(mqtt_topic.c_str(), Topic_Value.c_str(), MQTT_RETAIN_VALUES);
+      actual_data[top_num] = top_value;
+      mqtt_topic = Topics::STATE + "/" + topics[top_num];
+      mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
     }
   }
 }

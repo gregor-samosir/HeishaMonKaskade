@@ -216,7 +216,7 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->client().stop();
 }
 
-void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
+void handleTableRefresh(ESP8266WebServer *httpServer, String actual_data[])
 {
   String tabletext;
   String topicdesc;
@@ -229,12 +229,12 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actData[])
     }
     else
     {
-      int value = actData[topic].toInt();
+      int value = actual_data[topic].toInt();
       topicdesc = topicDescription[topic][value];
     }
-    if (actData[topic] != "unused")
+    if (actual_data[topic] != "unused")
     {
-      tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actData[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
+      tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actual_data[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
     }
   }
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);

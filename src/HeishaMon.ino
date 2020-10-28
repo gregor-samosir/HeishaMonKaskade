@@ -21,14 +21,40 @@
 // of the address block
 #define DRD_ADDRESS 0x00
 
-#define COMMANDTIME 1000    // time between commands send to HP
-#define QUERYTIME 14000     // time between main querys send to HP
-#define SERIALTIMEOUT 750   // max. time to read 203 bytes from serial buffer (> SERIALBUFFERFILLTIME)
-#define SERIALBUFFERFILLTIME 500 // wait to fill the serial buffer
-#define RECONNECTTIME 30000 // time between mqtt reconnect
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 255
+
+// Setup timers
+unsigned long currentMillis;
+
+// Command / timer to send commands from buffer to HP
+// Default 1000
+unsigned long commandStarttime;
+const unsigned long commandtime = 1000;
+
+// Query / timer to initiate a query
+// Default 14000
+unsigned long queryStarttime;
+const unsigned long querytime = 14000;
+
+// Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
+// Default 500
+unsigned long bufferfillStarttime;
+const unsigned long bufferfilltime = 500;
+
+// Serial Timout / timer to wait on serial to read all 203 bytes from HP
+// Default 750
+unsigned long serialreadStarttime;
+const unsigned long serialreadtime = 750;
+bool serialquerysent = false; // mutex for serial sending
+
+// Mqtt reconnect // timer between mqtt reconnect
+// Default 30000
+// #define RECONNECTTIME 30000 // time between mqtt reconnect
+unsigned long reconnectStarttime ;
+const unsigned long reconnecttime = 30000;
+
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
@@ -40,12 +66,6 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-bool serialquerysent = false; // mutex for serial sending
-
-unsigned long nextquerytime = 0;   // QUERYTIME
-unsigned long nextcommandtime = 0; // COMMANDTIME
-unsigned long serialreadtime = 0;  // SERIALTIMEOUT
-unsigned long bufferfilltime = 0;
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
@@ -57,7 +77,7 @@ byte data_length = 0;
 unsigned int querynum = 0;
 
 // store actual value in an String array
-String actData[NUMBEROFTOPICS];
+String actual_data[NUMBEROFTOPICS];
 
 // log message to sprintf to
 char log_msg[255];
@@ -83,6 +103,12 @@ ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
 /*****************************************************************************/
+/* MQTT Client                                                               */
+/*****************************************************************************/
+WiFiClient mqtt_wifi_client;
+PubSubClient mqtt_client(mqtt_wifi_client);
+
+/*****************************************************************************/
 /* OTA                                                                       */
 /*****************************************************************************/
 void setupOTA()
@@ -100,13 +126,6 @@ void setupOTA()
   });
   ArduinoOTA.begin();
 }
-
-/*****************************************************************************/
-/* MQTT Client                                                               */
-/*****************************************************************************/
-WiFiClient mqtt_wifi_client;
-PubSubClient mqtt_client(mqtt_wifi_client);
-unsigned long lastReconnectAttempt = 0;
 
 /*****************************************************************************/
 /* Write to mqtt log                                                         */
@@ -129,7 +148,7 @@ void setupHttp()
     handleRoot(&httpServer);
   });
   httpServer.on("/tablerefresh", []() {
-    handleTableRefresh(&httpServer, actData);
+    handleTableRefresh(&httpServer, actual_data);
   });
   httpServer.on("/reboot", []() {
     handleReboot(&httpServer);
@@ -250,7 +269,6 @@ void setupMqtt()
   mqtt_client.setServer(mqtt_server, atoi(mqtt_port));
   mqtt_client.setCallback(mqtt_callback);
   mqtt_reconnect();
-  lastReconnectAttempt = 0;
 }
 
 /*****************************************************************************/
@@ -304,10 +322,9 @@ bool validate_checksum()
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (millis() > nextcommandtime)
+  if (currentMillis - commandStarttime >= commandtime)
   {
-    nextcommandtime = millis() + COMMANDTIME;
-    write_mqtt_log((char *) commandBuffer->log_msg);
+    write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
     bytesSent += Serial.write(chk);
@@ -322,8 +339,11 @@ void send_pana_command()
     free(commandBuffer);
     commandBuffer = nextCommand;
     commandsInBuffer--;
-    serialreadtime = millis() + SERIALTIMEOUT;
-    bufferfilltime = millis() + SERIALBUFFERFILLTIME;
+
+    commandStarttime = currentMillis;
+    serialreadStarttime = currentMillis;
+    bufferfillStarttime = currentMillis;
+    
     serialquerysent = true;
   }
 }
@@ -333,12 +353,12 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (millis() > nextquerytime)
+  if (currentMillis - queryStarttime >= querytime)
   {
-    nextquerytime = millis() + QUERYTIME;
     querynum += 1;
     sprintf(log_msg, "QUERY: %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
+    queryStarttime = currentMillis;
   }
 }
 
@@ -392,7 +412,7 @@ void read_pana_data()
 {
   if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
-    if (millis() > serialreadtime)
+    if (currentMillis - serialreadStarttime >= serialreadtime)
     {
       write_mqtt_log((char *)"Serial read failed due to timeout!");
       data_length = 0;
@@ -400,12 +420,12 @@ void read_pana_data()
       return;
     }
 
-    if (millis() > bufferfilltime) // wait to fill the serial buffer
+    if (currentMillis - bufferfillStarttime >= bufferfilltime) // wait to fill the serial buffer
     {
       if (readSerial() == true)
       {
         //write_mqtt_log((char *)"Decode  Start");
-        decode_heatpump_data(serial_data, actData, mqtt_client, write_mqtt_log);
+        decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
         serialquerysent = false;
         //write_mqtt_log((char *)"Decode  End");
       }
@@ -420,13 +440,11 @@ void mqtt_loop()
 {
   if (!mqtt_client.connected())
   {
-    unsigned long now = millis();
-    if (now - lastReconnectAttempt > RECONNECTTIME)
+    if (currentMillis - reconnectStarttime >= reconnecttime)
     {
-      lastReconnectAttempt = now;
       if (mqtt_reconnect())
       {
-        lastReconnectAttempt = 0;
+        reconnectStarttime = currentMillis;
       }
     }
   }
@@ -448,6 +466,12 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
+
+  commandStarttime = millis();
+  queryStarttime = millis();
+  bufferfillStarttime = millis();
+  serialreadStarttime = millis();
+  reconnectStarttime = millis();
 }
 
 void loop()
@@ -456,6 +480,8 @@ void loop()
   httpServer.handleClient();
   MDNS.update();
   mqtt_loop();
+
+  currentMillis = millis(); //get the current time
 
   if (commandBuffer)
   {

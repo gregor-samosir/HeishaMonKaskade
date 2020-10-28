@@ -5,7 +5,7 @@
 #define MQTT_RETAIN_VALUES 1
 #define NUMBEROFTOPICS 98 //last topic number + 1
 
-void decode_heatpump_data(char *serial_data, String actData[], PubSubClient &mqtt_client, void(write_mqtt_log)(char *));
+void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client, void(write_mqtt_log)(char *));
 
 String unknown(byte input);
 String getBit1and2(byte input);
