@@ -12,15 +12,6 @@
 #include "decode.h"
 #include "commands.h"
 
-// maximum number of seconds between resets that
-// counts as a double reset
-#define DRD_TIMEOUT 0.1
-
-// address to the block in the RTC user memory
-// change it if it collides with another usage
-// of the address block
-#define DRD_ADDRESS 0x00
-
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 255
@@ -94,9 +85,6 @@ struct command_struct
 };
 command_struct *commandBuffer;
 unsigned int commandsInBuffer = 0;
-
-//doule reset detection
-DoubleResetDetect drd(DRD_TIMEOUT, DRD_ADDRESS);
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -459,7 +447,7 @@ void mqtt_loop()
 void setup()
 {
   setupSerial();
-  setupWifi(drd, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
+  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   MDNS.begin(wifi_hostname);
   setupOTA();
   setupMqtt();
@@ -478,9 +466,10 @@ void loop()
   ArduinoOTA.handle();
   httpServer.handleClient();
   MDNS.update();
-  mqtt_loop();
-
+  
   currentMillis = millis(); //get the current time
+  
+  mqtt_loop();
 
   if (commandBuffer)
   {
