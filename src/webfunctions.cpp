@@ -34,80 +34,67 @@ void saveConfigCallback()
   shouldSaveConfig = true;
 }
 
-void setupWifi(DoubleResetDetect &drd, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
+void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
 {
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
   wifiManager.setDebugOutput(true); //this is debugging on serial port, because serial swap is done after full startup this is ok
 
-  if (drd.detect())
-  {
-    Serial.println("Double reset detected, clearing config.");
-    LittleFS.begin();
-    LittleFS.format();
-    wifiManager.resetSettings();
-    Serial.println("Erase Config. Please open the Wifi portal to configure this device...");
-  }
-  else
-  {
-    //read configuration from FS json
-    Serial.println("mounting LittleFS...");
+  Serial.println("mounting LittleFS...");
 
-    if (LittleFS.begin())
+  if (LittleFS.begin())
+  {
+    Serial.println("Mount file system");
+    if (LittleFS.exists("/config.json"))
     {
-      Serial.println("Mount file system");
-      if (LittleFS.exists("/config.json"))
+      //file exists, reading and loading
+      Serial.println("Read config file");
+      File configFile = LittleFS.open("/config.json", "r");
+      if (configFile)
       {
-        //file exists, reading and loading
-        Serial.println("Read config file");
-        File configFile = LittleFS.open("/config.json", "r");
-        if (configFile)
-        {
-          Serial.println("Open config file");
-          size_t size = configFile.size();
-          // Allocate a buffer to store contents of the file.
-          std::unique_ptr<char[]> buf(new char[size]);
+        Serial.println("Open config file");
+        size_t size = configFile.size();
+        // Allocate a buffer to store contents of the file.
+        std::unique_ptr<char[]> buf(new char[size]);
 
-          configFile.readBytes(buf.get(), size);
-          DynamicJsonDocument jsonDoc(1024);
-          DeserializationError error = deserializeJson(jsonDoc, buf.get());
-          serializeJson(jsonDoc, Serial);
-          if (!error)
-          {
-            Serial.println("\nparsed json");
-            //read updated parameters, make sure no overflow
-            strncpy(wifi_hostname, jsonDoc["wifi_hostname"], 39);
-            wifi_hostname[39] = '\0';
-            strncpy(ota_password, jsonDoc["ota_password"], 39);
-            ota_password[39] = '\0';
-            strncpy(mqtt_server, jsonDoc["mqtt_server"], 39);
-            mqtt_server[39] = '\0';
-            strncpy(mqtt_port, jsonDoc["mqtt_port"], 5);
-            mqtt_port[5] = '\0';
-            strncpy(mqtt_username, jsonDoc["mqtt_username"], 39);
-            mqtt_username[39] = '\0';
-            strncpy(mqtt_password, jsonDoc["mqtt_password"], 39);
-            mqtt_password[39] = '\0';
-          }
-          else
-          {
-            Serial.println("Failed to load config, forcing config reset.");
-            wifiManager.resetSettings();
-          }
-          configFile.close();
+        configFile.readBytes(buf.get(), size);
+        DynamicJsonDocument jsonDoc(1024);
+        DeserializationError error = deserializeJson(jsonDoc, buf.get());
+        serializeJson(jsonDoc, Serial);
+        if (!error)
+        {
+          Serial.println("\nparsed json");
+          //read updated parameters, make sure no overflow
+          strncpy(wifi_hostname, jsonDoc["wifi_hostname"], 39);
+          wifi_hostname[39] = '\0';
+          strncpy(ota_password, jsonDoc["ota_password"], 39);
+          ota_password[39] = '\0';
+          strncpy(mqtt_server, jsonDoc["mqtt_server"], 39);
+          mqtt_server[39] = '\0';
+          strncpy(mqtt_port, jsonDoc["mqtt_port"], 5);
+          mqtt_port[5] = '\0';
+          strncpy(mqtt_username, jsonDoc["mqtt_username"], 39);
+          mqtt_username[39] = '\0';
+          strncpy(mqtt_password, jsonDoc["mqtt_password"], 39);
+          mqtt_password[39] = '\0';
         }
-      }
-      else
-      {
-        Serial.println("No config. Forcing reset to default.");
-        wifiManager.resetSettings();
+        else
+        {
+          Serial.println("Failed to load config, forcing config reset.");
+          wifiManager.resetSettings();
+        }
+        configFile.close();
       }
     }
     else
     {
-      Serial.println("Failed to mount FS");
+      Serial.println("No config. Forcing reset to default.");
+      wifiManager.resetSettings();
     }
-    //end read
+  }
+  else
+  {
+    Serial.println("Failed to mount FS");
   }
 
   // The extra parameters to be configured (can be either global or just in the setup)
