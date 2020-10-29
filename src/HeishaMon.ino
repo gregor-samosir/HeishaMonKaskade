@@ -379,7 +379,7 @@ bool readSerial()
       data_length = 0;
       return true;
     }
-    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfilltime", data_length);
+    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", data_length);
     write_mqtt_log(log_msg);
   }
   return false;
@@ -392,8 +392,10 @@ void read_pana_data()
 {
   if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
+    bufferfill_timeout.stop();
     if (readSerial() == true)
     {
+      serial_timeout.stop();
       //write_mqtt_log((char *)"Decode  Start");
       decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
       serialquerysent = false;
@@ -427,6 +429,7 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
+  delay(1000);
 
   command_timer.start();
   query_timer.start();
@@ -458,9 +461,9 @@ void loop()
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 
-  command_timer.update(); // send_pana_command()
-  query_timer.update(); // send query to buffer
+  command_timer.update(); // trigger send_pana_command()   - send command or query from buffer
+  query_timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
 
-  bufferfill_timeout.update(); //read_pana_data()
-  serial_timeout.update(); // timeout serial read
+  bufferfill_timeout.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
+  serial_timeout.update();     // trigger timeout_serial() - stop read from serial after timeout
 }
