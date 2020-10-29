@@ -1,5 +1,5 @@
-#include <LittleFS.h>
 #include <Arduino.h>
+#include <LittleFS.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
@@ -21,28 +21,25 @@ void send_pana_command();
 void send_pana_mainquery();
 void read_pana_data();
 void timeout_serial();
-void reconnect_check();
 
 // Command / timer to send commands from buffer to HP
 // Default 1000
-Ticker command_timer(send_pana_command, 1000, MILLIS);
+Ticker command_timer(send_pana_command, 1000, 0, MILLIS);  // loop
 
 // Query / timer to initiate a query
 // Default 14000
-Ticker query_timer(send_pana_mainquery, 14000, MILLIS);
+Ticker query_timer(send_pana_mainquery, 14000, 0, MILLIS); // loop
 
 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
 // Default 500
-Ticker bufferfill_timeout(read_pana_data, 500, 1, MILLIS);
+Ticker bufferfill_timeout(read_pana_data, 500, 1, MILLIS); // one time
 
 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
 // Default 750
-Ticker serial_timeout(timeout_serial, 750, 1, MILLIS);
+Ticker serial_timeout(timeout_serial, 750, 1, MILLIS); // one time
+
 bool serialquerysent = false; // mutex for serial sending
 
-// Mqtt reconnect // timer between mqtt reconnect
-// Default 30000
-Ticker reconnect_timer(reconnect_check, 30000, MILLIS);
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
@@ -92,6 +89,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 /*****************************************************************************/
 WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
+unsigned long lastReconnectAttempt = 0;
 
 /*****************************************************************************/
 /* OTA                                                                       */
@@ -329,7 +327,6 @@ void send_pana_command()
     bufferfill_timeout.start();
     serialquerysent = true;
   }
-  command_timer.start();
 }
 
 /*****************************************************************************/
@@ -343,7 +340,6 @@ void send_pana_mainquery()
     sprintf(log_msg, "QUERY: %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
-  query_timer.start();
 }
 
 /*****************************************************************************/
@@ -402,11 +398,12 @@ void read_pana_data()
       decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
       serialquerysent = false;
       //write_mqtt_log((char *)"Decode  End");
-      //bufferfill_timeout.stop();
     }
   }
 }
 
+/*****************************************************************************/
+/* handle serial timeout                                                     */
 /*****************************************************************************/
 void timeout_serial()
 {
@@ -415,21 +412,6 @@ void timeout_serial()
     write_mqtt_log((char *)"Serial read failed due to timeout!");
     data_length = 0;
     serialquerysent = false; //we are allowed to send a new command
-    //serial_timeout.stop();
-  }
-}
-
-/*****************************************************************************/
-/* handle mqtt connection  (call from loop)                                  */
-/*****************************************************************************/
-void reconnect_check()
-{
-  if (!mqtt_client.connected())
-  {
-    if (mqtt_reconnect())
-    {
-      reconnect_timer.start();
-    }
   }
 }
 
@@ -448,7 +430,7 @@ void setup()
 
   command_timer.start();
   query_timer.start();
-  reconnect_timer.start();
+  lastReconnectAttempt = 0;
 }
 
 void loop()
@@ -457,9 +439,22 @@ void loop()
   httpServer.handleClient();
   MDNS.update();
 
-  reconnect_timer.update(); // reconnect_check();
-  
-  mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
+  if (!mqtt_client.connected())
+  {
+    unsigned long now = millis();
+    if (now - lastReconnectAttempt > 5000)
+    {
+      lastReconnectAttempt = now;
+      if (mqtt_reconnect())
+      {
+        lastReconnectAttempt = 0;
+      }
+    }
+  }
+  else
+  {
+    mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
+  }
 
   command_timer.update(); // send_pana_command()
   query_timer.update(); // send query to buffer
