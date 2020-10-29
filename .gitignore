@@ -3,6 +3,8 @@
 .pioenvs
 .cache
 .DS_Store
+.clang_complete
+.gcc-flags.json
 build_output
 include
 firmware.map
