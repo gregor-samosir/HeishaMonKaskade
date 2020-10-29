@@ -19,38 +19,30 @@
 
 void send_pana_command();
 void send_pana_mainquery();
-
-// Setup timers
-unsigned long currentMillis;
+void read_pana_data();
+void timeout_serial();
+void reconnect_check();
 
 // Command / timer to send commands from buffer to HP
 // Default 1000
-unsigned long commandStarttime;
-const unsigned long commandtime = 1000;
-Ticker command_ticker(send_pana_command, commandtime, MILLIS);
+Ticker command_timer(send_pana_command, 1000, MILLIS);
 
 // Query / timer to initiate a query
 // Default 14000
-unsigned long queryStarttime;
-const unsigned long querytime = 14000;
-Ticker query_ticker(send_pana_mainquery, querytime, MILLIS);
+Ticker query_timer(send_pana_mainquery, 14000, MILLIS);
 
 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
 // Default 500
-unsigned long bufferfillStarttime;
-const unsigned long bufferfilltime = 500;
+Ticker bufferfill_timeout(read_pana_data, 500, 1, MILLIS);
 
 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
 // Default 750
-unsigned long serialreadStarttime;
-const unsigned long serialreadtime = 750;
+Ticker serial_timeout(timeout_serial, 750, 1, MILLIS);
 bool serialquerysent = false; // mutex for serial sending
 
 // Mqtt reconnect // timer between mqtt reconnect
 // Default 30000
-unsigned long reconnectStarttime ;
-const unsigned long reconnecttime = 30000;
-
+Ticker reconnect_timer(reconnect_check, 30000, MILLIS);
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
@@ -317,7 +309,6 @@ void send_pana_command()
 {
   if (commandBuffer)
   {
-    //commandStarttime = currentMillis;
     write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
@@ -334,12 +325,11 @@ void send_pana_command()
     commandBuffer = nextCommand;
     commandsInBuffer--;
 
-    serialreadStarttime = currentMillis;
-    bufferfillStarttime = currentMillis;
-
+    serial_timeout.start();
+    bufferfill_timeout.start();
     serialquerysent = true;
   }
-  command_ticker.start();
+  command_timer.start();
 }
 
 /*****************************************************************************/
@@ -353,7 +343,7 @@ void send_pana_mainquery()
     sprintf(log_msg, "QUERY: %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
-  query_ticker.start();
+  query_timer.start();
 }
 
 /*****************************************************************************/
@@ -406,45 +396,40 @@ void read_pana_data()
 {
   if (serialquerysent) //only read if we have sent a command so we expect an answer
   {
-    if (currentMillis - bufferfillStarttime >= bufferfilltime) // wait to fill the serial buffer
+    if (readSerial() == true)
     {
-      if (readSerial() == true)
-      {
-        //write_mqtt_log((char *)"Decode  Start");
-        decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
-        serialquerysent = false;
-        //write_mqtt_log((char *)"Decode  End");
-        return;
-      }
+      //write_mqtt_log((char *)"Decode  Start");
+      decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
+      serialquerysent = false;
+      //write_mqtt_log((char *)"Decode  End");
+      //bufferfill_timeout.stop();
     }
-    if (currentMillis - serialreadStarttime >= serialreadtime)
-    {
-      write_mqtt_log((char *)"Serial read failed due to timeout!");
-      data_length = 0;
-      serialquerysent = false; //we are allowed to send a new command
-      // return;
-    }
+  }
+}
+
+/*****************************************************************************/
+void timeout_serial()
+{
+  if (serialquerysent)
+  {
+    write_mqtt_log((char *)"Serial read failed due to timeout!");
+    data_length = 0;
+    serialquerysent = false; //we are allowed to send a new command
+    //serial_timeout.stop();
   }
 }
 
 /*****************************************************************************/
 /* handle mqtt connection  (call from loop)                                  */
 /*****************************************************************************/
-void mqtt_loop()
+void reconnect_check()
 {
   if (!mqtt_client.connected())
   {
-    if (currentMillis - reconnectStarttime >= reconnecttime)
+    if (mqtt_reconnect())
     {
-      if (mqtt_reconnect())
-      {
-        reconnectStarttime = currentMillis;
-      }
+      reconnect_timer.start();
     }
-  }
-  else
-  {
-    mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 }
 
@@ -461,13 +446,9 @@ void setup()
   setupHttp();
   switchSerial();
 
-  command_ticker.start();
-
-  query_ticker.start();
-  
-  bufferfillStarttime = millis();
-  serialreadStarttime = millis();
-  reconnectStarttime = millis();
+  command_timer.start();
+  query_timer.start();
+  reconnect_timer.start();
 }
 
 void loop()
@@ -475,22 +456,14 @@ void loop()
   ArduinoOTA.handle();
   httpServer.handleClient();
   MDNS.update();
+
+  reconnect_timer.update(); // reconnect_check();
   
-  currentMillis = millis(); //get the current time
-  
-  mqtt_loop();
+  mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
 
-  command_ticker.update();
-  query_ticker.update();
+  command_timer.update(); // send_pana_command()
+  query_timer.update(); // send query to buffer
 
-  //if (commandBuffer)
-  //{
-  //  send_pana_command(); // Send command from buffer.
-  //}
-  //else
-  //{
-  //  send_pana_mainquery(); // Send mainquery to buffer
-  //}
-
-  read_pana_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
+  bufferfill_timeout.update(); //read_pana_data()
+  serial_timeout.update(); // timeout serial read
 }
