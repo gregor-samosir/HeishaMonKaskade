@@ -7,6 +7,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
+#include "Ticker.h"
 
 #include "webfunctions.h"
 #include "decode.h"
@@ -16,6 +17,9 @@
 #define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 255
 
+void send_pana_command();
+void send_pana_mainquery();
+
 // Setup timers
 unsigned long currentMillis;
 
@@ -23,11 +27,13 @@ unsigned long currentMillis;
 // Default 1000
 unsigned long commandStarttime;
 const unsigned long commandtime = 1000;
+Ticker command_ticker(send_pana_command, commandtime, MILLIS);
 
 // Query / timer to initiate a query
 // Default 14000
 unsigned long queryStarttime;
 const unsigned long querytime = 14000;
+Ticker query_ticker(send_pana_mainquery, querytime, MILLIS);
 
 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
 // Default 500
@@ -309,18 +315,18 @@ bool validate_checksum()
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (currentMillis - commandStarttime >= commandtime)
-  { 
-    commandStarttime = currentMillis;
+  if (commandBuffer)
+  {
+    //commandStarttime = currentMillis;
     write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
     bytesSent += Serial.write(chk);
     //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-    
+
     if (outputHexDump)
     {
-      write_mqtt_hex((char *) commandBuffer->value, commandBuffer->length);
+      write_mqtt_hex((char *)commandBuffer->value, commandBuffer->length);
     }
 
     command_struct *nextCommand = commandBuffer->next;
@@ -333,6 +339,7 @@ void send_pana_command()
 
     serialquerysent = true;
   }
+  command_ticker.start();
 }
 
 /*****************************************************************************/
@@ -340,13 +347,13 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (currentMillis - queryStarttime >= querytime)
+  if (!commandBuffer)
   {
     querynum += 1;
     sprintf(log_msg, "QUERY: %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
-    queryStarttime = currentMillis;
   }
+  query_ticker.start();
 }
 
 /*****************************************************************************/
@@ -454,8 +461,10 @@ void setup()
   setupHttp();
   switchSerial();
 
-  commandStarttime = millis();
-  queryStarttime = millis();
+  command_ticker.start();
+
+  query_ticker.start();
+  
   bufferfillStarttime = millis();
   serialreadStarttime = millis();
   reconnectStarttime = millis();
@@ -471,14 +480,17 @@ void loop()
   
   mqtt_loop();
 
-  if (commandBuffer)
-  {
-    send_pana_command(); // Send command from buffer.
-  }
-  else
-  {
-    send_pana_mainquery(); // Send mainquery to buffer
-  }
+  command_ticker.update();
+  query_ticker.update();
+
+  //if (commandBuffer)
+  //{
+  //  send_pana_command(); // Send command from buffer.
+  //}
+  //else
+  //{
+  //  send_pana_mainquery(); // Send mainquery to buffer
+  //}
 
   read_pana_data(); // Read serial buffer, decode the received value and publish the changed states to mqtt
 }
