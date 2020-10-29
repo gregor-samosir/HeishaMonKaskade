@@ -305,7 +305,7 @@ bool validate_checksum()
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (commandBuffer)
+  if (commandsInBuffer > 0 && serialquerysent == false)
   {
     write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
@@ -334,7 +334,7 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (!commandBuffer)
+  if (commandsInBuffer == 0)
   {
     querynum += 1;
     sprintf(log_msg, "QUERY: %d", querynum);
