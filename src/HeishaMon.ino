@@ -431,6 +431,8 @@ void setup()
   command_timer.start();
   query_timer.start();
   lastReconnectAttempt = 0;
+
+  send_pana_mainquery(); // fill buffer for first query
 }
 
 void loop()
