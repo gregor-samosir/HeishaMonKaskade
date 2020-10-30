@@ -325,7 +325,7 @@ void send_pana_command()
 
     serial_timeout.start();
     bufferfill_timeout.start();
-    serialquerysent = true;
+    serialquerysent = !serialquerysent;
   }
 }
 
@@ -398,7 +398,7 @@ void read_pana_data()
       serial_timeout.stop();
       //write_mqtt_log((char *)"Decode  Start");
       decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
-      serialquerysent = false;
+      serialquerysent = !serialquerysent;
       //write_mqtt_log((char *)"Decode  End");
     }
   }
@@ -411,9 +411,10 @@ void timeout_serial()
 {
   if (serialquerysent)
   {
+    serial_timeout.stop();
     write_mqtt_log((char *)"Serial read failed due to timeout!");
     data_length = 0;
-    serialquerysent = false; //we are allowed to send a new command
+    serialquerysent = !serialquerysent; //we are allowed to send a new command
   }
 }
 
