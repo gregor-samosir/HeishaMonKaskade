@@ -222,25 +222,6 @@ void setupMqtt()
 }
 
 /*****************************************************************************/
-/* Write raw hex to mqtt log                                            */
-/*****************************************************************************/
-void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
-{
-
-  for (int i = 0; i < hex_len; i += LOGHEXBYTESPERLINE)
-  {
-    char buffer[(LOGHEXBYTESPERLINE * 3) + 1];
-    buffer[LOGHEXBYTESPERLINE * 3] = '\0';
-    for (int j = 0; (j < LOGHEXBYTESPERLINE && (i + j) < hex_len); j++)
-    {
-      sprintf(&buffer[3 * j], "%02X ", hex[i + j]);
-    }
-    sprintf(log_msg, "Data: %s", buffer);
-    write_mqtt_log(log_msg);
-  }
-}
-
-/*****************************************************************************/
 /* Build checksum for commands and query                                     */
 /*****************************************************************************/
 byte build_checksum(byte *command, int length)
@@ -275,16 +256,12 @@ void send_pana_command()
   if (commandsInBuffer > 0)
   {
     write_mqtt_log((char *)commandBuffer->log_msg);
+
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
     size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
     bytesSent += Serial.write(chk);
     //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-
-    if (outputHexDump)
-    {
-      write_mqtt_hex((char *)commandBuffer->value, commandBuffer->length);
-    }
-
+    
     command_struct *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
@@ -332,11 +309,6 @@ bool readSerial()
 
     if (data_length == (serial_data[1] + 3))
     {
-      if (outputHexDump)
-      {
-        write_mqtt_hex(serial_data, data_length);
-      }
-
       if (!validate_checksum())
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
