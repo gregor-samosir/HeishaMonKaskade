@@ -6,8 +6,8 @@
 
 Ticker command_timer(send_pana_command, COMMANDTIMER, 0, MILLIS);  // loop
 Ticker query_timer(send_pana_mainquery, QUERYTIMER, 0, MILLIS); // loop
-Ticker bufferfill_timeout(read_pana_data, 500, 1, MILLIS); // one time
-Ticker serial_timeout(timeout_serial, 750, 1, MILLIS); // one time
+Ticker bufferfill_timeout(read_pana_data, BUFFERTIMEOUT, 1, MILLIS); // one time
+Ticker serial_timeout(timeout_serial, SERIALTIMEOUT, 1, MILLIS); // one time
 
 bool serialquerysent = false; // mutex for serial sending
 
