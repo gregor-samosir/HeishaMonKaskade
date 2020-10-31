@@ -179,7 +179,6 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
-    //write_mqtt_log(log_msg);
     command_struct *newCommand = new command_struct;
     newCommand->length = length;
     for (int i = 0; i < length; i++)
@@ -204,10 +203,12 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
+  //command_timer.stop();
   char *msg = (char *)malloc(sizeof(char) * length + 1);
   strncpy(msg, (char *)payload, length);
   msg[length] = '\0';
   build_heatpump_command(topic, msg);
+  //command_timer.start();
 }
 
 /*****************************************************************************/
@@ -271,7 +272,7 @@ bool validate_checksum()
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (commandsInBuffer > 0 && serialquerysent == false)
+  if (commandsInBuffer > 0)
   {
     write_mqtt_log((char *)commandBuffer->log_msg);
     byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
@@ -356,7 +357,7 @@ bool readSerial()
 /*****************************************************************************/
 void read_pana_data()
 {
-  if (serialquerysent) //only read if we have sent a command so we expect an answer
+  if (serialquerysent == true) //only read if we have sent a command so we expect an answer
   {
     bufferfill_timeout.stop();
     if (readSerial() == true)
@@ -364,7 +365,7 @@ void read_pana_data()
       serial_timeout.stop();
       //write_mqtt_log((char *)"Decode  Start");
       decode_heatpump_data(serial_data, actual_data, mqtt_client);
-      serialquerysent = !serialquerysent;
+      serialquerysent = false;
       //write_mqtt_log((char *)"Decode  End");
     }
   }
@@ -375,12 +376,12 @@ void read_pana_data()
 /*****************************************************************************/
 void timeout_serial()
 {
-  if (serialquerysent)
+  if (serialquerysent == true)
   {
     serial_timeout.stop();
     write_mqtt_log((char *)"Serial read failed due to timeout!");
     data_length = 0;
-    serialquerysent = !serialquerysent; //we are allowed to send a new command
+    serialquerysent = false; //we are allowed to send a new command
   }
 }
 
