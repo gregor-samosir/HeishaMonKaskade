@@ -203,12 +203,12 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-  command_timer.stop();
+  //command_timer.stop();
   char *msg = (char *)malloc(sizeof(char) * length + 1);
   strncpy(msg, (char *)payload, length);
   msg[length] = '\0';
   build_heatpump_command(topic, msg);
-  command_timer.start();
+  //command_timer.start();
 }
 
 /*****************************************************************************/
