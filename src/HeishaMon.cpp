@@ -292,7 +292,7 @@ void send_pana_command()
 
     serial_timeout.start();
     bufferfill_timeout.start();
-    serialquerysent = !serialquerysent;
+    serialquerysent = true;
   }
 }
 
