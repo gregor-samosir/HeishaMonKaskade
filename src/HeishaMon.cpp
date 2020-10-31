@@ -359,13 +359,11 @@ void read_pana_data()
 {
   if (serialquerysent == true) //only read if we have sent a command so we expect an answer
   {
-    bufferfill_timeout.stop();
     if (readSerial() == true)
     {
-      serial_timeout.stop();
-      //write_mqtt_log((char *)"Decode  Start");
-      decode_heatpump_data(serial_data, actual_data, mqtt_client);
       serialquerysent = false;
+      //write_mqtt_log((char *)"Decode  Start");
+      decode_heatpump_data(serial_data, actual_data, mqtt_client);    
       //write_mqtt_log((char *)"Decode  End");
     }
   }
@@ -378,10 +376,9 @@ void timeout_serial()
 {
   if (serialquerysent == true)
   {
-    serial_timeout.stop();
-    write_mqtt_log((char *)"Serial read failed due to timeout!");
     data_length = 0;
     serialquerysent = false; //we are allowed to send a new command
+    write_mqtt_log((char *)"Serial read failed due to timeout!");
   }
 }
 
