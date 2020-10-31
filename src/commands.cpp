@@ -1,11 +1,11 @@
+#include "HeishaMon.h"
 #include "commands.h"
 #include "Topics.h"
 #include <string>
 
 byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-// byte pcbSET[] = {0xF1, 0x11, 0x01, 0x50, 0x00, 0x00, 0x40, 0xFF, 0xFF, 0xE5, 0xFF, 0xFF, 0x00, 0xFF, 0xEB, 0xFF, 0xFF, 0x00, 0x00};
 
-void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byte *, int, char *))
+void build_heatpump_command(char *topic, char *msg)
 {
   byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   char log_msg[110];
@@ -24,7 +24,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 2;
     }
-    sprintf(log_msg, "SET1 Heatpump: %d", set_byte);
+    sprintf(log_msg, "SET1 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -34,7 +34,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 7
     set_pos = 7;
     set_byte = (state_string.toInt() + 1) * 8;
-    sprintf(log_msg, "SET3 QuietMode: %d", set_byte / 8 - 1);
+    sprintf(log_msg, "SET3 %s: %d", topic, set_byte / 8 - 1);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -44,7 +44,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos = 38
     set_pos = 38;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET5 Z1HeatRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET5 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -54,7 +54,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 39
     set_pos = 39;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET6 Z1CoolRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET6 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -64,7 +64,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 40
     set_pos = 40;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET7 Z2HeatRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET7 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -74,7 +74,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 41
     set_pos = 41;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET8 Z2CoolRequestTemperature: %d", set_byte - 128);
+    sprintf(log_msg, "SET8 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -88,7 +88,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 128; //hex 0x80
     }
-    sprintf(log_msg, "SET10 ForceDHW: %d", set_byte);
+    sprintf(log_msg, "SET10 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -102,7 +102,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 2; //hex 0x02
     }
-    sprintf(log_msg, "SET12 ForceDefrost: %d", set_byte);
+    sprintf(log_msg, "SET12 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -116,7 +116,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 4; //hex 0x04
     }
-    sprintf(log_msg, "SET13 ForceSterilization: %d", set_byte);
+    sprintf(log_msg, "SET13 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -130,7 +130,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "SET2 HolidayMode: %d", set_byte);
+    sprintf(log_msg, "SET2 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -140,7 +140,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 7
     set_pos = 7;
     set_byte = (state_string.toInt()) + 73;
-    sprintf(log_msg, "SET4 PowerfulMode: %d", (set_byte - 73));
+    sprintf(log_msg, "SET4 %s: %d", topic, (set_byte - 73));
     mainCommand[set_pos] = set_byte;
   }
 
@@ -182,7 +182,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
       set_byte = 0;
       break;
     }
-    sprintf(log_msg, "SET9 OperationMode: %d", set_byte);
+    sprintf(log_msg, "SET9 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -192,7 +192,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 42
     set_pos = 42;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET11 DHWTemp: %d", set_byte - 128);
+    sprintf(log_msg, "SET11 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -206,7 +206,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "SET14 WaterPump: %d", set_byte);
+    sprintf(log_msg, "SET14 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -216,7 +216,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 45
     set_pos = 45;
     set_byte = state_string.toInt() + 1;
-    sprintf(log_msg, "SET15 WaterPumpSpeed: %d", set_byte);
+    sprintf(log_msg, "SET15 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
   // set heat delta 1-15
@@ -225,7 +225,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 84
     set_pos = 84;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET16 HeatDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET16 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set cool delta 1-15
@@ -234,7 +234,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 94
     set_pos = 94;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET17 CoolDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET17 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set DHW reheat delta -5 -15
@@ -243,7 +243,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 99
     set_pos = 99;
     set_byte = state_string.toInt() + 128;
-    sprintf(log_msg, "SET18 DHWHeatDelta: %d", set_byte - 128);
+    sprintf(log_msg, "SET18 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set DHW heatup time (max) 5 -240
@@ -252,7 +252,7 @@ void build_heatpump_command(char *topic, char *msg, void push_command_buffer(byt
     //pos 98
     set_pos = 98;
     set_byte = state_string.toInt() + 1;
-    sprintf(log_msg, "SET19 DHWHeatupTime: %d", set_byte - 1);
+    sprintf(log_msg, "SET19 %s: %d", topic, set_byte - 1);
     mainCommand[set_pos] = set_byte;
   }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);

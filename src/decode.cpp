@@ -1,9 +1,10 @@
+#include "HeishaMon.h"
 #include "decode.h"
 #include "commands.h"
 
 unsigned long nextalldatatime = 0;
 
-void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client, void write_mqtt_log(char *))
+void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client)
 {
   char log_msg[255];
   std::string mqtt_topic;
