@@ -173,32 +173,6 @@ boolean mqtt_reconnect()
 }
 
 /*****************************************************************************/
-/* Write to buffer                                                      */
-/*****************************************************************************/
-void push_command_buffer(byte *command, int length, char *log_msg)
-{
-  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
-  {
-    command_struct *newCommand = new command_struct;
-    newCommand->length = length;
-    for (int i = 0; i < length; i++)
-    {
-      newCommand->value[i] = command[i];
-      newCommand->log_msg[i] = log_msg[i];
-    }
-    newCommand->next = commandBuffer;
-    commandBuffer = newCommand;
-    commandsInBuffer++;
-    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
-  }
-  else
-  {
-    write_mqtt_log(log_msg);
-    write_mqtt_log((char *)"Buffer full. Ignoring this command");
-  }
-}
-
-/*****************************************************************************/
 /* MQTT Callback                                                             */
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
@@ -249,44 +223,6 @@ bool validate_checksum()
 }
 
 /*****************************************************************************/
-/* Send command buffer to pana  (called from loop)                           */
-/*****************************************************************************/
-void send_pana_command()
-{
-  if (commandsInBuffer > 0)
-  {
-    write_mqtt_log((char *)commandBuffer->log_msg);
-
-    byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
-    size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
-    bytesSent += Serial.write(chk);
-    //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
-    
-    command_struct *nextCommand = commandBuffer->next;
-    free(commandBuffer);
-    commandBuffer = nextCommand;
-    commandsInBuffer--;
-
-    serial_timeout.start();
-    bufferfill_timeout.start();
-    serialquerysent = true;
-  }
-}
-
-/*****************************************************************************/
-/* Send query to buffer  (called from loop)                                    */
-/*****************************************************************************/
-void send_pana_mainquery()
-{
-  if (commandsInBuffer == 0)
-  {
-    querynum += 1;
-    sprintf(log_msg, "QUERY: %d", querynum);
-    push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
-  }
-}
-
-/*****************************************************************************/
 /* Read raw from serial                                                 */
 /*****************************************************************************/
 bool readSerial()
@@ -323,6 +259,71 @@ bool readSerial()
   }
   return false;
 }
+
+/*****************************************************************************/
+/* Write to buffer                                                      */
+/*****************************************************************************/
+void push_command_buffer(byte *command, int length, char *log_msg)
+{
+  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
+  {
+    command_struct *newCommand = new command_struct;
+    newCommand->length = length;
+    for (int i = 0; i < length; i++)
+    {
+      newCommand->value[i] = command[i];
+      newCommand->log_msg[i] = log_msg[i];
+    }
+    newCommand->next = commandBuffer;
+    commandBuffer = newCommand;
+    commandsInBuffer++;
+    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
+  }
+  else
+  {
+    write_mqtt_log(log_msg);
+    write_mqtt_log((char *)"Buffer full. Ignoring this command");
+  }
+}
+
+/*****************************************************************************/
+/* Send command buffer to pana  (called from loop)                           */
+/*****************************************************************************/
+void send_pana_command()
+{
+  if (commandsInBuffer > 0)
+  {
+    write_mqtt_log((char *)commandBuffer->log_msg);
+
+    byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
+    size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
+    bytesSent += Serial.write(chk);
+    //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
+    
+    command_struct *nextCommand = commandBuffer->next;
+    free(commandBuffer);
+    commandBuffer = nextCommand;
+    commandsInBuffer--;
+
+    serialquerysent = true;
+    serial_timeout.start();
+    bufferfill_timeout.start();
+  }
+}
+
+/*****************************************************************************/
+/* Send query to buffer  (called from loop)                                    */
+/*****************************************************************************/
+void send_pana_mainquery()
+{
+  if (commandsInBuffer == 0)
+  {
+    querynum += 1;
+    sprintf(log_msg, "QUERY: %d", querynum);
+    push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
+  }
+}
+
 
 /*****************************************************************************/
 /* Read from pana and decode (call from loop)                           */
