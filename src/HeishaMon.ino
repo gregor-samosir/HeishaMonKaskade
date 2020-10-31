@@ -1,45 +1,15 @@
-#include <Arduino.h>
-#include <LittleFS.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
-#include <ArduinoOTA.h>
-#include <PubSubClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
-#include <DNSServer.h>
-#include "Ticker.h"
 
+#include "HeishaMon.h"
 #include "webfunctions.h"
 #include "decode.h"
 #include "commands.h"
 
-#define LOGHEXBYTESPERLINE 16
-#define MAXCOMMANDSINBUFFER 10
-#define MAXDATASIZE 255
-
-void send_pana_command();
-void send_pana_mainquery();
-void read_pana_data();
-void timeout_serial();
-
-// Command / timer to send commands from buffer to HP
-// Default 1000
-Ticker command_timer(send_pana_command, 1000, 0, MILLIS);  // loop
-
-// Query / timer to initiate a query
-// Default 14000
-Ticker query_timer(send_pana_mainquery, 14000, 0, MILLIS); // loop
-
-// Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
-// Default 500
+Ticker command_timer(send_pana_command, COMMANDTIMER, 0, MILLIS);  // loop
+Ticker query_timer(send_pana_mainquery, QUERYTIMER, 0, MILLIS); // loop
 Ticker bufferfill_timeout(read_pana_data, 500, 1, MILLIS); // one time
-
-// Serial Timout / timer to wait on serial to read all 203 bytes from HP
-// Default 750
 Ticker serial_timeout(timeout_serial, 750, 1, MILLIS); // one time
 
 bool serialquerysent = false; // mutex for serial sending
-
 
 // Default settings if config does not exists
 const char *update_path = "/firmware";
@@ -51,12 +21,11 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
 bool outputHexDump = false; // toggle to dump raw hex to mqtt log
 
-// instead of passing array pointers between functions we just define this in the global scope
+// global scope
 char serial_data[MAXDATASIZE];
 byte data_length = 0;
 unsigned int querynum = 0;
@@ -64,10 +33,10 @@ unsigned int querynum = 0;
 // store actual value in an String array
 String actual_data[NUMBEROFTOPICS];
 
-// log message to sprintf to
+// log message
 char log_msg[255];
 
-// mqtt topic to sprintf and then publish to
+// mqtt topic
 char mqtt_topic[255];
 
 //buffer for commands to send
@@ -84,9 +53,6 @@ unsigned int commandsInBuffer = 0;
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
-/*****************************************************************************/
-/* MQTT Client                                                               */
-/*****************************************************************************/
 WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
@@ -241,7 +207,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
   char *msg = (char *)malloc(sizeof(char) * length + 1);
   strncpy(msg, (char *)payload, length);
   msg[length] = '\0';
-  build_heatpump_command(topic, msg, push_command_buffer);
+  build_heatpump_command(topic, msg);
 }
 
 /*****************************************************************************/
@@ -264,7 +230,7 @@ void write_mqtt_hex(char *hex, byte hex_len) // New version from HeishaMon
   {
     char buffer[(LOGHEXBYTESPERLINE * 3) + 1];
     buffer[LOGHEXBYTESPERLINE * 3] = '\0';
-    for (int j = 0; ((j < LOGHEXBYTESPERLINE) && ((i + j) < hex_len)); j++)
+    for (int j = 0; (j < LOGHEXBYTESPERLINE && (i + j) < hex_len); j++)
     {
       sprintf(&buffer[3 * j], "%02X ", hex[i + j]);
     }
@@ -397,7 +363,7 @@ void read_pana_data()
     {
       serial_timeout.stop();
       //write_mqtt_log((char *)"Decode  Start");
-      decode_heatpump_data(serial_data, actual_data, mqtt_client, write_mqtt_log);
+      decode_heatpump_data(serial_data, actual_data, mqtt_client);
       serialquerysent = !serialquerysent;
       //write_mqtt_log((char *)"Decode  End");
     }

@@ -5,29 +5,29 @@
 #define MQTT_RETAIN_VALUES 1
 #define NUMBEROFTOPICS 98 //last topic number + 1
 
-void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client, void(write_mqtt_log)(char *));
+void decode_heatpump_data(char *, String *, PubSubClient & mqtt_client);
 
-String unknown(byte input);
-String getBit1and2(byte input);
-String getBit3and4(byte input);
-String getBit5and6(byte input);
-String getBit7and8(byte input);
-String getBit3and4and5(byte input);
-String getLeft5bits(byte input);
-String getRight3bits(byte input);
-String getIntMinus1(byte input);
-String getIntMinus128(byte input);
-String getIntMinus1Div5(byte input);
-String getIntMinus1Times10(byte input);
-String getIntMinus1Times50(byte input);
-String getIntMinus1Times200(byte input);
-String getOpMode(byte input);
-String getPumpFlow(char *serial_data);
-String getOperationHour(char *serial_data);
-String getOperationCount(char *serial_data);
-String getRoomHeaterHour(char *serial_data);
-String getDHWHeaterHour(char *serial_data);
-String getErrorInfo(char *serial_data);
+String unknown(byte);
+String getBit1and2(byte);
+String getBit3and4(byte);
+String getBit5and6(byte);
+String getBit7and8(byte);
+String getBit3and4and5(byte);
+String getLeft5bits(byte);
+String getRight3bits(byte);
+String getIntMinus1(byte);
+String getIntMinus128(byte);
+String getIntMinus1Div5(byte);
+String getIntMinus1Times10(byte);
+String getIntMinus1Times50(byte);
+String getIntMinus1Times200(byte);
+String getOpMode(byte);
+String getPumpFlow(char *);
+String getOperationHour(char *);
+String getOperationCount(char *);
+String getRoomHeaterHour(char *);
+String getDHWHeaterHour(char *);
+String getErrorInfo(char *);
 
 static const char *topics[] = {
     States::TOP0,
