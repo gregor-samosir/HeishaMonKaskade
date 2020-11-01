@@ -38,11 +38,11 @@ void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient 
     case 91: //DHW_Heater_Operations_Hours
       top_value = getDHWHeaterHour(serial_data);
       break;
-    case 44: //Error
+    case 44: //Error and decription
       top_value = getErrorInfo(serial_data);
       break;
     case 34: // unused Topics
-    case 35:
+    case 35: // add your unused topics to the list
     case 37:
     case 43:
     case 46:
@@ -71,7 +71,7 @@ void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient 
     {
       if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
       {
-        sprintf(log_msg, "TOP%d %s: %s", top_num, topics[top_num], top_value.c_str());
+        sprintf(log_msg, "RECEIVE: TOP%d %s", top_num, top_value.c_str());
         write_mqtt_log(log_msg);
       }
       actual_data[top_num] = top_value;
