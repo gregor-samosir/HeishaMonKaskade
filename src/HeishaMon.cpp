@@ -23,7 +23,6 @@ char mqtt_password[40];
 
 //log and debugg
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
-bool outputHexDump = false; // toggle to dump raw hex to mqtt log
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -110,11 +109,6 @@ void setupHttp()
     outputMqttLog ^= true;
     handleRoot(&httpServer);
   });
-  httpServer.on("/togglehexdump", []() {
-    write_mqtt_log((char *)"Toggled hexdump log flag");
-    outputHexDump ^= true;
-    handleRoot(&httpServer);
-  });
   httpServer.begin();
 }
 
@@ -177,12 +171,13 @@ boolean mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-  //command_timer.stop();
-  char *msg = (char *)malloc(sizeof(char) * length + 1);
-  strncpy(msg, (char *)payload, length);
+  char msg[length + 1];
+  for (unsigned int i = 0; i < length; i++)
+  {
+    msg[i] = (char)payload[i];
+  }
   msg[length] = '\0';
   build_heatpump_command(topic, msg);
-  //command_timer.start();
 }
 
 /*****************************************************************************/
@@ -277,7 +272,7 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
     commandsInBuffer++;
-    // sprintf(log_msg, "Push %d to buffer", commandsInBuffer); write_mqtt_log(log_msg);
+    //sprintf(log_msg, "BUFFERSIZE: %d", commandsInBuffer); write_mqtt_log(log_msg);
   }
   else
   {
@@ -319,7 +314,7 @@ void send_pana_mainquery()
   if (commandsInBuffer == 0)
   {
     querynum += 1;
-    sprintf(log_msg, "QUERY: %d", querynum);
+    sprintf(log_msg, "REQUEST: #%d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
@@ -367,7 +362,7 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
-  delay(1000);
+  delay(100);
 
   command_timer.start();
   query_timer.start();
