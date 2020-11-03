@@ -26,3 +26,10 @@ void timeout_serial();
 void write_mqtt_log(char *);
 void push_command_buffer(byte *, int, char *);
 
+typedef struct Buffer Buffer;
+struct Buffer{
+    byte command[128];
+    unsigned int length;
+    char log_msg[128];
+    Buffer* next;
+};
