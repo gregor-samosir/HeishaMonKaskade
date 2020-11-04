@@ -22,7 +22,7 @@ char mqtt_username[40];
 char mqtt_password[40];
 
 //log and debugg
-bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
+bool outputMqttLog = false;  // toggle to write logmessages to mqtt or telnetstream
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -75,6 +75,10 @@ void write_mqtt_log(char *string)
   if (outputMqttLog)
   {
     mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+  else
+  {
+    TelnetStream.println(string);
   }
 }
 
@@ -335,6 +339,29 @@ void timeout_serial()
 }
 
 /*****************************************************************************/
+/* handle telnet stream                                                      */
+/*****************************************************************************/
+void handle_telnetstream()
+{
+switch (TelnetStream.read()) {
+    case 'R':
+      TelnetStream.stop();
+      delay(100);
+      ESP.reset();
+      break;
+    case 'C':
+      TelnetStream.println("bye bye");
+      TelnetStream.flush();
+      TelnetStream.stop();
+      break;
+    case 'T':
+      write_mqtt_log((char *)"Toggled mqtt log flag");
+      outputMqttLog ^= true;
+      break;
+  }
+}
+
+/*****************************************************************************/
 /* main                                                                      */
 /*****************************************************************************/
 void setup()
@@ -346,8 +373,10 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
+  
+  TelnetStream.begin();
   delay(100);
-
+  
   command_timer.start();
   query_timer.start();
   lastReconnectAttempt = 0;
@@ -377,6 +406,8 @@ void loop()
   {
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
+
+  handle_telnetstream();  
 
   command_timer.update(); // trigger send_pana_command()   - send command or query from buffer
   query_timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
