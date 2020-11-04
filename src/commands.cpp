@@ -11,8 +11,7 @@ void build_heatpump_command(char *topic, char *msg)
   char log_msg[110];
   byte set_byte;
   byte set_pos; // position in mainCommand
-
-  String state_string(msg);
+  unsigned int msg_int = atoi(msg);
 
   // set heatpump state to on by sending 1
   if (Topics::SET1.compare(topic) == 0)
@@ -20,7 +19,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 4
     set_pos = 4;
     set_byte = 1;
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 2;
     }
@@ -33,7 +32,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 7
     set_pos = 7;
-    set_byte = (state_string.toInt() + 1) * 8;
+    set_byte = (msg_int + 1) * 8;
     sprintf(log_msg, "COMMAND: SET3 %d", set_byte / 8 - 1);
     mainCommand[set_pos] = set_byte;
   }
@@ -43,7 +42,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos = 38
     set_pos = 38;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET5 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -53,7 +52,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 39
     set_pos = 39;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET6 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -63,7 +62,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 40
     set_pos = 40;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET7 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -73,7 +72,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 41
     set_pos = 41;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET8 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -84,7 +83,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 4
     set_pos = 4;
     set_byte = 64; //hex 0x40
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 128; //hex 0x80
     }
@@ -98,7 +97,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 8
     set_pos = 8;
     set_byte = 0;
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 2; //hex 0x02
     }
@@ -112,7 +111,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 8
     set_pos = 8;
     set_byte = 0;
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 4; //hex 0x04
     }
@@ -126,7 +125,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 5
     set_pos = 5;
     set_byte = 16; //hex 0x10
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 32; //hex 0x20
     }
@@ -139,7 +138,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 7
     set_pos = 7;
-    set_byte = (state_string.toInt()) + 73;
+    set_byte = (msg_int) + 73;
     sprintf(log_msg, "COMMAND: SET4 %d", (set_byte - 73));
     mainCommand[set_pos] = set_byte;
   }
@@ -149,7 +148,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 6
     set_pos = 6;
-    switch (state_string.toInt())
+    switch (msg_int)
     {
     case 0: // Heat
       set_byte = 82;
@@ -191,7 +190,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 42
     set_pos = 42;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET11 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -202,7 +201,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 4
     set_pos = 4;
     set_byte = 16; //hex 0x10
-    if (state_string.toInt() == 1)
+    if (msg_int == 1)
     {
       set_byte = 32; //hex 0x20
     }
@@ -215,7 +214,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 45
     set_pos = 45;
-    set_byte = state_string.toInt() + 1;
+    set_byte = msg_int + 1;
     sprintf(log_msg, "COMMAND: SET15 %d", set_byte);
     mainCommand[set_pos] = set_byte;
   }
@@ -224,7 +223,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 84
     set_pos = 84;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET16 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -233,7 +232,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 94
     set_pos = 94;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET17 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -242,7 +241,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 99
     set_pos = 99;
-    set_byte = state_string.toInt() + 128;
+    set_byte = msg_int + 128;
     sprintf(log_msg, "COMMAND: SET18 %d", set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
@@ -251,7 +250,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     //pos 98
     set_pos = 98;
-    set_byte = state_string.toInt() + 1;
+    set_byte = msg_int + 1;
     sprintf(log_msg, "COMMAND: SET19 %d", set_byte - 1);
     mainCommand[set_pos] = set_byte;
   }

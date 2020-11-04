@@ -8,10 +8,10 @@ void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient 
 {
   char log_msg[255];
   std::string mqtt_topic;
-  bool updatealltopics = false;
   byte input_pos;
   String top_value;
 
+  bool updatealltopics = false;
   if (millis() > nextalldatatime)
   {
     updatealltopics = true;

@@ -26,7 +26,7 @@ bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
 
 // global scope
 char serial_data[MAXDATASIZE];
-byte data_length = 0;
+byte serial_length = 0;
 unsigned int querynum = 0;
 
 // store actual value in an String array
@@ -38,15 +38,7 @@ char log_msg[255];
 // mqtt topic
 char mqtt_topic[255];
 
-//buffer for commands to send
-struct command_struct
-{
-  byte value[128];
-  unsigned int length;
-  char log_msg[128];
-  command_struct *next;
-};
-command_struct *commandBuffer;
+Buffer *commandBuffer;
 unsigned int commandsInBuffer = 0;
 
 ESP8266WebServer httpServer(80);
@@ -191,26 +183,12 @@ void setupMqtt()
 }
 
 /*****************************************************************************/
-/* Build checksum for commands and query                                     */
-/*****************************************************************************/
-byte build_checksum(byte *command, int length)
-{
-  byte chk = 0;
-  for (int i = 0; i < length; i++)
-  {
-    chk += command[i];
-  }
-  chk = (chk ^ 0xFF) + 01;
-  return chk;
-}
-
-/*****************************************************************************/
 /* Validate checksum                                                         */
 /*****************************************************************************/
 bool validate_checksum()
 {
   byte chk = 0;
-  for (int i = 0; i < data_length; i++)
+  for (int i = 0; i < serial_length; i++)
   {
     chk += serial_data[i];
   }
@@ -224,32 +202,32 @@ bool readSerial()
 {
   while (Serial.available() > 0)
   {
-    serial_data[data_length] = Serial.read();
-    data_length += 1;
+    serial_data[serial_length] = Serial.read();
+    serial_length += 1;
     // only enable next line to DEBUG
-    // sprintf(log_msg, "Receive byte : %d", data_length); write_mqtt_log(log_msg);
+    // sprintf(log_msg, "Receive byte : %d", serial_length); write_mqtt_log(log_msg);
   }
-  if (data_length > 0)
+  if (serial_length > 0)
   { // received length part of header now
-    if (data_length > (serial_data[1] + 3))
+    if (serial_length > (serial_data[1] + 3))
     {
       write_mqtt_log((char *)"Datagram longer than header suggests");
-      data_length = 0;
+      serial_length = 0;
       return false;
     }
 
-    if (data_length == (serial_data[1] + 3))
+    if (serial_length == (serial_data[1] + 3))
     {
       if (!validate_checksum())
       {
         write_mqtt_log((char *)"Datagram checksum not valid");
-        data_length = 0;
+        serial_length = 0;
         return false;
       }
-      data_length = 0;
+      serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", data_length);
+    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", serial_length);
     write_mqtt_log(log_msg);
   }
   return false;
@@ -262,11 +240,11 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
-    command_struct *newCommand = new command_struct;
+    Buffer *newCommand = new Buffer;
     newCommand->length = length;
     for (int i = 0; i < length; i++)
     {
-      newCommand->value[i] = command[i];
+      newCommand->command[i] = command[i];
       newCommand->log_msg[i] = log_msg[i];
     }
     newCommand->next = commandBuffer;
@@ -282,20 +260,26 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 }
 
 /*****************************************************************************/
-/* Send command buffer to pana  (called from loop)                           */
+/* Send commands from buffer to pana  (called from loop)                     */
 /*****************************************************************************/
 void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
     write_mqtt_log((char *)commandBuffer->log_msg);
+    // checksum
+    byte chk = 0;
+    for (int i = 0; i < commandBuffer->length; i++)
+    {
+      chk += commandBuffer->command[i];
+    }
+    chk = (chk ^ 0xFF) + 01;
 
-    byte chk = build_checksum(commandBuffer->value, commandBuffer->length);
-    size_t bytesSent = Serial.write(commandBuffer->value, commandBuffer->length);
+    unsigned int bytesSent = Serial.write(commandBuffer->command, commandBuffer->length);
     bytesSent += Serial.write(chk);
     //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
     
-    command_struct *nextCommand = commandBuffer->next;
+    Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
     commandsInBuffer--;
@@ -344,7 +328,7 @@ void timeout_serial()
 {
   if (serialquerysent == true)
   {
-    data_length = 0;
+    serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
     write_mqtt_log((char *)"Serial read failed due to timeout!");
   }
