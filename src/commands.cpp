@@ -11,7 +11,7 @@ void build_heatpump_command(char *topic, char *msg)
   char log_msg[110];
   byte set_byte;
   byte set_pos; // position in mainCommand
-  int msg_int = atoi(msg);
+  unsigned int msg_int = atoi(msg);
 
   // set heatpump state to on by sending 1
   if (Topics::SET1.compare(topic) == 0)
