@@ -8,6 +8,7 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <DNSServer.h>
 #include "Ticker.h"
+#include <TelnetStream.h>
 
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
