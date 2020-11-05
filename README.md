@@ -7,4 +7,4 @@
 
  Die komplette Dokumentation ist hier zu finden. https://github.com/Egyras/HeishaMon
 
-Bei Fragen zum Projet bin ich über den Slack Kanal von HeishaMon zu erreichen.
+Bei Fragen zum Projekt bin ich über den Slack Kanal von HeishaMon zu erreichen.
