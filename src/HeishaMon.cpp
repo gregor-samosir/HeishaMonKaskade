@@ -355,7 +355,7 @@ switch (TelnetStream.read()) {
       TelnetStream.stop();
       break;
     case 'T':
-      write_mqtt_log((char *)"Toggled mqtt log flag");
+      TelnetStream.println("Toggled mqtt log flag");
       outputMqttLog ^= true;
       break;
   }
