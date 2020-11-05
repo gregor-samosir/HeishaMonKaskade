@@ -215,7 +215,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 45
     set_pos = 45;
     set_byte = msg_int + 1;
-    sprintf(log_msg, "COMMAND: SET15 %s: %d", topic, set_byte);
+    sprintf(log_msg, "COMMAND: SET15 %s: %d", topic, set_byte - 1);
     mainCommand[set_pos] = set_byte;
   }
   // set heat delta 1-15
