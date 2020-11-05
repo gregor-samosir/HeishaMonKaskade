@@ -22,7 +22,7 @@ char mqtt_username[40];
 char mqtt_password[40];
 
 //log and debugg
-bool outputMqttLog = true;  // toggle to write logmessages to mqtt log
+bool outputMqttLog = false;  // toggle to write logmessages to mqtt or telnetstream
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -75,6 +75,10 @@ void write_mqtt_log(char *string)
   if (outputMqttLog)
   {
     mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+  else
+  {
+    TelnetStream.println(string);
   }
 }
 
@@ -211,7 +215,7 @@ bool readSerial()
   { // received length part of header now
     if (serial_length > (serial_data[1] + 3))
     {
-      write_mqtt_log((char *)"Datagram longer than header suggests");
+      write_mqtt_log((char *)"<ERR> Datagram longer than header suggests");
       serial_length = 0;
       return false;
     }
@@ -220,14 +224,14 @@ bool readSerial()
     {
       if (!validate_checksum())
       {
-        write_mqtt_log((char *)"Datagram checksum not valid");
+        write_mqtt_log((char *)"<ERR> Datagram checksum not valid");
         serial_length = 0;
         return false;
       }
       serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", serial_length);
+    sprintf(log_msg, "<ERR> Receive partial datagram %d, please fix bufferfill_timeout", serial_length);
     write_mqtt_log(log_msg);
   }
   return false;
@@ -255,7 +259,7 @@ void push_command_buffer(byte *command, int length, char *log_msg)
   else
   {
     write_mqtt_log(log_msg);
-    write_mqtt_log((char *)"Buffer full. Ignoring this command");
+    write_mqtt_log((char *)"<ERR> Buffer full. Ignoring this command");
   }
 }
 
@@ -298,7 +302,7 @@ void send_pana_mainquery()
   if (commandsInBuffer == 0)
   {
     querynum += 1;
-    sprintf(log_msg, "REQUEST: #%d", querynum);
+    sprintf(log_msg, "<REQ> #%d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
@@ -330,7 +334,30 @@ void timeout_serial()
   {
     serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
-    write_mqtt_log((char *)"Serial read failed due to timeout!");
+    write_mqtt_log((char *)"<ERR> Serial read failed due to timeout!");
+  }
+}
+
+/*****************************************************************************/
+/* handle telnet stream                                                      */
+/*****************************************************************************/
+void handle_telnetstream()
+{
+switch (TelnetStream.read()) {
+    case 'R':
+      TelnetStream.stop();
+      delay(100);
+      ESP.reset();
+      break;
+    case 'C':
+      TelnetStream.println("bye bye");
+      TelnetStream.flush();
+      TelnetStream.stop();
+      break;
+    case 'T':
+      TelnetStream.println("Toggled mqtt log flag");
+      outputMqttLog ^= true;
+      break;
   }
 }
 
@@ -346,8 +373,10 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
+  
+  TelnetStream.begin();
   delay(100);
-
+  
   command_timer.start();
   query_timer.start();
   lastReconnectAttempt = 0;
@@ -377,6 +406,8 @@ void loop()
   {
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
+
+  handle_telnetstream();  
 
   command_timer.update(); // trigger send_pana_command()   - send command or query from buffer
   query_timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
