@@ -83,6 +83,18 @@ void write_mqtt_log(char *string)
 }
 
 /*****************************************************************************/
+/* FreeMemory (Igor Ybema)                                                   */
+/*****************************************************************************/
+int getFreeMemory() {
+  //store total memory at boot time
+  static uint32_t total_memory = 0;
+  if ( 0 == total_memory ) total_memory = ESP.getFreeHeap();
+
+  uint32_t free_memory   = ESP.getFreeHeap();
+  return (100 * free_memory / total_memory ) ; // as a %
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -343,7 +355,9 @@ void timeout_serial()
 /*****************************************************************************/
 void handle_telnetstream()
 {
-switch (TelnetStream.read()) {
+  if (TelnetStream.available() > 0)
+  {
+    switch (TelnetStream.read()) {
     case 'R':
       TelnetStream.stop();
       delay(100);
@@ -358,6 +372,11 @@ switch (TelnetStream.read()) {
       TelnetStream.println("Toggled mqtt log flag");
       outputMqttLog ^= true;
       break;
+    case 'M':
+      sprintf(log_msg, "DEBUG: %d percent memory free" , getFreeMemory());
+      TelnetStream.println(log_msg);
+      break;
+    }
   }
 }
 
@@ -367,6 +386,7 @@ switch (TelnetStream.read()) {
 void setup()
 {
   setupSerial();
+  getFreeMemory();
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   MDNS.begin(wifi_hostname);
   setupOTA();
