@@ -17,8 +17,8 @@
 // config your timing
 #define COMMANDTIMER 950 // Command / timer to send commands from buffer to HP
 #define QUERYTIMER 5000   // Query / timer to initiate a query
-#define BUFFERTIMEOUT 200 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
-#define SERIALTIMEOUT 250 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
+#define BUFFERTIMEOUT 500 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
+#define SERIALTIMEOUT 600 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
 
 void send_pana_command();
 void send_pana_mainquery();

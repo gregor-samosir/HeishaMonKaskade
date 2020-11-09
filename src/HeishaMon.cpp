@@ -216,9 +216,10 @@ bool validate_checksum()
 /*****************************************************************************/
 bool readSerial()
 {
-  if (Serial.available() > 0)
+  while (Serial.available() > 0)
   {
-    serial_length = Serial.readBytes(serial_data, 203);
+    serial_data[serial_length] = Serial.read();
+    serial_length += 1;
     // only enable next line to DEBUG
     // sprintf(log_msg, "DEBUG Receive bytes : %d", serial_length); write_mqtt_log(log_msg);
   }
