@@ -4,10 +4,10 @@
 #include "decode.h"
 #include "commands.h"
 
-Ticker command_timer(send_pana_command, COMMANDTIMER, 0, MILLIS);  // loop
-Ticker query_timer(send_pana_mainquery, QUERYTIMER, 0, MILLIS); // loop
-Ticker bufferfill_timeout(read_pana_data, BUFFERTIMEOUT, 1, MILLIS); // one time
-Ticker serial_timeout(timeout_serial, SERIALTIMEOUT, 1, MILLIS); // one time
+Ticker command_timer(send_pana_command, COMMANDTIMER, 0, MICROS);  // loop
+Ticker query_timer(send_pana_mainquery, QUERYTIMER, 0, MICROS); // loop
+Ticker bufferfill_timeout(read_pana_data, BUFFERTIMEOUT, 1, MICROS); // one time
+Ticker serial_timeout(timeout_serial, SERIALTIMEOUT, 1, MICROS); // one time
 
 bool serialquerysent = false; // mutex for serial sending
 
@@ -22,7 +22,8 @@ char mqtt_username[40];
 char mqtt_password[40];
 
 //log and debugg
-bool outputMqttLog = false;  // toggle to write logmessages to mqtt or telnetstream
+bool outputMqttLog = true;  // toggle to write logmessages to mqtt or telnetstream
+bool outputTelnetLog = true;  // enable/disable telnet DEBUG
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -80,6 +81,29 @@ void write_mqtt_log(char *string)
   {
     TelnetStream.println(string);
   }
+}
+
+/*****************************************************************************/
+/* DEBUG to Telnet log                                                       */
+/*****************************************************************************/
+void write_telnet_log(char *string)
+{
+  if (outputTelnetLog)
+  {
+    TelnetStream.println(string);
+  }
+}
+
+/*****************************************************************************/
+/* FreeMemory (Igor Ybema)                                                   */
+/*****************************************************************************/
+int getFreeMemory() {
+  //store total memory at boot time
+  static uint32_t total_memory = 0;
+  if ( 0 == total_memory ) total_memory = ESP.getFreeHeap();
+
+  uint32_t free_memory   = ESP.getFreeHeap();
+  return (100 * free_memory / total_memory ) ; // as a %
 }
 
 /*****************************************************************************/
@@ -209,13 +233,13 @@ bool readSerial()
     serial_data[serial_length] = Serial.read();
     serial_length += 1;
     // only enable next line to DEBUG
-    // sprintf(log_msg, "Receive byte : %d", serial_length); write_mqtt_log(log_msg);
+    // sprintf(log_msg, "DEBUG Receive byte : %d", serial_length); write_telnet_log(log_msg);
   }
   if (serial_length > 0)
   { // received length part of header now
     if (serial_length > (serial_data[1] + 3))
     {
-      write_mqtt_log((char *)"<ERR> Datagram longer than header suggests");
+      write_telnet_log((char *)"DEBUG Received data longer than header suggests");
       serial_length = 0;
       return false;
     }
@@ -224,15 +248,15 @@ bool readSerial()
     {
       if (!validate_checksum())
       {
-        write_mqtt_log((char *)"<ERR> Datagram checksum not valid");
+        write_telnet_log((char *)"DEBUG Checksum not valid");
         serial_length = 0;
         return false;
       }
+      write_telnet_log((char *)"DEBUG Serial data valid");
       serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "<ERR> Receive partial datagram %d, please fix bufferfill_timeout", serial_length);
-    write_mqtt_log(log_msg);
+    sprintf(log_msg, "DEBUG Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
   }
   return false;
 }
@@ -254,12 +278,11 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
     commandsInBuffer++;
-    //sprintf(log_msg, "BUFFERSIZE: %d", commandsInBuffer); write_mqtt_log(log_msg);
+    sprintf(log_msg, "DEBUG Command in buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
   }
   else
   {
-    write_mqtt_log(log_msg);
-    write_mqtt_log((char *)"<ERR> Buffer full. Ignoring this command");
+    write_telnet_log((char *)"DEBUG Buffer full. Ignoring last command");
   }
 }
 
@@ -270,6 +293,8 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
+    command_timer.pause();
+
     write_mqtt_log((char *)commandBuffer->log_msg);
     // checksum
     byte chk = 0;
@@ -281,7 +306,7 @@ void send_pana_command()
 
     unsigned int bytesSent = Serial.write(commandBuffer->command, commandBuffer->length);
     bytesSent += Serial.write(chk);
-    //sprintf(log_msg, "Send %d bytes with checksum: %d ", bytesSent, int(chk)); write_mqtt_log(log_msg);
+    sprintf(log_msg, "DEBUG Send %d bytes with checksum: %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
     
     Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
@@ -289,8 +314,9 @@ void send_pana_command()
     commandsInBuffer--;
 
     serialquerysent = true;
-    serial_timeout.start();
+    
     bufferfill_timeout.start();
+    serial_timeout.start();
   }
 }
 
@@ -299,8 +325,9 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (commandsInBuffer == 0)
+  if (commandsInBuffer == 0 && serialquerysent == false)
   {
+    write_telnet_log((char *)"DEBUG Push mainQuery to buffer");
     querynum += 1;
     sprintf(log_msg, "<REQ> #%d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
@@ -317,10 +344,11 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
-      serialquerysent = false;
-      //write_mqtt_log((char *)"Decode  Start");
+      write_telnet_log((char *)"DEBUG Decode Start");
       decode_heatpump_data(serial_data, actual_data, mqtt_client);    
-      //write_mqtt_log((char *)"Decode  End");
+      write_telnet_log((char *)"DEBUG Decode End");
+      serialquerysent = false;
+      command_timer.resume();
     }
   }
 }
@@ -332,9 +360,10 @@ void timeout_serial()
 {
   if (serialquerysent == true)
   {
-    serial_length = 0;
+    // serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
-    write_mqtt_log((char *)"<ERR> Serial read failed due to timeout!");
+    command_timer.resume();
+    write_telnet_log((char *)"DEBUG Serial read failed due to timeout!");
   }
 }
 
@@ -343,7 +372,9 @@ void timeout_serial()
 /*****************************************************************************/
 void handle_telnetstream()
 {
-switch (TelnetStream.read()) {
+  if (TelnetStream.available() > 0)
+  {
+    switch (TelnetStream.read()) {
     case 'R':
       TelnetStream.stop();
       delay(100);
@@ -354,10 +385,19 @@ switch (TelnetStream.read()) {
       TelnetStream.flush();
       TelnetStream.stop();
       break;
-    case 'T':
+    case 'L':
       TelnetStream.println("Toggled mqtt log flag");
       outputMqttLog ^= true;
+      break;    
+    case 'D':
+      TelnetStream.println("Toggled telnet debug flag");
+      outputTelnetLog ^= true;
       break;
+    case 'M':
+      sprintf(log_msg, " %d percent memory free" , getFreeMemory());
+      TelnetStream.println(log_msg);
+      break;
+    }
   }
 }
 
@@ -366,6 +406,7 @@ switch (TelnetStream.read()) {
 /*****************************************************************************/
 void setup()
 {
+  getFreeMemory();
   setupSerial();
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   MDNS.begin(wifi_hostname);
@@ -375,13 +416,11 @@ void setup()
   switchSerial();
   
   TelnetStream.begin();
-  delay(100);
-  
-  command_timer.start();
-  query_timer.start();
-  lastReconnectAttempt = 0;
 
-  send_pana_mainquery(); // fill buffer for first query
+  query_timer.start();
+  command_timer.start();
+  
+  lastReconnectAttempt = 0;
 }
 
 void loop()
@@ -389,6 +428,8 @@ void loop()
   ArduinoOTA.handle();
   httpServer.handleClient();
   MDNS.update();
+
+  handle_telnetstream();  
 
   if (!mqtt_client.connected())
   {
@@ -407,11 +448,9 @@ void loop()
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 
-  handle_telnetstream();  
-
   command_timer.update(); // trigger send_pana_command()   - send command or query from buffer
   query_timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
-
+  
   bufferfill_timeout.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
   serial_timeout.update();     // trigger timeout_serial() - stop read from serial after timeout
 }
