@@ -216,10 +216,8 @@ bool validate_checksum()
 /*****************************************************************************/
 bool readSerial()
 {
-  while (Serial.available())
+  if (Serial.available() > 0)
   {
-    //serial_data[serial_length] = Serial.read();
-    //serial_length += 1;
     serial_length = Serial.readBytes(serial_data, 203);
     // only enable next line to DEBUG
     // sprintf(log_msg, "DEBUG Receive bytes : %d", serial_length); write_mqtt_log(log_msg);
@@ -242,6 +240,7 @@ bool readSerial()
         return false;
       }
       // write_mqtt_log((char *)"DEBUG Datagram valid");
+      serial_length = 0;
       return true;
     }
     sprintf(log_msg, "<ERR> Receive partial datagram %d, please fix bufferfill_timeout", serial_length);
