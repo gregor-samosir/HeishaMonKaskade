@@ -26,7 +26,7 @@ static const char menuJS[] PROGMEM = "<script> function openLeftMenu() {var x = 
 
 static const char refreshJS[] PROGMEM = "<script> $(document).ready(function(){refreshTable();}); function refreshTable(){$('#heishavalues').load('/tablerefresh', function(){setTimeout(refreshTable, 30000);});}</script></head><body>";
 
-static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a>";
+static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a><a href='/toggledebug' class='w3-bar-item w3-button w3-small'>Toggle debug log</a>";
 
 //callback notifying us of the need to save config
 void saveConfigCallback()
