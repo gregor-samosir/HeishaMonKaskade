@@ -71,8 +71,7 @@ void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient 
     {
       if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
       {
-        sprintf(log_msg, "<REC> TOP%d %s: %s", top_num, topics[top_num], top_value.c_str());
-        write_mqtt_log(log_msg);
+        sprintf(log_msg, "<PUB> TOP%d %s: %s", top_num, topics[top_num], top_value.c_str()); write_mqtt_log(log_msg);
       }
       actual_data[top_num] = top_value;
       mqtt_topic = Topics::STATE + "/" + topics[top_num];

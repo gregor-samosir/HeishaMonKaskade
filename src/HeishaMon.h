@@ -18,13 +18,14 @@
 #define COMMANDTIMER 950 // Command / timer to send commands from buffer to HP
 #define QUERYTIMER 5000   // Query / timer to initiate a query
 #define BUFFERTIMEOUT 500 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
-#define SERIALTIMEOUT 600 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
+#define SERIALTIMEOUT 700 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
 
 void send_pana_command();
 void send_pana_mainquery();
 void read_pana_data();
 void timeout_serial();
 void write_mqtt_log(char *);
+void write_telnet_log(char *);
 void push_command_buffer(byte *, int, char *);
 
 typedef struct Buffer Buffer;
