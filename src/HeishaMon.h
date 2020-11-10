@@ -9,6 +9,11 @@
 #include <DNSServer.h>
 #include "Ticker.h"
 #include <TelnetStream.h>
+#include <TimeLib.h>
+#include <sntp.h>
+#include <TZ.h>
+
+#define TIME_ZONE TZ_Europe_Berlin
 
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
