@@ -129,6 +129,11 @@ void setupHttp()
     outputMqttLog ^= true;
     handleRoot(&httpServer);
   });
+  httpServer.on("/toggledebug", []() {
+    write_mqtt_log((char *)"Toggled debug flag");
+    outputTelnetLog ^= true;
+    handleRoot(&httpServer);
+  });
   httpServer.begin();
 }
 
@@ -239,7 +244,7 @@ bool readSerial()
   { // received length part of header now
     if (serial_length > (serial_data[1] + 3))
     {
-      write_telnet_log((char *)"DEBUG Received data longer than header suggests");
+      write_telnet_log((char *)"ERROR Received data longer than header suggests");
       serial_length = 0;
       return false;
     }
@@ -248,15 +253,15 @@ bool readSerial()
     {
       if (!validate_checksum())
       {
-        write_telnet_log((char *)"DEBUG Checksum not valid");
+        write_telnet_log((char *)"ERROR Checksum not valid");
         serial_length = 0;
         return false;
       }
-      write_telnet_log((char *)"DEBUG Serial data valid");
+      write_telnet_log((char *)"DEBUG Receive valid data from serial");
       serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "DEBUG Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
+    sprintf(log_msg, "ERROR Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
   }
   return false;
 }
@@ -278,11 +283,11 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
     commandsInBuffer++;
-    sprintf(log_msg, "DEBUG Command in buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "DEBUG Add command to buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
   }
   else
   {
-    write_telnet_log((char *)"DEBUG Buffer full. Ignoring last command");
+    write_telnet_log((char *)"ERROR Buffer full. Ignoring last command");
   }
 }
 
@@ -296,6 +301,7 @@ void send_pana_command()
     command_timer.pause();
 
     write_mqtt_log((char *)commandBuffer->log_msg);
+    sprintf(log_msg, "DEBUG Send command from buffer: %s", commandBuffer->log_msg); write_telnet_log(log_msg);
     // checksum
     byte chk = 0;
     for (int i = 0; i < commandBuffer->length; i++)
@@ -306,8 +312,9 @@ void send_pana_command()
 
     unsigned int bytesSent = Serial.write(commandBuffer->command, commandBuffer->length);
     bytesSent += Serial.write(chk);
-    sprintf(log_msg, "DEBUG Send %d bytes with checksum: %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
+    // sprintf(log_msg, "DEBUG Send %d / %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
     
+
     Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
@@ -327,7 +334,7 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
-    write_telnet_log((char *)"DEBUG Push mainQuery to buffer");
+    //write_telnet_log((char *)"DEBUG Add mainQuery to buffer");
     querynum += 1;
     sprintf(log_msg, "<REQ> #%d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
@@ -344,9 +351,9 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
-      write_telnet_log((char *)"DEBUG Decode Start");
+      write_telnet_log((char *)"DEBUG Decode topics start ----------------------------");
       decode_heatpump_data(serial_data, actual_data, mqtt_client);    
-      write_telnet_log((char *)"DEBUG Decode End");
+      write_telnet_log((char *)"DEBUG Decode topics end-------------------------------");
       serialquerysent = false;
       command_timer.resume();
     }
@@ -363,7 +370,7 @@ void timeout_serial()
     // serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
     command_timer.resume();
-    write_telnet_log((char *)"DEBUG Serial read failed due to timeout!");
+    write_telnet_log((char *)"ERROR Serial read timeout");
   }
 }
 
@@ -390,11 +397,11 @@ void handle_telnetstream()
       outputMqttLog ^= true;
       break;    
     case 'D':
-      TelnetStream.println("Toggled telnet debug flag");
+      TelnetStream.println("Toggled debug flag");
       outputTelnetLog ^= true;
       break;
     case 'M':
-      sprintf(log_msg, " %d percent memory free" , getFreeMemory());
+      sprintf(log_msg, "%d percent memory free" , getFreeMemory());
       TelnetStream.println(log_msg);
       break;
     }
