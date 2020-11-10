@@ -23,7 +23,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 2;
     }
-    sprintf(log_msg, "<COM> SET1 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET1 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -33,7 +33,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 7
     set_pos = 7;
     set_byte = (msg_int + 1) * 8;
-    sprintf(log_msg, "<COM> SET3 %s: %d", topic, set_byte / 8 - 1);
+    sprintf(log_msg, "<SUB> SET3 %s: %d", topic, set_byte / 8 - 1);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -43,7 +43,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos = 38
     set_pos = 38;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET5 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET5 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -53,7 +53,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 39
     set_pos = 39;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET6 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET6 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -63,7 +63,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 40
     set_pos = 40;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET7 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET7 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -73,7 +73,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 41
     set_pos = 41;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET8 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET8 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -87,7 +87,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 128; //hex 0x80
     }
-    sprintf(log_msg, "<COM> SET10 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET10 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -101,7 +101,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 2; //hex 0x02
     }
-    sprintf(log_msg, "<COM> SET12 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET12 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -115,7 +115,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 4; //hex 0x04
     }
-    sprintf(log_msg, "<COM> SET13 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET13 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -129,7 +129,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "<COM> SET2 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET2 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -139,7 +139,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 7
     set_pos = 7;
     set_byte = (msg_int) + 73;
-    sprintf(log_msg, "<COM> SET4 %s: %d", topic, (set_byte - 73));
+    sprintf(log_msg, "<SUB> SET4 %s: %d", topic, (set_byte - 73));
     mainCommand[set_pos] = set_byte;
   }
 
@@ -181,7 +181,7 @@ void build_heatpump_command(char *topic, char *msg)
       set_byte = 0;
       break;
     }
-    sprintf(log_msg, "<COM> SET9 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET9 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -191,7 +191,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 42
     set_pos = 42;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET11 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET11 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -205,7 +205,7 @@ void build_heatpump_command(char *topic, char *msg)
     {
       set_byte = 32; //hex 0x20
     }
-    sprintf(log_msg, "<COM> SET14 %s: %d", topic, set_byte);
+    sprintf(log_msg, "<SUB> SET14 %s: %d", topic, set_byte);
     mainCommand[set_pos] = set_byte;
   }
 
@@ -215,7 +215,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 45
     set_pos = 45;
     set_byte = msg_int + 1;
-    sprintf(log_msg, "<COM> SET15 %s: %d", topic, set_byte - 1);
+    sprintf(log_msg, "<SUB> SET15 %s: %d", topic, set_byte - 1);
     mainCommand[set_pos] = set_byte;
   }
   // set heat delta 1-15
@@ -224,7 +224,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 84
     set_pos = 84;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET16 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET16 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set cool delta 1-15
@@ -233,7 +233,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 94
     set_pos = 94;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET17 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET17 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set DHW reheat delta -5 -15
@@ -242,7 +242,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 99
     set_pos = 99;
     set_byte = msg_int + 128;
-    sprintf(log_msg, "<COM> SET18 %s: %d", topic, set_byte - 128);
+    sprintf(log_msg, "<SUB> SET18 %s: %d", topic, set_byte - 128);
     mainCommand[set_pos] = set_byte;
   }
   // set DHW heatup time (max) 5 -240
@@ -251,7 +251,7 @@ void build_heatpump_command(char *topic, char *msg)
     //pos 98
     set_pos = 98;
     set_byte = msg_int + 1;
-    sprintf(log_msg, "<COM> SET19 %s: %d", topic, set_byte - 1);
+    sprintf(log_msg, "<SUB> SET19 %s: %d", topic, set_byte - 1);
     mainCommand[set_pos] = set_byte;
   }
   push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);

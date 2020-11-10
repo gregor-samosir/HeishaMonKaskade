@@ -79,7 +79,9 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    TelnetStream.println(string);
+    char timeStr[255];
+    sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
+    TelnetStream.println(timeStr);
   }
 }
 
@@ -90,7 +92,9 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    TelnetStream.println(string);
+    char timeStr[255];
+    sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
+    TelnetStream.println(timeStr);
   }
 }
 
@@ -244,7 +248,7 @@ bool readSerial()
   { // received length part of header now
     if (serial_length > (serial_data[1] + 3))
     {
-      write_telnet_log((char *)"ERROR Received data longer than header suggests");
+      write_telnet_log((char *)"Received data longer than header suggests");
       serial_length = 0;
       return false;
     }
@@ -253,15 +257,15 @@ bool readSerial()
     {
       if (!validate_checksum())
       {
-        write_telnet_log((char *)"ERROR Checksum not valid");
+        write_telnet_log((char *)"Checksum not valid");
         serial_length = 0;
         return false;
       }
-      write_telnet_log((char *)"DEBUG Receive valid data from serial");
+      write_telnet_log((char *)"Receive valid data from serial");
       serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "ERROR Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
+    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
   }
   return false;
 }
@@ -283,11 +287,11 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
     commandsInBuffer++;
-    sprintf(log_msg, "DEBUG Add command to buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "Add to buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
   }
   else
   {
-    write_telnet_log((char *)"ERROR Buffer full. Ignoring last command");
+    write_telnet_log((char *)"Buffer full. Ignoring last command");
   }
 }
 
@@ -301,7 +305,7 @@ void send_pana_command()
     command_timer.pause();
 
     write_mqtt_log((char *)commandBuffer->log_msg);
-    sprintf(log_msg, "DEBUG Send command from buffer: %s", commandBuffer->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "Send from buffer: %s", commandBuffer->log_msg); write_telnet_log(log_msg);
     // checksum
     byte chk = 0;
     for (int i = 0; i < commandBuffer->length; i++)
@@ -312,7 +316,7 @@ void send_pana_command()
 
     unsigned int bytesSent = Serial.write(commandBuffer->command, commandBuffer->length);
     bytesSent += Serial.write(chk);
-    // sprintf(log_msg, "DEBUG Send %d / %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
+    // sprintf(log_msg, "Send %d / %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
     
 
     Buffer *nextCommand = commandBuffer->next;
@@ -336,7 +340,7 @@ void send_pana_mainquery()
   {
     //write_telnet_log((char *)"DEBUG Add mainQuery to buffer");
     querynum += 1;
-    sprintf(log_msg, "<REQ> #%d", querynum);
+    sprintf(log_msg, "<REQ> Query %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
   }
 }
@@ -351,9 +355,9 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
-      write_telnet_log((char *)"DEBUG Decode topics start ----------------------------");
+      write_telnet_log((char *)"Decode topics start ----------------------------");
       decode_heatpump_data(serial_data, actual_data, mqtt_client);    
-      write_telnet_log((char *)"DEBUG Decode topics end-------------------------------");
+      write_telnet_log((char *)"Decode topics end ------------------------------");
       serialquerysent = false;
       command_timer.resume();
     }
@@ -370,7 +374,7 @@ void timeout_serial()
     // serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
     command_timer.resume();
-    write_telnet_log((char *)"ERROR Serial read timeout");
+    write_telnet_log((char *)"Serial read timeout");
   }
 }
 
@@ -422,6 +426,14 @@ void setup()
   setupHttp();
   switchSerial();
   
+  configTime(TIME_ZONE, "pool.ntp.org");
+  time_t now = time(nullptr);
+  while (now < SECS_YR_2000) {
+    delay(100);
+    now = time(nullptr);
+  }
+  setTime(now);
+
   TelnetStream.begin();
 
   query_timer.start();
