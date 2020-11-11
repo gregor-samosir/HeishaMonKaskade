@@ -79,7 +79,7 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    char timeStr[255];
+    char timeStr[256];
     sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
     TelnetStream.println(timeStr);
   }
@@ -92,7 +92,7 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    char timeStr[255];
+    char timeStr[256];
     sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
     TelnetStream.println(timeStr);
   }
