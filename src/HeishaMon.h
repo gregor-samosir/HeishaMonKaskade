@@ -17,7 +17,14 @@
 
 #define LOGHEXBYTESPERLINE 16
 #define MAXCOMMANDSINBUFFER 10
-#define MAXDATASIZE 255
+#define MAXDATASIZE 256
+#define MAINQUERYSIZE 110
+#define COMMQUERYSIZE 110
+
+#define UPDATEALLTIME 300000 // time to resend all to mqtt
+#define MQTT_RETAIN_VALUES 1
+#define NUMBEROFTOPICS 98 //last topic number + 1
+
 
 // config your timing
 #define COMMANDTIMER 950 // Command / timer to send commands from buffer to HP
@@ -35,8 +42,8 @@ void push_command_buffer(byte *, int, char *);
 
 typedef struct Buffer Buffer;
 struct Buffer{
-    byte command[128];
+    byte command[COMMQUERYSIZE];
     unsigned int length;
-    char log_msg[128];
+    char log_msg[MAXDATASIZE];
     Buffer* next;
 };

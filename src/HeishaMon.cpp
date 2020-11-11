@@ -21,7 +21,7 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-//log and debugg
+//log and debug
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt or telnetstream
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
 
@@ -34,10 +34,10 @@ unsigned int querynum = 0;
 String actual_data[NUMBEROFTOPICS];
 
 // log message
-char log_msg[255];
+char log_msg[256];
 
 // mqtt topic
-char mqtt_topic[255];
+char mqtt_topic[256];
 
 Buffer *commandBuffer;
 unsigned int commandsInBuffer = 0;
@@ -79,7 +79,7 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    char timeStr[255];
+    char timeStr[256];
     sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
     TelnetStream.println(timeStr);
   }
@@ -92,7 +92,7 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    char timeStr[255];
+    char timeStr[256];
     sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
     TelnetStream.println(timeStr);
   }
@@ -413,6 +413,20 @@ void handle_telnetstream()
 }
 
 /*****************************************************************************/
+/* Setup Time                                                                */
+/*****************************************************************************/
+void setupTime() {
+  configTime(TIME_ZONE, "pool.ntp.org");
+  delay(250);
+  time_t now = time(nullptr);
+  while (now < SECS_YR_2000) {
+    delay(100);
+    now = time(nullptr);
+  }
+  setTime(now+3600); // FIX CEST dont work
+}
+
+/*****************************************************************************/
 /* main                                                                      */
 /*****************************************************************************/
 void setup()
@@ -425,14 +439,7 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
-  
-  configTime(TIME_ZONE, "pool.ntp.org");
-  time_t now = time(nullptr);
-  while (now < SECS_YR_2000) {
-    delay(100);
-    now = time(nullptr);
-  }
-  setTime(now);
+  setupTime();
 
   TelnetStream.begin();
 
