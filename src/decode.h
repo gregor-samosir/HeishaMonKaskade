@@ -1,10 +1,6 @@
 #include <PubSubClient.h>
 #include "Topics.h"
 
-#define UPDATEALLTIME 300000 // time to resend all to mqtt
-#define MQTT_RETAIN_VALUES 1
-#define NUMBEROFTOPICS 98 //last topic number + 1
-
 void decode_heatpump_data(char *, String *, PubSubClient &);
 
 String unknown(byte);

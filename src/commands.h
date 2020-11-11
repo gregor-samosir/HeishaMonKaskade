@@ -1,7 +1,4 @@
-
-#define MAINQUERYSIZE 110
-#define MAXCOMMANDSINBUFFER 10
-
 extern byte mainQuery[MAINQUERYSIZE];
+extern byte mainCommand[COMMQUERYSIZE];
 
 void build_heatpump_command(char *, char *);

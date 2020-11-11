@@ -34,10 +34,10 @@ unsigned int querynum = 0;
 String actual_data[NUMBEROFTOPICS];
 
 // log message
-char log_msg[255];
+char log_msg[256];
 
 // mqtt topic
-char mqtt_topic[255];
+char mqtt_topic[256];
 
 Buffer *commandBuffer;
 unsigned int commandsInBuffer = 0;
