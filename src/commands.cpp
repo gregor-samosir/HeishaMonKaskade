@@ -171,12 +171,6 @@ void build_heatpump_command(char *topic, char *msg)
     case 6: // Auto(Heat) + DHW
       set_byte = 40;
       break;
-    case 7: // Auto(Cool)
-      set_byte = 26;
-      break;
-    case 8: // Auto(Cool) + DHW
-      set_byte = 42;
-      break;
     default:
       set_byte = 0;
       break;
