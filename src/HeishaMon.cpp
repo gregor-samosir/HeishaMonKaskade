@@ -21,7 +21,7 @@ char mqtt_port[6] = "1883";
 char mqtt_username[40];
 char mqtt_password[40];
 
-//log and debugg
+//log and debug
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt or telnetstream
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
 
