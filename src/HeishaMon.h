@@ -45,6 +45,7 @@ struct Buffer{
     byte command[COMMQUERYSIZE];
     unsigned int length;
     char log_msg[MAXDATASIZE];
+    unsigned int position;
     Buffer* next;
 };
 
