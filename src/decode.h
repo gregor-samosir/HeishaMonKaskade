@@ -1,6 +1,8 @@
 #include <PubSubClient.h>
 #include "Topics.h"
 
+#define NUMBEROFTOPICS 98 //last topic number + 1
+
 void decode_heatpump_data(char *, String *, PubSubClient &);
 
 String unknown(byte);

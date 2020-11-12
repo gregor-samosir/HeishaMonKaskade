@@ -23,7 +23,7 @@
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
-#define NUMBEROFTOPICS 98 //last topic number + 1
+//#define NUMBEROFTOPICS 98 //last topic number + 1
 
 
 // config your timing
@@ -47,3 +47,6 @@ struct Buffer{
     char log_msg[MAXDATASIZE];
     Buffer* next;
 };
+
+extern byte mainQuery[MAINQUERYSIZE];
+extern byte mainCommand[COMMQUERYSIZE];
