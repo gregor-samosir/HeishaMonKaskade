@@ -110,6 +110,20 @@ int getFreeMemory() {
 }
 
 /*****************************************************************************/
+/* WiFi Quality (Igor Ybema)                                                  */
+/*****************************************************************************/
+int getWifiQuality() {
+  if (WiFi.status() != WL_CONNECTED)
+    return -1;
+  int dBm = WiFi.RSSI();
+  if (dBm <= -100)
+    return 0;
+  if (dBm >= -50)
+    return 100;
+  return 2 * (dBm + 100);
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -404,8 +418,10 @@ void handle_telnetstream()
       outputTelnetLog ^= true;
       break;
     case 'M':
-      sprintf(log_msg, "%d percent memory free" , getFreeMemory());
-      TelnetStream.println(log_msg);
+      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
+      break;
+    case 'W':
+      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> WiFi: %d\n", year(), month(), day(), hour(), minute(), second(), getWifiQuality());
       break;
     }
   }
