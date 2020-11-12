@@ -4,7 +4,6 @@
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
-#include "HeishaMon.h"
 #include "webfunctions.h"
 #include "decode.h"
 #include "version.h"

@@ -49,6 +49,9 @@ WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 
+byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
+byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10};
+
 /*****************************************************************************/
 /* OTA                                                                       */
 /*****************************************************************************/
@@ -79,9 +82,7 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    char timeStr[256];
-    sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
-    TelnetStream.println(timeStr);
+    TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] %s\n", year(), month(), day(), hour(), minute(), second(), string);
   }
 }
 
@@ -92,9 +93,7 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    char timeStr[256];
-    sprintf(timeStr, "[%02d-%02d-%02d %02d:%02d:%02d] %s", year(), month(), day(), hour(), minute(), second(), string);
-    TelnetStream.println(timeStr);
+    TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] \e[31m<DBG>\e[39m %s\n", year(), month(), day(), hour(), minute(), second(), string);
   }
 }
 
