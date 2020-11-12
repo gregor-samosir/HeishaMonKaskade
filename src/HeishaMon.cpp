@@ -292,6 +292,7 @@ void push_command_buffer(byte *command, int length, char *log_msg)
   {
     Buffer *newCommand = new Buffer;
     newCommand->length = length;
+    newCommand->position = commandsInBuffer;
     for (int i = 0; i < length; i++)
     {
       newCommand->command[i] = command[i];
@@ -300,7 +301,7 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
     commandsInBuffer++;
-    sprintf(log_msg, "Add to buffer: %s", newCommand->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d] Push buffer: %s", newCommand->position + 1, newCommand->log_msg); write_telnet_log(log_msg);
   }
   else
   {
@@ -318,7 +319,7 @@ void send_pana_command()
     command_timer.pause();
 
     write_mqtt_log((char *)commandBuffer->log_msg);
-    sprintf(log_msg, "Send from buffer: %s", commandBuffer->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->position + 1,  commandBuffer->log_msg); write_telnet_log(log_msg);
     // checksum
     byte chk = 0;
     for (int i = 0; i < commandBuffer->length; i++)
