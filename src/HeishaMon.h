@@ -42,10 +42,10 @@ void push_command_buffer(byte *, int, char *);
 
 typedef struct Buffer Buffer;
 struct Buffer{
-    byte command[COMMQUERYSIZE];
-    unsigned int length;
-    char log_msg[MAXDATASIZE];
-    unsigned int position;
+    byte command_bytes[COMMQUERYSIZE];
+    unsigned int command_length;
+    char command_name[MAXDATASIZE];
+    unsigned int command_position;
     Buffer* next;
 };
 

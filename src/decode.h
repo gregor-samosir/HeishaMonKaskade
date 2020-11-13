@@ -3,7 +3,8 @@
 
 #define NUMBEROFTOPICS 98 //last topic number + 1
 
-void decode_heatpump_data(char *, String *, PubSubClient &);
+void publish_heatpump_data(char *, String *, PubSubClient &);
+String getTopicPayload(unsigned int, char *);
 
 String unknown(byte);
 String getBit1and2(byte);
@@ -27,7 +28,7 @@ String getRoomHeaterHour(char *);
 String getDHWHeaterHour(char *);
 String getErrorInfo(char *);
 
-static const char *topics[] = {
+static const char *topicNames[] = {
     States::TOP0,
     States::TOP1,
     States::TOP2,

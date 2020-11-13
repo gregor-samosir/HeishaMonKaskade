@@ -4,10 +4,10 @@
 #include "decode.h"
 #include "commands.h"
 
-Ticker command_timer(send_pana_command, COMMANDTIMER, 0, MICROS);  // loop
-Ticker query_timer(send_pana_mainquery, QUERYTIMER, 0, MICROS); // loop
-Ticker bufferfill_timeout(read_pana_data, BUFFERTIMEOUT, 1, MICROS); // one time
-Ticker serial_timeout(timeout_serial, SERIALTIMEOUT, 1, MICROS); // one time
+Ticker Command_Timer(send_pana_command, COMMANDTIMER, 0, MICROS);  // loop
+Ticker Query_Timer(send_pana_mainquery, QUERYTIMER, 0, MICROS); // loop
+Ticker Bufferfill_Timeout(read_pana_data, BUFFERTIMEOUT, 1, MICROS); // one time
+Ticker Serial_Timeout(timeout_serial, SERIALTIMEOUT, 1, MICROS); // one time
 
 bool serialquerysent = false; // mutex for serial sending
 
@@ -278,7 +278,7 @@ bool readSerial()
       serial_length = 0;
       return true;
     }
-    sprintf(log_msg, "Receive partial datagram %d, please fix bufferfill_timeout", serial_length); write_telnet_log(log_msg);
+    sprintf(log_msg, "Receive partial datagram %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
   }
   return false;
 }
@@ -290,18 +290,19 @@ void push_command_buffer(byte *command, int length, char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
+    commandsInBuffer++;
     Buffer *newCommand = new Buffer;
-    newCommand->length = length;
-    newCommand->position = commandsInBuffer;
+    newCommand->command_length = length;
+    newCommand->command_position = commandsInBuffer;
     for (int i = 0; i < length; i++)
     {
-      newCommand->command[i] = command[i];
-      newCommand->log_msg[i] = log_msg[i];
+      newCommand->command_bytes[i] = command[i];
+      newCommand->command_name[i] = log_msg[i];
     }
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
-    commandsInBuffer++;
-    sprintf(log_msg, "[%d] Push buffer: %s", newCommand->position + 1, newCommand->log_msg); write_telnet_log(log_msg);
+    //commandsInBuffer++;
+    sprintf(log_msg, "[%d] Push buffer: %s", commandBuffer->command_position, commandBuffer->command_name); write_telnet_log(log_msg);
   }
   else
   {
@@ -316,32 +317,29 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    command_timer.pause();
+    Command_Timer.pause(); // resume after serial read and decode 
 
-    write_mqtt_log((char *)commandBuffer->log_msg);
-    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->position + 1,  commandBuffer->log_msg); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
     // checksum
     byte chk = 0;
-    for (int i = 0; i < commandBuffer->length; i++)
+    for (int i = 0; i < commandBuffer->command_length; i++)
     {
-      chk += commandBuffer->command[i];
+      chk += commandBuffer->command_bytes[i];
     }
     chk = (chk ^ 0xFF) + 01;
 
-    unsigned int bytesSent = Serial.write(commandBuffer->command, commandBuffer->length);
+    unsigned int bytesSent = Serial.write(commandBuffer->command_bytes, commandBuffer->command_length);
     bytesSent += Serial.write(chk);
+    serialquerysent = true;
     // sprintf(log_msg, "Send %d / %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
     
-
     Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
     commandsInBuffer--;
 
-    serialquerysent = true;
-    
-    bufferfill_timeout.start();
-    serial_timeout.start();
+    Bufferfill_Timeout.start();
+    Serial_Timeout.start();
   }
 }
 
@@ -352,7 +350,6 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
-    //write_telnet_log((char *)"DEBUG Add mainQuery to buffer");
     querynum += 1;
     sprintf(log_msg, "<REQ> Query %d", querynum);
     push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
@@ -370,10 +367,10 @@ void read_pana_data()
     if (readSerial() == true)
     {
       write_telnet_log((char *)"Decode topics start ----------------------------");
-      decode_heatpump_data(serial_data, actual_data, mqtt_client);    
-      write_telnet_log((char *)"Decode topics end ------------------------------");
+      publish_heatpump_data(serial_data, actual_data, mqtt_client);    
+      write_telnet_log((char *)"Decode topics end ------------------------------\n");
       serialquerysent = false;
-      command_timer.resume();
+      Command_Timer.resume();
     }
   }
 }
@@ -387,7 +384,7 @@ void timeout_serial()
   {
     // serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
-    command_timer.resume();
+    Command_Timer.resume();
     write_telnet_log((char *)"Serial read timeout");
   }
 }
@@ -459,8 +456,8 @@ void setup()
 
   TelnetStream.begin();
 
-  query_timer.start();
-  command_timer.start();
+  Query_Timer.start();
+  Command_Timer.start();
   
   lastReconnectAttempt = 0;
 }
@@ -490,9 +487,9 @@ void loop()
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 
-  command_timer.update(); // trigger send_pana_command()   - send command or query from buffer
-  query_timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
+  Command_Timer.update(); // trigger send_pana_command()   - send command or query from buffer
+  Query_Timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
   
-  bufferfill_timeout.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
-  serial_timeout.update();     // trigger timeout_serial() - stop read from serial after timeout
+  Bufferfill_Timeout.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
+  Serial_Timeout.update();     // trigger timeout_serial() - stop read from serial after timeout
 }
