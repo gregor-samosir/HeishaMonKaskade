@@ -43,7 +43,7 @@ struct Buffer{
     unsigned int command_length;
     char command_name[MAXDATASIZE];
     unsigned int command_position;
-    Buffer* next;
+    Buffer *next;
 };
 
 extern byte mainQuery[MAINQUERYSIZE];
