@@ -208,20 +208,20 @@ void handleTableRefresh(ESP8266WebServer *httpServer, String actual_data[])
   String tabletext;
   String topicdesc;
 
-  for (unsigned int topic = 0; topic < NUMBEROFTOPICS; topic++)
+  for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
-    if (strcmp(topicDescription[topic][0], "value") == 0)
+    if (strcmp(topicDescription[top_num][0], "value") == 0)
     {
-      topicdesc = topicDescription[topic][1];
+      topicdesc = topicDescription[top_num][1];
     }
     else
     {
-      int value = actual_data[topic].toInt();
-      topicdesc = topicDescription[topic][value];
+      int value = actual_data[top_num].toInt();
+      topicdesc = topicDescription[top_num][value];
     }
-    if (actual_data[topic] != "unused")
+    if (actual_data[top_num] != "unused")
     {
-      tabletext = tabletext + "<tr><td>TOP" + topic + "</td><td>" + topics[topic] + "</td><td>" + actual_data[topic] + "</td><td>" + topicdesc + "</td></tr>\n";
+      tabletext = tabletext + "<tr><td>TOP" + top_num + "</td><td>" + topicNames[top_num] + "</td><td>" + actual_data[top_num] + "</td><td>" + topicdesc + "</td></tr>\n";
     }
   }
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);

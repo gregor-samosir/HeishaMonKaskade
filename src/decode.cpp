@@ -4,23 +4,42 @@
 
 unsigned long nextalldatatime = 0;
 
-void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client)
+void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client)
 {
-  char log_msg[256];
-  std::string mqtt_topic;
-  byte input_pos;
-  String top_value;
-
+  char pub_msg[256];
   bool updatealltopics = false;
-  if (millis() > nextalldatatime)
+
+  unsigned long now = millis();
+  if (now - nextalldatatime > UPDATEALLTIME)
   {
     updatealltopics = true;
-    nextalldatatime = millis() + UPDATEALLTIME;
+    nextalldatatime = now;
+    write_telnet_log((char *)"Publish all topics");
   }
 
   for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
-    //switch on topic numbers with 2 bytes
+    String top_value = getTopicPayload(top_num, serial_data);
+
+    if ((updatealltopics) || (actual_data[top_num] != top_value))
+    {
+      if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
+      {
+        sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value.c_str()); write_mqtt_log(pub_msg);
+      }
+      actual_data[top_num] = top_value;
+      std::string mqtt_topic = Topics::STATE + "/" + topicNames[top_num];
+      mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
+    }
+  }
+}
+
+/*****************************************************************************/
+/* calculate the payload                                                     */
+/*****************************************************************************/
+String getTopicPayload(unsigned int top_num, char *serial_data)
+{
+  String top_value;
     switch (top_num)
     {
     case 1: //Pump_Flow
@@ -41,43 +60,13 @@ void decode_heatpump_data(char *serial_data, String actual_data[], PubSubClient 
     case 44: //Error and decription
       top_value = getErrorInfo(serial_data);
       break;
-    case 34: // unused Topics
-    case 35: // add your unused topics to the list
-    case 37:
-    case 43:
-    case 46:
-    case 47:
-    case 48:
-    case 57:
-    case 63:
-    case 82:
-    case 83:
-    case 84:
-    case 85:
-    case 86:
-    case 87:
-    case 88:
-    case 89:
-      top_value = "unused";
-      break;
     default:
       //call the topic function for 1 byte topics
-      input_pos = serial_data[topicBytes[top_num]];
-      top_value = topicFunctions[top_num](input_pos);
+      byte serial_value = serial_data[topicBytes[top_num]];
+      top_value = topicFunctions[top_num](serial_value);
       break;
     }
-
-    if ((updatealltopics) || (actual_data[top_num] != top_value))
-    {
-      if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
-      {
-        sprintf(log_msg, "<PUB> TOP%d %s: %s", top_num, topics[top_num], top_value.c_str()); write_mqtt_log(log_msg);
-      }
-      actual_data[top_num] = top_value;
-      mqtt_topic = Topics::STATE + "/" + topics[top_num];
-      mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
-    }
-  }
+    return top_value;
 }
 
 String getBit1and2(byte input)
@@ -154,26 +143,16 @@ String getOpMode(byte input)
 {
   switch ((int)(input & 0b111111))
   {
-  case 18:
-    return "0";
-  case 19:
-    return "1";
-  case 25:
-    return "2";
-  case 33:
-    return "3";
-  case 34:
-    return "4";
-  case 35:
-    return "5";
-  case 41:
-    return "6";
-  case 26:
-    return "7";
-  case 42:
-    return "8";
-  default:
-    return "-1";
+  case 18: return "0";
+  case 19: return "1";
+  case 25: return "2";
+  case 33: return "3";
+  case 34: return "4";
+  case 35: return "5";
+  case 41: return "6";
+  case 26: return "7";
+  case 42: return "8";
+  default: return "-1";
   }
 }
 

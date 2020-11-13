@@ -23,8 +23,6 @@
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
-//#define NUMBEROFTOPICS 98 //last topic number + 1
-
 
 // config your timing
 #define COMMANDTIMER 950 // Command / timer to send commands from buffer to HP
@@ -40,12 +38,11 @@ void write_mqtt_log(char *);
 void write_telnet_log(char *);
 void push_command_buffer(byte *, int, char *);
 
-typedef struct Buffer Buffer;
 struct Buffer{
-    byte command[COMMQUERYSIZE];
-    unsigned int length;
-    char log_msg[MAXDATASIZE];
-    unsigned int position;
+    byte command_bytes[COMMQUERYSIZE];
+    unsigned int command_length;
+    char command_name[MAXDATASIZE];
+    unsigned int command_position;
     Buffer* next;
 };
 
