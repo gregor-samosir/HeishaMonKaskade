@@ -301,7 +301,6 @@ void push_command_buffer(byte *command, int length, char *log_msg)
     }
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
-    //commandsInBuffer++;
     sprintf(log_msg, "[%d] Push buffer: %s", commandBuffer->command_position, commandBuffer->command_name); write_telnet_log(log_msg);
   }
   else
@@ -318,8 +317,7 @@ void send_pana_command()
   if (commandsInBuffer > 0)
   {
     Command_Timer.pause(); // resume after serial read and decode 
-
-    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
+       
     // checksum
     byte chk = 0;
     for (int i = 0; i < commandBuffer->command_length; i++)
@@ -330,14 +328,14 @@ void send_pana_command()
 
     unsigned int bytesSent = Serial.write(commandBuffer->command_bytes, commandBuffer->command_length);
     bytesSent += Serial.write(chk);
-    serialquerysent = true;
-    // sprintf(log_msg, "Send %d / %d from buffer", bytesSent, int(chk)); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
     
     Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
     commandBuffer = nextCommand;
     commandsInBuffer--;
 
+    serialquerysent = true;
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
   }
@@ -382,7 +380,6 @@ void timeout_serial()
 {
   if (serialquerysent == true)
   {
-    // serial_length = 0;
     serialquerysent = false; //we are allowed to send a new command
     Command_Timer.resume();
     write_telnet_log((char *)"Serial read timeout");
