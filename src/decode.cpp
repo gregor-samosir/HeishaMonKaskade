@@ -6,11 +6,7 @@ unsigned long nextalldatatime = 0;
 
 void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client)
 {
-  char decode_msg[256];
-  std::string mqtt_topic;
-  byte serial_value;
-  String top_value;
-
+  char pub_msg[256];
   bool updatealltopics = false;
 
   unsigned long now = millis();
@@ -23,16 +19,16 @@ void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient
 
   for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
-    top_value = getTopicPayload(top_num, serial_data);
+    String top_value = getTopicPayload(top_num, serial_data);
 
     if ((updatealltopics) || (actual_data[top_num] != top_value))
     {
       if (actual_data[top_num] != top_value) //write only changed topics to mqtt log
       {
-        sprintf(decode_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value.c_str()); write_mqtt_log(decode_msg);
+        sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value.c_str()); write_mqtt_log(pub_msg);
       }
       actual_data[top_num] = top_value;
-      mqtt_topic = Topics::STATE + "/" + topicNames[top_num];
+      std::string mqtt_topic = Topics::STATE + "/" + topicNames[top_num];
       mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
     }
   }
