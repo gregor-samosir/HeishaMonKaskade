@@ -287,7 +287,7 @@ bool readSerial()
 /* Write to buffer
 /* hold only the command topic name
 /*****************************************************************************/
-void push_command_buffer(char *log_msg)
+void push_command_buffer(char *log_msg, int length)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
