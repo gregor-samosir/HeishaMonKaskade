@@ -284,7 +284,8 @@ bool readSerial()
 }
 
 /*****************************************************************************/
-/* Write to buffer                                                      */
+/* Write to buffer
+/* hold only the command topic name
 /*****************************************************************************/
 void push_command_buffer(char *log_msg)
 {
@@ -309,6 +310,9 @@ void push_command_buffer(char *log_msg)
 
 /*****************************************************************************/
 /* Send commands from buffer to pana  (called from loop)                     */
+/* send the set command global mainCommand[]
+/* chk calculation must be on each time
+/* most of this part are debug only
 /*****************************************************************************/
 void send_pana_command()
 {
@@ -343,7 +347,8 @@ void send_pana_command()
 }
 
 /*****************************************************************************/
-/* Send query to buffer  (called from loop)                                    */
+/* Send query to buffer  (called from loop)                                    
+/* only to trigger the next query if we have no new set command on buffer 
 /*****************************************************************************/
 void send_pana_mainquery()
 {
