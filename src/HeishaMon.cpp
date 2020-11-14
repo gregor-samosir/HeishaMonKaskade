@@ -316,8 +316,11 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    Command_Timer.pause(); // resume after serial read and decode 
-       
+    int status = Command_Timer.state();
+    if (status == 1) {
+      write_telnet_log((char *)"Command Timmer pause");
+      Command_Timer.pause(); // resume after serial read and decode 
+    }   
     // checksum
     byte chk = 0;
     for (int i = 0; i < commandBuffer->command_length; i++)
@@ -364,10 +367,11 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
-      write_telnet_log((char *)"Decode topics start ----------------------------");
+      write_telnet_log((char *)"Decode topics ---------- Start ------------------");
       publish_heatpump_data(serial_data, actual_data, mqtt_client);    
-      write_telnet_log((char *)"Decode topics end ------------------------------\n");
+      write_telnet_log((char *)"Decode topics ---------- End --------------------");
       serialquerysent = false;
+      write_telnet_log((char *)"Command Timmer resume\n");
       Command_Timer.resume();
     }
   }
