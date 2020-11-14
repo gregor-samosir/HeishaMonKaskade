@@ -208,5 +208,5 @@ void build_heatpump_command(char *topic, char *msg)
     sprintf(log_msg, "<SUB> SET19 %s: %d", topic, set_byte - 1);
   }
   mainCommand[set_pos] = set_byte;
-  push_command_buffer(mainCommand, sizeof(mainCommand), log_msg);
+  push_command_buffer(log_msg);
 }
