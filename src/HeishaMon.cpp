@@ -1,4 +1,3 @@
-
 #include "HeishaMon.h"
 #include "webfunctions.h"
 #include "decode.h"
@@ -286,6 +285,7 @@ bool readSerial()
 /*****************************************************************************/
 /* Write to buffer
 /* hold only the command topic name
+/* commands stored in mainCommand[]
 /*****************************************************************************/
 void push_command_buffer(char *log_msg, int length)
 {
@@ -320,7 +320,7 @@ void send_pana_command()
   {
     int status = Command_Timer.state();
     if (status == 1) {
-      write_telnet_log((char *)"Command Timmer pause");
+      //write_telnet_log((char *)"Command Timmer pause");
       Command_Timer.pause(); // resume after serial read and decode 
     }   
     // checksum
@@ -330,9 +330,11 @@ void send_pana_command()
       chk += mainCommand[i];
     }
     chk = (chk ^ 0xFF) + 01;
-
-    unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
-    bytesSent += Serial.write(chk);
+    if (Serial.availableForWrite() > 110){
+      unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
+      Serial.write(chk);
+    }
+    
     sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
     
     Buffer *nextCommand = commandBuffer->next;
@@ -355,7 +357,7 @@ void send_pana_mainquery()
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
     querynum += 1;
-    sprintf(log_msg, "<REQ> Query %d", querynum);
+    sprintf(log_msg, "Query %d", querynum);
     push_command_buffer(log_msg, sizeof(log_msg));
   }
 }
@@ -372,9 +374,9 @@ void read_pana_data()
     {
       write_telnet_log((char *)"Decode topics ---------- Start ------------------");
       publish_heatpump_data(serial_data, actual_data, mqtt_client);    
-      write_telnet_log((char *)"Decode topics ---------- End --------------------");
+      write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
       serialquerysent = false;
-      write_telnet_log((char *)"Command Timmer resume\n");
+      //write_telnet_log((char *)"Command Timmer resume\n");
       Command_Timer.resume();
     }
   }
@@ -456,10 +458,10 @@ void setup()
   setupMqtt();
   setupHttp();
   switchSerial();
+  
   setupTime();
-
   TelnetStream.begin();
-
+  
   Query_Timer.start();
   Command_Timer.start();
   
