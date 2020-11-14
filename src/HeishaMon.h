@@ -35,7 +35,7 @@ void read_pana_data();
 void timeout_serial();
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
-void push_command_buffer(char *);
+void push_command_buffer(char *, int);
 
 struct Buffer{
     char command_name[MAXDATASIZE];
