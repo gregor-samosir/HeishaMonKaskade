@@ -356,7 +356,7 @@ void send_pana_mainquery()
   {
     querynum += 1;
     sprintf(log_msg, "<REQ> Query %d", querynum);
-    push_command_buffer(log_msg);
+    push_command_buffer(log_msg, sizeof(log_msg));
   }
 }
 
