@@ -34,7 +34,7 @@ unsigned int querynum = 0;
 String actual_data[NUMBEROFTOPICS];
 
 // log message
-char log_msg[256];
+char log_msg[MAXDATASIZE];
 
 // mqtt topic
 char mqtt_topic[256];
@@ -286,17 +286,15 @@ bool readSerial()
 /*****************************************************************************/
 /* Write to buffer                                                      */
 /*****************************************************************************/
-void push_command_buffer(byte *command, int length, char *log_msg)
+void push_command_buffer(char *log_msg)
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
     commandsInBuffer++;
     Buffer *newCommand = new Buffer;
-    newCommand->command_length = length;
     newCommand->command_position = commandsInBuffer;
-    for (int i = 0; i < length; i++)
+    for (int i = 0; i < MAXDATASIZE; i++)
     {
-      newCommand->command_bytes[i] = command[i];
       newCommand->command_name[i] = log_msg[i];
     }
     newCommand->next = commandBuffer;
@@ -323,13 +321,13 @@ void send_pana_command()
     }   
     // checksum
     byte chk = 0;
-    for (int i = 0; i < commandBuffer->command_length; i++)
+    for (int i = 0; i < MAINQUERYSIZE; i++)
     {
-      chk += commandBuffer->command_bytes[i];
+      chk += mainCommand[i];
     }
     chk = (chk ^ 0xFF) + 01;
 
-    unsigned int bytesSent = Serial.write(commandBuffer->command_bytes, commandBuffer->command_length);
+    unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
     bytesSent += Serial.write(chk);
     sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
     
@@ -353,7 +351,7 @@ void send_pana_mainquery()
   {
     querynum += 1;
     sprintf(log_msg, "<REQ> Query %d", querynum);
-    push_command_buffer(mainQuery, MAINQUERYSIZE, log_msg);
+    push_command_buffer(log_msg);
   }
 }
 

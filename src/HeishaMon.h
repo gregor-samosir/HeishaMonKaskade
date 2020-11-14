@@ -19,7 +19,6 @@
 #define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 256
 #define MAINQUERYSIZE 110
-#define COMMQUERYSIZE 110
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
@@ -36,15 +35,12 @@ void read_pana_data();
 void timeout_serial();
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
-void push_command_buffer(byte *, int, char *);
+void push_command_buffer(char *);
 
 struct Buffer{
-    byte command_bytes[COMMQUERYSIZE];
-    unsigned int command_length;
     char command_name[MAXDATASIZE];
     unsigned int command_position;
     Buffer *next;
 };
 
-extern byte mainQuery[MAINQUERYSIZE];
-extern byte mainCommand[COMMQUERYSIZE];
+extern byte mainCommand[MAINQUERYSIZE];
