@@ -208,8 +208,8 @@ void build_heatpump_command(char *topic, char *msg)
     sprintf(log_msg, "<SUB> SET19 %s: %d", topic, set_byte - 1);
   }
   mainCommand[set_pos] = set_byte;
-  // trigger buffer
-  push_command_buffer();
   
   write_mqtt_log(log_msg);
+  // trigger buffer
+  register_new_command();
 }
