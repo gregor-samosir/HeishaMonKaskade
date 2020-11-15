@@ -282,21 +282,12 @@ bool readSerial()
 }
 
 /*****************************************************************************/
-/* Write to buffer
-/* hold only the command topic name
-/* commands stored in mainCommand[]
+/* Register new command
 /*****************************************************************************/
-void push_command_buffer()
+void register_new_command()
 {
-  if (commandsInBuffer < MAXCOMMANDSINBUFFER)
-  {
     commandsInBuffer++;
     sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
-  }
-  else
-  {
-    write_telnet_log((char *)"Buffer full. Ignoring last command");
-  }
 }
 
 /*****************************************************************************/
@@ -308,11 +299,8 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    int status = Command_Timer.state();
-    if (status == RUNNING) {
-      //write_telnet_log((char *)"Command Timmer pause");
-      Command_Timer.pause(); // resume after serial read and decode 
-    }   
+    Command_Timer.stop(); // restart after serial read and decode 
+   
     // checksum
     byte chk = 0;
     for (int i = 0; i < MAINQUERYSIZE; i++)
@@ -327,7 +315,6 @@ void send_pana_command()
     sprintf(log_msg, "Command %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     
     commandsInBuffer--;
-
     serialquerysent = true;
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
@@ -342,9 +329,12 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
-    querynum += 1;
-    sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
-    push_command_buffer();
+    int status = Command_Timer.state();
+    if (status == RUNNING) {
+      querynum += 1;
+      sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
+      register_new_command();
+    }
   }
 }
 
@@ -363,7 +353,7 @@ void read_pana_data()
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
       serialquerysent = false;
       //write_telnet_log((char *)"Command Timmer resume\n");
-      Command_Timer.resume();
+      Command_Timer.start();
     }
   }
 }
