@@ -300,7 +300,7 @@ void push_command_buffer(char *log_msg, int length)
     }
     newCommand->next = commandBuffer;
     commandBuffer = newCommand;
-    sprintf(log_msg, "[%d] Push buffer: %s", commandBuffer->command_position, commandBuffer->command_name); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d Push] %s", commandBuffer->command_position, commandBuffer->command_name); write_telnet_log(log_msg);
   }
   else
   {
@@ -335,7 +335,7 @@ void send_pana_command()
       Serial.write(chk);
     }
     
-    sprintf(log_msg, "[%d] Pop buffer: %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
+    sprintf(log_msg, "[%d Pop ] %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
     
     Buffer *nextCommand = commandBuffer->next;
     free(commandBuffer);
@@ -427,6 +427,9 @@ void handle_telnetstream()
     case 'W':
       TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> WiFi: %d\n", year(), month(), day(), hour(), minute(), second(), getWifiQuality());
       break;
+    case 'I':
+      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> localIP: %s\n", year(), month(), day(), hour(), minute(), second(), WiFi.localIP().toString().c_str());
+      break;
     }
   }
 }
@@ -461,7 +464,7 @@ void setup()
   
   setupTime();
   TelnetStream.begin();
-  
+
   Query_Timer.start();
   Command_Timer.start();
   
