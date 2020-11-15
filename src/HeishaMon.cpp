@@ -319,7 +319,7 @@ void send_pana_command()
   if (commandsInBuffer > 0)
   {
     int status = Command_Timer.state();
-    if (status == 1) {
+    if (status == RUNNING) {
       //write_telnet_log((char *)"Command Timmer pause");
       Command_Timer.pause(); // resume after serial read and decode 
     }   
