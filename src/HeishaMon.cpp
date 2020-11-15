@@ -38,7 +38,6 @@ char log_msg[MAXDATASIZE];
 // mqtt topic
 char mqtt_topic[256];
 
-Buffer *commandBuffer;
 unsigned int commandsInBuffer = 0;
 
 ESP8266WebServer httpServer(80);
@@ -287,20 +286,12 @@ bool readSerial()
 /* hold only the command topic name
 /* commands stored in mainCommand[]
 /*****************************************************************************/
-void push_command_buffer(char *log_msg, int length)
+void push_command_buffer()
 {
   if (commandsInBuffer < MAXCOMMANDSINBUFFER)
   {
     commandsInBuffer++;
-    Buffer *newCommand = new Buffer;
-    newCommand->command_position = commandsInBuffer;
-    for (int i = 0; i < MAXDATASIZE; i++)
-    {
-      newCommand->command_name[i] = log_msg[i];
-    }
-    newCommand->next = commandBuffer;
-    commandBuffer = newCommand;
-    sprintf(log_msg, "[%d Push] %s", commandBuffer->command_position, commandBuffer->command_name); write_telnet_log(log_msg);
+    sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
   }
   else
   {
@@ -311,8 +302,7 @@ void push_command_buffer(char *log_msg, int length)
 /*****************************************************************************/
 /* Send commands from buffer to pana  (called from loop)                     */
 /* send the set command global mainCommand[]
-/* chk calculation must be on each time
-/* most of this part are debug only
+/* chk calculation must be on each time we send
 /*****************************************************************************/
 void send_pana_command()
 {
@@ -330,16 +320,12 @@ void send_pana_command()
       chk += mainCommand[i];
     }
     chk = (chk ^ 0xFF) + 01;
-    if (Serial.availableForWrite() > 110){
-      unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
-      Serial.write(chk);
-    }
     
-    sprintf(log_msg, "[%d Pop ] %s", commandBuffer->command_position,  commandBuffer->command_name); write_telnet_log(log_msg);
+    unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
+    bytesSent +=  Serial.write(chk);
     
-    Buffer *nextCommand = commandBuffer->next;
-    free(commandBuffer);
-    commandBuffer = nextCommand;
+    sprintf(log_msg, "Command %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
+    
     commandsInBuffer--;
 
     serialquerysent = true;
@@ -357,8 +343,8 @@ void send_pana_mainquery()
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
     querynum += 1;
-    sprintf(log_msg, "Query %d", querynum);
-    push_command_buffer(log_msg, sizeof(log_msg));
+    sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
+    push_command_buffer();
   }
 }
 
