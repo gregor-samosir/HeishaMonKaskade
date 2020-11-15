@@ -47,7 +47,7 @@ WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 
-byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
+//byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
 byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10};
 
 /*****************************************************************************/
