@@ -286,6 +286,7 @@ bool readSerial()
 /*****************************************************************************/
 void register_new_command()
 {
+    Command_Timer.stop();
     commandsInBuffer++;
     sprintf(log_msg, "%d command(s) registered", commandsInBuffer); write_telnet_log(log_msg);
     Command_Timer.start(); // wait to fill the buffer with more commands
