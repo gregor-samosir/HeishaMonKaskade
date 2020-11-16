@@ -3,7 +3,7 @@
 #include "decode.h"
 #include "commands.h"
 
-Ticker Command_Timer(send_pana_command, COMMANDTIMER, 0, MICROS);  // loop
+Ticker Command_Timer(send_pana_command, COMMANDTIMER, 1, MICROS);  // one time
 Ticker Query_Timer(send_pana_mainquery, QUERYTIMER, 0, MICROS); // loop
 Ticker Bufferfill_Timeout(read_pana_data, BUFFERTIMEOUT, 1, MICROS); // one time
 Ticker Serial_Timeout(timeout_serial, SERIALTIMEOUT, 1, MICROS); // one time
@@ -287,7 +287,9 @@ bool readSerial()
 void register_new_command()
 {
     commandsInBuffer++;
-    sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+    sprintf(log_msg, "%d command(s) registered", commandsInBuffer); write_telnet_log(log_msg);
+    Command_Timer.start(); // wait to fill the buffer with more commands
+    write_telnet_log((char *)"Wait for next command");
 }
 
 /*****************************************************************************/
@@ -299,8 +301,6 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    Command_Timer.stop(); // restart after serial read and decode 
-   
     // checksum
     byte chk = 0;
     for (int i = 0; i < MAINQUERYSIZE; i++)
@@ -312,9 +312,9 @@ void send_pana_command()
     unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
     bytesSent +=  Serial.write(chk);
     
-    sprintf(log_msg, "Command %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
+    sprintf(log_msg, "%d command(s) send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     
-    commandsInBuffer--;
+    commandsInBuffer = 0;
     serialquerysent = true;
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
@@ -329,12 +329,9 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0 && serialquerysent == false)
   {
-    int status = Command_Timer.state();
-    if (status == RUNNING) {
       querynum += 1;
       sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
       register_new_command();
-    }
   }
 }
 
@@ -353,7 +350,7 @@ void read_pana_data()
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
       serialquerysent = false;
       //write_telnet_log((char *)"Command Timmer resume\n");
-      Command_Timer.start();
+      // Command_Timer.start();
     }
   }
 }
