@@ -362,7 +362,6 @@ void timeout_serial()
   if (serialquerysent == true)
   {
     serialquerysent = false; //we are allowed to send a new command
-    Command_Timer.resume();
     write_telnet_log((char *)"Serial read timeout");
   }
 }
