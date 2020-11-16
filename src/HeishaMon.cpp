@@ -349,8 +349,6 @@ void read_pana_data()
       publish_heatpump_data(serial_data, actual_data, mqtt_client);    
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
       serialquerysent = false;
-      //write_telnet_log((char *)"Command Timmer resume\n");
-      // Command_Timer.start();
     }
   }
 }
