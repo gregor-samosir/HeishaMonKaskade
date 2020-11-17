@@ -21,7 +21,7 @@ char mqtt_username[40];
 char mqtt_password[40];
 
 //log and debug
-bool outputMqttLog = true;  // toggle to write logmessages to mqtt or telnetstream
+bool outputMqttLog = true;  // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
 
 // global scope
@@ -211,12 +211,15 @@ bool mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
+  Query_Timer.stop();
+  write_telnet_log((char *)"Mqtt callback");
   char msg[length + 1];
   for (unsigned int i = 0; i < length; i++)
   {
     msg[i] = (char)payload[i];
   }
   msg[length] = '\0';
+  
   build_heatpump_command(topic, msg);
 }
 
@@ -286,7 +289,6 @@ bool readSerial()
 /*****************************************************************************/
 void register_new_command()
 {
-    Query_Timer.stop();
     commandsInBuffer++;
     sprintf(log_msg, "%d command(s) registered", commandsInBuffer); write_telnet_log(log_msg);
     Command_Timer.start(); // wait countdown for multible SET commands
@@ -364,6 +366,7 @@ void timeout_serial()
   {
     serialquerysent = false; //we are allowed to send a new command
     write_telnet_log((char *)"Serial read timeout");
+    Query_Timer.start();
   }
 }
 
