@@ -287,10 +287,12 @@ bool readSerial()
 /*****************************************************************************/
 /* Register new command
 /*****************************************************************************/
-void register_new_command()
+void register_new_command(bool query)
 {
     commandsInBuffer++;
-    sprintf(log_msg, "%d command(s) registered", commandsInBuffer); write_telnet_log(log_msg);
+    if (!query) {
+      sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+    }
     Command_Timer.start(); // wait countdown for multible SET commands
 }
 
@@ -314,7 +316,7 @@ void send_pana_command()
     unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
     bytesSent +=  Serial.write(chk);
     
-    sprintf(log_msg, "%d command(s) send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
+    sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     
     commandsInBuffer = 0;
     serialquerysent = true;
@@ -334,7 +336,7 @@ void send_pana_mainquery()
   {
       querynum += 1;
       sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
-      register_new_command();
+      register_new_command(true);
   }
 }
 
