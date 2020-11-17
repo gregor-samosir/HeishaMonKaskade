@@ -177,7 +177,7 @@ void switchSerial()
 /*****************************************************************************/
 /* MQTT Client reconnect                                                     */
 /*****************************************************************************/
-boolean mqtt_reconnect()
+bool mqtt_reconnect()
 {
   if (mqtt_client.connect(wifi_hostname, mqtt_username, mqtt_password, Topics::WILL.c_str(), 1, true, "Offline"))
   {
@@ -286,10 +286,10 @@ bool readSerial()
 /*****************************************************************************/
 void register_new_command()
 {
-    Command_Timer.stop();
+    if (commandsInBuffer > 0) Command_Timer.pause();
     commandsInBuffer++;
     sprintf(log_msg, "%d command(s) registered", commandsInBuffer); write_telnet_log(log_msg);
-    Command_Timer.start(); // wait to fill the buffer with more commands
+    Command_Timer.resume(); // wait to fill the buffer with more commands
     write_telnet_log((char *)"Wait for next command");
 }
 
@@ -328,7 +328,7 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (commandsInBuffer == 0 && serialquerysent == false)
+  if (commandsInBuffer == 0)
   {
       querynum += 1;
       sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);

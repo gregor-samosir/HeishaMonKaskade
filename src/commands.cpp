@@ -1,7 +1,7 @@
 #include "HeishaMon.h"
 #include "commands.h"
 #include "Topics.h"
-#include <string>
+//#include <string>
 
 void build_heatpump_command(char *topic, char *msg)
 {
