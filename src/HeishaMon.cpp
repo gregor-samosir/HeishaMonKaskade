@@ -179,6 +179,7 @@ void switchSerial()
 /*****************************************************************************/
 bool mqtt_reconnect()
 {
+  write_telnet_log((char *)"Mqtt reconnect");
   if (mqtt_client.connect(wifi_hostname, mqtt_username, mqtt_password, Topics::WILL.c_str(), 1, true, "Offline"))
   {
     mqtt_client.publish(Topics::WILL.c_str(), "Online");
