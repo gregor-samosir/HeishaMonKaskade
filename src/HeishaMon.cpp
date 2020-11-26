@@ -23,6 +23,7 @@ char mqtt_password[40];
 //log and debug
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
+bool servicemode = false; // maintenance mode. No commands send
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -47,7 +48,7 @@ WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 
-//byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
+byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
 byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10};
 
 /*****************************************************************************/
@@ -310,19 +311,33 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    // checksum
-    byte chk = 0;
-    for (int i = 0; i < MAINQUERYSIZE; i++)
+    if (servicemode == false) {
+      // checksum
+      byte chk = 0;
+      for (int i = 0; i < MAINQUERYSIZE; i++)
+      {
+        chk += mainCommand[i];
+      }
+      chk = (chk ^ 0xFF) + 01;
+    
+      unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
+      bytesSent +=  Serial.write(chk);
+      sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
+    } else 
     {
-      chk += mainCommand[i];
+      // checksum
+      byte chk = 0;
+      for (int i = 0; i < MAINQUERYSIZE; i++)
+      {
+        chk += mainQuery[i];
+      }
+      chk = (chk ^ 0xFF) + 01;
+    
+      unsigned int bytesSent = Serial.write(mainQuery, MAINQUERYSIZE);
+      bytesSent +=  Serial.write(chk);
+      sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);      
     }
-    chk = (chk ^ 0xFF) + 01;
-    
-    unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
-    bytesSent +=  Serial.write(chk);
-    
-    sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
-    
+
     commandsInBuffer = 0;
     serialquerysent = true;
     
@@ -402,6 +417,10 @@ void handle_telnetstream()
     case 'D':
       TelnetStream.println("Toggled debug flag");
       outputTelnetLog ^= true;
+      break;
+    case 'S':
+      TelnetStream.println("Toggled service flag");
+      servicemode ^= true;
       break;
     case 'M':
       TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
