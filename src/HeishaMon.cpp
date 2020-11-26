@@ -291,9 +291,9 @@ bool readSerial()
 void register_new_command(bool query)
 {
     commandsInBuffer++;
-    if (query) {
+    if (query == true) {
+      write_telnet_log((char *)"Query registered");
       send_pana_command();
-  
     } else
     {
       sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
