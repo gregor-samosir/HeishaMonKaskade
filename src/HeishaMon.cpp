@@ -291,10 +291,14 @@ bool readSerial()
 void register_new_command(bool query)
 {
     commandsInBuffer++;
-    if (!query) {
+    if (query) {
+      send_pana_command();
+  
+    } else
+    {
       sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+      Command_Timer.start(); // wait countdown for multible SET commands
     }
-    Command_Timer.start(); // wait countdown for multible SET commands
 }
 
 /*****************************************************************************/
