@@ -292,13 +292,13 @@ bool readSerial()
 void register_new_command(bool query)
 {
   commandsInBuffer++;
-    if (query == true) {
-      write_telnet_log((char *)"Query registered");
-    } else
-    {
-      sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
-    }
   Command_Timer.start(); // wait countdown for multible SET commands
+  if (query == true) {
+    write_telnet_log((char *)"Query registered");
+  } else
+  {
+    sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+  }
 }
 
 /*****************************************************************************/
@@ -354,8 +354,8 @@ void send_pana_mainquery()
   if (commandsInBuffer == 0)
   {
       querynum += 1;
-      sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
       register_new_command(true);
+      sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
   }
 }
 
@@ -369,10 +369,10 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
+      serialquerysent = false;   
       write_telnet_log((char *)"Decode topics ---------- Start ------------------");
-      publish_heatpump_data(serial_data, actual_data, mqtt_client);    
+      publish_heatpump_data(serial_data, actual_data, mqtt_client); 
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
-      serialquerysent = false;
       Query_Timer.start();
     }
   }
