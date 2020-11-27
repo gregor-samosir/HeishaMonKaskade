@@ -28,7 +28,6 @@ bool servicemode = false; // maintenance mode. No commands send
 // global scope
 char serial_data[MAXDATASIZE];
 byte serial_length = 0;
-unsigned int querynum = 0;
 
 // store actual value in an String array
 String actual_data[NUMBEROFTOPICS];
@@ -353,9 +352,7 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0)
   {
-      querynum += 1;
       register_new_command(true);
-      sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
   }
 }
 
