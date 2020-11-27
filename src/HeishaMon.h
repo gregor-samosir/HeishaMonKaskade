@@ -38,3 +38,4 @@ void register_new_command(bool);
 
 // Global command buffer
 extern byte mainCommand[MAINQUERYSIZE];
+extern byte mainQuery[MAINQUERYSIZE];

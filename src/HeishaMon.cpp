@@ -23,11 +23,11 @@ char mqtt_password[40];
 //log and debug
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
+bool servicemode = false; // maintenance mode. No commands send
 
 // global scope
 char serial_data[MAXDATASIZE];
 byte serial_length = 0;
-unsigned int querynum = 0;
 
 // store actual value in an String array
 String actual_data[NUMBEROFTOPICS];
@@ -47,7 +47,7 @@ WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 
-//byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
+byte mainQuery[]   = {0x71, 0x6c, 0x01, 0x10};
 byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10};
 
 /*****************************************************************************/
@@ -179,6 +179,7 @@ void switchSerial()
 /*****************************************************************************/
 bool mqtt_reconnect()
 {
+  write_telnet_log((char *)"Mqtt reconnect");
   if (mqtt_client.connect(wifi_hostname, mqtt_username, mqtt_password, Topics::WILL.c_str(), 1, true, "Offline"))
   {
     mqtt_client.publish(Topics::WILL.c_str(), "Online");
@@ -289,11 +290,14 @@ bool readSerial()
 /*****************************************************************************/
 void register_new_command(bool query)
 {
-    commandsInBuffer++;
-    if (!query) {
-      sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
-    }
-    Command_Timer.start(); // wait countdown for multible SET commands
+  commandsInBuffer++;
+  Command_Timer.start(); // wait countdown for multible SET commands
+  if (query == true) {
+    write_telnet_log((char *)"Query registered");
+  } else
+  {
+    sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+  }
 }
 
 /*****************************************************************************/
@@ -305,19 +309,33 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    // checksum
-    byte chk = 0;
-    for (int i = 0; i < MAINQUERYSIZE; i++)
+    if (servicemode == false) {
+      // checksum
+      byte chk = 0;
+      for (int i = 0; i < MAINQUERYSIZE; i++)
+      {
+        chk += mainCommand[i];
+      }
+      chk = (chk ^ 0xFF) + 01;
+    
+      unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
+      bytesSent +=  Serial.write(chk);
+      sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
+    } else 
     {
-      chk += mainCommand[i];
+      // checksum
+      byte chk = 0;
+      for (int i = 0; i < MAINQUERYSIZE; i++)
+      {
+        chk += mainQuery[i];
+      }
+      chk = (chk ^ 0xFF) + 01;
+    
+      unsigned int bytesSent = Serial.write(mainQuery, MAINQUERYSIZE);
+      bytesSent +=  Serial.write(chk);
+      sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);      
     }
-    chk = (chk ^ 0xFF) + 01;
-    
-    unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
-    bytesSent +=  Serial.write(chk);
-    
-    sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
-    
+
     commandsInBuffer = 0;
     serialquerysent = true;
     
@@ -334,8 +352,6 @@ void send_pana_mainquery()
 {
   if (commandsInBuffer == 0)
   {
-      querynum += 1;
-      sprintf(log_msg, "Inject Query %d", querynum); write_telnet_log(log_msg);
       register_new_command(true);
   }
 }
@@ -350,10 +366,10 @@ void read_pana_data()
   {
     if (readSerial() == true)
     {
+      serialquerysent = false;   
       write_telnet_log((char *)"Decode topics ---------- Start ------------------");
-      publish_heatpump_data(serial_data, actual_data, mqtt_client);    
+      publish_heatpump_data(serial_data, actual_data, mqtt_client); 
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
-      serialquerysent = false;
       Query_Timer.start();
     }
   }
@@ -397,6 +413,10 @@ void handle_telnetstream()
     case 'D':
       TelnetStream.println("Toggled debug flag");
       outputTelnetLog ^= true;
+      break;
+    case 'S':
+      TelnetStream.println("Toggled service flag");
+      servicemode ^= true;
       break;
     case 'M':
       TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
