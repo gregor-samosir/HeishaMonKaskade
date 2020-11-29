@@ -325,18 +325,18 @@ void send_pana_command()
       byte chk = calculate_checksum(mainCommand);  
       unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
       bytesSent +=  Serial.write(chk);
+      commandsInBuffer = 0;
+      serialquerysent = true;
       sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     } else 
     {
       byte chk = calculate_checksum(mainQuery);
       unsigned int bytesSent = Serial.write(mainQuery, MAINQUERYSIZE);
       bytesSent +=  Serial.write(chk);
+      commandsInBuffer = 0;
+      serialquerysent = true;
       sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);      
     }
-
-    commandsInBuffer = 0;
-    serialquerysent = true;
-    
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
   }
