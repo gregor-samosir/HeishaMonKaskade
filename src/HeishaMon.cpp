@@ -248,6 +248,18 @@ bool validate_checksum()
 }
 
 /*****************************************************************************/
+/* Calculate checksum                                                        */
+/*****************************************************************************/
+byte calculate_checksum(byte* command) {
+  byte chk = 0;
+  for ( int i = 0; i < MAINQUERYSIZE; i++)  {
+    chk += command[i];
+  }
+  chk = (chk ^ 0xFF) + 01;
+  return chk;
+}
+
+/*****************************************************************************/
 /* Read raw from serial                                                 */
 /*****************************************************************************/
 bool readSerial()
@@ -310,35 +322,21 @@ void send_pana_command()
   if (commandsInBuffer > 0)
   {
     if (servicemode == false) {
-      // checksum
-      byte chk = 0;
-      for (int i = 0; i < MAINQUERYSIZE; i++)
-      {
-        chk += mainCommand[i];
-      }
-      chk = (chk ^ 0xFF) + 01;
-    
+      byte chk = calculate_checksum(mainCommand);  
       unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
       bytesSent +=  Serial.write(chk);
+      commandsInBuffer = 0;
+      serialquerysent = true;
       sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     } else 
     {
-      // checksum
-      byte chk = 0;
-      for (int i = 0; i < MAINQUERYSIZE; i++)
-      {
-        chk += mainQuery[i];
-      }
-      chk = (chk ^ 0xFF) + 01;
-    
+      byte chk = calculate_checksum(mainQuery);
       unsigned int bytesSent = Serial.write(mainQuery, MAINQUERYSIZE);
       bytesSent +=  Serial.write(chk);
+      commandsInBuffer = 0;
+      serialquerysent = true;
       sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);      
     }
-
-    commandsInBuffer = 0;
-    serialquerysent = true;
-    
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
   }
