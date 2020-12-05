@@ -38,7 +38,7 @@ char log_msg[MAXDATASIZE];
 // mqtt topic
 char mqtt_topic[256];
 
-unsigned int commandsInBuffer = 0;
+bool newcommand = false;
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -303,13 +303,13 @@ bool readSerial()
 /*****************************************************************************/
 void register_new_command(bool query)
 {
-  commandsInBuffer++;
+  newcommand = true;
   Command_Timer.start(); // wait countdown for multible SET commands
   if (query == true) {
     write_telnet_log((char *)"Query registered");
   } else
   {
-    sprintf(log_msg, "Command %d registered", commandsInBuffer); write_telnet_log(log_msg);
+    write_telnet_log((char *)"Command registered");
   }
 }
 
@@ -320,20 +320,20 @@ void register_new_command(bool query)
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (commandsInBuffer > 0)
+  if (newcommand == true)
   {
     if (servicemode == false) { 
       Serial.write(mainCommand, MAINQUERYSIZE);
       Serial.write(calculate_checksum(mainCommand));
-      sprintf(log_msg, "Command/Query %d send", commandsInBuffer); write_telnet_log(log_msg);
-      commandsInBuffer = 0;
+      write_telnet_log((char *)"Command send");
+      newcommand = false;
       serialquerysent = true;
     } else 
     {
       Serial.write(mainQuery, MAINQUERYSIZE);
       Serial.write(calculate_checksum(mainQuery));
-      sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer); write_telnet_log(log_msg);
-      commandsInBuffer = 0;
+      write_telnet_log((char *)"Query send in servicemode");
+      newcommand = false;
       serialquerysent = true;      
     }
     Bufferfill_Timeout.start();
@@ -347,7 +347,7 @@ void send_pana_command()
 /*****************************************************************************/
 void send_pana_mainquery()
 {
-  if (commandsInBuffer == 0)
+  if (newcommand == false)
   {
       register_new_command(true);
   }
