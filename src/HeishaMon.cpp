@@ -299,6 +299,7 @@ bool readSerial()
 
 /*****************************************************************************/
 /* Register new command
+/* Wait COMMANDTIMER for multible commands from mqtt
 /*****************************************************************************/
 void register_new_command(bool query)
 {
@@ -321,21 +322,19 @@ void send_pana_command()
 {
   if (commandsInBuffer > 0)
   {
-    if (servicemode == false) {
-      byte chk = calculate_checksum(mainCommand);  
-      unsigned int bytesSent = Serial.write(mainCommand, MAINQUERYSIZE);
-      bytesSent +=  Serial.write(chk);
+    if (servicemode == false) { 
+      Serial.write(mainCommand, MAINQUERYSIZE);
+      Serial.write(calculate_checksum(mainCommand));
+      sprintf(log_msg, "Command/Query %d send", commandsInBuffer); write_telnet_log(log_msg);
       commandsInBuffer = 0;
       serialquerysent = true;
-      sprintf(log_msg, "Command/Query %d send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);
     } else 
     {
-      byte chk = calculate_checksum(mainQuery);
-      unsigned int bytesSent = Serial.write(mainQuery, MAINQUERYSIZE);
-      bytesSent +=  Serial.write(chk);
+      Serial.write(mainQuery, MAINQUERYSIZE);
+      Serial.write(calculate_checksum(mainQuery));
+      sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer); write_telnet_log(log_msg);
       commandsInBuffer = 0;
-      serialquerysent = true;
-      sprintf(log_msg, "Query %d in servicemode send with %d bytes", commandsInBuffer, bytesSent); write_telnet_log(log_msg);      
+      serialquerysent = true;      
     }
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
