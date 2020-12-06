@@ -25,6 +25,8 @@ public:
     static const std::string SET17;
     static const std::string SET18;
     static const std::string SET19;
+    static const std::string SET20;
+    static const std::string SET21;
 };
 
 class States

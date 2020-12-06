@@ -29,6 +29,8 @@ const std::string Topics::SET16 = setTopicPrefix + s + "HeatDelta";
 const std::string Topics::SET17 = setTopicPrefix + s + "CoolDelta";
 const std::string Topics::SET18 = setTopicPrefix + s + "DHWHeatDelta";
 const std::string Topics::SET19 = setTopicPrefix + s + "DHWHeatupTime";
+const std::string Topics::SET20 = setTopicPrefix + s + "HeaterOnOutdoorTemp";
+const std::string Topics::SET21 = setTopicPrefix + s + "HeatingOffOutdoorTemp";
 
 // state topics
 // Can be configured.
