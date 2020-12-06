@@ -207,6 +207,21 @@ void build_heatpump_command(char *topic, char *msg)
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET19 %s: %d", topic, set_byte - 1);
   }
+  // set Heater_On_Outdoor_Temp
+  else if (Topics::SET20.compare(topic) == 0)
+  {
+    set_pos = 85;
+    set_byte = msg_int + 128;
+    sprintf(log_msg, "<SUB> SET20 %s: %d", topic, set_byte - 128);
+  }
+  // set Heating_Off_Outdoor_Temp
+  else if (Topics::SET21.compare(topic) == 0)
+  {
+    set_pos = 83;
+    set_byte = msg_int + 128;
+    sprintf(log_msg, "<SUB> SET21 %s: %d", topic, set_byte - 128);
+  }
+
   mainCommand[set_pos] = set_byte;
   
   write_mqtt_log(log_msg);

@@ -203,6 +203,8 @@ bool mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET17.c_str());
     mqtt_client.subscribe(Topics::SET18.c_str());
     mqtt_client.subscribe(Topics::SET19.c_str());
+    mqtt_client.subscribe(Topics::SET20.c_str());
+    mqtt_client.subscribe(Topics::SET21.c_str());    
   }
   return mqtt_client.connected();
 }
