@@ -31,6 +31,10 @@ const std::string Topics::SET18 = setTopicPrefix + s + "DHWHeatDelta";
 const std::string Topics::SET19 = setTopicPrefix + s + "DHWHeatupTime";
 const std::string Topics::SET20 = setTopicPrefix + s + "HeaterOnOutdoorTemp";
 const std::string Topics::SET21 = setTopicPrefix + s + "HeatingOffOutdoorTemp";
+const std::string Topics::SET22 = setTopicPrefix + s + "SGReadyCapacity1Heat";
+const std::string Topics::SET23 = setTopicPrefix + s + "SGReadyCapacity1DHW";
+const std::string Topics::SET24 = setTopicPrefix + s + "SGReadyCapacity2Heat";
+const std::string Topics::SET25 = setTopicPrefix + s + "SGReadyCapacity2DHW";
 
 // state topics
 // Can be configured.
