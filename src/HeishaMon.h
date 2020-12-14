@@ -15,7 +15,6 @@
 
 #define TIME_ZONE TZ_Europe_Berlin
 
-#define MAXCOMMANDSINBUFFER 10
 #define MAXDATASIZE 256
 #define MAINQUERYSIZE 110
 
