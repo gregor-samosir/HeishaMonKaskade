@@ -23,6 +23,7 @@ char mqtt_password[40];
 //log and debug
 bool outputMqttLog = true;  // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true;  // enable/disable telnet DEBUG
+bool outputHexLog = false;
 
 // global scope
 char serial_data[MAXDATASIZE];
@@ -95,6 +96,9 @@ void write_telnet_log(char *string)
   }
 }
 
+/*****************************************************************************/
+/* DEBUG hex log  (Igor Ybema)                                               */
+/*****************************************************************************/
 void write_hex_log(char *hex, byte hex_len) {
   int bytesperline = 32; // please be aware of max mqtt message size - 32 bytes per line does not work
   for (int i = 0; i < hex_len; i += bytesperline) {
@@ -307,6 +311,7 @@ bool readSerial()
         return false;
       }
       write_telnet_log((char *)"Receive valid data from serial");
+      if (outputHexLog) write_hex_log((char*)serial_data, serial_length);
       serial_length = 0;
       return true;
     }
@@ -346,7 +351,6 @@ void send_pana_command()
       Serial.write(mainQuery, MAINQUERYSIZE);
       Serial.write(calculate_checksum(mainQuery));
       write_telnet_log((char *)"Query send");
-      //DEBUG write_hex_log((char*)mainQuery, MAINQUERYSIZE);
       isquery = false;
       newcommand = false;
       serialquerysent = true;
@@ -356,7 +360,7 @@ void send_pana_command()
       Serial.write(mainCommand, MAINQUERYSIZE);
       Serial.write(calculate_checksum(mainCommand));
       write_telnet_log((char *)"Command send");
-      //DEBUG write_hex_log((char*)mainCommand, MAINQUERYSIZE);
+      if (outputHexLog) write_hex_log((char*)mainCommand, MAINQUERYSIZE);
       newcommand = false;
       serialquerysent = true; 
       byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -436,6 +440,10 @@ void handle_telnetstream()
     case 'D':
       TelnetStream.println("Toggled debug flag");
       outputTelnetLog ^= true;
+      break;
+    case 'H':
+      TelnetStream.println("Toggled hexlog flag");
+      outputHexLog ^= true;
       break;
     case 'M':
       TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
