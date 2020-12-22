@@ -480,7 +480,7 @@ void setup()
   getFreeMemory();
   setupSerial();
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
-  MDNS.begin(wifi_hostname);
+  //MDNS.begin(wifi_hostname);
   setupOTA();
   setupMqtt();
   setupHttp();
@@ -498,7 +498,7 @@ void loop()
 {
   ArduinoOTA.handle();
   httpServer.handleClient();
-  MDNS.update();
+  // MDNS.update();
 
   handle_telnetstream();  
 
