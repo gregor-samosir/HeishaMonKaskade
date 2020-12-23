@@ -480,7 +480,14 @@ void setup()
   getFreeMemory();
   setupSerial();
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
-  MDNS.begin(wifi_hostname);
+  
+  if (!MDNS.begin(wifi_hostname)) {
+    while (1) {
+      delay(1000);
+    }
+  }
+  MDNS.addService("http", "tcp", 80);
+
   setupOTA();
   setupMqtt();
   setupHttp();
