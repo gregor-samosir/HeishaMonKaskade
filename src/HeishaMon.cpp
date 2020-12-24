@@ -479,6 +479,9 @@ void setup()
 {
   getFreeMemory();
   setupSerial();
+
+  WiFi.setPhyMode(WIFI_PHY_MODE_11B);
+
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   
   if (!MDNS.begin(wifi_hostname)) {

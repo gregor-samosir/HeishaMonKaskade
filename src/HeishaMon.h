@@ -14,6 +14,10 @@
 #include <sntp.h>
 #include <TZ.h>
 
+extern "C" {
+#include "user_interface.h"
+}
+
 #define TIME_ZONE TZ_Europe_Berlin
 
 #define MAXDATASIZE 256
