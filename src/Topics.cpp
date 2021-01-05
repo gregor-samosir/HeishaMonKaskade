@@ -35,6 +35,7 @@ const std::string Topics::SET22 = setTopicPrefix + s + "SGReadyCapacity1Heat";
 const std::string Topics::SET23 = setTopicPrefix + s + "SGReadyCapacity1DHW";
 const std::string Topics::SET24 = setTopicPrefix + s + "SGReadyCapacity2Heat";
 const std::string Topics::SET25 = setTopicPrefix + s + "SGReadyCapacity2DHW";
+const std::string Topics::SET26 = setTopicPrefix + s + "DHW_Room_Max_Time";
 
 // state topics
 // Can be configured.
@@ -136,3 +137,4 @@ const char *States::TOP94 = "SGReady_Capacity1_DHW";
 const char *States::TOP95 = "SGReady_Capacity2_Heat";
 const char *States::TOP96 = "SGReady_Capacity2_DHW";
 const char *States::TOP97 = "DHW_Heatup_Time";
+const char *States::TOP98 = "DHW_Room_Max_Time";

@@ -249,6 +249,13 @@ void build_heatpump_command(char *topic, char *msg)
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET25 %s: %d", topic, set_byte - 1);
   }
+    // set DHW room time (max) in steps of 30 minutes
+  else if (Topics::SET26.compare(topic) == 0)
+  {
+    set_pos = 97;
+    set_byte = msg_int + 1;
+    sprintf(log_msg, "<SUB> SET26 %s: %d", topic, set_byte - 1);
+  }
 
   mainCommand[set_pos] = set_byte;
   

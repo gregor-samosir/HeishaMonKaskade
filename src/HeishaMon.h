@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
@@ -12,6 +13,10 @@
 #include <TimeLib.h>
 #include <sntp.h>
 #include <TZ.h>
+
+extern "C" {
+#include "user_interface.h"
+}
 
 #define TIME_ZONE TZ_Europe_Berlin
 
