@@ -225,6 +225,7 @@ bool mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET23.c_str());
     mqtt_client.subscribe(Topics::SET24.c_str());
     mqtt_client.subscribe(Topics::SET25.c_str());
+    mqtt_client.subscribe(Topics::SET26.c_str());
   }
   return mqtt_client.connected();
 }

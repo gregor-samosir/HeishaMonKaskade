@@ -134,6 +134,11 @@ String getIntMinus1Times200(byte input)
   return String(((int)input - 1) * 200);
 }
 
+String getIntMinus1Times30(byte input)
+{
+  return String(((int)input - 1) * 30);
+}
+
 String unknown(byte input)
 {
   return "-1";
