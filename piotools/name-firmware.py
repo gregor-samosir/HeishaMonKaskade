@@ -28,6 +28,6 @@ def bin_map_copy(source, target, env):
     shutil.copy(str(target[0]), bin_file)
 
     # copy firmware.map to map/<variant>.map
-    shutil.copy("firmware.map", map_file)
+    # shutil.copy("firmware.map", map_file)
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", [bin_map_copy])
