@@ -160,7 +160,7 @@ void build_heatpump_command(char *topic, char *msg)
     sprintf(log_msg, "<SUB> SET11 %s: %d", topic, set_byte - 128);
   }
 
-  // set water pump state to on=1  or off=0 
+  // set water pump state to on=1 off=0 airpurge = 2
   else if (Topics::SET14.compare(topic) == 0)
   {
     set_pos = 4;
@@ -168,6 +168,10 @@ void build_heatpump_command(char *topic, char *msg)
     if (msg_int == 1)
     {
       set_byte = 32; //hex 0x20
+    }
+    if (msg_int == 2)
+    {
+      set_byte = 48; //hex 0x30
     }
     sprintf(log_msg, "<SUB> SET14 %s: %d", topic, set_byte);
   }
