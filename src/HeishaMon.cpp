@@ -465,7 +465,7 @@ void handle_telnetstream()
 /* Setup Time                                                                */
 /*****************************************************************************/
 void setupTime() {
-  configTime(TIME_ZONE, "pool.ntp.org");
+  configTime(TIME_ZONE, "0.de.pool.ntp.org");
   delay(250);
   time_t now = time(nullptr);
   while (now < SECS_YR_2000) {
