@@ -465,7 +465,7 @@ void handle_telnetstream()
 /* Setup Time                                                                */
 /*****************************************************************************/
 void setupTime() {
-  configTime(TIME_ZONE, "pool.ntp.org");
+  configTime(TIME_ZONE, "0.de.pool.ntp.org");
   delay(250);
   time_t now = time(nullptr);
   while (now < SECS_YR_2000) {
@@ -483,7 +483,7 @@ void setup()
   getFreeMemory();
   setupSerial();
 
-  WiFi.setPhyMode(WIFI_PHY_MODE_11B);
+  //WiFi.setPhyMode(WIFI_PHY_MODE_11B);
 
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   
@@ -493,6 +493,7 @@ void setup()
     }
   }
   MDNS.addService("http", "tcp", 80);
+  MDNS.addService("telnet", "tcp", 23);
 
   setupOTA();
   setupMqtt();
