@@ -252,9 +252,9 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
 /*****************************************************************************/
 void setupMqtt()
 {
-  mqtt_client.setBufferSize(1024);
-  mqtt_client.setSocketTimeout(120); 
-  mqtt_client.setKeepAlive(120); 
+  //mqtt_client.setBufferSize(1024);
+  //mqtt_client.setSocketTimeout(120); 
+  //mqtt_client.setKeepAlive(120); 
   mqtt_client.setServer(mqtt_server, atoi(mqtt_port));
   mqtt_client.setCallback(mqtt_callback);
   mqtt_reconnect();
