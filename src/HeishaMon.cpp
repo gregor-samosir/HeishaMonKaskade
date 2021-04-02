@@ -292,6 +292,7 @@ bool readSerial()
 {
   while (Serial.available() > 0)
   {
+    delay(0);
     serial_data[serial_length] = Serial.read();
     serial_length += 1;
     // only enable next line to DEBUG
