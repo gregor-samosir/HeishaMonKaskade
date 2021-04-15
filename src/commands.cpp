@@ -228,28 +228,28 @@ void build_heatpump_command(char *topic, char *msg)
   // set SG-Ready SGReady_Capacity1_Heat
   else if (Topics::SET22.compare(topic) == 0)
   {
-    set_pos = 71;
+    set_pos = 72;
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET22 %s: %d", topic, set_byte - 1);
   }
   // set SG-Ready SGReady_Capacity1_DHW
   else if (Topics::SET23.compare(topic) == 0)
   {
-    set_pos = 72;
+    set_pos = 71;
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET23 %s: %d", topic, set_byte - 1);
   }
   // set SG-Ready SGReady_Capacity2_Heat
   else if (Topics::SET24.compare(topic) == 0)
   {
-    set_pos = 73;
+    set_pos = 74;
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET24 %s: %d", topic, set_byte - 1);
   }
   // set SG-Ready SGReady_Capacity2_DHW
   else if (Topics::SET25.compare(topic) == 0)
   {
-    set_pos = 74;
+    set_pos = 73;
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET25 %s: %d", topic, set_byte - 1);
   }
