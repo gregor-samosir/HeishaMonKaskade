@@ -226,10 +226,10 @@ static const byte topicBytes[] = {
     0,   //TOP90
     0,   //TOP91
     172, //TOP92
-    71,  //TOP93
-    72,  //TOP94
-    73,  //TOP95
-    74,  //TOP96
+    72,  //TOP93
+    71,  //TOP94
+    74,  //TOP95
+    73,  //TOP96
     98,  //TOP97
     97,  //TOP98
 };
