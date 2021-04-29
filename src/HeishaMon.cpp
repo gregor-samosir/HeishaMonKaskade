@@ -10,6 +10,15 @@ Ticker Serial_Timeout(timeout_serial, SERIALTIMEOUT, 1); // one time
 
 bool serialquerysent = false; // mutex for serial sending
 
+struct cmdbuffer_t {
+ 	// uint8_t length;
+ 	byte data[110];
+ } cmdbuffer[MAXCOMMANDSINBUFFER];
+
+static uint8_t cmdstart = 0;
+static uint8_t cmdend = 0;
+static uint8_t cmdnrel = 0;
+
 // Default settings if config does not exists
 const char *update_path = "/firmware";
 const char *update_username = "admin";
@@ -261,6 +270,32 @@ void setupMqtt()
 }
 
 /*****************************************************************************/
+/* Experimental     CurlyMoo                                                 */
+/*****************************************************************************/
+//void popCommandBuffer() 
+//{
+//  if(cmdnrel > 0) {
+//     //send_command(cmdbuffer[cmdstart].data, cmdbuffer[cmdstart].length);
+//     memcpy(sendCommand, cmdbuffer[cmdstart].data, MAINQUERYSIZE);
+//     cmdstart = (cmdstart + 1) % (MAXCOMMANDSINBUFFER);
+//     cmdnrel--;
+//  }
+//}
+
+void pushCommandBuffer(byte* command) 
+{
+  if(cmdnrel+1 > MAXCOMMANDSINBUFFER) 
+  {
+    write_telnet_log((char *)"Too much commands already in buffer");
+    return;
+  }
+    memcpy(&cmdbuffer[cmdend].data, command, MAINQUERYSIZE);
+    cmdend = (cmdend + 1) % (MAXCOMMANDSINBUFFER);
+    cmdnrel++;
+}
+
+
+/*****************************************************************************/
 /* Validate checksum                                                         */
 /*****************************************************************************/
 bool validate_checksum()
@@ -335,12 +370,17 @@ void register_new_command(bool query)
   Command_Timer.start(); // wait countdown for multible SET commands
   if (query == true) {
     isquery = true;
-    write_telnet_log((char *)"Query registered");
+    if (cmdnrel == 0) {
+      pushCommandBuffer (mainQuery);
+      write_telnet_log((char *)"Query registered");
+    }
   } else
   {
     isquery = false;
+    pushCommandBuffer (mainCommand);
     write_telnet_log((char *)"Command registered");
   }
+  byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 }
 
 /*****************************************************************************/
@@ -352,6 +392,19 @@ void send_pana_command()
 {
   if (newcommand == true)
   {
+    while (cmdnrel > 0) {
+      Serial.write(cmdbuffer[cmdstart].data, MAINQUERYSIZE);
+      Serial.write(calculate_checksum(cmdbuffer[cmdstart].data));
+      write_telnet_log((char *)"Send from ringbuffer");
+      if (outputHexLog) write_hex_log((char*)cmdbuffer[cmdstart].data, MAINQUERYSIZE);
+      cmdstart = (cmdstart + 1) % (MAXCOMMANDSINBUFFER);
+      cmdnrel--;
+    }
+    
+    newcommand = false;
+    serialquerysent = true; 
+    
+    /*
     if (isquery == true) { 
       Serial.write(mainQuery, MAINQUERYSIZE);
       Serial.write(calculate_checksum(mainQuery));
@@ -370,6 +423,7 @@ void send_pana_command()
       serialquerysent = true; 
       byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};     
     }
+    */
     Bufferfill_Timeout.start();
     Serial_Timeout.start();
   }

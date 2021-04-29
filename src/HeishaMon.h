@@ -22,6 +22,7 @@ extern "C" {
 
 #define MAXDATASIZE 256
 #define MAINQUERYSIZE 110
+#define MAXCOMMANDSINBUFFER 10
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
@@ -39,6 +40,7 @@ void timeout_serial(void);
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
 void register_new_command(bool);
+void pushCommandBuffer(byte *);
 
 // Global command buffer
 extern byte mainCommand[MAINQUERYSIZE];
