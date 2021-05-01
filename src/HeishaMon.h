@@ -38,7 +38,7 @@ void read_pana_data(void);
 void timeout_serial(void);
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
-void register_new_command(bool);
+void register_new_command(void);
 
 // Global command buffer
 extern byte mainCommand[QUERYSIZE];
