@@ -21,7 +21,7 @@ extern "C" {
 #define TIME_ZONE TZ_Europe_Berlin
 
 #define MAXDATASIZE 256
-#define MAINQUERYSIZE 110
+#define QUERYSIZE 110
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
@@ -38,8 +38,7 @@ void read_pana_data(void);
 void timeout_serial(void);
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
-void register_new_command(bool);
+void register_new_command(void);
 
 // Global command buffer
-extern byte mainCommand[MAINQUERYSIZE];
-extern byte mainQuery[MAINQUERYSIZE];
+extern byte mainCommand[QUERYSIZE];
