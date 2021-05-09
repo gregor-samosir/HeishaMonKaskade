@@ -265,5 +265,6 @@ void build_heatpump_command(char *topic, char *msg)
   
   write_mqtt_log(log_msg);
   // trigger buffer
+  isquery = false;
   register_new_command();
 }
