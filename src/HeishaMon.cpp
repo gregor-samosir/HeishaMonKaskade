@@ -289,7 +289,20 @@ byte calculate_checksum(byte* command)
 }
 
 /*****************************************************************************/
-/* Read raw from serial                                                 */
+/* Calculate is command set                                                  */
+/*****************************************************************************/
+byte calculate_commandset(byte* command)
+{
+  byte chk = 0;
+  for ( int i = 4; i < QUERYSIZE; i++)  
+  {
+    chk += command[i];
+  }
+  return chk;
+}
+
+/*****************************************************************************/
+/* Read raw from serial                                                      */
 /*****************************************************************************/
 bool readSerial()
 {
@@ -340,7 +353,7 @@ void register_new_command()
 }
 
 /*****************************************************************************/
-/* Send commands from buffer to pana  (called from loop)                     */
+/* Send commands from buffer to pana  (called from loop)
 /* send the set command global mainCommand[]
 /* chk calculation must be on each time we send
 /*****************************************************************************/
@@ -348,11 +361,10 @@ void send_pana_command()
 {
   if (newcommand == true)
   {
-    if (isquery == true)
+    if (calculate_commandset(mainCommand) == 0)
     {
       Serial.write(mainQuery, QUERYSIZE);
       Serial.write(calculate_checksum(mainQuery));
-      isquery = false;
       serialquerysent = true;
       write_telnet_log((char *)"Send query");
     }
@@ -379,7 +391,6 @@ void send_pana_mainquery()
 {
   if (newcommand == false)
   {
-    isquery = true;
     register_new_command();
   }
 }

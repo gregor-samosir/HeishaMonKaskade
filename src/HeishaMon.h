@@ -42,4 +42,3 @@ void register_new_command(void);
 
 // Global command buffer
 extern byte mainCommand[QUERYSIZE];
-extern bool isquery;
