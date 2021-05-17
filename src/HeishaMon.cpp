@@ -306,38 +306,40 @@ byte calculate_commandset(byte* command)
 /*****************************************************************************/
 bool readSerial()
 {
-  while (Serial.available() > 0)
+  while(true)
   {
-    delay(0);
+    if (Serial.available() > 0)
+    {
     serial_data[serial_length] = Serial.read();
     serial_length += 1;
     // only enable next line to DEBUG
     // sprintf(log_msg, "DEBUG Receive byte : %d", serial_length); write_telnet_log(log_msg);
+    } else break;
   }
-  if (serial_length > 0)
-  { // received length part of header now
-    if (serial_length > (serial_data[1] + 3))
+
+  if (serial_length == (serial_data[1] + 3))
+  {
+    if (!validate_checksum())
     {
-      write_telnet_log((char *)"Received serial data longer than header suggests");
+      write_telnet_log((char *)"Checksum on serial data not valid");
       serial_length = 0;
       return false;
     }
-
-    if (serial_length == (serial_data[1] + 3))
-    {
-      if (!validate_checksum())
-      {
-        write_telnet_log((char *)"Checksum on serial data not valid");
-        serial_length = 0;
-        return false;
-      }
-      write_telnet_log((char *)"Receive valid data from serial");
-      if (outputHexLog) write_hex_log((char*)serial_data, serial_length);
-      serial_length = 0;
-      return true;
-    }
-    sprintf(log_msg, "Receive partial datagram %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
+    write_telnet_log((char *)"Receive valid data from serial");
+    if (outputHexLog) write_hex_log((char*)serial_data, serial_length);
+    serial_length = 0;
+    return true;
   }
+
+  if (serial_length > (serial_data[1] + 3))
+  {
+    write_telnet_log((char *)"Received serial data longer than header suggests");
+    serial_length = 0;
+    return false;
+  }
+
+  sprintf(log_msg, "Receive partial datagram %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
+  serial_length = 0;
   return false;
 }
 
