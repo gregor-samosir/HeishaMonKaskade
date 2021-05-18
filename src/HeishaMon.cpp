@@ -321,11 +321,11 @@ bool readSerial()
   {
     if (!validate_checksum())
     {
-      write_telnet_log((char *)"Checksum on serial data not valid");
+      write_telnet_log((char *)"Checksum error");
       serial_length = 0;
       return false;
     }
-    write_telnet_log((char *)"Receive valid data from serial");
+    write_telnet_log((char *)"Valid data");
     if (outputHexLog) write_hex_log((char*)serial_data, serial_length);
     serial_length = 0;
     return true;
@@ -333,12 +333,12 @@ bool readSerial()
 
   if (serial_length > (serial_data[1] + 3))
   {
-    write_telnet_log((char *)"Received serial data longer than header suggests");
+    write_telnet_log((char *)"Data longer than header suggests");
     serial_length = 0;
     return false;
   }
 
-  sprintf(log_msg, "Receive partial datagram %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
+  sprintf(log_msg, "Partial datag length %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
   serial_length = 0;
   return false;
 }
