@@ -3,10 +3,10 @@
 #include "decode.h"
 #include "commands.h"
 
-Ticker Command_Timer(send_pana_command, COMMANDTIMER, 1);  // one time
-Ticker Query_Timer(send_pana_mainquery, QUERYTIMER, 1); // one time
-Ticker Bufferfill_Timeout(read_pana_data, BUFFERTIMEOUT, 1); // one time
-Ticker Serial_Timeout(timeout_serial, SERIALTIMEOUT, 1); // one time
+Ticker Send_Pana_Command_Timer(send_pana_command, COMMANDTIMER, 1);  // one time
+Ticker Send_Pana_Mainquery_Timer(send_pana_mainquery, QUERYTIMER, 1); // one time
+Ticker Read_Pana_Data_Timer(read_pana_data, BUFFERTIMEOUT, 1); // one time
+Ticker Timeout_Serial_Timer(timeout_serial, SERIALTIMEOUT, 1); // one time
 
 bool serialquerysent = false; // mutex for serial sending
 
@@ -35,11 +35,7 @@ String actual_data[NUMBEROFTOPICS];
 // log message
 char log_msg[MAXDATASIZE];
 
-// mqtt topic
-char mqtt_topic[256];
-
 bool newcommand = false;
-bool isquery = false;
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -50,7 +46,7 @@ unsigned long lastReconnectAttempt = 0;
 
 byte mainQuery[]    = {0x71, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 byte mainCommand[]  = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-byte cleanCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+byte cleanCommand[QUERYSIZE];
 
 /*****************************************************************************/
 /* OTA                                                                       */
@@ -239,7 +235,7 @@ bool mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-  Query_Timer.stop();
+  Send_Pana_Mainquery_Timer.stop();
   write_telnet_log((char *)"Callback from mqtt");
   char msg[length + 1];
   for (unsigned int i = 0; i < length; i++)
@@ -338,7 +334,7 @@ bool readSerial()
     return false;
   }
 
-  sprintf(log_msg, "Partial datag length %d, please fix Bufferfill_Timeout", serial_length); write_telnet_log(log_msg);
+  sprintf(log_msg, "Partial datag length %d, please fix Read_Pana_Data_Timer", serial_length); write_telnet_log(log_msg);
   serial_length = 0;
   return false;
 }
@@ -350,8 +346,8 @@ bool readSerial()
 void register_new_command()
 {
   newcommand = true;
-  Command_Timer.start(); // wait countdown for multible SET commands
-  write_telnet_log((char *)"Register new command/query");
+  Send_Pana_Command_Timer.start(); // wait countdown for multible SET commands
+  write_telnet_log((char *)"Register command/query");
 }
 
 /*****************************************************************************/
@@ -380,8 +376,8 @@ void send_pana_command()
       memcpy(mainCommand, cleanCommand, QUERYSIZE);
     }
     newcommand = false;
-    Bufferfill_Timeout.start();
-    Serial_Timeout.start();
+    Read_Pana_Data_Timer.start();
+    Timeout_Serial_Timer.start();
   }
 }
 
@@ -411,7 +407,7 @@ void read_pana_data()
       write_telnet_log((char *)"Decode topics ---------- Start ------------------");
       publish_heatpump_data(serial_data, actual_data, mqtt_client); 
       write_telnet_log((char *)"Decode topics ---------- End --------------------\n");
-      Query_Timer.start();
+      Send_Pana_Mainquery_Timer.start();
     }
   }
 }
@@ -425,7 +421,7 @@ void timeout_serial()
   {
     serialquerysent = false; //we are allowed to send a new command
     write_telnet_log((char *)"Serial interface read timeout");
-    Query_Timer.start();
+    Send_Pana_Mainquery_Timer.start();
   }
 }
 
@@ -494,8 +490,6 @@ void setup()
   getFreeMemory();
   setupSerial();
 
-  //WiFi.setPhyMode(WIFI_PHY_MODE_11B);
-
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
   
   if (!MDNS.begin(wifi_hostname)) {
@@ -514,7 +508,8 @@ void setup()
   setupTime();
   TelnetStream.begin();
 
-  Query_Timer.start(); // start only the query timer
+  memcpy(cleanCommand, mainCommand, QUERYSIZE); // copy the empty command
+  Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;
 }
@@ -544,9 +539,9 @@ void loop()
     mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 
-  Command_Timer.update(); // trigger send_pana_command()   - send command or query from buffer
-  Query_Timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
+  Send_Pana_Command_Timer.update(); // trigger send_pana_command()   - send command or query from buffer
+  Send_Pana_Mainquery_Timer.update();   // trigger send_pana_mainquery() - send query to buffer if no command in buffer
   
-  Bufferfill_Timeout.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
-  Serial_Timeout.update();     // trigger timeout_serial() - stop read from serial after timeout
+  Read_Pana_Data_Timer.update(); // trigger read_pana_data() - read from serial, decode bytes and publish to mqtt
+  Timeout_Serial_Timer.update();     // trigger timeout_serial() - stop read from serial after timeout
 }
