@@ -5,6 +5,7 @@
 .DS_Store
 .clang_complete
 .gcc-flags.json
+.devcontainer
 build_output
 include
 firmware.map
