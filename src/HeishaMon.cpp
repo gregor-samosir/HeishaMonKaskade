@@ -334,7 +334,7 @@ bool readSerial()
     return false;
   }
 
-  sprintf(log_msg, "Partial datag length %d, please fix Read_Pana_Data_Timer", serial_length); write_telnet_log(log_msg);
+  sprintf(log_msg, "Partial data length %d, please fix Read_Pana_Data_Timer", serial_length); write_telnet_log(log_msg);
   serial_length = 0;
   return false;
 }
