@@ -484,21 +484,6 @@ void setupTime() {
 }
 
 /*****************************************************************************/
-/* Not used yet                                                              */
-/*****************************************************************************/
-void send_initial_query() {
-    Serial.write(initialQuery, 7);
-    byte chk = 0;
-    for ( int i = 0; i < 7; i++)  
-    {
-      chk += initialQuery[i];
-    }
-    chk = (chk ^ 0xFF) + 01;
-    Serial.write(chk);
-
- }
-
-/*****************************************************************************/
 /* main                                                                      */
 /*****************************************************************************/
 void setup()
@@ -523,9 +508,6 @@ void setup()
   
   setupTime();
   TelnetStream.begin();
-
-  //delay(1000);
-  //send_initial_query();
 
   memcpy(cleanCommand, mainCommand, QUERYSIZE); // copy the empty command
   Send_Pana_Mainquery_Timer.start(); // start only the query timer
