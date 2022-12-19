@@ -138,3 +138,5 @@ const char *States::TOP95 = "SGReady_Capacity2_Heat";
 const char *States::TOP96 = "SGReady_Capacity2_DHW";
 const char *States::TOP97 = "DHW_Heatup_Time";
 const char *States::TOP98 = "DHW_Room_Max_Time";
+const char *States::TOP99 = "Main_Inlet_Fraction";
+const char *States::TOP100 = "Main_Outlet_Fraction";

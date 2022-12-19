@@ -161,6 +161,17 @@ String getOpMode(byte input)
   }
 }
 
+String getInletFraction(byte input)
+{
+  return String(((input & 0b111) - 1) * 0.25);  
+}
+
+String getOutletFraction(byte input)
+{
+  return String((((input  >> 3)& 0b111) - 1) * 0.25);  
+}
+
+
 /* Two bytes per TOP */
 String getPumpFlow(char *serial_data)
 { // TOP1 //
@@ -209,3 +220,4 @@ String getErrorInfo(char *serial_data)
   }
   return String(Error_string);
 }
+
