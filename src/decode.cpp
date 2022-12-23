@@ -163,12 +163,14 @@ String getOpMode(byte input)
 
 String getInletFraction(byte input)
 {
-  return String(((int)(input & 0b111) - 1) * 0.25);  
+  int fractional = (int)(input & 0b111);
+  return String((fractional - 1) * 0.25);  
 }
 
 String getOutletFraction(byte input)
 {
-  return String(((int)((input >> 3) & 0b111) - 1) * 0.25);  
+  int fractional = (int)((input >> 3) & 0b111);
+  return String((fractional - 1) * 0.25);  
 }
 
 
