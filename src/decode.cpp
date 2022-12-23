@@ -201,6 +201,7 @@ String getOutletFraction(byte input)
       fraction = 0.5;
       break;
   case 4:
+      fraction = 0.75;
       break;
   default:
       break;
