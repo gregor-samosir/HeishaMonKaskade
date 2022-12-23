@@ -167,23 +167,22 @@ String getInletFraction(byte input)
   int fractional = (int)(input & 0b111);
   switch (fractional)
   {
-  case 1: // fractional .00
+  case 1:
       fraction = 0;
       break;
-  case 2: // fractional .25
+  case 2:
       fraction = 0.25;
       break;
-  case 3: // fractional .50
+  case 3:
       fraction = 0.5;
       break;
-  case 4: // fractional .75
+  case 4:
       fraction = 0.75;
       break;
   default:
       break;
   }
   return String(fraction);
-  //return String((fractional - 1) * 0.25);  
 }
 
 String getOutletFraction(byte input)
@@ -192,23 +191,21 @@ String getOutletFraction(byte input)
   int fractional = (int)((input >> 3) & 0b111);
   switch (fractional)
   {
-  case 1: // fractional .00
+  case 1:
       fraction = 0;
       break;
-  case 2: // fractional .25
+  case 2:
       fraction = 0.25;
       break;
-  case 3: // fractional .50
+  case 3:
       fraction = 0.5;
       break;
-  case 4: // fractional .75
-      fraction = 0.75;
+  case 4:
       break;
   default:
       break;
   }
   return String(fraction);
-  //return String((fractional - 1) * 0.25);  
 }
 
 
