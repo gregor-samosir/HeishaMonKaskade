@@ -168,7 +168,7 @@ String getInletFraction(byte input)
 
 String getOutletFraction(byte input)
 {
-  return String((((input  >> 3)& 0b111) - 1) * 0.25);  
+  return String((((input  >> 3) & 0b111) - 1) * 0.25);  
 }
 
 
