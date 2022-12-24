@@ -30,6 +30,8 @@ String getDHWHeaterHour(char *);
 String getErrorInfo(char *);
 String getInletFraction(byte);
 String getOutletFraction(byte);
+String getInletTempWithFraction(char *);
+String getOutletTempWithFraction(char *);
 
 static const char *topicNames[] = {
     States::TOP0,
