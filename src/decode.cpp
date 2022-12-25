@@ -45,6 +45,12 @@ String getTopicPayload(unsigned int top_num, char *serial_data)
     case 1: //Pump_Flow
       top_value = getPumpFlow(serial_data);
       break;
+    case 5: //InletTemp with fraction
+      top_value = getInletTempWithFraction(serial_data);
+      break;
+    case 6: //OutletTemp with fraction
+      top_value = getOutletTempWithFraction(serial_data);
+      break;
     case 11: //Operations_Hours
       top_value = getOperationHour(serial_data);
       break;
@@ -161,6 +167,111 @@ String getOpMode(byte input)
   }
 }
 
+String getInletTempWithFraction(char *serial_data)
+{
+  String fraction;
+  int fractional = (int)(serial_data[118] & 0b111);
+  // int fractional = (int)(input & 0b111);
+  switch (fractional)
+  {
+  case 1:
+      fraction = ".00";
+      break;
+  case 2:
+      fraction = ".25";
+      break;
+  case 3:
+      fraction = ".50";
+      break;
+  case 4:
+      fraction = ".75";
+      break;
+  default:
+      break;
+  }
+  int top_num = 5;
+  byte serial_value = serial_data[topicBytes[top_num]];
+  String top_value = topicFunctions[top_num](serial_value);
+  return String(top_value + fraction);
+}
+
+String getInletFraction(byte input)
+{
+  float fraction;
+  int fractional = (int)(input & 0b111);
+  switch (fractional)
+  {
+  case 1:
+      fraction = 0;
+      break;
+  case 2:
+      fraction = 0.25;
+      break;
+  case 3:
+      fraction = 0.5;
+      break;
+  case 4:
+      fraction = 0.75;
+      break;
+  default:
+      break;
+  }
+  return String(fraction);
+}
+
+String getOutletTempWithFraction(char *serial_data)
+{
+  String fraction;
+  int fractional = (int)((serial_data[118] >> 3) & 0b111);
+  // int fractional = (int)(input & 0b111);
+  switch (fractional)
+  {
+  case 1:
+      fraction = ".00";
+      break;
+  case 2:
+      fraction = ".25";
+      break;
+  case 3:
+      fraction = ".50";
+      break;
+  case 4:
+      fraction = ".75";
+      break;
+  default:
+      break;
+  }
+  int top_num = 6;
+  byte serial_value = serial_data[topicBytes[top_num]];
+  String top_value = topicFunctions[top_num](serial_value);
+  return String(top_value + fraction);
+}
+
+String getOutletFraction(byte input)
+{
+  float fraction;
+  int fractional = (int)((input >> 3) & 0b111);
+  switch (fractional)
+  {
+  case 1:
+      fraction = 0;
+      break;
+  case 2:
+      fraction = 0.25;
+      break;
+  case 3:
+      fraction = 0.5;
+      break;
+  case 4:
+      fraction = 0.75;
+      break;
+  default:
+      break;
+  }
+  return String(fraction);
+}
+
+
 /* Two bytes per TOP */
 String getPumpFlow(char *serial_data)
 { // TOP1 //
@@ -209,3 +320,4 @@ String getErrorInfo(char *serial_data)
   }
   return String(Error_string);
 }
+
