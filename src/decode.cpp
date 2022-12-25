@@ -197,26 +197,26 @@ String getInletTempWithFraction(char *serial_data)
 
 String getInletFraction(byte input)
 {
-  float fraction;
+  String fraction;
   int fractional = (int)(input & 0b111);
   switch (fractional)
   {
   case 1:
-      fraction = 0;
+      fraction = "0.00";
       break;
   case 2:
-      fraction = 0.25;
+      fraction = "0.25";
       break;
   case 3:
-      fraction = 0.5;
+      fraction = "0.50";
       break;
   case 4:
-      fraction = 0.75;
+      fraction = "0.75";
       break;
   default:
       break;
   }
-  return String(fraction);
+  return fraction;
 }
 
 String getOutletTempWithFraction(char *serial_data)
@@ -249,26 +249,26 @@ String getOutletTempWithFraction(char *serial_data)
 
 String getOutletFraction(byte input)
 {
-  float fraction;
+  String fraction;
   int fractional = (int)((input >> 3) & 0b111);
   switch (fractional)
   {
   case 1:
-      fraction = 0;
+      fraction = "0.00";
       break;
   case 2:
-      fraction = 0.25;
+      fraction = "0.25";
       break;
   case 3:
-      fraction = 0.5;
+      fraction = "0.50";
       break;
   case 4:
-      fraction = 0.75;
+      fraction = "0.75";
       break;
   default:
       break;
   }
-  return String(fraction);
+  return fraction;
 }
 
 
