@@ -8,7 +8,7 @@
 #include "decode.h"
 #include "version.h"
 
-//flag for saving
+// flag for saving
 bool shouldSaveConfig = false;
 
 static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5; url=/' />";
@@ -27,7 +27,7 @@ static const char refreshJS[] PROGMEM = "<script> $(document).ready(function(){r
 
 static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a><a href='/toggledebug' class='w3-bar-item w3-button w3-small'>Toggle debug log</a>";
 
-//callback notifying us of the need to save config
+// callback notifying us of the need to save config
 void saveConfigCallback()
 {
   Serial.println("Should save config");
@@ -36,9 +36,9 @@ void saveConfigCallback()
 
 void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
 {
-  //Local intialization. Once its business is done, there is no need to keep it around
+  // Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
-  wifiManager.setDebugOutput(true); //this is debugging on serial port, because serial swap is done after full startup this is ok
+  wifiManager.setDebugOutput(true); // this is debugging on serial port, because serial swap is done after full startup this is ok
 
   Serial.println("mounting LittleFS...");
 
@@ -47,7 +47,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     Serial.println("Mount file system");
     if (LittleFS.exists("/config.json"))
     {
-      //file exists, reading and loading
+      // file exists, reading and loading
       Serial.println("Read config file");
       File configFile = LittleFS.open("/config.json", "r");
       if (configFile)
@@ -64,7 +64,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
         if (!error)
         {
           Serial.println("\nparsed json");
-          //read updated parameters, make sure no overflow
+          // read updated parameters, make sure no overflow
           strncpy(wifi_hostname, jsonDoc["wifi_hostname"], 39);
           wifi_hostname[39] = '\0';
           strncpy(ota_password, jsonDoc["ota_password"], 39);
@@ -109,10 +109,10 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   WiFiManagerParameter custom_mqtt_username("username", "mqtt username", mqtt_username, 39);
   WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 39);
 
-  //set config save notify callback
+  // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-  //add all your parameters here
+  // add all your parameters here
   wifiManager.addParameter(&custom_text1);
   wifiManager.addParameter(&custom_wifi_hostname);
   wifiManager.addParameter(&custom_ota_password);
@@ -128,15 +128,15 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   {
     Serial.println("failed to connect and hit timeout");
     delay(3000);
-    //reset and try again, or maybe put it to deep sleep
+    // reset and try again, or maybe put it to deep sleep
     ESP.reset();
     delay(5000);
   }
 
-  //if you get here you have connected to the WiFi
+  // if you get here you have connected to the WiFi
   Serial.println("Wifi connected...yeey :)");
 
-  //read updated parameters, make sure no overflow
+  // read updated parameters, make sure no overflow
   strncpy(wifi_hostname, custom_wifi_hostname.getValue(), 39);
   wifi_hostname[39] = '\0';
   strncpy(ota_password, custom_ota_password.getValue(), 39);
@@ -150,10 +150,10 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   strncpy(mqtt_password, custom_mqtt_password.getValue(), 39);
   mqtt_password[39] = '\0';
 
-  //Set hostname on wifi rather than ESP_xxxxx
+  // Set hostname on wifi rather than ESP_xxxxx
   WiFi.hostname(wifi_hostname);
 
-  //save the custom parameters to FS
+  // save the custom parameters to FS
   if (shouldSaveConfig)
   {
     Serial.println("Save config");
@@ -174,7 +174,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     serializeJson(jsonDoc, Serial);
     serializeJson(jsonDoc, configFile);
     configFile.close();
-    //end save
+    // end save
   }
 
   Serial.println("local ip");
@@ -264,7 +264,7 @@ void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota
   httptext = "</div>";
   httpServer->sendContent(httptext);
 
-  //check if POST was made with save settings, if yes then save and reboot
+  // check if POST was made with save settings, if yes then save and reboot
   if (httpServer->args())
   {
     DynamicJsonDocument jsonDoc(512);
