@@ -14,7 +14,8 @@
 #include <sntp.h>
 #include <TZ.h>
 
-extern "C" {
+extern "C"
+{
 #include "user_interface.h"
 }
 
@@ -27,7 +28,7 @@ extern "C" {
 #define MQTT_RETAIN_VALUES 1
 
 // config your timing
-#define COMMANDTIMER 500 // Command / timer to send commands from buffer to HP
+#define COMMANDTIMER 500  // Command / timer to send commands from buffer to HP
 #define QUERYTIMER 5000   // Query / timer to initiate a query
 #define BUFFERTIMEOUT 500 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
 #define SERIALTIMEOUT 600 // Serial Timout / timer to wait on serial to read all 203 bytes from HP

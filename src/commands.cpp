@@ -1,7 +1,7 @@
 #include "HeishaMon.h"
 #include "commands.h"
 #include "Topics.h"
-//#include <string>
+// #include <string>
 
 void build_heatpump_command(char *topic, char *msg)
 {
@@ -66,10 +66,10 @@ void build_heatpump_command(char *topic, char *msg)
   else if (Topics::SET10.compare(topic) == 0)
   {
     set_pos = 4;
-    set_byte = 64; //hex 0x40
+    set_byte = 64; // hex 0x40
     if (msg_int == 1)
     {
-      set_byte = 128; //hex 0x80
+      set_byte = 128; // hex 0x80
     }
     sprintf(log_msg, "<SUB> SET10 %s: %d", topic, set_byte);
   }
@@ -81,7 +81,7 @@ void build_heatpump_command(char *topic, char *msg)
     set_byte = 0;
     if (msg_int == 1)
     {
-      set_byte = 2; //hex 0x02
+      set_byte = 2; // hex 0x02
     }
     sprintf(log_msg, "<SUB> SET12 %s: %d", topic, set_byte);
   }
@@ -93,7 +93,7 @@ void build_heatpump_command(char *topic, char *msg)
     set_byte = 0;
     if (msg_int == 1)
     {
-      set_byte = 4; //hex 0x04
+      set_byte = 4; // hex 0x04
     }
     sprintf(log_msg, "<SUB> SET13 %s: %d", topic, set_byte);
   }
@@ -102,10 +102,10 @@ void build_heatpump_command(char *topic, char *msg)
   else if (Topics::SET2.compare(topic) == 0)
   {
     set_pos = 5;
-    set_byte = 16; //hex 0x10
+    set_byte = 16; // hex 0x10
     if (msg_int == 1)
     {
-      set_byte = 32; //hex 0x20
+      set_byte = 32; // hex 0x20
     }
     sprintf(log_msg, "<SUB> SET2 %s: %d", topic, set_byte);
   }
@@ -164,14 +164,14 @@ void build_heatpump_command(char *topic, char *msg)
   else if (Topics::SET14.compare(topic) == 0)
   {
     set_pos = 4;
-    set_byte = 16; //hex 0x10
+    set_byte = 16; // hex 0x10
     if (msg_int == 1)
     {
-      set_byte = 32; //hex 0x20
+      set_byte = 32; // hex 0x20
     }
     if (msg_int == 2)
     {
-      set_byte = 48; //hex 0x30
+      set_byte = 48; // hex 0x30
     }
     sprintf(log_msg, "<SUB> SET14 %s: %d", topic, set_byte);
   }
@@ -253,7 +253,7 @@ void build_heatpump_command(char *topic, char *msg)
     set_byte = msg_int + 1;
     sprintf(log_msg, "<SUB> SET25 %s: %d", topic, set_byte - 1);
   }
-    // set DHW room time (max) in steps of 30 minutes
+  // set DHW room time (max) in steps of 30 minutes
   else if (Topics::SET26.compare(topic) == 0)
   {
     set_pos = 97;
@@ -262,7 +262,7 @@ void build_heatpump_command(char *topic, char *msg)
   }
 
   mainCommand[set_pos] = set_byte;
-  
+
   write_mqtt_log(log_msg);
   // trigger buffer
   register_new_command();
