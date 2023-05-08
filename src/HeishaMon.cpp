@@ -176,7 +176,7 @@ void setupSerial()
 
 void switchSerial()
 {
-  Serial.println("Switch serial to to heatpump. Look for debug on mqtt log topic.");
+  Serial.println("Switch serial to heatpump. Look for debug on mqtt log topic.");
   // serial to cn-cnt
   Serial.flush();
   Serial.end();
