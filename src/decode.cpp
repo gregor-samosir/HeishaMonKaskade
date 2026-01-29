@@ -30,7 +30,7 @@ void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient
       }
       actual_data[top_num] = top_value;
       std::string mqtt_topic = Topics::STATE + "/" + topicNames[top_num];
-      mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
+      (void)mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
     }
   }
 }
@@ -313,7 +313,7 @@ String getDHWHeaterHour(char *serial_data)
 
 String getErrorInfo(char *serial_data)
 { // TOP44 //
-  int Error_type = (int)(serial_data[113]);
+  int Error_type = (int)(unsigned char)(serial_data[113]);
   int Error_number = ((int)(serial_data[114])) - 17;
   char Error_string[10];
   switch (Error_type)

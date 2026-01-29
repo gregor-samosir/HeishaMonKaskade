@@ -71,11 +71,11 @@ void write_mqtt_log(char *string)
 {
   if (outputMqttLog)
   {
-    mqtt_client.publish(Topics::LOG.c_str(), string);
+    (void)mqtt_client.publish(Topics::LOG.c_str(), string);
   }
   else
   {
-    TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] %s\n", year(), month(), day(), hour(), minute(), second(), string);
+    (void)TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] %s\n", year(), month(), day(), hour(), minute(), second(), string);
   }
 }
 
@@ -102,9 +102,9 @@ void write_hex_log(char *hex, byte hex_len)
     buffer[bytesperline * 3] = '\0';
     for (int j = 0; ((j < bytesperline) && ((i + j) < hex_len)); j++)
     {
-      sprintf(&buffer[3 * j], "%02X ", hex[i + j]);
+      (void)sprintf(&buffer[3 * j], "%02X ", (unsigned char)hex[i + j]);
     }
-    sprintf(log_msg, "data: %s", buffer);
+    (void)sprintf(log_msg, "data: %s", buffer);
     write_telnet_log(log_msg);
   }
 }
@@ -249,7 +249,14 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
 /*****************************************************************************/
 void setupMqtt()
 {
-  mqtt_client.setServer(mqtt_server, atoi(mqtt_port));
+  char *endptr;
+  long port = strtol(mqtt_port, &endptr, 10);
+  if (endptr == mqtt_port || *endptr != '\0' || port < 1 || port > 65535) {
+    (void)sprintf(log_msg, "Warning: Invalid MQTT port '%s'. Using default 1883.", mqtt_port);
+    write_mqtt_log(log_msg);
+    port = 1883;
+  }
+  mqtt_client.setServer(mqtt_server, (uint16_t)port);
   mqtt_client.setCallback(mqtt_callback);
   mqtt_reconnect();
 }
@@ -542,7 +549,7 @@ void loop()
   }
   else
   {
-    mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
+    (void)mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
   }
 
   Send_Pana_Command_Timer.update();   // trigger send_pana_command()   - send command or query from buffer
