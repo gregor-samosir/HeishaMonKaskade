@@ -4,6 +4,46 @@
 #include <climits>
 // #include <string>
 
+/*****************************************************************************/
+/* Allowed value range per set topic                                         */
+/* commands outside these limits are rejected before touching mainCommand    */
+/*****************************************************************************/
+struct SetLimit
+{
+  const std::string *topic;
+  int min;
+  int max;
+};
+
+static const SetLimit setLimits[] = {
+    {&Topics::SET1, 0, 1},    // Heatpump on/off
+    {&Topics::SET2, 0, 1},    // HolidayMode on/off
+    {&Topics::SET3, 0, 3},    // QuietMode level
+    {&Topics::SET4, 0, 3},    // PowerfulMode 0/30/60/90 min
+    {&Topics::SET5, -5, 65},  // Z1 heat: shift -5..5 or direct temp
+    {&Topics::SET6, -5, 65},  // Z1 cool: shift -5..5 or direct temp
+    {&Topics::SET7, -5, 65},  // Z2 heat: shift -5..5 or direct temp
+    {&Topics::SET8, -5, 65},  // Z2 cool: shift -5..5 or direct temp
+    {&Topics::SET9, 0, 6},    // OperationMode
+    {&Topics::SET10, 0, 1},   // ForceDHW on/off
+    {&Topics::SET11, 40, 75}, // DHW target temp
+    {&Topics::SET12, 0, 1},   // ForceDefrost on/off
+    {&Topics::SET13, 0, 1},   // ForceSterilization on/off
+    {&Topics::SET14, 0, 2},   // WaterPump off/on/airpurge
+    {&Topics::SET15, 65, 254},// PumpSpeedMax (254: +1 conversion must fit a byte)
+    {&Topics::SET16, 1, 15},  // HeatDelta
+    {&Topics::SET17, 1, 15},  // CoolDelta
+    {&Topics::SET18, -15, 15},// DHWHeatDelta
+    {&Topics::SET19, 5, 240}, // DHWHeatupTime minutes
+    {&Topics::SET20, -20, 35},// HeaterOnOutdoorTemp
+    {&Topics::SET21, 5, 35},  // HeatingOffOutdoorTemp
+    {&Topics::SET22, 0, 254}, // SGReadyCapacity1Heat
+    {&Topics::SET23, 0, 254}, // SGReadyCapacity1DHW
+    {&Topics::SET24, 0, 254}, // SGReadyCapacity2Heat
+    {&Topics::SET25, 0, 254}, // SGReadyCapacity2DHW
+    {&Topics::SET26, 0, 254}, // DHWRoomMaxTime (steps of 30 min)
+};
+
 // returns true if a command was registered, false on any error
 // (caller must restart the mainquery timer on false, see mqtt_callback)
 bool build_heatpump_command(char *topic, char *msg)
@@ -23,14 +63,22 @@ bool build_heatpump_command(char *topic, char *msg)
     return false;
   }
 
-  // Check if the value is within the range of an unsigned int
-  if (msg_long < 0 || msg_long > UINT_MAX)
+  // Check the value against the allowed range of the matching set topic
+  // negative values are valid for shift temperatures (SET5-8, SET18, SET20)
+  for (unsigned int i = 0; i < (sizeof(setLimits) / sizeof(setLimits[0])); i++)
   {
-    (void)sprintf(log_msg, "Error: Integer value '%s' out of range for topic %s", msg, topic);
-    write_mqtt_log(log_msg);
-    return false;
+    if (setLimits[i].topic->compare(topic) == 0)
+    {
+      if (msg_long < setLimits[i].min || msg_long > setLimits[i].max)
+      {
+        (void)sprintf(log_msg, "Error: Value %ld out of range [%d..%d] for topic %s", msg_long, setLimits[i].min, setLimits[i].max, topic);
+        write_mqtt_log(log_msg);
+        return false;
+      }
+      break;
+    }
   }
-  unsigned int msg_int = (unsigned int)msg_long;
+  int msg_int = (int)msg_long;
 
   // set heatpump state to on by sending 1
   if (Topics::SET1.compare(topic) == 0)
