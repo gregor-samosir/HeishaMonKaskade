@@ -1,7 +1,12 @@
 #include "Topics.h"
 
-// Can be configured. The mqtt topics will be concatenated with these values
-const std::string mqttPrefix = "panasonic_heat_pump";
+// The mqtt topics will be concatenated with these values.
+// Stage-specific prefix comes as build flag from platformio.ini (HEISHA_MQTT_PREFIX),
+// fallback = stage 1
+#ifndef HEISHA_MQTT_PREFIX
+#define HEISHA_MQTT_PREFIX "panasonic_heat_pump"
+#endif
+const std::string mqttPrefix = HEISHA_MQTT_PREFIX;
 const std::string s = "/";
 const std::string setTopicPrefix = mqttPrefix + s + "set";
 const std::string infTopicPrefix = mqttPrefix + s + "info";

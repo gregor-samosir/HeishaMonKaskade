@@ -11,9 +11,14 @@ Ticker Timeout_Serial_Timer(timeout_serial, SERIALTIMEOUT, 1);        // one tim
 bool serialquerysent = false; // mutex for serial sending
 
 // Default settings if config does not exists
+// stage-specific hostname comes as build flag from platformio.ini, fallback = stage 1
+// (config.json on the device overrides this default at boot)
+#ifndef HEISHA_HOSTNAME
+#define HEISHA_HOSTNAME "HeishaMon"
+#endif
 const char *update_path = "/firmware";
 const char *update_username = "admin";
-char wifi_hostname[40] = "HeishaMon";
+char wifi_hostname[40] = HEISHA_HOSTNAME;
 char ota_password[40] = "heisha";
 char mqtt_server[40];
 char mqtt_port[6] = "1883";

@@ -17,7 +17,11 @@ static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha moni
 
 static const char ajaxscript[] PROGMEM = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js'></script>";
 
-static const char webBodyStart[] PROGMEM = "<button class='w3-button w3-blue w3-medium w3-left' onclick='openLeftMenu()'>&#9776;</button><header class='w3-container w3-card-4 w3-theme'><h4>Heisha Stufe 1</h4></header>";
+// stage-specific page title comes as build flag from platformio.ini, fallback = stage 1
+#ifndef HEISHA_STAGE_NAME
+#define HEISHA_STAGE_NAME "Heisha Stufe 1"
+#endif
+static const char webBodyStart[] PROGMEM = "<button class='w3-button w3-blue w3-medium w3-left' onclick='openLeftMenu()'>&#9776;</button><header class='w3-container w3-card-4 w3-theme'><h4>" HEISHA_STAGE_NAME "</h4></header>";
 
 static const char webFooter[] PROGMEM = "</body></html>";
 
