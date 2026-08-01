@@ -148,17 +148,36 @@ void setupHttp()
                 { handleRoot(&httpServer); });
   httpServer.on("/tablerefresh", []()
                 { handleTableRefresh(&httpServer, actual_data); });
+  // state-changing endpoints require login (same credentials as /firmware)
   httpServer.on("/reboot", []()
-                { handleReboot(&httpServer); });
+                {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleReboot(&httpServer); });
   httpServer.on("/settings", []()
-                { handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
+                {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
   httpServer.on("/togglelog", []()
                 {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
     write_mqtt_log((char *)"Toggled mqtt log flag");
     outputMqttLog ^= true;
     handleRoot(&httpServer); });
   httpServer.on("/toggledebug", []()
                 {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
     write_mqtt_log((char *)"Toggled debug flag");
     outputTelnetLog ^= true;
     handleRoot(&httpServer); });

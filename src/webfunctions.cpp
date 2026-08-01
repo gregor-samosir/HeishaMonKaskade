@@ -311,7 +311,8 @@ void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota
     {
       jsonDoc["mqtt_username"] = httpServer->arg("mqtt_username");
     }
-    if (httpServer->hasArg("mqtt_password"))
+    // empty field means: keep current password (it is no longer prefilled in the form)
+    if (httpServer->hasArg("mqtt_password") && (httpServer->arg("mqtt_password").length() > 0))
     {
       jsonDoc["mqtt_password"] = httpServer->arg("mqtt_password");
     }
@@ -361,8 +362,9 @@ void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota
   httptext = httptext + "Mqtt username:<br>";
   httptext = httptext + "<input type='text' name='mqtt_username' value='" + mqtt_username + "'>";
   httptext = httptext + "<br><br>";
-  httptext = httptext + "Mqtt password:<br>";
-  httptext = httptext + "<input type='password' name='mqtt_password' value='" + mqtt_password + "'>";
+  // never render the stored password into the page source; empty = keep current
+  httptext = httptext + "Mqtt password (leave empty to keep current):<br>";
+  httptext = httptext + "<input type='password' name='mqtt_password' value=''>";
   httptext = httptext + "<br><br>";
   httptext = httptext + "<input class='w3-green w3-button' type='submit' value='Save and reboot'>";
   httptext = httptext + "</form>";
