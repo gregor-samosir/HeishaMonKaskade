@@ -34,8 +34,9 @@ bool outputHexLog = false;
 char serial_data[MAXDATASIZE];
 unsigned int serial_length = 0; // int instead of byte: must be able to reach MAXDATASIZE for the overflow check
 
-// store actual value in an String array
-String actual_data[NUMBEROFTOPICS];
+// store actual values in a fixed char array: permanent String objects
+// fragment the heap on long running ESP8266 devices
+char actual_data[NUMBEROFTOPICS][MAXVALUELEN];
 
 // log message
 char log_msg[MAXDATASIZE];

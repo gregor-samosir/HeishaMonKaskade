@@ -4,8 +4,9 @@
 #include "Topics.h"
 
 #define NUMBEROFTOPICS 99 // last topic number + 1
+#define MAXVALUELEN 16    // longest payload value incl. terminator (e.g. "No error", "-123.75")
 
-void publish_heatpump_data(char *, String *, PubSubClient &);
+void publish_heatpump_data(char *, char (*)[MAXVALUELEN], PubSubClient &);
 String getTopicPayload(unsigned int, char *);
 
 String unknown(byte);

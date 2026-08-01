@@ -440,9 +440,10 @@ const char **topicDescription[NUMBEROFTOPICS] = {
 
 unsigned long nextalldatatime = 0;
 
-void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient &mqtt_client)
+void publish_heatpump_data(char *serial_data, char actual_data[][MAXVALUELEN], PubSubClient &mqtt_client)
 {
   char pub_msg[256];
+  char mqtt_topic[128]; // fixed buffer instead of std::string concat per publish (heap churn)
   bool updatealltopics = false;
 
   unsigned long now = millis();
@@ -456,17 +457,18 @@ void publish_heatpump_data(char *serial_data, String actual_data[], PubSubClient
   for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
     String top_value = getTopicPayload(top_num, serial_data);
+    bool changed = (strcmp(actual_data[top_num], top_value.c_str()) != 0);
 
-    if ((updatealltopics) || (actual_data[top_num] != top_value))
+    if (updatealltopics || changed)
     {
-      if (actual_data[top_num] != top_value) // write only changed topics to mqtt log
+      if (changed) // write only changed topics to mqtt log
       {
         sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value.c_str());
         write_mqtt_log(pub_msg);
       }
-      actual_data[top_num] = top_value;
-      std::string mqtt_topic = Topics::STATE + "/" + topicNames[top_num];
-      (void)mqtt_client.publish(mqtt_topic.c_str(), top_value.c_str(), MQTT_RETAIN_VALUES);
+      strlcpy(actual_data[top_num], top_value.c_str(), MAXVALUELEN);
+      (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topicNames[top_num]);
+      (void)mqtt_client.publish(mqtt_topic, top_value.c_str(), MQTT_RETAIN_VALUES);
     }
   }
 }

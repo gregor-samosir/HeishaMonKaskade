@@ -221,30 +221,34 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->client().stop();
 }
 
-void handleTableRefresh(ESP8266WebServer *httpServer, String actual_data[])
+void handleTableRefresh(ESP8266WebServer *httpServer, char actual_data[][MAXVALUELEN])
 {
-  String tabletext;
-  String topicdesc;
+  // rows are streamed from a fixed buffer instead of concatenating one big
+  // String (heap fragmentation on every 30s browser refresh)
+  char rowbuf[256];
 
+  httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  httpServer->send(200, "text/html");
   for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
+    const char *topicdesc;
     if (strcmp(topicDescription[top_num][0], "value") == 0)
     {
       topicdesc = topicDescription[top_num][1];
     }
     else
     {
-      int value = actual_data[top_num].toInt();
-      topicdesc = topicDescription[top_num][value];
+      int value = atoi(actual_data[top_num]);
+      // bounds check: decoders return -1 for unknown raw values,
+      // indexing with it read out of bounds before
+      topicdesc = (value < 0) ? "" : topicDescription[top_num][value];
     }
-    if (actual_data[top_num] != "unused")
+    if (strcmp(actual_data[top_num], "unused") != 0)
     {
-      tabletext = tabletext + "<tr><td>TOP" + top_num + "</td><td>" + topicNames[top_num] + "</td><td>" + actual_data[top_num] + "</td><td>" + topicdesc + "</td></tr>\n";
+      (void)snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", top_num, topicNames[top_num], actual_data[top_num], topicdesc);
+      httpServer->sendContent(rowbuf);
     }
   }
-  httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  httpServer->send(200, "text/html");
-  httpServer->sendContent(tabletext);
   httpServer->sendContent("");
   httpServer->client().stop();
 }
