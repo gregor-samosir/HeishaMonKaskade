@@ -1,5 +1,6 @@
 .pio
 .vscode
+compile_commands.json
 .pioenvs
 .cache
 .DS_Store
