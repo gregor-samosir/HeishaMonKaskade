@@ -27,7 +27,7 @@ bool outputHexLog = false;
 
 // global scope
 char serial_data[MAXDATASIZE];
-byte serial_length = 0;
+unsigned int serial_length = 0; // int instead of byte: must be able to reach MAXDATASIZE for the overflow check
 
 // store actual value in an String array
 String actual_data[NUMBEROFTOPICS];
@@ -241,7 +241,12 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
   }
   msg[length] = '\0';
 
-  build_heatpump_command(topic, msg);
+  // on error no command was registered: restart the query cycle,
+  // otherwise no timer is running anymore and polling stops forever
+  if (!build_heatpump_command(topic, msg))
+  {
+    Send_Pana_Mainquery_Timer.start();
+  }
 }
 
 /*****************************************************************************/
@@ -310,6 +315,17 @@ bool readSerial()
   {
     if (Serial.available() > 0)
     {
+      // bounds check: discard everything on overflow instead of wrapping the buffer
+      if (serial_length >= MAXDATASIZE)
+      {
+        write_telnet_log((char *)"Serial buffer overflow, discarding data");
+        while (Serial.available() > 0)
+        {
+          (void)Serial.read();
+        }
+        serial_length = 0;
+        return false;
+      }
       serial_data[serial_length] = Serial.read();
       serial_length += 1;
       // only enable next line to DEBUG

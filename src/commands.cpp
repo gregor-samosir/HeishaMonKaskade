@@ -4,11 +4,13 @@
 #include <climits>
 // #include <string>
 
-void build_heatpump_command(char *topic, char *msg)
+// returns true if a command was registered, false on any error
+// (caller must restart the mainquery timer on false, see mqtt_callback)
+bool build_heatpump_command(char *topic, char *msg)
 {
   char log_msg[256];
-  byte set_byte;
-  byte set_pos; // position in mainCommand
+  byte set_byte = 0;
+  byte set_pos = COMMANDPOS_UNSET; // position in mainCommand, sentinel = no topic matched
 
   char *endptr;
   long msg_long = strtol(msg, &endptr, 10); // 10 is for base-10
@@ -18,7 +20,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     (void)sprintf(log_msg, "Error: Invalid integer value '%s' received for topic %s", msg, topic);
     write_mqtt_log(log_msg);
-    return;
+    return false;
   }
 
   // Check if the value is within the range of an unsigned int
@@ -26,7 +28,7 @@ void build_heatpump_command(char *topic, char *msg)
   {
     (void)sprintf(log_msg, "Error: Integer value '%s' out of range for topic %s", msg, topic);
     write_mqtt_log(log_msg);
-    return;
+    return false;
   }
   unsigned int msg_int = (unsigned int)msg_long;
 
@@ -281,9 +283,18 @@ void build_heatpump_command(char *topic, char *msg)
     (void)sprintf(log_msg, "<SUB> SET26 %s: %d", topic, set_byte - 1);
   }
 
+  // no else-if branch matched: never write with the uninitialized sentinel position
+  if (set_pos == COMMANDPOS_UNSET)
+  {
+    (void)sprintf(log_msg, "Error: Unknown set topic %s", topic);
+    write_mqtt_log(log_msg);
+    return false;
+  }
+
   mainCommand[set_pos] = set_byte;
 
   write_mqtt_log(log_msg);
   // trigger buffer
   register_new_command();
+  return true;
 }

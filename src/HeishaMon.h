@@ -43,3 +43,6 @@ void register_new_command(void);
 
 // Global command buffer
 extern byte mainCommand[QUERYSIZE];
+
+// query timer, needs restart from mqtt_callback if a command was rejected
+extern Ticker Send_Pana_Mainquery_Timer;
