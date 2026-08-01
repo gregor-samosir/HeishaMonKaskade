@@ -1,3 +1,4 @@
+#pragma once
 
 // sentinel: no set topic matched, mainCommand must not be written
 #define COMMANDPOS_UNSET 0xFF

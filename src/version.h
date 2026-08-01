@@ -1,3 +1,4 @@
+#pragma once
 // Changelog:
 // 2.0.1 - Bugfixes: uninitialisiertes set_pos/set_byte bei unbekanntem Set-Topic,
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
