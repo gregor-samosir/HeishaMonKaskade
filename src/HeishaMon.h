@@ -32,6 +32,7 @@ extern "C"
 #define QUERYTIMER 5000   // Query / timer to initiate a query
 #define BUFFERTIMEOUT 500 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board
 #define SERIALTIMEOUT 600 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
+#define NTPTIMEOUT 30000  // max. wait for NTP at boot before continuing without valid time
 
 void send_pana_command(void);
 void send_pana_mainquery(void);

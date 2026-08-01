@@ -499,14 +499,24 @@ void handle_telnetstream()
 void setupTime()
 {
   configTime(TIME_ZONE, "0.de.pool.ntp.org");
-  delay(250);
+  // wait max. 30 s for NTP, otherwise continue without valid time
+  // (timestamps then start at 1970, but heatpump polling must not be blocked)
+  unsigned long start = millis();
   time_t now = time(nullptr);
-  while (now < SECS_YR_2000)
+  while ((now < SECS_YR_2000) && ((millis() - start) < NTPTIMEOUT))
   {
     delay(100);
     now = time(nullptr);
   }
-  setTime(now + 3600); // FIX CEST dont work
+  if (now < SECS_YR_2000)
+  {
+    write_mqtt_log((char *)"Warning: NTP timeout, continuing without valid time");
+    return;
+  }
+  // take local time incl. DST from the TZ database instead of fixed +3600
+  struct tm local;
+  localtime_r(&now, &local);
+  setTime(local.tm_hour, local.tm_min, local.tm_sec, local.tm_mday, local.tm_mon + 1, local.tm_year + 1900);
 }
 
 /*****************************************************************************/
@@ -519,15 +529,16 @@ void setup()
 
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
 
-  if (!MDNS.begin(wifi_hostname))
+  // mDNS is comfort only: log and continue instead of blocking the device forever
+  if (MDNS.begin(wifi_hostname))
   {
-    while (1)
-    {
-      delay(1000);
-    }
+    MDNS.addService("http", "tcp", 80);
+    MDNS.addService("telnet", "tcp", 23);
   }
-  MDNS.addService("http", "tcp", 80);
-  MDNS.addService("telnet", "tcp", 23);
+  else
+  {
+    Serial.println("Warning: mDNS setup failed, continuing without mDNS");
+  }
 
   setupOTA();
   setupMqtt();
