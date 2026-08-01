@@ -13,9 +13,23 @@ bool shouldSaveConfig = false;
 
 static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5; url=/' />";
 
-static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta name='viewport' content='width=device-width, initial-scale=1'><link rel='stylesheet' href='https://www.w3schools.com/w3css/4/w3.css'><link rel='stylesheet' href='https://www.w3schools.com/lib/w3-theme-blue.css'>";
-
-static const char ajaxscript[] PROGMEM = "<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js'></script>";
+// CSS is embedded (styles the existing w3-class names): the UI must work
+// without internet access, previously w3.css and jquery came from CDNs
+static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
+    "*{box-sizing:border-box}body{font-family:Verdana,sans-serif;margin:0}h4{margin:10px 0}"
+    ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
+    ".w3-container{padding:0.01em 16px}.w3-card-4{box-shadow:0 4px 10px 0 rgba(0,0,0,.2)}"
+    ".w3-card{box-shadow:0 2px 5px 0 rgba(0,0,0,.2)}.w3-center{text-align:center}.w3-left{float:left}"
+    ".w3-small{font-size:12px}.w3-medium{font-size:15px}.w3-text-grey{color:#757575}"
+    ".w3-button{border:none;padding:8px 16px;cursor:pointer;background:inherit;display:inline-block}"
+    ".w3-sidebar{position:fixed;top:0;left:0;height:100%;width:200px;background:#fff;z-index:2;overflow:auto}"
+    ".w3-bar-block .w3-bar-item{display:block;width:100%;text-align:left;text-decoration:none;color:#000;padding:8px 16px}"
+    ".w3-bar-block .w3-bar-item:hover{background:#ccc}"
+    ".w3-table-all{border-collapse:collapse;width:100%;margin:16px 0;border:1px solid #ccc}"
+    ".w3-table-all th,.w3-table-all td{padding:6px 8px;text-align:left;border-bottom:1px solid #ddd}"
+    ".w3-table-all tr:nth-child(even){background:#f1f1f1}"
+    "input{padding:8px;border:1px solid #ccc;margin:4px 0}"
+    "</style>";
 
 // stage-specific page title comes as build flag from platformio.ini, fallback = stage 1
 #ifndef HEISHA_STAGE_NAME
@@ -27,7 +41,8 @@ static const char webFooter[] PROGMEM = "</body></html>";
 
 static const char menuJS[] PROGMEM = "<script> function openLeftMenu() {var x = document.getElementById('leftMenu');if (x.style.display === 'none') {x.style.display = 'block';} else {x.style.display = 'none';}}</script>";
 
-static const char refreshJS[] PROGMEM = "<script> $(document).ready(function(){refreshTable();}); function refreshTable(){$('#heishavalues').load('/tablerefresh', function(){setTimeout(refreshTable, 30000);});}</script></head><body>";
+// table refresh via native fetch instead of jquery (was loaded from CDN)
+static const char refreshJS[] PROGMEM = "<script>function refreshTable(){fetch('/tablerefresh').then(function(r){return r.text()}).then(function(t){document.getElementById('heishavalues').innerHTML=t}).catch(function(){}).finally(function(){setTimeout(refreshTable,30000)})}document.addEventListener('DOMContentLoaded',refreshTable);</script></head><body>";
 
 static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a><a href='/toggledebug' class='w3-bar-item w3-button w3-small'>Toggle debug log</a>";
 
@@ -190,7 +205,6 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
   httpServer->sendContent_P(webHeader);
-  httpServer->sendContent_P(ajaxscript);
   httpServer->sendContent_P(webBodyStart);
   httpServer->sendContent_P(menuJS);
   httpServer->sendContent_P(refreshJS);
