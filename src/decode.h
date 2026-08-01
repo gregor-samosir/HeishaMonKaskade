@@ -1,7 +1,7 @@
 #include <PubSubClient.h>
 #include "Topics.h"
 
-#define NUMBEROFTOPICS 101 // last topic number + 1
+#define NUMBEROFTOPICS 99 // last topic number + 1
 
 void publish_heatpump_data(char *, String *, PubSubClient &);
 String getTopicPayload(unsigned int, char *);
@@ -133,8 +133,6 @@ static const char *topicNames[] = {
     States::TOP96,
     States::TOP97,
     States::TOP98,
-    States::TOP99,
-    States::TOP100,
 };
 
 static const byte topicBytes[] = {
@@ -238,8 +236,6 @@ static const byte topicBytes[] = {
     73,  // TOP96
     98,  // TOP97
     97,  // TOP98
-    118, // TOP99
-    118, // TOP100
 };
 
 typedef String (*topicFP)(byte);
@@ -344,8 +340,6 @@ static const topicFP topicFunctions[] = {
     getIntMinus1,         // TOP96
     getIntMinus1,         // TOP97
     getIntMinus1Times30,  // TOP98
-    getInletFraction,     // TOP99
-    getOutletFraction,    // TOP100
 };
 
 static const char *DisabledEnabled[] = {"Disabled", "Enabled"};
@@ -473,6 +467,4 @@ static const char **topicDescription[] = {
     Percent,          // TOP96
     Minutes,          // TOP97
     Minutes,          // TOP98
-    Celsius,          // TOP99
-    Celsius,          // TOP100
 };

@@ -206,6 +206,7 @@ String getInletTempWithFraction(char *serial_data)
   return String(top_value + fraction);
 }
 
+/*
 String getInletFraction(byte input)
 {
   String fraction;
@@ -229,6 +230,7 @@ String getInletFraction(byte input)
   }
   return fraction;
 }
+*/  
 
 String getOutletTempWithFraction(char *serial_data)
 {
@@ -258,6 +260,7 @@ String getOutletTempWithFraction(char *serial_data)
   return String(top_value + fraction);
 }
 
+/*
 String getOutletFraction(byte input)
 {
   String fraction;
@@ -281,6 +284,7 @@ String getOutletFraction(byte input)
   }
   return fraction;
 }
+*/
 
 /* Two bytes per TOP */
 String getPumpFlow(char *serial_data)
