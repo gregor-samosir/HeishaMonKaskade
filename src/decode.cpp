@@ -454,321 +454,259 @@ void publish_heatpump_data(char *serial_data, char actual_data[][MAXVALUELEN], P
     write_telnet_log((char *)"Publish all topics");
   }
 
+  char top_value[MAXVALUELEN]; // stack buffer, decoders are String-free
   for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
   {
-    String top_value = getTopicPayload(top_num, serial_data);
-    bool changed = (strcmp(actual_data[top_num], top_value.c_str()) != 0);
+    getTopicPayload(top_num, serial_data, top_value);
+    bool changed = (strcmp(actual_data[top_num], top_value) != 0);
 
     if (updatealltopics || changed)
     {
       if (changed) // write only changed topics to mqtt log
       {
-        sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value.c_str());
+        sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value);
         write_mqtt_log(pub_msg);
       }
-      strlcpy(actual_data[top_num], top_value.c_str(), MAXVALUELEN);
+      strlcpy(actual_data[top_num], top_value, MAXVALUELEN);
       (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topicNames[top_num]);
-      (void)mqtt_client.publish(mqtt_topic, top_value.c_str(), MQTT_RETAIN_VALUES);
+      (void)mqtt_client.publish(mqtt_topic, top_value, MQTT_RETAIN_VALUES);
     }
   }
 }
 
 /*****************************************************************************/
 /* calculate the payload                                                     */
+/* out must hold at least MAXVALUELEN bytes                                  */
 /*****************************************************************************/
-String getTopicPayload(unsigned int top_num, char *serial_data)
+void getTopicPayload(unsigned int top_num, char *serial_data, char *out)
 {
-  String top_value;
   switch (top_num)
   {
   case 1: // Pump_Flow
-    top_value = getPumpFlow(serial_data);
+    getPumpFlow(serial_data, out);
     break;
   case 5: // InletTemp with fraction
-    top_value = getInletTempWithFraction(serial_data);
+    getInletTempWithFraction(serial_data, out);
     break;
   case 6: // OutletTemp with fraction
-    top_value = getOutletTempWithFraction(serial_data);
+    getOutletTempWithFraction(serial_data, out);
     break;
   case 11: // Operations_Hours
-    top_value = getOperationHour(serial_data);
+    getOperationHour(serial_data, out);
     break;
   case 12: // Operations_Counter
-    top_value = getOperationCount(serial_data);
+    getOperationCount(serial_data, out);
     break;
   case 90: // Room_Heater_Operations_Hours
-    top_value = getRoomHeaterHour(serial_data);
+    getRoomHeaterHour(serial_data, out);
     break;
   case 91: // DHW_Heater_Operations_Hours
-    top_value = getDHWHeaterHour(serial_data);
+    getDHWHeaterHour(serial_data, out);
     break;
   case 44: // Error and decription
-    top_value = getErrorInfo(serial_data);
+    getErrorInfo(serial_data, out);
     break;
   default:
+  {
     // call the topic function for 1 byte topics
     byte serial_value = serial_data[topicBytes[top_num]];
-    top_value = topicFunctions[top_num](serial_value);
+    topicFunctions[top_num](serial_value, out);
     break;
   }
-  return top_value;
+  }
 }
 
-String getBit1and2(byte input)
+/*****************************************************************************/
+/* 1-byte decoders: extract value and format it into the caller buffer      */
+/*****************************************************************************/
+void getBit1and2(byte input, char *out)
 {
-  return String((input >> 6) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (input >> 6) - 1);
 }
 
-String getBit3and4(byte input)
+void getBit3and4(byte input, char *out)
 {
-  return String(((input >> 4) & 0b11) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((input >> 4) & 0b11) - 1);
 }
 
-String getBit5and6(byte input)
+void getBit5and6(byte input, char *out)
 {
-  return String(((input >> 2) & 0b11) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((input >> 2) & 0b11) - 1);
 }
 
-String getBit7and8(byte input)
+void getBit7and8(byte input, char *out)
 {
-  return String((input & 0b11) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (input & 0b11) - 1);
 }
 
-String getBit3and4and5(byte input)
+void getBit3and4and5(byte input, char *out)
 {
-  return String(((input >> 3) & 0b111) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((input >> 3) & 0b111) - 1);
 }
 
-String getLeft5bits(byte input)
+void getLeft5bits(byte input, char *out)
 {
-  return String((input >> 3) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (input >> 3) - 1);
 }
 
-String getRight3bits(byte input)
+void getRight3bits(byte input, char *out)
 {
-  return String((input & 0b111) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (input & 0b111) - 1);
 }
 
-String getIntMinus1(byte input)
+void getIntMinus1(byte input, char *out)
 {
-  return String((int)input - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)input - 1);
 }
 
-String getIntMinus128(byte input)
+void getIntMinus128(byte input, char *out)
 {
-  return String((int)input - 128);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)input - 128);
 }
 
-String getIntMinus1Div5(byte input)
+void getIntMinus1Div5(byte input, char *out)
 {
-  return String((((float)input - 1) / 5), 1);
+  // dtostrf instead of snprintf %f: float formatting like String(value, 1)
+  (void)dtostrf(((float)input - 1) / 5, 1, 1, out);
 }
 
-String getIntMinus1Times10(byte input)
+void getIntMinus1Times10(byte input, char *out)
 {
-  return String(((int)input - 1) * 10);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((int)input - 1) * 10);
 }
 
-String getIntMinus1Times50(byte input)
+void getIntMinus1Times50(byte input, char *out)
 {
-  return String(((int)input - 1) * 50);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((int)input - 1) * 50);
 }
 
-String getIntMinus1Times200(byte input)
+void getIntMinus1Times200(byte input, char *out)
 {
-  return String(((int)input - 1) * 200);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((int)input - 1) * 200);
 }
 
-String getIntMinus1Times30(byte input)
+void getIntMinus1Times30(byte input, char *out)
 {
-  return String(((int)input - 1) * 30);
+  (void)snprintf(out, MAXVALUELEN, "%d", ((int)input - 1) * 30);
 }
 
-String unknown(byte input)
+void unknown(byte input, char *out)
 {
-  return "-1";
+  (void)strlcpy(out, "-1", MAXVALUELEN);
 }
 
-String getOpMode(byte input)
+void getOpMode(byte input, char *out)
 {
+  int mode;
   switch ((int)(input & 0b111111))
   {
   case 18:
-    return "0";
+    mode = 0;
+    break;
   case 19:
-    return "1";
+    mode = 1;
+    break;
   case 25:
-    return "2";
+    mode = 2;
+    break;
   case 33:
-    return "3";
+    mode = 3;
+    break;
   case 34:
-    return "4";
+    mode = 4;
+    break;
   case 35:
-    return "5";
+    mode = 5;
+    break;
   case 41:
-    return "6";
+    mode = 6;
+    break;
   case 26:
-    return "7";
+    mode = 7;
+    break;
   case 42:
-    return "8";
+    mode = 8;
+    break;
   default:
-    return "-1";
+    mode = -1;
+    break;
   }
+  (void)snprintf(out, MAXVALUELEN, "%d", mode);
 }
 
-String getInletTempWithFraction(char *serial_data)
+/*****************************************************************************/
+/* temperatures with fraction: integer part from the standard 1-byte        */
+/* decoder, fraction bits from byte 118 (raw 1..4, otherwise no fraction)   */
+/*****************************************************************************/
+static const char *fractionText[] = {".00", ".25", ".50", ".75"};
+
+void getInletTempWithFraction(char *serial_data, char *out)
 {
-  String fraction;
   int fractional = (int)(serial_data[118] & 0b111);
-  // int fractional = (int)(input & 0b111);
-  switch (fractional)
+  byte serial_value = serial_data[topicBytes[5]];
+  topicFunctions[5](serial_value, out); // TOP5 integer part
+  if (fractional >= 1 && fractional <= 4)
   {
-  case 1:
-    fraction = ".00";
-    break;
-  case 2:
-    fraction = ".25";
-    break;
-  case 3:
-    fraction = ".50";
-    break;
-  case 4:
-    fraction = ".75";
-    break;
-  default:
-    break;
+    (void)strlcat(out, fractionText[fractional - 1], MAXVALUELEN);
   }
-  int top_num = 5;
-  byte serial_value = serial_data[topicBytes[top_num]];
-  String top_value = topicFunctions[top_num](serial_value);
-  return String(top_value + fraction);
 }
 
-/*
-String getInletFraction(byte input)
+void getOutletTempWithFraction(char *serial_data, char *out)
 {
-  String fraction;
-  int fractional = (int)(input & 0b111);
-  switch (fractional)
-  {
-  case 1:
-    fraction = "0.00";
-    break;
-  case 2:
-    fraction = "0.25";
-    break;
-  case 3:
-    fraction = "0.50";
-    break;
-  case 4:
-    fraction = "0.75";
-    break;
-  default:
-    break;
-  }
-  return fraction;
-}
-*/  
-
-String getOutletTempWithFraction(char *serial_data)
-{
-  String fraction;
   int fractional = (int)((serial_data[118] >> 3) & 0b111);
-  // int fractional = (int)(input & 0b111);
-  switch (fractional)
+  byte serial_value = serial_data[topicBytes[6]];
+  topicFunctions[6](serial_value, out); // TOP6 integer part
+  if (fractional >= 1 && fractional <= 4)
   {
-  case 1:
-    fraction = ".00";
-    break;
-  case 2:
-    fraction = ".25";
-    break;
-  case 3:
-    fraction = ".50";
-    break;
-  case 4:
-    fraction = ".75";
-    break;
-  default:
-    break;
+    (void)strlcat(out, fractionText[fractional - 1], MAXVALUELEN);
   }
-  int top_num = 6;
-  byte serial_value = serial_data[topicBytes[top_num]];
-  String top_value = topicFunctions[top_num](serial_value);
-  return String(top_value + fraction);
 }
 
-/*
-String getOutletFraction(byte input)
-{
-  String fraction;
-  int fractional = (int)((input >> 3) & 0b111);
-  switch (fractional)
-  {
-  case 1:
-    fraction = "0.00";
-    break;
-  case 2:
-    fraction = "0.25";
-    break;
-  case 3:
-    fraction = "0.50";
-    break;
-  case 4:
-    fraction = "0.75";
-    break;
-  default:
-    break;
-  }
-  return fraction;
-}
-*/
-
-/* Two bytes per TOP */
-String getPumpFlow(char *serial_data)
+/*****************************************************************************/
+/* multi-byte decoders                                                       */
+/*****************************************************************************/
+void getPumpFlow(char *serial_data, char *out)
 { // TOP1 //
   float PumpFlow1 = (float)serial_data[170];
   float PumpFlow2 = (((float)serial_data[169] - 1) / 256);
-  float PumpFlow = PumpFlow1 + PumpFlow2;
-  return String(PumpFlow, 2);
+  // dtostrf instead of snprintf %f: float formatting like String(value, 2)
+  (void)dtostrf(PumpFlow1 + PumpFlow2, 1, 2, out);
 }
 
-String getOperationHour(char *serial_data)
+void getOperationHour(char *serial_data, char *out)
 {
-  return String(word(serial_data[183], serial_data[182]) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[183], serial_data[182]) - 1);
 }
 
-String getOperationCount(char *serial_data)
+void getOperationCount(char *serial_data, char *out)
 {
-  return String(word(serial_data[180], serial_data[179]) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[180], serial_data[179]) - 1);
 }
 
-String getRoomHeaterHour(char *serial_data)
+void getRoomHeaterHour(char *serial_data, char *out)
 {
-  return String(word(serial_data[186], serial_data[185]) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[186], serial_data[185]) - 1);
 }
 
-String getDHWHeaterHour(char *serial_data)
+void getDHWHeaterHour(char *serial_data, char *out)
 {
-  return String(word(serial_data[189], serial_data[188]) - 1);
+  (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[189], serial_data[188]) - 1);
 }
 
-String getErrorInfo(char *serial_data)
+void getErrorInfo(char *serial_data, char *out)
 { // TOP44 //
   int Error_type = (int)(unsigned char)(serial_data[113]);
   int Error_number = ((int)(serial_data[114])) - 17;
-  char Error_string[10];
   switch (Error_type)
   {
   case 177: // B1=F type error
-    sprintf(Error_string, "F%02X", Error_number);
+    (void)snprintf(out, MAXVALUELEN, "F%02X", Error_number);
     break;
   case 161: // A1=H type error
-    sprintf(Error_string, "H%02X", Error_number);
+    (void)snprintf(out, MAXVALUELEN, "H%02X", Error_number);
     break;
   default:
-    sprintf(Error_string, "No error");
+    (void)strlcpy(out, "No error", MAXVALUELEN);
     break;
   }
-  return String(Error_string);
 }

@@ -1,0 +1,4 @@
+# clangd kennt die Xtensa-GCC-Flags aus compile_commands.json nicht -
+# fuer die IDE-Analyse entfernen (der PlatformIO-Build nutzt weiterhin GCC)
+CompileFlags:
+  Remove: [-mlongcalls, -mtext-section-literals, -free, -fipa-pta]

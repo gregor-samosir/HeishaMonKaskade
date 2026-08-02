@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h> // byte, String etc. - not only indirectly via PubSubClient.h
 #include <PubSubClient.h>
 #include "Topics.h"
 
@@ -7,36 +8,37 @@
 #define MAXVALUELEN 16    // longest payload value incl. terminator (e.g. "No error", "-123.75")
 
 void publish_heatpump_data(char *, char (*)[MAXVALUELEN], PubSubClient &);
-String getTopicPayload(unsigned int, char *);
 
-String unknown(byte);
-String getBit1and2(byte);
-String getBit3and4(byte);
-String getBit5and6(byte);
-String getBit7and8(byte);
-String getBit3and4and5(byte);
-String getLeft5bits(byte);
-String getRight3bits(byte);
-String getIntMinus1(byte);
-String getIntMinus128(byte);
-String getIntMinus1Div5(byte);
-String getIntMinus1Times10(byte);
-String getIntMinus1Times30(byte);
-String getIntMinus1Times50(byte);
-String getIntMinus1Times200(byte);
-String getOpMode(byte);
-String getPumpFlow(char *);
-String getOperationHour(char *);
-String getOperationCount(char *);
-String getRoomHeaterHour(char *);
-String getDHWHeaterHour(char *);
-String getErrorInfo(char *);
-String getInletFraction(byte);
-String getOutletFraction(byte);
-String getInletTempWithFraction(char *);
-String getOutletTempWithFraction(char *);
+// all decoders write into a caller buffer of MAXVALUELEN bytes:
+// no String allocations in the decode path (runs every 5 seconds)
+void getTopicPayload(unsigned int, char *, char *);
 
-typedef String (*topicFP)(byte);
+void unknown(byte, char *);
+void getBit1and2(byte, char *);
+void getBit3and4(byte, char *);
+void getBit5and6(byte, char *);
+void getBit7and8(byte, char *);
+void getBit3and4and5(byte, char *);
+void getLeft5bits(byte, char *);
+void getRight3bits(byte, char *);
+void getIntMinus1(byte, char *);
+void getIntMinus128(byte, char *);
+void getIntMinus1Div5(byte, char *);
+void getIntMinus1Times10(byte, char *);
+void getIntMinus1Times30(byte, char *);
+void getIntMinus1Times50(byte, char *);
+void getIntMinus1Times200(byte, char *);
+void getOpMode(byte, char *);
+void getPumpFlow(char *, char *);
+void getOperationHour(char *, char *);
+void getOperationCount(char *, char *);
+void getRoomHeaterHour(char *, char *);
+void getDHWHeaterHour(char *, char *);
+void getErrorInfo(char *, char *);
+void getInletTempWithFraction(char *, char *);
+void getOutletTempWithFraction(char *, char *);
+
+typedef void (*topicFP)(byte, char *);
 
 // lookup tables, defined once in decode.cpp (previously static copies per translation unit)
 extern const char *topicNames[NUMBEROFTOPICS];
