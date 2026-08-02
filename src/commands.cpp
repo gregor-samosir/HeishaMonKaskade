@@ -89,10 +89,14 @@ bool build_heatpump_command(char *topic, char *msg)
       continue;
     }
 
+    // short topic name without path prefix, log format matches the <PUB> lines
+    const char *topic_name = strrchr(topic, '/');
+    topic_name = (topic_name != NULL) ? topic_name + 1 : topic;
+
     // range check before touching mainCommand
     if (msg_long < cmd.min || msg_long > cmd.max)
     {
-      (void)sprintf(log_msg, "Error: Value %ld out of range [%d..%d] for topic %s", msg_long, cmd.min, cmd.max, topic);
+      (void)sprintf(log_msg, "Error: Value %ld out of range [%d..%d] for topic %s", msg_long, cmd.min, cmd.max, topic_name);
       write_mqtt_log(log_msg);
       return false;
     }
@@ -118,7 +122,7 @@ bool build_heatpump_command(char *topic, char *msg)
 
     mainCommand[cmd.pos] = set_byte;
 
-    (void)sprintf(log_msg, "<SUB> SET%d %s: %ld", cmd.number, topic, msg_long);
+    (void)sprintf(log_msg, "<SUB> SET%d %s: %ld", cmd.number, topic_name, msg_long);
     write_mqtt_log(log_msg);
     // trigger buffer
     register_new_command();
