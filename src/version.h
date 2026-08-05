@@ -1,5 +1,7 @@
 #pragma once
 // Changelog:
+// 3.0.1 - ESP32: WiFi-Modem-Sleep deaktiviert (eingehende Verbindungen),
+//         OTA-Env heishamon_esp32_ota, OTA-Weg verifiziert
 // 3.0.0 - ESP32-S3-Port: eine Codebasis fuer D1 mini (ESP8266) und das
 //         offizielle HeishaMon-ESP32-Board. Plattformschicht in
 //         HeishaMon.h, Waermepumpe auf ESP32 an eigener Serial1
@@ -25,4 +27,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.0.0";
+static const char* heishamon_version = "3.0.1";
