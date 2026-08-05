@@ -174,6 +174,9 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   // Set hostname on wifi rather than ESP_xxxxx
 #if defined(ESP32)
   WiFi.setHostname(wifi_hostname);
+  // modem sleep breaks inbound connections on ESP32 (ping/http time out
+  // while outbound mqtt keeps working) - disable it, device is mains powered
+  WiFi.setSleep(false);
 #else
   WiFi.hostname(wifi_hostname);
 #endif
