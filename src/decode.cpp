@@ -440,7 +440,7 @@ const char **topicDescription[NUMBEROFTOPICS] = {
 
 unsigned long nextalldatatime = 0;
 
-void publish_heatpump_data(char *serial_data, char actual_data[][MAXVALUELEN], PubSubClient &mqtt_client)
+void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN], PubSubClient &mqtt_client)
 {
   char pub_msg[256];
   char mqtt_topic[128]; // fixed buffer instead of std::string concat per publish (heap churn)
@@ -478,7 +478,7 @@ void publish_heatpump_data(char *serial_data, char actual_data[][MAXVALUELEN], P
 /* calculate the payload                                                     */
 /* out must hold at least MAXVALUELEN bytes                                  */
 /*****************************************************************************/
-void getTopicPayload(unsigned int top_num, char *serial_data, char *out)
+void getTopicPayload(unsigned int top_num, uint8_t *serial_data, char *out)
 {
   switch (top_num)
   {
@@ -640,7 +640,7 @@ void getOpMode(byte input, char *out)
 /*****************************************************************************/
 static const char *fractionText[] = {".00", ".25", ".50", ".75"};
 
-void getInletTempWithFraction(char *serial_data, char *out)
+void getInletTempWithFraction(uint8_t *serial_data, char *out)
 {
   int fractional = (int)(serial_data[118] & 0b111);
   byte serial_value = serial_data[topicBytes[5]];
@@ -651,7 +651,7 @@ void getInletTempWithFraction(char *serial_data, char *out)
   }
 }
 
-void getOutletTempWithFraction(char *serial_data, char *out)
+void getOutletTempWithFraction(uint8_t *serial_data, char *out)
 {
   int fractional = (int)((serial_data[118] >> 3) & 0b111);
   byte serial_value = serial_data[topicBytes[6]];
@@ -665,7 +665,7 @@ void getOutletTempWithFraction(char *serial_data, char *out)
 /*****************************************************************************/
 /* multi-byte decoders                                                       */
 /*****************************************************************************/
-void getPumpFlow(char *serial_data, char *out)
+void getPumpFlow(uint8_t *serial_data, char *out)
 { // TOP1 //
   float PumpFlow1 = (float)serial_data[170];
   float PumpFlow2 = (((float)serial_data[169] - 1) / 256);
@@ -673,29 +673,29 @@ void getPumpFlow(char *serial_data, char *out)
   (void)dtostrf(PumpFlow1 + PumpFlow2, 1, 2, out);
 }
 
-void getOperationHour(char *serial_data, char *out)
+void getOperationHour(uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[183], serial_data[182]) - 1);
 }
 
-void getOperationCount(char *serial_data, char *out)
+void getOperationCount(uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[180], serial_data[179]) - 1);
 }
 
-void getRoomHeaterHour(char *serial_data, char *out)
+void getRoomHeaterHour(uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[186], serial_data[185]) - 1);
 }
 
-void getDHWHeaterHour(char *serial_data, char *out)
+void getDHWHeaterHour(uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[189], serial_data[188]) - 1);
 }
 
-void getErrorInfo(char *serial_data, char *out)
+void getErrorInfo(uint8_t *serial_data, char *out)
 { // TOP44 //
-  int Error_type = (int)(unsigned char)(serial_data[113]);
+  int Error_type = (int)serial_data[113];
   int Error_number = ((int)(serial_data[114])) - 17;
   switch (Error_type)
   {

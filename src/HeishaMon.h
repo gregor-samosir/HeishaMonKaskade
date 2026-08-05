@@ -1,6 +1,35 @@
 #pragma once
 #include <Arduino.h>
 #include <LittleFS.h>
+
+// platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
+// (official HeishaMon board), differences are isolated here
+#if defined(ESP32)
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <ESPmDNS.h>
+#include <ArduinoOTA.h>
+#include <PubSubClient.h>
+#include <WebServer.h>
+#include <HTTPUpdateServer.h>
+#include <DNSServer.h>
+#include "Ticker.h"
+#include <TelnetStream.h>
+#include <TimeLib.h>
+
+// class names differ between the cores
+typedef WebServer WebServerClass;
+typedef HTTPUpdateServer HTTPUpdateServerClass;
+
+// heatpump on its own UART (pins from the official HeishaMon ESP32-S3 board),
+// Serial stays available as USB console
+#define heatpumpSerial Serial1
+#define HEATPUMPRX 18
+#define HEATPUMPTX 17
+#define ENABLEPIN 5   // mosfet enable for TX line to heatpump
+#define ENABLEOTPIN 4 // OpenTherm 24V booster - unused, must stay LOW
+
+#else
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <ESP8266mDNS.h>
@@ -13,14 +42,18 @@
 #include <TelnetStream.h>
 #include <TimeLib.h>
 #include <sntp.h>
-#include <TZ.h>
 
-extern "C"
-{
-#include "user_interface.h"
-}
+typedef ESP8266WebServer WebServerClass;
+typedef ESP8266HTTPUpdateServer HTTPUpdateServerClass;
 
-#define TIME_ZONE TZ_Europe_Berlin
+// heatpump on the swapped main UART (gpio13/15), enabled via gpio5
+#define heatpumpSerial Serial
+#define ENABLEPIN 5
+
+#endif
+
+// posix TZ string (identical to TZ_Europe_Berlin), works on both cores
+#define TIME_ZONE "CET-1CEST,M3.5.0,M10.5.0/3"
 
 #define MAXDATASIZE 256
 #define QUERYSIZE 110

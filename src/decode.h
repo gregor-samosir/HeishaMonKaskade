@@ -7,11 +7,11 @@
 #define NUMBEROFTOPICS 99 // last topic number + 1
 #define MAXVALUELEN 16    // longest payload value incl. terminator (e.g. "No error", "-123.75")
 
-void publish_heatpump_data(char *, char (*)[MAXVALUELEN], PubSubClient &);
+void publish_heatpump_data(uint8_t *, char (*)[MAXVALUELEN], PubSubClient &);
 
 // all decoders write into a caller buffer of MAXVALUELEN bytes:
 // no String allocations in the decode path (runs every 5 seconds)
-void getTopicPayload(unsigned int, char *, char *);
+void getTopicPayload(unsigned int, uint8_t *, char *);
 
 void unknown(byte, char *);
 void getBit1and2(byte, char *);
@@ -29,14 +29,14 @@ void getIntMinus1Times30(byte, char *);
 void getIntMinus1Times50(byte, char *);
 void getIntMinus1Times200(byte, char *);
 void getOpMode(byte, char *);
-void getPumpFlow(char *, char *);
-void getOperationHour(char *, char *);
-void getOperationCount(char *, char *);
-void getRoomHeaterHour(char *, char *);
-void getDHWHeaterHour(char *, char *);
-void getErrorInfo(char *, char *);
-void getInletTempWithFraction(char *, char *);
-void getOutletTempWithFraction(char *, char *);
+void getPumpFlow(uint8_t *, char *);
+void getOperationHour(uint8_t *, char *);
+void getOperationCount(uint8_t *, char *);
+void getRoomHeaterHour(uint8_t *, char *);
+void getDHWHeaterHour(uint8_t *, char *);
+void getErrorInfo(uint8_t *, char *);
+void getInletTempWithFraction(uint8_t *, char *);
+void getOutletTempWithFraction(uint8_t *, char *);
 
 typedef void (*topicFP)(byte, char *);
 

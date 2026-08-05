@@ -31,7 +31,7 @@ bool outputTelnetLog = true; // enable/disable telnet DEBUG
 bool outputHexLog = false;
 
 // global scope
-char serial_data[MAXDATASIZE];
+uint8_t serial_data[MAXDATASIZE]; // uint8_t statt char: Bytes > 127, kein Vorzeichen-Risiko
 unsigned int serial_length = 0; // int instead of byte: must be able to reach MAXDATASIZE for the overflow check
 
 // store actual values in a fixed char array: permanent String objects
@@ -43,8 +43,8 @@ char log_msg[MAXDATASIZE];
 
 bool newcommand = false;
 
-ESP8266WebServer httpServer(80);
-ESP8266HTTPUpdateServer httpUpdater;
+WebServerClass httpServer(80);
+HTTPUpdateServerClass httpUpdater;
 
 WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
@@ -60,7 +60,9 @@ byte cleanCommand[QUERYSIZE];
 /*****************************************************************************/
 void setupOTA()
 {
-  ArduinoOTA.setPort(8266);              // Port defaults to 8266
+#if !defined(ESP32)
+  ArduinoOTA.setPort(8266); // ESP32 keeps default 3232 (matches espota upload)
+#endif
   ArduinoOTA.setHostname(wifi_hostname); // Hostname defaults to esp8266-[ChipID]
   ArduinoOTA.setPassword(ota_password);  // Set authentication
   ArduinoOTA.onStart([]() {});
@@ -99,14 +101,14 @@ void write_telnet_log(char *string)
 /*****************************************************************************/
 /* DEBUG hex log  (Igor Ybema)                                               */
 /*****************************************************************************/
-void write_hex_log(char *hex, byte hex_len)
+void write_hex_log(uint8_t *hex, unsigned int hex_len)
 {
   int bytesperline = 32; // please be aware of max mqtt message size - 32 bytes per line does not work
-  for (int i = 0; i < hex_len; i += bytesperline)
+  for (unsigned int i = 0; i < hex_len; i += bytesperline)
   {
     char buffer[(bytesperline * 3) + 1];
     buffer[bytesperline * 3] = '\0';
-    for (int j = 0; ((j < bytesperline) && ((i + j) < hex_len)); j++)
+    for (unsigned int j = 0; ((j < (unsigned int)bytesperline) && ((i + j) < hex_len)); j++)
     {
       (void)sprintf(&buffer[3 * j], "%02X ", (unsigned char)hex[i + j]);
     }
@@ -195,21 +197,36 @@ void setupHttp()
 /*****************************************************************************/
 void setupSerial()
 {
-  Serial.begin(115200); // boot issue's first on normal serial
+  Serial.begin(115200); // ESP8266: boot debug before swap / ESP32: USB CDC console
+#if defined(ESP32)
+  delay(100); // let USB CDC come up
+#endif
   Serial.flush();
 }
 
 void switchSerial()
 {
+#if defined(ESP32)
+  // heatpump on its own UART - USB console stays available in parallel
+  Serial.println("Starting heatpump serial on Serial1 (RX18/TX17). USB debug stays alive.");
+  heatpumpSerial.setRxBufferSize(MAXDATASIZE);
+  heatpumpSerial.begin(9600, SERIAL_8E1, HEATPUMPRX, HEATPUMPTX);
+  heatpumpSerial.flush();
+  pinMode(ENABLEOTPIN, OUTPUT);
+  digitalWrite(ENABLEOTPIN, LOW); // keep unused OpenTherm 24V booster off
+  pinMode(ENABLEPIN, OUTPUT);
+  digitalWrite(ENABLEPIN, HIGH); // enable mosfet for TX line to heatpump
+#else
   Serial.println("Switch serial to heatpump. Look for debug on mqtt log topic.");
   // serial to cn-cnt
-  Serial.flush();
-  Serial.end();
-  Serial.begin(9600, SERIAL_8E1);
-  Serial.flush();
-  Serial.swap();      // swap to gpio13 (D7) and gpio15 (D8)
-  pinMode(5, OUTPUT); // enable gpio15 after boot using gpio5 (D1)
-  digitalWrite(5, HIGH);
+  heatpumpSerial.flush();
+  heatpumpSerial.end();
+  heatpumpSerial.begin(9600, SERIAL_8E1);
+  heatpumpSerial.flush();
+  heatpumpSerial.swap();       // swap to gpio13 (D7) and gpio15 (D8)
+  pinMode(ENABLEPIN, OUTPUT);  // enable gpio15 after boot using gpio5 (D1)
+  digitalWrite(ENABLEPIN, HIGH);
+#endif
 }
 
 /*****************************************************************************/
@@ -338,20 +355,20 @@ bool readSerial()
 {
   while (true)
   {
-    if (Serial.available() > 0)
+    if (heatpumpSerial.available() > 0)
     {
       // bounds check: discard everything on overflow instead of wrapping the buffer
       if (serial_length >= MAXDATASIZE)
       {
         write_telnet_log((char *)"Serial buffer overflow, discarding data");
-        while (Serial.available() > 0)
+        while (heatpumpSerial.available() > 0)
         {
-          (void)Serial.read();
+          (void)heatpumpSerial.read();
         }
         serial_length = 0;
         return false;
       }
-      serial_data[serial_length] = Serial.read();
+      serial_data[serial_length] = heatpumpSerial.read();
       serial_length += 1;
       // only enable next line to DEBUG
       // sprintf(log_msg, "DEBUG Receive byte : %d", serial_length); write_telnet_log(log_msg);
@@ -370,7 +387,7 @@ bool readSerial()
     }
     write_telnet_log((char *)"Valid data");
     if (outputHexLog)
-      write_hex_log((char *)serial_data, serial_length);
+      write_hex_log(serial_data, serial_length);
     serial_length = 0;
     return true;
   }
@@ -410,19 +427,19 @@ void send_pana_command()
   {
     if (calculate_commandset(mainCommand) == 0)
     {
-      Serial.write(mainQuery, QUERYSIZE);
-      Serial.write(calculate_checksum(mainQuery));
+      heatpumpSerial.write(mainQuery, QUERYSIZE);
+      heatpumpSerial.write(calculate_checksum(mainQuery));
       serialquerysent = true;
       write_telnet_log((char *)"Send query");
     }
     else
     {
-      Serial.write(mainCommand, QUERYSIZE);
-      Serial.write(calculate_checksum(mainCommand));
+      heatpumpSerial.write(mainCommand, QUERYSIZE);
+      heatpumpSerial.write(calculate_checksum(mainCommand));
       serialquerysent = true;
       write_telnet_log((char *)"Send command");
       if (outputHexLog)
-        write_hex_log((char *)mainCommand, QUERYSIZE);
+        write_hex_log(mainCommand, QUERYSIZE);
       memcpy(mainCommand, cleanCommand, QUERYSIZE);
     }
     newcommand = false;
@@ -486,7 +503,7 @@ void handle_telnetstream()
     case 'R':
       TelnetStream.stop();
       delay(100);
-      ESP.reset();
+      ESP.restart();
       break;
     case 'C':
       TelnetStream.println("bye bye");
@@ -523,7 +540,11 @@ void handle_telnetstream()
 /*****************************************************************************/
 void setupTime()
 {
+#if defined(ESP32)
+  configTzTime(TIME_ZONE, "0.de.pool.ntp.org");
+#else
   configTime(TIME_ZONE, "0.de.pool.ntp.org");
+#endif
   // wait max. 30 s for NTP, otherwise continue without valid time
   // (timestamps then start at 1970, but heatpump polling must not be blocked)
   unsigned long start = millis();
@@ -583,7 +604,9 @@ void loop()
 {
   ArduinoOTA.handle();
   httpServer.handleClient();
-  MDNS.update();
+#if !defined(ESP32)
+  MDNS.update(); // not needed/available on ESP32
+#endif
 
   handle_telnetstream();
 

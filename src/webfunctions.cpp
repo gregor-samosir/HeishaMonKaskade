@@ -1,6 +1,4 @@
 #include <LittleFS.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 
@@ -61,7 +59,11 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 
   Serial.println("mounting LittleFS...");
 
+#if defined(ESP32)
+  if (LittleFS.begin(true)) // ESP32: format on first mount
+#else
   if (LittleFS.begin())
+#endif
   {
     Serial.println("Mount file system");
     if (LittleFS.exists("/config.json"))
@@ -148,7 +150,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     Serial.println("failed to connect and hit timeout");
     delay(3000);
     // reset and try again, or maybe put it to deep sleep
-    ESP.reset();
+    ESP.restart();
     delay(5000);
   }
 
@@ -170,7 +172,11 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   mqtt_password[39] = '\0';
 
   // Set hostname on wifi rather than ESP_xxxxx
+#if defined(ESP32)
+  WiFi.setHostname(wifi_hostname);
+#else
   WiFi.hostname(wifi_hostname);
+#endif
 
   // save the custom parameters to FS
   if (shouldSaveConfig)
@@ -200,7 +206,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   Serial.println(WiFi.localIP());
 }
 
-void handleRoot(ESP8266WebServer *httpServer)
+void handleRoot(WebServerClass *httpServer)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -221,7 +227,7 @@ void handleRoot(ESP8266WebServer *httpServer)
   httpServer->client().stop();
 }
 
-void handleTableRefresh(ESP8266WebServer *httpServer, char actual_data[][MAXVALUELEN])
+void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUELEN])
 {
   // rows are streamed from a fixed buffer instead of concatenating one big
   // String (heap fragmentation on every 30s browser refresh)
@@ -253,7 +259,7 @@ void handleTableRefresh(ESP8266WebServer *httpServer, char actual_data[][MAXVALU
   httpServer->client().stop();
 }
 
-void handleReboot(ESP8266WebServer *httpServer)
+void handleReboot(WebServerClass *httpServer)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -273,7 +279,7 @@ void handleReboot(ESP8266WebServer *httpServer)
   ESP.restart();
 }
 
-void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
+void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -339,7 +345,11 @@ void handleSettings(ESP8266WebServer *httpServer, char *wifi_hostname, char *ota
       jsonDoc["mqtt_password"] = httpServer->arg("mqtt_password");
     }
 
-    if (LittleFS.begin())
+  #if defined(ESP32)
+  if (LittleFS.begin(true)) // ESP32: format on first mount
+#else
+  if (LittleFS.begin())
+#endif
     {
       File configFile = LittleFS.open("/config.json", "w");
       if (configFile)
