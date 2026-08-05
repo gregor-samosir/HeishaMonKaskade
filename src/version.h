@@ -1,5 +1,10 @@
 #pragma once
 // Changelog:
+// 3.0.0 - ESP32-S3-Port: eine Codebasis fuer D1 mini (ESP8266) und das
+//         offizielle HeishaMon-ESP32-Board. Plattformschicht in
+//         HeishaMon.h, Waermepumpe auf ESP32 an eigener Serial1
+//         (RX18/TX17), USB-Debug parallel, serial_data auf uint8_t,
+//         Env heishamon_esp32_usb (4MB Flash, min_spiffs)
 // 2.3.1 - SUB-Log zeigt wie PUB nur noch den Topic-Namen statt des
 //         kompletten MQTT-Pfads
 // 2.3.0 - WiFiManager 0.16 -> 2.0.17 (RAM -3%, Strings in PROGMEM),
@@ -20,4 +25,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "2.3.1";
+static const char* heishamon_version = "3.0.0";
