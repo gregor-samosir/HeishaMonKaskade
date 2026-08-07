@@ -1,5 +1,20 @@
 #pragma once
 // Changelog:
+// 3.1.0 - Set-Kommandos werden bitgenau in den Puffer gemischt statt
+//         byteweise zugewiesen: mehrere SET-Topics, die sich ein
+//         Protokollbyte teilen (Byte 4 Heatpump/WaterPump/ForceDHW,
+//         Byte 8 ForceDefrost/ForceSterilization), loeschten sich
+//         bisher gegenseitig, wenn sie im selben 500-ms-Fenster
+//         eintrafen - genau der Fall beim 5-min-Re-Assert der
+//         Node-RED-Kaskade (6 SETs pro WP gleichzeitig).
+//         Neue Maskenspalte in setCommands, Konflikt-Warnung im Log.
+//         Ausnahme Byte 7 (QuietMode/PowerfulMode ueberlappen im
+//         Protokoll selbst): Verhalten unveraendert, nur Warnung.
+//         Zusaetzlich: explizites setDataPending-Flag statt der
+//         Bytesummen-Heuristik calculate_commandset() - die konnte
+//         "leerer Puffer" nicht von "Summe auf 256 umgeschlagen"
+//         unterscheiden und verwarf still ganze Kommandotelegramme
+//         (betraf auch SetForceDefrost 0 / SetForceSterilization 0).
 // 3.0.1 - ESP32: WiFi-Modem-Sleep deaktiviert (eingehende Verbindungen),
 //         OTA-Env heishamon_esp32_ota, OTA-Weg verifiziert
 // 3.0.0 - ESP32-S3-Port: eine Codebasis fuer D1 mini (ESP8266) und das
@@ -27,4 +42,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.0.1";
+static const char* heishamon_version = "3.1.0";

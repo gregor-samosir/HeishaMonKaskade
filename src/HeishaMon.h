@@ -76,8 +76,13 @@ void write_mqtt_log(char *);
 void write_telnet_log(char *);
 void register_new_command(void);
 
-// Global command buffer
+// Global command buffer plus the bits already claimed in it (see commands.cpp)
 extern byte mainCommand[QUERYSIZE];
+extern byte usedMask[QUERYSIZE];
+
+// true once at least one real SET field sits in mainCommand. Replaces the old
+// byte-sum heuristic, which could not tell "empty buffer" from "sum wrapped to 0"
+extern bool setDataPending;
 
 // query timer, needs restart from mqtt_callback if a command was rejected
 extern Ticker Send_Pana_Mainquery_Timer;

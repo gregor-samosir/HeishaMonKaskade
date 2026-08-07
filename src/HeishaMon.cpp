@@ -41,7 +41,8 @@ char actual_data[NUMBEROFTOPICS][MAXVALUELEN];
 // log message
 char log_msg[MAXDATASIZE];
 
-bool newcommand = false;
+bool newcommand = false;    // a send is due (command or plain query)
+bool setDataPending = false; // the buffer holds at least one real SET field
 
 WebServerClass httpServer(80);
 HTTPUpdateServerClass httpUpdater;
@@ -336,19 +337,6 @@ byte calculate_checksum(byte *command)
 }
 
 /*****************************************************************************/
-/* Calculate is command set                                                  */
-/*****************************************************************************/
-byte calculate_commandset(byte *command)
-{
-  byte chk = 0;
-  for (int i = 4; i < QUERYSIZE; i++)
-  {
-    chk += command[i];
-  }
-  return chk;
-}
-
-/*****************************************************************************/
 /* Read raw from serial                                                      */
 /*****************************************************************************/
 bool readSerial()
@@ -425,7 +413,7 @@ void send_pana_command()
 {
   if (newcommand == true)
   {
-    if (calculate_commandset(mainCommand) == 0)
+    if (!setDataPending)
     {
       heatpumpSerial.write(mainQuery, QUERYSIZE);
       heatpumpSerial.write(calculate_checksum(mainQuery));
@@ -440,7 +428,10 @@ void send_pana_command()
       write_telnet_log((char *)"Send command");
       if (outputHexLog)
         write_hex_log(mainCommand, QUERYSIZE);
+      // buffer is on the wire: drop both the payload and the claimed bits
       memcpy(mainCommand, cleanCommand, QUERYSIZE);
+      memset(usedMask, 0, QUERYSIZE);
+      setDataPending = false;
     }
     newcommand = false;
     Read_Pana_Data_Timer.start();

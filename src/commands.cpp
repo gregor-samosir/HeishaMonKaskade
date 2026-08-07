@@ -25,41 +25,67 @@ struct SetCommand
   byte number;              // SETn, for logging only
   const std::string *topic; // mqtt set topic
   byte pos;                 // target position in mainCommand
+  byte mask;                // bits this field owns inside that byte (see below)
   int min;                  // allowed value range (inclusive)
   int max;
   ConvType conv;            // conversion rule
   int param;                // offset or factor for the conversion
 };
 
+/*****************************************************************************/
+/* Why the mask column exists                                                */
+/*                                                                           */
+/* Several set topics share one protocol byte, each owning a different group */
+/* of bits (0 in a group means "no change" for that field). Writing the byte */
+/* as a whole therefore silently wipes every other field in it - two set     */
+/* commands arriving inside the same 500 ms window would cancel each other.  */
+/* Applying the value through its mask keeps neighbouring fields intact:     */
+/*                                                                           */
+/*   byte 4:  Heatpump 0x03  |  WaterPump 0x30  |  ForceDHW 0xC0             */
+/*   byte 5:  HolidayMode 0x30                                               */
+/*   byte 8:  ForceDefrost 0x02  |  ForceSterilization 0x04                  */
+/*                                                                           */
+/* Exception - byte 7: QuietMode ((n+1)*8) and PowerfulMode (73..76) really  */
+/* do overlap in bit 3, PowerfulMode carries an implicit "quiet off". That   */
+/* is a protocol property, not an implementation flaw, so both keep mask     */
+/* 0xFF and behave exactly as before (last one wins). The conflict warning   */
+/* below makes it visible if it ever happens.                                */
+/*****************************************************************************/
+
 static const SetCommand setCommands[] = {
-    // Nr topic            pos  min  max  conversion    param
-    {1, &Topics::SET1, 4, 0, 1, CONV_ADD, 1},        // Heatpump off=1 on=2
-    {2, &Topics::SET2, 5, 0, 1, CONV_MUL_INC, 16},   // HolidayMode off=16 on=32
-    {3, &Topics::SET3, 7, 0, 3, CONV_MUL_INC, 8},    // QuietMode level -> (n+1)*8
-    {4, &Topics::SET4, 7, 0, 3, CONV_ADD, 73},       // PowerfulMode 0/30/60/90 min
-    {5, &Topics::SET5, 38, -5, 65, CONV_ADD, 128},   // Z1 heat: shift or direct temp
-    {6, &Topics::SET6, 39, -5, 65, CONV_ADD, 128},   // Z1 cool: shift or direct temp
-    {7, &Topics::SET7, 40, -5, 65, CONV_ADD, 128},   // Z2 heat: shift or direct temp
-    {8, &Topics::SET8, 41, -5, 65, CONV_ADD, 128},   // Z2 cool: shift or direct temp
-    {9, &Topics::SET9, 6, 0, 6, CONV_OPMODE, 0},     // OperationMode via lookup
-    {10, &Topics::SET10, 4, 0, 1, CONV_MUL_INC, 64}, // ForceDHW off=64 on=128
-    {11, &Topics::SET11, 42, 40, 75, CONV_ADD, 128}, // DHW target temp
-    {12, &Topics::SET12, 8, 0, 1, CONV_MUL, 2},      // ForceDefrost off=0 on=2
-    {13, &Topics::SET13, 8, 0, 1, CONV_MUL, 4},      // ForceSterilization off=0 on=4
-    {14, &Topics::SET14, 4, 0, 2, CONV_MUL_INC, 16}, // WaterPump off/on/airpurge
-    {15, &Topics::SET15, 45, 65, 254, CONV_ADD, 1},  // PumpSpeedMax
-    {16, &Topics::SET16, 84, 1, 15, CONV_ADD, 128},  // HeatDelta
-    {17, &Topics::SET17, 94, 1, 15, CONV_ADD, 128},  // CoolDelta
-    {18, &Topics::SET18, 99, -15, 15, CONV_ADD, 128},// DHWHeatDelta
-    {19, &Topics::SET19, 98, 5, 240, CONV_ADD, 1},   // DHWHeatupTime minutes
-    {20, &Topics::SET20, 85, -20, 35, CONV_ADD, 128},// HeaterOnOutdoorTemp
-    {21, &Topics::SET21, 83, 5, 35, CONV_ADD, 128},  // HeatingOffOutdoorTemp
-    {22, &Topics::SET22, 72, 0, 254, CONV_ADD, 1},   // SGReadyCapacity1Heat
-    {23, &Topics::SET23, 71, 0, 254, CONV_ADD, 1},   // SGReadyCapacity1DHW
-    {24, &Topics::SET24, 74, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2Heat
-    {25, &Topics::SET25, 73, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2DHW
-    {26, &Topics::SET26, 97, 0, 254, CONV_ADD, 1},   // DHWRoomMaxTime (steps of 30 min)
+    // Nr topic            pos  mask  min  max  conversion    param
+    {1, &Topics::SET1, 4, 0x03, 0, 1, CONV_ADD, 1},        // Heatpump off=1 on=2
+    {2, &Topics::SET2, 5, 0x30, 0, 1, CONV_MUL_INC, 16},   // HolidayMode off=16 on=32
+    {3, &Topics::SET3, 7, 0xFF, 0, 3, CONV_MUL_INC, 8},    // QuietMode level -> (n+1)*8
+    {4, &Topics::SET4, 7, 0xFF, 0, 3, CONV_ADD, 73},       // PowerfulMode 0/30/60/90 min
+    {5, &Topics::SET5, 38, 0xFF, -5, 65, CONV_ADD, 128},   // Z1 heat: shift or direct temp
+    {6, &Topics::SET6, 39, 0xFF, -5, 65, CONV_ADD, 128},   // Z1 cool: shift or direct temp
+    {7, &Topics::SET7, 40, 0xFF, -5, 65, CONV_ADD, 128},   // Z2 heat: shift or direct temp
+    {8, &Topics::SET8, 41, 0xFF, -5, 65, CONV_ADD, 128},   // Z2 cool: shift or direct temp
+    {9, &Topics::SET9, 6, 0xFF, 0, 6, CONV_OPMODE, 0},     // OperationMode via lookup
+    {10, &Topics::SET10, 4, 0xC0, 0, 1, CONV_MUL_INC, 64}, // ForceDHW off=64 on=128
+    {11, &Topics::SET11, 42, 0xFF, 40, 75, CONV_ADD, 128}, // DHW target temp
+    {12, &Topics::SET12, 8, 0x02, 0, 1, CONV_MUL, 2},      // ForceDefrost off=0 on=2
+    {13, &Topics::SET13, 8, 0x04, 0, 1, CONV_MUL, 4},      // ForceSterilization off=0 on=4
+    {14, &Topics::SET14, 4, 0x30, 0, 2, CONV_MUL_INC, 16}, // WaterPump off/on/airpurge
+    {15, &Topics::SET15, 45, 0xFF, 65, 254, CONV_ADD, 1},  // PumpSpeedMax
+    {16, &Topics::SET16, 84, 0xFF, 1, 15, CONV_ADD, 128},  // HeatDelta
+    {17, &Topics::SET17, 94, 0xFF, 1, 15, CONV_ADD, 128},  // CoolDelta
+    {18, &Topics::SET18, 99, 0xFF, -15, 15, CONV_ADD, 128},// DHWHeatDelta
+    {19, &Topics::SET19, 98, 0xFF, 5, 240, CONV_ADD, 1},   // DHWHeatupTime minutes
+    {20, &Topics::SET20, 85, 0xFF, -20, 35, CONV_ADD, 128},// HeaterOnOutdoorTemp
+    {21, &Topics::SET21, 83, 0xFF, 5, 35, CONV_ADD, 128},  // HeatingOffOutdoorTemp
+    {22, &Topics::SET22, 72, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity1Heat
+    {23, &Topics::SET23, 71, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity1DHW
+    {24, &Topics::SET24, 74, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2Heat
+    {25, &Topics::SET25, 73, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2DHW
+    {26, &Topics::SET26, 97, 0xFF, 0, 254, CONV_ADD, 1},   // DHWRoomMaxTime (steps of 30 min)
 };
+
+// bits already claimed in the pending command, one entry per protocol byte.
+// Only used to detect two fields fighting over the same bits - cleared
+// together with mainCommand after each send (see send_pana_command).
+byte usedMask[QUERYSIZE];
 
 /*****************************************************************************/
 /* Build the heatpump command from an mqtt set message                       */
@@ -120,7 +146,25 @@ bool build_heatpump_command(char *topic, char *msg)
       break;
     }
 
-    mainCommand[cmd.pos] = set_byte;
+    // conflict diagnosis: two fields claiming the same bits before the buffer
+    // was sent. Must never happen silently again - log it, then continue with
+    // the previous behaviour (last value wins).
+    if (usedMask[cmd.pos] & cmd.mask)
+    {
+      (void)sprintf(log_msg, "Warning: Field conflict in byte %d (%s) - last value wins", cmd.pos, topic_name);
+      write_mqtt_log(log_msg);
+    }
+    usedMask[cmd.pos] |= cmd.mask;
+
+    // insert the field bit-exact: other fields sharing this byte survive.
+    // Clearing the mask first is what makes a repeated set overwrite its own
+    // previous value instead of OR-ing on top of it.
+    mainCommand[cmd.pos] = (mainCommand[cmd.pos] & ~cmd.mask) | (set_byte & cmd.mask);
+
+    // explicit flag instead of deriving "buffer is filled" from a byte sum:
+    // a checksum of 0 is a valid command (e.g. ForceDefrost off) and wraps
+    // at 256, which used to drop whole command telegrams silently
+    setDataPending = true;
 
     (void)sprintf(log_msg, "<SUB> SET%d %s: %ld", cmd.number, topic_name, msg_long);
     write_mqtt_log(log_msg);
