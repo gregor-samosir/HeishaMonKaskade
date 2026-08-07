@@ -82,6 +82,27 @@ kommandiert (hier Modus 0/AUS: Heatpump 0, WaterPump 0). Dann aendert sich am
 Sollzustand nichts, und ein Fehlschlag korrigiert sich spaetestens mit dem
 5-min-Re-Assert von selbst.
 
+## Fallstrick beim Deuten eines Mitschnitts
+
+Der Node-RED-Verteiler sendet **idempotent**: nur Kanaele, deren Wert sich
+geaendert hat (`lastSent`-Filter in `syncOutputs`). Ein Telegramm mit nur
+einem gesetzten Feld ist also normal und kein Fehler. Beim Wechsel von Modus 0
+auf Modus 3 (Kuehlen) aendern sich zum Beispiel nur `heatpump` und
+`pumpspeed` - `uwpmode`, `opmode` und `cooltarget` bleiben gleich und gehen
+gar nicht erst raus.
+
+Alle Kanaele auf einmal kommen erst beim zyklischen Re-Assert (alle 5 min,
+dort wird `lastSent` geleert). Nur dort ist im Mitschnitt zu sehen, dass
+Heatpump und WaterPump gemeinsam in Byte 4 stehen. `produktiv_mitschnitt.py`
+hoert deshalb per Vorgabe 360 s mit statt beim ersten Kommando abzubrechen.
+
+Beleg aus dem Normalbetrieb (2026-08-08, WP1 im Kuehlbetrieb, Re-Assert):
+
+```text
+F1 6C 01 10 12 ...   Heatpump an | WaterPump auto | OperationMode 19
+                     Z1 Heat 20 C | Z1 Cool 20 C | PumpSpeed 150
+```
+
 ## Fallstrick beim Hexlog-Parsen
 
 Der Hexlog gibt nicht nur das gesendete Kommando aus, sondern auch die

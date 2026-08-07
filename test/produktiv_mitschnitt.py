@@ -2,15 +2,19 @@
 """Passiver Mitschnitt am laufenden HeishaMon - sendet selbst NICHTS.
 
 Schaltet nur den Hexlog ein (bewusst kein 'L', damit die MQTT-Logs
-weiterlaufen), hoert mit, bis der Node-RED-Verteiler das naechste Kommando
-schickt, und schaltet den Hexlog danach wieder aus.
+weiterlaufen), hoert eine Weile mit und zerlegt jedes gesendete
+Kommandotelegramm in seine Felder. Danach Hexlog wieder aus.
 
-Erwartungswert Byte 4, solange die zwei 5-s-delay-Nodes im Logik-Flow noch
-drin sind: WaterPump und Heatpump kommen in ZWEI getrennten Telegrammen,
-also 0x10 und dann 0x01/0x02. Ohne die Delays muessten beide Felder in einem
-Telegramm stehen (0x11 bzw. 0x12).
+WICHTIG zur Deutung: Der Node-RED-Verteiler arbeitet idempotent - er sendet
+nur Kanaele, deren Wert sich GEAENDERT hat (lastSent-Filter in syncOutputs).
+Ein Telegramm mit nur einem gesetzten Feld ist deshalb voellig normal und
+kein Hinweis auf ein Problem. Alle Kanaele auf einmal kommen erst beim
+zyklischen Re-Assert (Standard: alle 5 Minuten, dort wird lastSent geleert).
+Deshalb laeuft dieses Werkzeug per Vorgabe lange genug, um einen Re-Assert
+mitzunehmen, und bricht nicht beim ersten Kommando ab.
 
-  ./produktiv_mitschnitt.py --esp 192.168.2.120 --warten 330
+  ./produktiv_mitschnitt.py --esp 192.168.2.120
+  ./produktiv_mitschnitt.py --esp 192.168.2.193 --warten 400
 """
 import argparse
 import sys
@@ -20,15 +24,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from heisha_probe import (drain, parse_all_command_telegrams,  # noqa: E402
                           telnet_connect, zeige_byte4)
 
+# Byte-Position -> (Bezeichnung, Maske, Umrechnung Rohbyte -> Klartext)
+FELDER = [
+    (4,  "Heatpump",   0x03, lambda v: {0: "-", 1: "aus", 2: "an"}.get(v, f"?{v}")),
+    (4,  "WaterPump",  0x30, lambda v: {0: "-", 1: "auto", 2: "an", 3: "Luft"}.get(v >> 4, f"?{v}")),
+    (4,  "ForceDHW",   0xC0, lambda v: {0: "-", 1: "aus", 2: "an"}.get(v >> 6, f"?{v}")),
+    (5,  "HolidayMode", 0x30, lambda v: {0: "-", 1: "aus", 2: "an"}.get(v >> 4, f"?{v}")),
+    (6,  "OperationMode", 0xFF, lambda v: "-" if v == 0 else f"roh {v}"),
+    (7,  "Quiet/Powerful", 0xFF, lambda v: "-" if v == 0 else f"roh {v}"),
+    (38, "Z1 Heat",    0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (39, "Z1 Cool",    0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (42, "DHW Temp",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (45, "PumpSpeed",  0xFF, lambda v: "-" if v == 0 else f"{v - 1}"),
+]
+
+
+def felder_von(tel):
+    """Liefert die im Telegramm gesetzten Felder als Liste (Name, Klartext)."""
+    gesetzt = []
+    for pos, name, maske, fmt in FELDER:
+        roh = int(tel[pos], 16) & maske
+        if roh:
+            gesetzt.append((name, fmt(roh)))
+    return gesetzt
+
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--esp", default="192.168.2.120", help="IP des Produktivgeraets")
-    ap.add_argument("--warten", type=int, default=330,
-                    help="max. Wartezeit in s (Re-Assert laeuft im 5-min-Takt)")
-    ap.add_argument("--nachlauf", type=int, default=8,
-                    help="nach dem ersten Kommando noch so lange mithoeren, "
-                         "um ein zweites Telegramm aus dem 5-s-Delay zu fangen")
+    ap.add_argument("--esp", default="192.168.2.120", help="IP des Geraets")
+    ap.add_argument("--warten", type=int, default=360,
+                    help="Mithoerdauer in s (Vorgabe 360 = laenger als der "
+                         "5-min-Re-Assert-Takt)")
+    ap.add_argument("--stop-beim-ersten", action="store_true",
+                    help="schon nach dem ersten Kommando aufhoeren (schnell, "
+                         "sieht aber den Re-Assert meist nicht)")
     args = ap.parse_args()
 
     captured = []
@@ -40,11 +69,10 @@ def main():
         sock.sendall(b"H")
         drain(sock, 1.5, captured)
 
-        print(f"== Warte auf den naechsten Verteiler-Befehl (max. {args.warten} s) ==")
-        gefunden = drain(sock, args.warten, captured, stop_marker="Send command")
-        if gefunden:
-            print(f"== Kommando gesehen, hoere noch {args.nachlauf} s nach ==")
-            drain(sock, args.nachlauf, captured)
+        marker = "Send command" if args.stop_beim_ersten else None
+        print(f"== Hoere {args.warten} s mit"
+              f"{' (Abbruch beim ersten Kommando)' if marker else ''} ==")
+        drain(sock, args.warten, captured, stop_marker=marker)
 
         print("== Hexlog AUS ==")
         sock.sendall(b"H")
@@ -54,40 +82,56 @@ def main():
     telegramme = parse_all_command_telegrams(text)
     if not telegramme:
         print(f"\nIn {args.warten} s kam kein Kommando - nur Abfragen. "
-              "Der Verteiler hatte nichts zu senden.")
+              "Der Verteiler hatte nichts zu senden (alle Kanaele unveraendert).")
         return 2
 
-    print("\n" + "=" * 68)
+    print("\n" + "=" * 70)
     print(f"{len(telegramme)} Kommandotelegramm(e) mitgeschnitten")
-    print("=" * 68)
+    print("=" * 70)
     for i, tel in enumerate(telegramme, 1):
         b4 = int(tel[4], 16)
-        print(f"\n--- Telegramm {i} ---")
-        print(f"Anfang  : {' '.join(tel[:8])} ...  ({len(tel)} Bytes)")
-        print(f"Byte  4 : {zeige_byte4(b4)}")
-        print(f"Byte  6 : 0x{int(tel[6], 16):02X}   OperationMode")
-        print(f"Byte 38 : 0x{int(tel[38], 16):02X}   Z1 Heat  = {int(tel[38], 16) - 128} C"
-              if int(tel[38], 16) else "Byte 38 : 0x00   Z1 Heat  nicht gesetzt")
-        print(f"Byte 39 : 0x{int(tel[39], 16):02X}   Z1 Cool  = {int(tel[39], 16) - 128} C"
-              if int(tel[39], 16) else "Byte 39 : 0x00   Z1 Cool  nicht gesetzt")
-        print(f"Byte 45 : 0x{int(tel[45], 16):02X}   PumpSpeed = {int(tel[45], 16) - 1}"
-              if int(tel[45], 16) else "Byte 45 : 0x00   PumpSpeed nicht gesetzt")
+        gesetzt = felder_von(tel)
+        print(f"\n--- Telegramm {i} ---  {' '.join(tel[:6])} ...")
+        print(f"Byte 4: {zeige_byte4(b4)}")
+        if gesetzt:
+            print("Gesetzte Felder:")
+            for name, wert in gesetzt:
+                print(f"    {name:<16} {wert}")
+        else:
+            print("    (keine Felder gesetzt - unerwartet)")
 
-    vereint = [t for t in telegramme
-               if (int(t[4], 16) & 0x03) and (int(t[4], 16) & 0x30)]
-    print("\n" + "-" * 68)
-    if vereint:
-        print("Heatpump und WaterPump stehen in EINEM Telegramm - der Merge "
-              "wirkt und die 5-s-Delays im Flow werden nicht mehr gebraucht.")
+    # Auswertung: wie viele der drei Felder von Byte 4 sind belegt?
+    def felder_in_byte4(roh):
+        return sum(1 for maske in (0x03, 0x30, 0xC0) if roh & maske)
+
+    mehrfach_byte4 = [t for t in telegramme if felder_in_byte4(int(t[4], 16)) >= 2]
+    voll = [t for t in telegramme if len(felder_von(t)) >= 4]
+
+    print("\n" + "-" * 70)
+    if mehrfach_byte4:
+        print("MERGE BELEGT: mindestens ein Telegramm traegt zwei Felder in "
+              "Byte 4 gleichzeitig.")
+        print("Mit 3.0.1 waere hier eines der beiden stillschweigend "
+              "verschwunden.")
+    elif voll:
+        print("Ein Telegramm mit vier oder mehr Feldern gesehen (vermutlich "
+              "der Re-Assert),")
+        print("aber Byte 4 trug nie zwei Felder gleichzeitig - dann standen "
+              "Heatpump und")
+        print("WaterPump in diesem Zyklus eben nicht beide zur Aenderung an.")
     else:
-        print("Heatpump und WaterPump kamen getrennt. Das ist erwartet, solange "
-              "die 5-s-delay-Nodes im Logik-Flow aktiv sind.")
+        print("Nur Telegramme mit wenigen Feldern - normal, der Verteiler "
+              "sendet idempotent")
+        print("(nur geaenderte Kanaele). Fuer den Merge-Nachweis den "
+              "Re-Assert abwarten:")
+        print("laenger mithoeren (--warten 400) oder einen Moduswechsel "
+              "ausloesen.")
     if "Field conflict" in text:
         print("\nACHTUNG - Konflikt-Warnung im Log:")
         for line in text.splitlines():
             if "Field conflict" in line:
                 print("  " + line.strip())
-    print("-" * 68)
+    print("-" * 70)
     return 0
 
 
