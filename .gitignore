@@ -12,3 +12,5 @@ include
 firmware.map
 extensions.json
 platformio_user_env.ini
+__pycache__
+*.pyc
