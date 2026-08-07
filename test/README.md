@@ -1,0 +1,98 @@
+# Diagnose- und Nachweiswerkzeuge
+
+Entstanden bei der Fehlersuche zum Bitmasken-Merge (Version 3.1.0, 2026-08-07).
+Alle Werkzeuge laufen mit der Python-Standardbibliothek, es muss nichts
+installiert werden.
+
+## Der Fehler, um den es geht
+
+Mehrere SET-Topics teilen sich ein Protokollbyte in verschiedenen Bitgruppen.
+Bis 3.0.1 wurde das Byte als Ganzes zugewiesen, wodurch die fremden Felder auf
+0 = "keine Aenderung" fielen. Trafen zwei SETs im selben 500-ms-Sammelfenster
+ein, loeschte das zweite das erste still aus:
+
+| Byte | Felder | Masken |
+| --- | --- | --- |
+| 4 | Heatpump, WaterPump, ForceDHW | 0x03, 0x30, 0xC0 |
+| 5 | HolidayMode | 0x30 |
+| 8 | ForceDefrost, ForceSterilization | 0x02, 0x04 |
+
+Byte 7 (QuietMode/PowerfulMode) ueberlappt im Protokoll selbst und bleibt
+bewusst unveraendert - dort warnt die Firmware nur.
+
+## Werkzeuge
+
+| Datei | Zweck | Braucht Hardware |
+| --- | --- | --- |
+| `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
+| `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
+| `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
+| `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
+| `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
+| `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
+
+## Pruefstand aufsetzen
+
+Ein beliebiges ESP8266-Board, **ohne Waermepumpe**. Der Nachweis braucht keine
+Gegenstelle: Der Hexlog gibt das Telegramm aus, bevor es auf die Leitung geht.
+
+```bash
+pio run -e d1_mini_test -t upload      # eigenes MQTT-Prefix, s. platformio.ini
+```
+
+Das eigene Prefix ist Pflicht - ohne Stufen-Build-Flags greift der Fallback
+`panasonic_heat_pump` aus `Topics.cpp`, und der Pruefling saesse auf dem LWT-
+und state-Pfad der produktiven WP1. Falls das Board noch keinen MQTT-Server
+kennt, laesst er sich ohne Neuflashen setzen:
+
+```bash
+curl -u admin:heisha "http://<ip>/settings?mqtt_server=192.168.2.147"
+```
+
+## Ausfuehren
+
+```bash
+c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
+
+./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
+./verteiler_test.py  --esp 192.168.2.197
+./produktiv_mitschnitt.py --esp 192.168.2.120     # nur mithoeren
+```
+
+Die beiden sendenden Tests weigern sich, gegen ein Prefix ohne `test` im Namen
+zu laufen.
+
+## Belegtes Ergebnis (2026-08-07, ESP8266-Pruefstand)
+
+```text
+3.0.1   F1 6C 01 10 10 ...   Heatpump-Bits = 0, verloren
+3.1.0   F1 6C 01 10 12 ...   Heatpump = 2, WaterPump = 1
+```
+
+Bemerkenswert: 3.0.1 quittiert das verschluckte Kommando im Log noch mit
+`<SUB> SET1 Heatpump: 1` - deshalb fiel der Fehler jahrelang nicht auf.
+
+Der Abnahmetest zeigt alle sechs Verteiler-Kanaele (Byte 4, 6, 38, 39, 45) in
+einem einzigen 110-Byte-Telegramm.
+
+Am selben Tag am Produktivgeraet WP1 (192.168.2.120) bestaetigt: `Byte 4 = 0x11`,
+Heatpump und WaterPump gemeinsam. Vorgehen fuer so einen Nachweis an einer
+laufenden Anlage: genau die Werte senden, die der Verteiler ohnehin gerade
+kommandiert (hier Modus 0/AUS: Heatpump 0, WaterPump 0). Dann aendert sich am
+Sollzustand nichts, und ein Fehlschlag korrigiert sich spaetestens mit dem
+5-min-Re-Assert von selbst.
+
+## Fallstrick beim Hexlog-Parsen
+
+Der Hexlog gibt nicht nur das gesendete Kommando aus, sondern auch die
+**empfangenen** 203 Bytes der Waermepumpe (`HeishaMon.cpp`, `readSerial`). Ein
+naiver Parser klebt beide zu 313 Bytes zusammen. `heisha_probe.py` schneidet
+deshalb ab dem `F1`-Header hart nach 110 Bytes ab. Auf dem Pruefstand ohne WP
+faellt das nicht auf, am Produktivgeraet sofort.
+
+## Verhaeltnis zu `pio test`
+
+Das sind eigenstaendige Diagnosewerkzeuge, keine Unity-Testsuites - `pio test`
+nutzt sie nicht. Echte Unit-Tests fuer Encoder, Decoder und Merge (Schritt 5
+des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp` ist die Vorlage
+dafuer.
