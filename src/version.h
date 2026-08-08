@@ -1,5 +1,15 @@
 #pragma once
 // Changelog:
+// 3.1.1 - Web-Tabelle wird in TCP-grossen Bloecken statt zeilenweise
+//         gesendet. Ein sendContent() pro Zeile kostete auf dem ESP32
+//         je einen Netzwerk-Roundtrip (~20 ms), 99 Zeilen also ~1,9 s
+//         sichtbares "... Loading ...". Der ESP8266-Core buendelt
+//         Schreibvorgaenge selbst und zeigte den Effekt nie. Jetzt
+//         werden die Zeilen in einem 1400-Byte-Puffer gesammelt
+//         (knapp unter der TCP-MSS) - aus 99 Sendevorgaengen werden
+//         etwa sechs. Reine Anzeige-Optimierung, der Waermepumpen-
+//         Pfad ist nicht betroffen (nachgemessen: HTTP-Auslieferung
+//         stoerte den 6-s-Abfragetakt auch vorher nicht).
 // 3.1.0 - Set-Kommandos werden bitgenau in den Puffer gemischt statt
 //         byteweise zugewiesen: mehrere SET-Topics, die sich ein
 //         Protokollbyte teilen (Byte 4 Heatpump/WaterPump/ForceDHW,
@@ -42,4 +52,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.1.0";
+static const char* heishamon_version = "3.1.1";

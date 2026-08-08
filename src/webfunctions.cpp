@@ -230,11 +230,28 @@ void handleRoot(WebServerClass *httpServer)
   httpServer->client().stop();
 }
 
+/*****************************************************************************/
+/* Table rows, collected into TCP-sized blocks                               */
+/*                                                                           */
+/* One sendContent() per row used to cost about one network round trip on    */
+/* the ESP32 (~20 ms each): its core pushes every write out as its own       */
+/* packet and waits for the ack, so 99 rows added up to ~1.9 s of "Loading". */
+/* The ESP8266 core coalesces writes and never showed the effect. Filling a  */
+/* buffer close to the TCP segment size first turns those 99 sends into      */
+/* about six on both platforms.                                              */
+/*                                                                           */
+/* sendbuf is static on purpose: 1400 bytes would be a large share of the    */
+/* ESP8266 stack, and this handler is only ever entered from loop().         */
+/*****************************************************************************/
+#define TABLE_SENDBUF 1400 // just below the usual TCP MSS of 1460
+
 void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUELEN])
 {
-  // rows are streamed from a fixed buffer instead of concatenating one big
+  // rows are built in a fixed buffer instead of concatenating one big
   // String (heap fragmentation on every 30s browser refresh)
   char rowbuf[256];
+  static char sendbuf[TABLE_SENDBUF];
+  size_t used = 0;
 
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -254,9 +271,33 @@ void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUEL
     }
     if (strcmp(actual_data[top_num], "unused") != 0)
     {
-      (void)snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", top_num, topicNames[top_num], actual_data[top_num], topicdesc);
-      httpServer->sendContent(rowbuf);
+      int written = snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", top_num, topicNames[top_num], actual_data[top_num], topicdesc);
+      if (written < 0)
+      {
+        continue; // formatting failed, skip this row
+      }
+      // snprintf returns what it WOULD have written: clamp to what fits
+      size_t rowlen = ((size_t)written >= sizeof(rowbuf)) ? sizeof(rowbuf) - 1 : (size_t)written;
+
+      // flush before the row would overflow the block (+1 for the terminator)
+      if (used + rowlen + 1 > sizeof(sendbuf))
+      {
+        sendbuf[used] = '\0';
+        httpServer->sendContent(sendbuf);
+        used = 0;
+      }
+      // a single row can never exceed the block, but stay defensive
+      if (rowlen + 1 <= sizeof(sendbuf))
+      {
+        memcpy(sendbuf + used, rowbuf, rowlen);
+        used += rowlen;
+      }
     }
+  }
+  if (used > 0) // send whatever is left over
+  {
+    sendbuf[used] = '\0';
+    httpServer->sendContent(sendbuf);
   }
   httpServer->sendContent("");
   httpServer->client().stop();
