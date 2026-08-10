@@ -139,3 +139,44 @@ Bereichspruefung greift ebenfalls - ein Wert unter der Grenze wird abgelehnt:
 ```text
 Error: Value 10 out of range [15..35] for topic Z1HeatCurveOutsideHighTemp
 ```
+
+## Grenzwerte der Waermepumpe (kurven_grenzen.py)
+
+Die in Umlauf befindlichen Wertebereiche der Kurvenparameter stimmen fuer
+diese Geraete nicht durchgaengig. `kurven_grenzen.py` prueft je Parameter die
+beiden Raender des in `commands.cpp` hinterlegten Bereichs: setzen, warten,
+ueber das state-Topic zurueckvergleichen, am Ende Ausgangswerte wiederherstellen.
+
+Nur laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt.
+
+```bash
+./kurven_grenzen.py --esp 192.168.2.120 --prefix panasonic_heat_pump
+```
+
+Messung 2026-08-10 an WP1:
+
+| Parameter | min | max | Ergebnis |
+| --- | --- | --- | --- |
+| Z1HeatCurveTargetHighTemp | 20 | 55 | beide uebernommen |
+| Z1HeatCurveTargetLowTemp | 20 | 55 | beide uebernommen |
+| Z1HeatCurveOutsideLowTemp | -15 | 15 | beide uebernommen |
+| Z1HeatCurveOutsideHighTemp | 15 | 35 | **haengt auf 15** - 20/25/30/35 werden alle ignoriert |
+| Z1CoolCurveTargetHighTemp | 5 | 20 | beide uebernommen |
+| Z1CoolCurveTargetLowTemp | 5 | 20 | beide uebernommen |
+| Z1CoolCurveOutsideLowTemp | 20 | 30 | beide uebernommen |
+| Z1CoolCurveOutsideHighTemp | 20 | 30 | beide uebernommen (>30 klemmt auf 30) |
+
+Offen: Ob 15 bei `Z1HeatCurveOutsideHighTemp` eine Obergrenze ist oder das Byte
+gar nicht schreibbar, laesst sich nur mit einem Wert unter 15 klaeren - den
+lehnt die eigene Bereichspruefung ab. Dafuer waere kurzzeitig eine Firmware
+mit geweitetem Bereich noetig.
+
+## Fallstrick: MQTT-Client-ID bei schnellen Reconnects
+
+Ein zweiter MQTT-Client mit derselben Client-ID trennt laut Spezifikation den
+ersten. Wer je Nachricht neu verbindet und dabei immer dieselbe ID nutzt,
+verliert bei schnell aufeinanderfolgenden Reconnects Nachrichten - am
+2026-08-10 blieb so ein Kurvenwert auf dem Testwert 55 stehen, obwohl das
+Ruecksetz-Kommando abgesetzt wurde. Konsequenz fuer diese Werkzeuge: EINE
+Verbindung fuer alle Publishes eines Vorgangs, Client-ID mit Prozess-ID, und
+eine Wiederherstellung wird nachgeprueft statt nur abgesetzt.
