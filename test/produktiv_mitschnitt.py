@@ -36,6 +36,15 @@ FELDER = [
     (39, "Z1 Cool",    0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
     (42, "DHW Temp",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
     (45, "PumpSpeed",  0xFF, lambda v: "-" if v == 0 else f"{v - 1}"),
+    # Heiz-/Kuehlkurve Zone 1 (SET27-SET34, seit 3.2.0)
+    (75, "HeatCurve TgtHigh",  0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (76, "HeatCurve TgtLow",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (77, "HeatCurve OutLow",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (78, "HeatCurve OutHigh",  0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (86, "CoolCurve TgtHigh",  0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (87, "CoolCurve TgtLow",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (88, "CoolCurve OutLow",   0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
+    (89, "CoolCurve OutHigh",  0xFF, lambda v: "-" if v == 0 else f"{v - 128} C"),
 ]
 
 
