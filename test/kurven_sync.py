@@ -50,8 +50,11 @@ MAPPING = [
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_atLo", "Z1CoolCurveOutsideLowTemp",
      "Z1_Cool_Curve_Outside_Low_Temp", 20, 30),
+    # Obergrenze 30: die WP klemmt alles darueber still auf 30 (an beiden
+    # Geraeten gemessen). Ein hoeherer Konfigurationswert wird hier deshalb
+    # als "AUSSERHALB" gemeldet statt wirkungslos gesendet zu werden.
     ("KK_Kühlkurve", "KK_HK_atHi", "Z1CoolCurveOutsideHighTemp",
-     "Z1_Cool_Curve_Outside_High_Temp", 30, 40),
+     "Z1_Cool_Curve_Outside_High_Temp", 20, 30),
 ]
 
 

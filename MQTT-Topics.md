@@ -160,7 +160,7 @@ SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperatu
 SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the lower outside temperature | 5 - 20
 SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the upper outside temperature | 5 - 20
 SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
-SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 30 - 40
+SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 20 - 30
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 
@@ -196,3 +196,11 @@ These commands exist so the heatpump can keep running on its own curve if the
 external cascade control is unavailable - the values are kept in sync from
 there, and the operator only has to switch the terminal from direct mode to
 curve mode.
+
+**The heatpump caps `Z1CoolCurveOutsideHighTemp` at 30 &deg;C.** Measured on
+two units: 31, 32, 35 and 40 all read back as 30, without any error from the
+heatpump. The range here is therefore 20-30 rather than the 30-40 some sources
+list - a higher value would be forwarded and then quietly dropped. Other curve
+parameters may well have similar undocumented caps that only show up when a
+value is pushed to its limit; after changing a curve, read the state topics
+back and compare.

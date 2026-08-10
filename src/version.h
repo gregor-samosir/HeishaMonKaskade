@@ -1,5 +1,15 @@
 #pragma once
 // Changelog:
+// 3.2.1 - Wertebereich von SET34 (Z1CoolCurveOutsideHighTemp) von 30-40
+//         auf 20-30 korrigiert. Die Waermepumpe klemmt jeden Wert
+//         darueber still auf 30 - an beiden Geraeten gemessen, 31/32/35
+//         und 40 kamen alle als 30 zurueck, ohne Fehlermeldung der WP.
+//         Vorher haette die Firmware solche Werte anstandslos
+//         weitergereicht und sie waeren lautlos verschwunden.
+//         Geprueft und ausgeschlossen: der Decoder klemmt nichts, alle
+//         Kurven-Topics nutzen getIntMinus128 (reine Subtraktion), im
+//         gesamten decode.cpp gibt es keine Begrenzung. Der Wert 30
+//         steht also wirklich so in der Waermepumpe.
 // 3.2.0 - Acht neue Set-Kommandos fuer die Zone-1-Heiz- und -Kuehlkurve
 //         (SET27-SET34, Byte 75-78 und 86-89). Zweck: Notbetrieb bei
 //         Ausfall der Node-RED-Kaskadensteuerung. Die Kurvenwerte
@@ -65,4 +75,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.2.0";
+static const char* heishamon_version = "3.2.1";

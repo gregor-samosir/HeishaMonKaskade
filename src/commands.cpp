@@ -92,7 +92,11 @@ static const SetCommand setCommands[] = {
     {31, &Topics::SET31, 86, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetHighTemp
     {32, &Topics::SET32, 87, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetLowTemp
     {33, &Topics::SET33, 88, 0xFF, 20, 30, CONV_ADD, 128},  // Z1CoolCurveOutsideLowTemp
-    {34, &Topics::SET34, 89, 0xFF, 30, 40, CONV_ADD, 128},  // Z1CoolCurveOutsideHighTemp
+    // upper bound is 30, not 40: the heatpump silently clamps anything above
+    // (measured on both units - 31, 32, 35 and 40 all came back as 30).
+    // Without this the firmware would happily forward a value that never
+    // arrives, which is exactly the kind of silent loss we removed elsewhere.
+    {34, &Topics::SET34, 89, 0xFF, 20, 30, CONV_ADD, 128},  // Z1CoolCurveOutsideHighTemp
 };
 
 // bits already claimed in the pending command, one entry per protocol byte.
