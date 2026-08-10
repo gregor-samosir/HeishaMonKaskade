@@ -1,5 +1,18 @@
 #pragma once
 // Changelog:
+// 3.2.0 - Acht neue Set-Kommandos fuer die Zone-1-Heiz- und -Kuehlkurve
+//         (SET27-SET34, Byte 75-78 und 86-89). Zweck: Notbetrieb bei
+//         Ausfall der Node-RED-Kaskadensteuerung. Die Kurvenwerte
+//         werden dort gepflegt und bei jeder Anpassung in die WPs
+//         geschrieben; faellt die Steuerung aus, wird am Bedienterminal
+//         von Direkt- auf Kurvenbetrieb umgeschaltet und die Anlage
+//         laeuft mit denselben Werten weiter.
+//         Alle acht Bytes waren frei - keine Feldkonflikte.
+//         MQTT-Topics.md nachgezogen: enthielt nur SET1-SET19, dazu
+//         veraltete Topic-Namen (SetHeatpump statt set/Heatpump) und
+//         vertauschte Beschreibungen bei TOP31/TOP32 und TOP74/TOP75
+//         (Outside_High ist die HOEHERE Aussentemperatur, an der Anlage
+//         geprueft). Jetzt vollstaendig inkl. Byte-Spalte.
 // 3.1.1 - Web-Tabelle wird in TCP-grossen Bloecken statt zeilenweise
 //         gesendet. Ein sendContent() pro Zeile kostete auf dem ESP32
 //         je einen Netzwerk-Roundtrip (~20 ms), 99 Zeilen also ~1,9 s
@@ -52,4 +65,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.1.1";
+static const char* heishamon_version = "3.2.0";

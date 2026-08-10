@@ -117,3 +117,24 @@ Das sind eigenstaendige Diagnosewerkzeuge, keine Unity-Testsuites - `pio test`
 nutzt sie nicht. Echte Unit-Tests fuer Encoder, Decoder und Merge (Schritt 5
 des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp` ist die Vorlage
 dafuer.
+
+## Kurven-Set-Kommandos (SET27-SET34)
+
+`kurven_test.py` weist die acht Kurvenbefehle am laufenden Geraet nach, ohne
+etwas zu verstellen: Es liest die aktuellen Kurvenwerte aus den state-Topics
+und schreibt genau diese zurueck. Geprueft wird, ob alle acht korrekt codiert
+(Wert+128) im Telegramm landen - und ob sie gemeinsam in einem Telegramm
+ankommen.
+
+```bash
+./kurven_test.py --esp 192.168.2.120 --prefix panasonic_heat_pump
+./kurven_test.py --esp 192.168.2.193 --prefix panasonic_heat_pump2
+```
+
+Belegt am 2026-08-10 auf beiden Stufen: acht Werte, ein Telegramm, Bytes
+75-78 und 86-89 korrekt, danach alle state-Werte unveraendert. Die
+Bereichspruefung greift ebenfalls - ein Wert unter der Grenze wird abgelehnt:
+
+```text
+Error: Value 10 out of range [15..35] for topic Z1HeatCurveOutsideHighTemp
+```

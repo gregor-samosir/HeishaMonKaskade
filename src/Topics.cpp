@@ -41,6 +41,17 @@ const std::string Topics::SET23 = setTopicPrefix + s + "SGReadyCapacity1DHW";
 const std::string Topics::SET24 = setTopicPrefix + s + "SGReadyCapacity2Heat";
 const std::string Topics::SET25 = setTopicPrefix + s + "SGReadyCapacity2DHW";
 const std::string Topics::SET26 = setTopicPrefix + s + "DHWRoomMaxTime";
+// Heizkurve Zone 1 (Byte 75-78). Namen folgen den zugehoerigen state-Topics
+// TOP29/TOP30/TOP32/TOP31 - dort werden die gesetzten Werte zurueckgelesen.
+const std::string Topics::SET27 = setTopicPrefix + s + "Z1HeatCurveTargetHighTemp";
+const std::string Topics::SET28 = setTopicPrefix + s + "Z1HeatCurveTargetLowTemp";
+const std::string Topics::SET29 = setTopicPrefix + s + "Z1HeatCurveOutsideLowTemp";
+const std::string Topics::SET30 = setTopicPrefix + s + "Z1HeatCurveOutsideHighTemp";
+// Kuehlkurve Zone 1 (Byte 86-89), state-Topics TOP72/TOP73/TOP75/TOP74
+const std::string Topics::SET31 = setTopicPrefix + s + "Z1CoolCurveTargetHighTemp";
+const std::string Topics::SET32 = setTopicPrefix + s + "Z1CoolCurveTargetLowTemp";
+const std::string Topics::SET33 = setTopicPrefix + s + "Z1CoolCurveOutsideLowTemp";
+const std::string Topics::SET34 = setTopicPrefix + s + "Z1CoolCurveOutsideHighTemp";
 
 // state topics
 // Can be configured.

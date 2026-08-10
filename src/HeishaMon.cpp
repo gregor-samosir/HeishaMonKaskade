@@ -266,6 +266,15 @@ bool mqtt_reconnect()
     mqtt_client.subscribe(Topics::SET24.c_str());
     mqtt_client.subscribe(Topics::SET25.c_str());
     mqtt_client.subscribe(Topics::SET26.c_str());
+    // Zone 1 heating/cooling curve (kept in sync for standalone operation)
+    mqtt_client.subscribe(Topics::SET27.c_str());
+    mqtt_client.subscribe(Topics::SET28.c_str());
+    mqtt_client.subscribe(Topics::SET29.c_str());
+    mqtt_client.subscribe(Topics::SET30.c_str());
+    mqtt_client.subscribe(Topics::SET31.c_str());
+    mqtt_client.subscribe(Topics::SET32.c_str());
+    mqtt_client.subscribe(Topics::SET33.c_str());
+    mqtt_client.subscribe(Topics::SET34.c_str());
   }
   return mqtt_client.connected();
 }

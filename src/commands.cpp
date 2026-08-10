@@ -80,6 +80,19 @@ static const SetCommand setCommands[] = {
     {24, &Topics::SET24, 74, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2Heat
     {25, &Topics::SET25, 73, 0xFF, 0, 254, CONV_ADD, 1},   // SGReadyCapacity2DHW
     {26, &Topics::SET26, 97, 0xFF, 0, 254, CONV_ADD, 1},   // DHWRoomMaxTime (steps of 30 min)
+    // Zone 1 heating curve: two points, each an outside temperature paired
+    // with the flow target at that point. Kept in sync from Node-RED so the
+    // heatpump can run on its own curve if the cascade control is unavailable.
+    // Read back via TOP29/TOP30/TOP32/TOP31 respectively.
+    {27, &Topics::SET27, 75, 0xFF, 20, 55, CONV_ADD, 128},  // Z1HeatCurveTargetHighTemp
+    {28, &Topics::SET28, 76, 0xFF, 20, 55, CONV_ADD, 128},  // Z1HeatCurveTargetLowTemp
+    {29, &Topics::SET29, 77, 0xFF, -15, 15, CONV_ADD, 128}, // Z1HeatCurveOutsideLowTemp
+    {30, &Topics::SET30, 78, 0xFF, 15, 35, CONV_ADD, 128},  // Z1HeatCurveOutsideHighTemp
+    // Zone 1 cooling curve, same idea. Read back via TOP72/TOP73/TOP75/TOP74.
+    {31, &Topics::SET31, 86, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetHighTemp
+    {32, &Topics::SET32, 87, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetLowTemp
+    {33, &Topics::SET33, 88, 0xFF, 20, 30, CONV_ADD, 128},  // Z1CoolCurveOutsideLowTemp
+    {34, &Topics::SET34, 89, 0xFF, 30, 40, CONV_ADD, 128},  // Z1CoolCurveOutsideHighTemp
 };
 
 // bits already claimed in the pending command, one entry per protocol byte.

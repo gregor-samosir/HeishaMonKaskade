@@ -33,6 +33,16 @@ public:
     static const std::string SET24;
     static const std::string SET25;
     static const std::string SET26;
+    // Heiz-/Kuehlkurve Zone 1: fuer den Notbetrieb ohne Node-RED an der
+    // Waermepumpe hinterlegt (Umschaltung auf Kurvenbetrieb am Bedienterminal)
+    static const std::string SET27;
+    static const std::string SET28;
+    static const std::string SET29;
+    static const std::string SET30;
+    static const std::string SET31;
+    static const std::string SET32;
+    static const std::string SET33;
+    static const std::string SET34;
 };
 
 class States
