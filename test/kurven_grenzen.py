@@ -11,6 +11,17 @@ NUR laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt (im
 Direktmodus sind diese Werte wirkungslos). Am Ende werden die Ausgangswerte
 wiederhergestellt.
 
+ACHTUNG - danach IMMER den kompletten Kurvensatz kontrollieren, nicht nur die
+getesteten Parameter: Am 2026-08-10 standen nach dem Lauf zwei Werte auf
+anderen Zahlen als vor dem vorangegangenen kurven_sync.py, obwohl sie dort
+bestaetigt worden waren und dazwischen niemand sie gesetzt hat
+(Heat_Curve_Target_High 26 -> 20, Cool_Curve_Target_High 19 -> 20, auf beiden
+Geraeten gleich). Ursache ungeklaert; ein Nachtest zeigte, dass die WP frisch
+gesetzte Werte ueber 100 s NICHT von sich aus zurueckdreht. Denkbar ist, dass
+die absurden Zwischenkombinationen dieses Tests (z.B. Target_High 55 bei
+Target_Low 20) eine interne Korrektur ausloesen. Also: nach dem Lauf
+`kurven_sync.py --dry-run` und einen Rueckvergleich fahren.
+
   ./kurven_grenzen.py --esp 192.168.2.120 --prefix panasonic_heat_pump
 """
 import argparse
