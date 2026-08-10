@@ -28,6 +28,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
+| `kurven_test.py` | Kurven-Kommandos SET27-SET34 nachweisen (schreibt die Ist-Werte zurueck, veraendert nichts) | Produktivgeraet |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 
