@@ -34,18 +34,34 @@ from mqtt_pub import build_connect, build_publish  # noqa: E402
 
 KONFIG = "0_userdata.0.kaskade.Konfiguration"
 
+# ACHTUNG - TargetHigh wird bewusst NICHT uebertragen:
+#
+# Z1HeatCurveTargetHighTemp (SET27, Byte 75) und Z1HeatRequestTemperature
+# (SET5, Byte 38) sind in der Waermepumpe DERSELBE Wert - im Direktmodus die
+# Vorlauf-Solltemperatur, im Kurvenmodus der obere Kurvenpunkt. Am 2026-08-10
+# an WP1 in beide Richtungen belegt:
+#   RequestTemp=20 gesendet          -> CurveTargetHigh sprang auf 20
+#   beide zusammen (20 und 26)       -> BEIDE standen danach auf 26
+# Fuer Z1CoolCurveTargetHighTemp / Z1CoolRequestTemperature gilt dasselbe.
+#
+# Diese beiden Werte hier mitzuschicken haette also zwei Folgen: Sie halten
+# ohnehin nicht (der naechste Re-Assert des Verteilers ueberschreibt sie),
+# und schlimmer - sie verstellen im Direktbetrieb den AKTIVEN Sollwert der
+# Anlage. Beim ersten Lauf am 2026-08-10 wurde so der Kuehl-Sollwert fuer
+# einige Minuten von 20 auf 19 gezogen.
+#
+# Die Kurve besteht fuer dieses Werkzeug daher aus TargetLow und den beiden
+# Aussentemperatur-Stuetzpunkten. Zum oberen Punkt siehe NOTBETRIEB-Hinweis
+# in test/README.md.
+
 # (Konfig-Gruppe, Konfig-Schluessel) -> (Set-Topic, state-Topic, min, max)
 MAPPING = [
-    ("KK_Heizkurve", "KK_HK_vlHi", "Z1HeatCurveTargetHighTemp",
-     "Z1_Heat_Curve_Target_High_Temp", 20, 55),
     ("KK_Heizkurve", "KK_HK_vlLo", "Z1HeatCurveTargetLowTemp",
      "Z1_Heat_Curve_Target_Low_Temp", 20, 55),
     ("KK_Heizkurve", "KK_HK_atLo", "Z1HeatCurveOutsideLowTemp",
      "Z1_Heat_Curve_Outside_Low_Temp", -15, 15),
     ("KK_Heizkurve", "KK_HK_atHi", "Z1HeatCurveOutsideHighTemp",
      "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
-    ("KK_Kühlkurve", "KK_HK_vlHi", "Z1CoolCurveTargetHighTemp",
-     "Z1_Cool_Curve_Target_High_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_vlLo", "Z1CoolCurveTargetLowTemp",
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_atLo", "Z1CoolCurveOutsideLowTemp",
@@ -151,6 +167,11 @@ def main():
     print("\n" + "-" * 60)
     print("Alle Kurvenwerte uebernommen." if gesamt_ok
           else "ACHTUNG: mindestens ein Wert weicht ab - Log der WP pruefen.")
+    print("\nHinweis: Der obere Kurvenpunkt (TargetHigh) wird bewusst nicht")
+    print("uebertragen - er teilt sich mit der Vorlauf-Solltemperatur eine")
+    print("Speicherstelle in der WP und traegt daher immer den zuletzt")
+    print("gesendeten Direktwert. Beim Umschalten auf Kurvenbetrieb ist er")
+    print("am Bedienterminal zu pruefen.")
     return 0 if gesamt_ok else 1
 
 

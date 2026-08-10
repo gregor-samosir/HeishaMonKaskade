@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Nachweis der Kurven-Set-Kommandos SET27-SET34 am laufenden Geraet.
 
+ACHTUNG: Zwei der acht Werte (Z1HeatCurveTargetHighTemp,
+Z1CoolCurveTargetHighTemp) teilen sich in der WP eine Speicherstelle mit der
+aktiven Vorlauf-Solltemperatur (Z1Heat/Z1CoolRequestTemperature). Weil dieses
+Werkzeug ausschliesslich die Ist-Werte zurueckschreibt, aendert es trotzdem
+nichts - aber mit anderen Werten waere es ein Eingriff in den laufenden
+Betrieb.
+
 Sicherheitsprinzip: Das Werkzeug erfindet keine Werte. Es liest die aktuell in
 der Waermepumpe hinterlegten Kurvenwerte aus den state-Topics und schreibt
 genau diese zurueck. An der Anlage aendert sich dadurch nichts - geprueft wird

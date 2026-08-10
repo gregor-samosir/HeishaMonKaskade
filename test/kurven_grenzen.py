@@ -11,6 +11,12 @@ NUR laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt (im
 Direktmodus sind diese Werte wirkungslos). Am Ende werden die Ausgangswerte
 wiederhergestellt.
 
+ACHTUNG - Z1HeatCurveTargetHighTemp und Z1CoolCurveTargetHighTemp teilen sich
+in der WP eine Speicherstelle mit Z1HeatRequestTemperature bzw.
+Z1CoolRequestTemperature, also mit der aktiven Vorlauf-Solltemperatur. Dieser
+Test verstellt beim Pruefen ihrer Raender damit den ECHTEN Sollwert der Anlage
+(im Heizbetrieb bis 55 Grad!). Nur bei abgeschaltetem Kompressor laufen lassen.
+
 ACHTUNG - danach IMMER den kompletten Kurvensatz kontrollieren, nicht nur die
 getesteten Parameter: Am 2026-08-10 standen nach dem Lauf zwei Werte auf
 anderen Zahlen als vor dem vorangegangenen kurven_sync.py, obwohl sie dort

@@ -157,21 +157,33 @@ Nur laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt.
 
 Messung 2026-08-10 an WP1:
 
-| Parameter | min | max | Ergebnis |
-| --- | --- | --- | --- |
-| Z1HeatCurveTargetHighTemp | 20 | 55 | beide uebernommen |
-| Z1HeatCurveTargetLowTemp | 20 | 55 | beide uebernommen |
-| Z1HeatCurveOutsideLowTemp | -15 | 15 | beide uebernommen |
-| Z1HeatCurveOutsideHighTemp | 15 | 35 | **haengt auf 15** - 20/25/30/35 werden alle ignoriert |
-| Z1CoolCurveTargetHighTemp | 5 | 20 | beide uebernommen |
-| Z1CoolCurveTargetLowTemp | 5 | 20 | beide uebernommen |
-| Z1CoolCurveOutsideLowTemp | 20 | 30 | beide uebernommen |
-| Z1CoolCurveOutsideHighTemp | 20 | 30 | beide uebernommen (>30 klemmt auf 30) |
+| Parameter | gemessener Bereich | Anmerkung |
+| --- | --- | --- |
+| Z1HeatCurveTargetHighTemp | 20 .. 55 | = Vorlauf-Sollwert, s. Abschnitt unten |
+| Z1HeatCurveTargetLowTemp | 20 .. 55 | haltbar |
+| Z1HeatCurveOutsideLowTemp | -15 .. 15 | haltbar |
+| Z1HeatCurveOutsideHighTemp | **-15 .. 15** | frueher 15..35 angenommen - falsche Seite |
+| Z1CoolCurveTargetHighTemp | 5 .. 20 | = Vorlauf-Sollwert, s. Abschnitt unten |
+| Z1CoolCurveTargetLowTemp | 5 .. 20 | haltbar |
+| Z1CoolCurveOutsideLowTemp | 20 .. 30 | haltbar |
+| Z1CoolCurveOutsideHighTemp | **15 .. 30** | frueher 20..30 bzw. 30..40 angenommen |
 
-Offen: Ob 15 bei `Z1HeatCurveOutsideHighTemp` eine Obergrenze ist oder das Byte
-gar nicht schreibbar, laesst sich nur mit einem Wert unter 15 klaeren - den
-lehnt die eigene Bereichspruefung ab. Dafuer waere kurzzeitig eine Firmware
-mit geweitetem Bereich noetig.
+Die beiden fett markierten Bereiche wurden mit einer Firmware ausgemessen,
+deren Grenzen zum Test geweitet waren:
+
+```text
+Heat Outside_High:  -20 -> -15    -15/-5/5/10/12/14/15 ok    20/25/30/35 -> 15
+Cool Outside_High:   10 ->  15     15/20/30 ok               31/32/35/40 -> 30
+```
+
+Der Heizwert ist der lehrreiche Fall: Gueltig ist alles BIS 15, nicht AB 15.
+Von den 21 Werten des frueheren Bereichs war genau einer gueltig - das fiel nur
+auf, weil die Anlagenkonfiguration zufaellig exakt diesen einen nutzt.
+
+Wichtig zur Deutung dieser Messungen: Die WP klemmt beim Schreiben sofort, ein
+Rueckvergleich nach ~15 s reicht dafuer. Die Kopplung von TargetHigh an den
+Sollwert (naechster Abschnitt) wirkt dagegen VERZOEGERT ueber den 5-min-
+Re-Assert - wer nur 15 s misst, haelt einen Wert faelschlich fuer stabil.
 
 ## Fallstrick: MQTT-Client-ID bei schnellen Reconnects
 
@@ -182,3 +194,35 @@ verliert bei schnell aufeinanderfolgenden Reconnects Nachrichten - am
 Ruecksetz-Kommando abgesetzt wurde. Konsequenz fuer diese Werkzeuge: EINE
 Verbindung fuer alle Publishes eines Vorgangs, Client-ID mit Prozess-ID, und
 eine Wiederherstellung wird nachgeprueft statt nur abgesetzt.
+
+## Wichtig: TargetHigh ist die Vorlauf-Solltemperatur
+
+`Z1HeatCurveTargetHighTemp` (SET27, Byte 75) und `Z1HeatRequestTemperature`
+(SET5, Byte 38) sind in der Waermepumpe **derselbe Wert** - im Direktmodus die
+Vorlauf-Solltemperatur, im Kurvenmodus der obere Kurvenpunkt. Fuer das
+Kuehl-Paar (SET31 / SET6) gilt dasselbe.
+
+Am 2026-08-10 an WP1 in beide Richtungen belegt:
+
+```text
+CurveTargetHigh=26 gesetzt, dann RequestTemp=20 gesendet
+   -> CurveTargetHigh fiel auf 20
+
+RequestTemp=20 und CurveTargetHigh=26 im selben Telegramm
+   -> BEIDE standen danach auf 26
+```
+
+Daraus folgen drei Dinge:
+
+1. **Der obere Kurvenpunkt ist im laufenden Direktbetrieb nicht haltbar.** Der
+   5-min-Re-Assert des Node-RED-Verteilers schreibt die Solltemperatur und
+   zieht den Kurvenpunkt mit. `kurven_sync.py` uebertraegt ihn deshalb nicht.
+2. **Ihn zu setzen ist ein Eingriff in den laufenden Betrieb** - er verstellt
+   die aktive Vorlauf-Solltemperatur. Genau das ist beim ersten Sync-Lauf
+   passiert (Kuehl-Sollwert einige Minuten auf 19 statt 20).
+3. **Fuer den Notbetrieb:** Beim Umschalten auf Kurvenbetrieb steht am oberen
+   Kurvenpunkt der zuletzt gefahrene Direktwert. Faellt die Steuerung im
+   Winter bei -10 Grad und 34 Grad Vorlauf aus, ergibt das eine praktisch
+   waagerechte Kurve (-10/34 nach 15/34) - die WP wuerde auch bei +15 Grad
+   Aussentemperatur noch 34 Grad Vorlauf fahren. Der obere Punkt gehoert
+   deshalb in die Notfall-Checkliste am Bedienterminal.
