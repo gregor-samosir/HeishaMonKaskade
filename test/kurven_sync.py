@@ -43,18 +43,19 @@ MAPPING = [
     ("KK_Heizkurve", "KK_HK_atLo", "Z1HeatCurveOutsideLowTemp",
      "Z1_Heat_Curve_Outside_Low_Temp", -15, 15),
     ("KK_Heizkurve", "KK_HK_atHi", "Z1HeatCurveOutsideHighTemp",
-     "Z1_Heat_Curve_Outside_High_Temp", 15, 35),
+     "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
     ("KK_Kühlkurve", "KK_HK_vlHi", "Z1CoolCurveTargetHighTemp",
      "Z1_Cool_Curve_Target_High_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_vlLo", "Z1CoolCurveTargetLowTemp",
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_atLo", "Z1CoolCurveOutsideLowTemp",
      "Z1_Cool_Curve_Outside_Low_Temp", 20, 30),
-    # Obergrenze 30: die WP klemmt alles darueber still auf 30 (an beiden
-    # Geraeten gemessen). Ein hoeherer Konfigurationswert wird hier deshalb
-    # als "AUSSERHALB" gemeldet statt wirkungslos gesendet zu werden.
+    # Bereiche der beiden OutsideHigh-Parameter an der Anlage ausgemessen
+    # (s. kurven_grenzen.py): Heat -15..15, Cool 15..30. Werte darueber oder
+    # darunter klemmt die WP still. Ein Konfigurationswert ausserhalb wird
+    # hier deshalb als "AUSSERHALB" gemeldet statt wirkungslos gesendet.
     ("KK_Kühlkurve", "KK_HK_atHi", "Z1CoolCurveOutsideHighTemp",
-     "Z1_Cool_Curve_Outside_High_Temp", 20, 30),
+     "Z1_Cool_Curve_Outside_High_Temp", 15, 30),
 ]
 
 

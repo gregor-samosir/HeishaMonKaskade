@@ -1,5 +1,22 @@
 #pragma once
 // Changelog:
+// 3.2.2 - Wertebereiche der beiden Kurven-OutsideHigh-Parameter an der
+//         Anlage ausgemessen statt aus Quellen uebernommen:
+//           Z1HeatCurveOutsideHighTemp   war 15..35 -> jetzt -15..15
+//           Z1CoolCurveOutsideHighTemp   war 20..30 -> jetzt  15..30
+//         Der Heiz-Bereich lag komplett auf der falschen Seite: gueltig
+//         ist alles BIS 15, nicht AB 15 - von 21 erlaubten Werten war
+//         genau einer gueltig, und das fiel nur auf, weil die
+//         Konfiguration zufaellig exakt diesen einen nutzt.
+//         Die WP klemmt ausserhalb liegende Werte kommentarlos auf den
+//         jeweiligen Rand (gemessen: -20 -> -15, 20/25/30/35 -> 15,
+//         10 -> 15, 31/32/35/40 -> 30). Ohne die Korrektur haette die
+//         Firmware solche Werte weitergereicht und sie waeren lautlos
+//         verschwunden.
+//         Werkzeug dafuer: test/kurven_grenzen.py. Recherche vorab ergab,
+//         dass das Original-HeishaMon-Projekt ueberhaupt keine
+//         Bereichspruefung kennt (cmd[75] = wert + 128 ungefiltert) - die
+//         verbreiteten Bereiche stammen also nicht von dort.
 // 3.2.1 - Wertebereich von SET34 (Z1CoolCurveOutsideHighTemp) von 30-40
 //         auf 20-30 korrigiert. Die Waermepumpe klemmt jeden Wert
 //         darueber still auf 30 - an beiden Geraeten gemessen, 31/32/35
@@ -75,4 +92,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.2.1";
+static const char* heishamon_version = "3.2.2";

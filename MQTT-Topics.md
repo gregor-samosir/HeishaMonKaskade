@@ -156,11 +156,11 @@ SET26 | DHWRoomMaxTime | 97 | DHW/room max time (steps of 30 min) | 0 - 254
 SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target at the upper outside temperature | 20 - 55
 SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target at the lower outside temperature | 20 - 55
 SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: lower outside temperature | -15 to 15
-SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperature | 15 - 35
+SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperature | -15 to 15
 SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the lower outside temperature | 5 - 20
 SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the upper outside temperature | 5 - 20
 SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
-SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 20 - 30
+SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 
@@ -197,10 +197,23 @@ external cascade control is unavailable - the values are kept in sync from
 there, and the operator only has to switch the terminal from direct mode to
 curve mode.
 
-**The heatpump caps `Z1CoolCurveOutsideHighTemp` at 30 &deg;C.** Measured on
-two units: 31, 32, 35 and 40 all read back as 30, without any error from the
-heatpump. The range here is therefore 20-30 rather than the 30-40 some sources
-list - a higher value would be forwarded and then quietly dropped. Other curve
-parameters may well have similar undocumented caps that only show up when a
-value is pushed to its limit; after changing a curve, read the state topics
-back and compare.
+**The ranges of both `OutsideHigh` parameters were measured on the plant, not
+taken from documentation** - and both published values turned out wrong:
+
+```text
+Z1HeatCurveOutsideHighTemp   -20 -> -15    -15 ok   15 ok   20/25/30/35 -> 15
+Z1CoolCurveOutsideHighTemp    10 ->  15     15 ok   30 ok   31/32/35/40 -> 30
+```
+
+The heating one is the instructive case: valid is everything *up to* 15, not
+*from* 15 as widely listed. Of the 21 values the old range allowed, exactly one
+was accepted - and that only surfaced because the plant configuration happens
+to use precisely that value. The heatpump clamps out-of-range values to the
+nearest bound and reports nothing.
+
+Note that the upstream HeishaMon project performs no range checking at all
+(`cmd[75] = value + 128`, unfiltered), so the ranges circulating elsewhere do
+not come from there. Other curve parameters may have similar undocumented
+limits that only show when a value is pushed to its bound - `test/kurven_grenzen.py`
+measures them, and after any curve change the state topics should be read back
+and compared.

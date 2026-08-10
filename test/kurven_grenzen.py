@@ -31,11 +31,11 @@ PARAMETER = [
     ("Z1HeatCurveTargetHighTemp",  "Z1_Heat_Curve_Target_High_Temp",  20, 55),
     ("Z1HeatCurveTargetLowTemp",   "Z1_Heat_Curve_Target_Low_Temp",   20, 55),
     ("Z1HeatCurveOutsideLowTemp",  "Z1_Heat_Curve_Outside_Low_Temp",  -15, 15),
-    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", 15, 35),
+    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
     ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  5, 20),
     ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   5, 20),
     ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  20, 30),
-    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 20, 30),
+    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 15, 30),
 ]
 
 

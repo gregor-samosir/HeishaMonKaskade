@@ -87,16 +87,19 @@ static const SetCommand setCommands[] = {
     {27, &Topics::SET27, 75, 0xFF, 20, 55, CONV_ADD, 128},  // Z1HeatCurveTargetHighTemp
     {28, &Topics::SET28, 76, 0xFF, 20, 55, CONV_ADD, 128},  // Z1HeatCurveTargetLowTemp
     {29, &Topics::SET29, 77, 0xFF, -15, 15, CONV_ADD, 128}, // Z1HeatCurveOutsideLowTemp
-    {30, &Topics::SET30, 78, 0xFF, 15, 35, CONV_ADD, 128},  // Z1HeatCurveOutsideHighTemp
+    // -15..15, NICHT 15..35: an der Anlage ausgemessen. Werte ueber 15
+    // werden still verworfen, unter -15 auf -15 geklemmt. Der frueher
+    // angenommene Bereich lag komplett auf der falschen Seite - von 21
+    // erlaubten Werten war genau einer gueltig.
+    {30, &Topics::SET30, 78, 0xFF, -15, 15, CONV_ADD, 128}, // Z1HeatCurveOutsideHighTemp
     // Zone 1 cooling curve, same idea. Read back via TOP72/TOP73/TOP75/TOP74.
     {31, &Topics::SET31, 86, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetHighTemp
     {32, &Topics::SET32, 87, 0xFF, 5, 20, CONV_ADD, 128},   // Z1CoolCurveTargetLowTemp
     {33, &Topics::SET33, 88, 0xFF, 20, 30, CONV_ADD, 128},  // Z1CoolCurveOutsideLowTemp
-    // upper bound is 30, not 40: the heatpump silently clamps anything above
-    // (measured on both units - 31, 32, 35 and 40 all came back as 30).
-    // Without this the firmware would happily forward a value that never
-    // arrives, which is exactly the kind of silent loss we removed elsewhere.
-    {34, &Topics::SET34, 89, 0xFF, 20, 30, CONV_ADD, 128},  // Z1CoolCurveOutsideHighTemp
+    // 15..30, ebenfalls ausgemessen: darueber klemmt die WP auf 30,
+    // darunter auf 15 - beides ohne jede Rueckmeldung. Genau die Art
+    // stiller Verluste, die mit 3.1.0 beseitigt wurde.
+    {34, &Topics::SET34, 89, 0xFF, 15, 30, CONV_ADD, 128}, // Z1CoolCurveOutsideHighTemp
 };
 
 // bits already claimed in the pending command, one entry per protocol byte.
