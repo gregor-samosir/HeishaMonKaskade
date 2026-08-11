@@ -116,7 +116,7 @@ TOP94 | SGReady_Capacity1_DHW | SGReady (%)
 TOP95 | SGReady_Capacity2_Heat | SGReady (%)
 TOP96 | SGReady_Capacity2_DHW | SGReady (%)
 TOP97 | DHW_Heatup_Time | DHW Heatup Time (Minutes)
-TOP98 | DHW_Room_Max_Time | DHW Max Room Time (Minutes)
+TOP98 | DHW_Room_Max_Time | DHW Max Room Max Time (Minutes)
 
 
 ## Command Topics:
