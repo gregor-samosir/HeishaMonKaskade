@@ -187,6 +187,34 @@ Rueckvergleich nach ~15 s reicht dafuer. Die Kopplung von TargetHigh an den
 Sollwert (naechster Abschnitt) wirkt dagegen VERZOEGERT ueber den 5-min-
 Re-Assert - wer nur 15 s misst, haelt einen Wert faelschlich fuer stabil.
 
+### Gegenprobe am Bedienterminal (2026-08-11, WP2)
+
+Die Tabelle oben ist per MQTT ausgemessen - sie zeigt, was die WP annimmt und
+was sie klemmt. Das Bedienterminal nennt die Bereiche selbst, und zwar in den
+Kurvendialogen (duenn gesetzte Zahlen an den Achsenenden) und in den
+Direktwert-Dialogen (Zeile `Bereich:`). Beides stimmt mit der Tabelle ueberein:
+
+| Anzeige am Terminal | genannter Bereich | Tabelle oben |
+| --- | --- | --- |
+| Heizbetr. Wassertemp, Y-Achse und `Bereich:` | 20 .. 55 | passt |
+| Heizbetr. Wassertemp, X-Achse | -15 .. 15 | passt |
+| Kuehlbetr. Wassertemp, Y-Achse und `Bereich:` | 5 .. 20 | passt |
+| Kuehlbetr. Wassertemp, X-Achse | 15 .. 30 | passt |
+
+Belege in `pictures/`: `IMG_4887` (Heizkurve), `IMG_4889` (Kuehlkurve),
+`IMG_4894` / `IMG_4892` (Direktwert-Dialoge heizen/kuehlen).
+
+Schrittweite laut Terminal ±1 Grad, wie in `commands.cpp` angenommen. Damit
+sind besonders die beiden fett markierten Korrekturen aus 3.2.x vom Geraet
+selbst bestaetigt: `Z1HeatCurveOutsideHighTemp` reicht BIS 15, und
+`Z1CoolCurveOutsideHighTemp` beginnt bei 15.
+
+Eine Unschaerfe bleibt: Die Kuehl-X-Achse spannt 15 .. 30 auf, waehrend fuer
+`Z1CoolCurveOutsideLowTemp` 20 .. 30 hinterlegt ist. Die Achse zeigt
+vermutlich nur den weiteren der beiden Punkte - die Klemm-Messung sagte 20.
+Kein Widerspruch, aber auch kein Beweis; ein Schreibversuch mit 15 auf SET33
+wuerde es klaeren. Bisher nicht gemessen, weil es fuer den Betrieb egal ist.
+
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 
 Wer an `decode.cpp` umbaut, will wissen, ob sich die AUSGABE veraendert hat -
@@ -298,9 +326,60 @@ Daraus folgen drei Dinge:
 2. **Ihn zu setzen ist ein Eingriff in den laufenden Betrieb** - er verstellt
    die aktive Vorlauf-Solltemperatur. Genau das ist beim ersten Sync-Lauf
    passiert (Kuehl-Sollwert einige Minuten auf 19 statt 20).
-3. **Fuer den Notbetrieb:** Beim Umschalten auf Kurvenbetrieb steht am oberen
-   Kurvenpunkt der zuletzt gefahrene Direktwert. Faellt die Steuerung im
-   Winter bei -10 Grad und 34 Grad Vorlauf aus, ergibt das eine praktisch
-   waagerechte Kurve (-10/34 nach 15/34) - die WP wuerde auch bei +15 Grad
-   Aussentemperatur noch 34 Grad Vorlauf fahren. Der obere Punkt gehoert
-   deshalb in die Notfall-Checkliste am Bedienterminal.
+3. **Fuer den Notbetrieb:** Der obere Kurvenpunkt gehoert in die
+   Notfall-Checkliste am Bedienterminal. Die urspruengliche Befuerchtung war,
+   dass beim Umschalten der zuletzt gefahrene Direktwert als oberer
+   Kurvenpunkt stehenbleibt und eine praktisch waagerechte Kurve ergibt. Das
+   trifft so nicht zu - siehe naechster Abschnitt, die WP ueberschreibt beim
+   Umschalten ohnehin alle vier Punkte.
+
+## Der Moduswechsel ueberschreibt die Kurvenwerte (2026-08-11, WP2)
+
+Gemessen im Wartungsmodus: Anlage aus, Re-Assert des Node-RED-Verteilers
+gestoppt, dann am Bedienterminal von Direktvorgabe auf Heizkurve und wieder
+zurueck geschaltet. Ohne jeden Schreibzugriff von aussen.
+
+| Topic | Start (Direkt) | nach Umschalten auf Kurve | zurueck auf Direkt |
+| --- | --- | --- | --- |
+| TOP29 Z1_Heat_Curve_Target_High_Temp | 20 | **55** | 35 |
+| TOP30 Z1_Heat_Curve_Target_Low_Temp | 34 | **35** | 35 |
+| TOP31 Z1_Heat_Curve_Outside_High_Temp | 15 | 15 | 15 |
+| TOP32 Z1_Heat_Curve_Outside_Low_Temp | -10 | **-5** | -5 |
+| TOP72 Z1_Cool_Curve_Target_High_Temp | 20 | **15** | 10 |
+| TOP73 Z1_Cool_Curve_Target_Low_Temp | 20 | **10** | 10 |
+| TOP74 Z1_Cool_Curve_Outside_High_Temp | 30 | 30 | 30 |
+| TOP75 Z1_Cool_Curve_Outside_Low_Temp | 25 | **20** | 20 |
+| TOP27 Z1_Heat_Request_Temp | 20 | **0** | **35** |
+| TOP28 Z1_Cool_Request_Temp | 20 | **0** | **10** |
+
+Belege in `pictures/`: `Start_Test1` / `Start_Test2` (Ausgangswerte),
+`Bild ... 21.07` / `21.08` (nach Umschalten auf Kurve), `Bild ... 21.15` /
+`21.16` (nach Rueckstellung auf Direkt). Die Kurvendialoge `IMG_4887` und
+`IMG_4889` zeigen dieselben Werte am Terminal.
+
+Drei Befunde:
+
+1. **Die konfigurierte Kurve ist nach dem Umschalten weg.** Es stehen
+   55 Grad bei -5 und 35 Grad bei +15 (heizen) bzw. 15 Grad bei 20 und
+   10 Grad bei 30 (kuehlen) - die Panasonic-Werksvorgaben. Das Zurueckschalten
+   stellt die alten Werte NICHT wieder her.
+2. **Im Kurvenbetrieb melden TOP27/TOP28 den Wert 0.** Wer den Direktsollwert
+   als Regelgroesse oder Lebenszeichen liest, sieht dort nichts Brauchbares.
+3. **Der Direktsollwert geht beim Roundtrip verloren.** Vorher 20 Grad,
+   danach 35 (heizen) bzw. 10 (kuehlen) - er uebernimmt den unteren
+   Kurvenpunkt. Nach einem Rueckschalten faehrt die Anlage also mit einem
+   fremden Sollwert weiter, bis der 5-min-Re-Assert greift.
+
+Nicht geklaert und bewusst nicht weiterverfolgt: ob die WP auf feste
+Werksdefaults zurueckstellt oder einen getrennt gespeicherten Kurvensatz
+hervorholt, der hier noch im Auslieferungszustand war. Beides sagt fuer diesen
+Durchlauf dasselbe voraus. Die Antwort wuerde nur entscheiden, ob eine
+Automatik die Kurve bei jedem Wechsel oder nur einmal schreiben muesste - und
+das ist gegenstandslos, weil die Kaskadensteuerung ueber die Direktvorgabe
+regelt und die Kurve nicht braucht.
+
+**Konsequenz fuer den Notbetrieb:** Wer im Notfall am Terminal auf Heizkurve
+umschaltet, bekommt die Werksvorgaben und muss anschliessend alle vier Punkte
+von Hand einstellen. Die Notfall-Unterlage braucht deshalb die Sollwerte
+vollstaendig - als Tabelle oder als Bild der beiden Kurvendialoge -, nicht nur
+den oberen Punkt.
