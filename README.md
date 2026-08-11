@@ -274,8 +274,10 @@ Beispiel:
 | Env | Board | Zweck |
 | --- | --- | --- |
 | `heishamon_esp32_h1_ota` | ESP32-S3 | Stufe 1 an WP1, produktiv, Update per OTA |
+| `heishamon_esp32_h2_ota` | ESP32-S3 | Stufe 2 an WP2, produktiv, Update per OTA |
+| `heishamon_esp32_h2_usb` | ESP32-S3 | Erstflash der Stufe 2 über USB (s. u.) |
 | `d1_mini_h1_ota` | D1 mini | Stufe 1 auf ESP8266 (Rückfallebene) |
-| `d1_mini_h2_ota` | D1 mini | Stufe 2 an WP2 |
+| `d1_mini_h2_ota` | D1 mini | Stufe 2 auf ESP8266 (Rückfallebene) |
 | `heishamon_esp32_usb` / `_ota` | ESP32-S3 | Testgerät mit eigenem MQTT-Präfix |
 | `d1_mini_test` | D1 mini | Prüfstand **ohne** Wärmepumpe |
 | `d1_mini_usb` | D1 mini | Erstflash über USB |
@@ -302,6 +304,34 @@ Nach dem Flashen richtet sich das Gerät wie das Original über einen
 WiFi-Manager-Hotspot ein; MQTT-Server und Zugangsdaten stehen danach unter
 `http://<ip>/settings`. Weboberfläche, Telnet-Log (Port 23) und OTA sind
 verfügbar wie gewohnt.
+
+### Erstflash eines ESP32-Boards, das noch die Original-Firmware trägt
+
+Der erste Flash muss **über USB** laufen: die Original-Firmware bringt eine
+andere Partitionstabelle mit, und die lässt sich per OTA nicht tauschen. Zwei
+Punkte, die dabei überraschen (beide am 2026-08-11 an Stufe 2 durchgemessen):
+
+* **Die WLAN-Zugangsdaten der Original-Firmware werden nicht übernommen.** Sie
+  liegen dort in deren eigenem Speicher, nicht an der Stelle, an der der
+  WiFiManager sucht. Das Board geht nach dem Flash in den Setup-Hotspot
+  `HeishaMon-Setup` (`http://192.168.4.1`, Portal-Timeout 180 s, danach Reboot
+  und der Hotspot kommt neu). WLAN, Hostname, OTA-Passwort und **MQTT-Server**
+  dort eintragen — der MQTT-Server hat keinen Default und bleibt sonst leer.
+* **Der Hostname aus der `config.json` gewinnt gegen das Build-Flag.** Das Flag
+  `HEISHA_HOSTNAME` ist nur der Default für den Fall, dass keine Konfiguration
+  existiert. Im Portal also gleich den endgültigen Namen eintragen — er ist
+  zugleich die MQTT-Client-ID, und zwei Geräte dürfen sie nicht teilen.
+
+Reihenfolge beim Ersetzen eines laufenden Geräts, damit die produktiven Topics
+sauber bleiben: erst **Testfirmware** (eigenes Präfix) per USB aufspielen und
+Netz, Web, MQTT und OTA prüfen — solange das Board noch am Schreibtisch liegt
+und ein USB-Kabel in Reichweite ist. Vor dem Einbau MQTT stilllegen, am
+einfachsten über einen Port, auf dem der Broker nichts anbietet
+(`curl -u admin:<pw> "http://<ip>/settings?mqtt_port=1884"`) — sonst legt die
+Testfirmware in den Minuten am Kabel einen kompletten Satz State-Objekte unter
+dem Testpräfix im ioBroker an. Dann Altgerät stromlos, Board anschließen, per
+OTA die Stufen-Firmware aufspielen und den Port zurücksetzen. So steht zu
+keiner Zeit ein Leerwert (−128, −1) auf einem produktiven State-Topic.
 
 ## MQTT-Schnittstelle
 
