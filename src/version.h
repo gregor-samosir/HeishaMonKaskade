@@ -17,9 +17,16 @@
 //         Stand vor 3.3.0: 65016 Zeilen identisch, 86 Topics, exakt die 13
 //         Zone-2-Topics fehlen und sonst nichts.
 //         NACH dem Flashen beider Stufen: test/retained_loeschen.py (neu)
-//         ausfuehren. Die Firmware publiziert mit Retain-Flag, der Broker
-//         liefert die 13 alten Werte sonst weiter an jeden neuen Abonnenten
-//         aus - das Topic verschwindet nicht, es friert ein.
+//         ausfuehren. Die Firmware publiziert mit Retain-Flag; ein normaler
+//         Broker liefert die 13 alten Werte sonst weiter an jeden neuen
+//         Abonnenten aus - das Topic verschwindet nicht, es friert ein.
+//         HIER aber nur die halbe Miete, am 2026-08-11 nachgemessen: Der
+//         Broker ist der ioBroker-MQTT-Adapter im SERVER-Modus, kein
+//         eigenstaendiger Broker. Er bedient Abonnenten aus seiner
+//         Objektdatenbank mit retain=0, das Loeschen setzt die States also
+//         nur auf null. Weg sind die Topics erst, wenn die Objekte
+//         mqtt.0.panasonic_heat_pump*.state.Z2_* im ioBroker-Admin
+//         geloescht werden - die simple-api auf 8087 kann das nicht.
 //         Groessen gegenueber 3.3.0: ESP8266 RAM -960 B, Flash -824 B;
 //         ESP32 RAM -256 B, Flash -872 B.
 // 3.3.0 - Die vier positionsgleichen State-Topic-Tabellen in decode.cpp durch

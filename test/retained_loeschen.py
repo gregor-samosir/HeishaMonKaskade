@@ -18,9 +18,16 @@ Arbeitsstand. Damit kann die Liste nicht veralten.
 REIHENFOLGE: erst die neue Firmware auf BEIDE Stufen flashen, dann loeschen.
 Andersherum publiziert die noch laufende alte Firmware die Werte sofort wieder.
 
-Was das NICHT tut: die Objekte unterhalb von mqtt.0.* im ioBroker entfernen. Die
-bleiben als Karteileichen stehen, bis sie dort von Hand geloescht werden - das
-ist eine Entscheidung am ioBroker, nicht am Broker.
+ACHTUNG - in DIESER Installation reicht das nicht:
+Der Broker auf 192.168.2.147 ist der ioBroker-MQTT-Adapter im Server-Modus, kein
+eigenstaendiger Broker (am 2026-08-11 nachgemessen). Er bedient neue Abonnenten
+aus seiner Objektdatenbank und setzt dabei retain=0. Ein Loeschbefehl von hier
+setzt den ioBroker-State also nur auf null - angekuendigt wird das Topic weiter,
+solange sein Objekt unter mqtt.0.* existiert. Das eigentliche Aufraeumen ist
+dort das Loeschen der Objekte in der Admin-Oberflaeche; eine Loeschschnittstelle
+bietet die simple-api auf Port 8087 nicht. Einzelheiten in test/README.md.
+
+Gegen einen echten Broker (mosquitto o. ae.) wirkt das Skript wie beschrieben.
 """
 import argparse
 import os

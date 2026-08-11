@@ -216,18 +216,16 @@ Fuer den Fall, dass Topics absichtlich entfallen, gibt es `--entfallen`:
 Damit wurde 3.3.0 abgenommen (Umbau auf die eine `stateTopics`-Tabelle):
 74844 Zeilen identisch.
 
-## Entfallene Topics vom Broker raeumen (retained_loeschen.py)
+## Entfallene Topics aufraeumen (retained_loeschen.py)
 
 Die Firmware publiziert alle state-Topics mit Retain-Flag. Faellt ein Topic aus
-der Tabelle, hoert die Firmware zwar auf zu senden - der Broker liefert den
-zuletzt gesendeten Wert aber weiter an jeden neuen Abonnenten aus. Das Topic
-verschwindet also nicht, es **friert auf seinem letzten Wert ein**, was
-schlimmer ist als vorher: Es sieht aus wie ein Messwert, ist aber keiner.
-
-`retained_loeschen.py` raeumt das auf, indem es eine leere Nutzlast mit
-Retain-Flag auf die betroffenen Topics schickt. Welche das sind, wird nicht von
-Hand gepflegt, sondern aus dem Code ermittelt (Topic-Namen des Basisstandes
-gegen die des Arbeitsstandes) - die Liste kann also nicht veralten.
+der Tabelle, hoert die Firmware zwar auf zu senden - ein normaler Broker
+(mosquitto o. ae.) liefert den zuletzt gesendeten Wert aber weiter an jeden
+neuen Abonnenten aus. Das Topic verschwindet dort also nicht, es friert auf
+seinem letzten Wert ein. Dagegen schickt `retained_loeschen.py` eine leere
+Nutzlast mit Retain-Flag auf die betroffenen Topics. Welche das sind, wird
+nicht von Hand gepflegt, sondern aus dem Code ermittelt (Topic-Namen des
+Basisstandes gegen die des Arbeitsstandes) - die Liste kann nicht veralten.
 
 ```bash
 ./retained_loeschen.py --basis v3.3.0              # nur anzeigen
@@ -238,9 +236,32 @@ gegen die des Arbeitsstandes) - die Liste kann also nicht veralten.
 loeschen. Andersherum publiziert die noch laufende alte Firmware die Werte
 sofort wieder.
 
-**Was das nicht tut:** die Objekte unter `mqtt.0.*` im ioBroker entfernen. Die
-bleiben als Karteileichen stehen, bis sie dort von Hand geloescht werden - so
-wie es 2026-08-07 bewusst auch mit `panasonic_heat_pump_test.*` gehalten wurde.
+### Hier gilt das nur zur Haelfte - der Broker IST der ioBroker
+
+Am 2026-08-11 beim Zone-2-Ausbau nachgemessen: Der Broker auf
+192.168.2.147:1883 ist **kein eigenstaendiger Broker, sondern der
+ioBroker-MQTT-Adapter im Server-Modus** (`mqtt.0.info.connection` fuehrt die
+verbundenen Clients auf: OpenDTU, venus, HeishaMonH2, HeishaMon32_h1). Damit
+gibt es keinen getrennten Retained-Speicher: Der Adapter bedient neue
+Abonnenten aus seiner eigenen Objektdatenbank, und zwar mit **retain=0** -
+auch bei Zone-1-Topics, die es noch gibt.
+
+Folge fuer das Aufraeumen:
+
+* `retained_loeschen.py` setzt die betroffenen ioBroker-States auf `null` -
+  belegt, die Zeitstempel der Objekte sprangen auf den Zeitpunkt des Laufs.
+  Schaden richtet es keinen an, aber die Topics sind damit nicht weg.
+* Sie werden weiter angekuendigt, jetzt mit Nutzlast `null`, **solange die
+  Objekte unter `mqtt.0.*` existieren**.
+* Das eigentliche Aufraeumen passiert deshalb im ioBroker: Objekte loeschen
+  (Admin, Objekte, `mqtt.0.panasonic_heat_pump.state.Z2_*` und dasselbe unter
+  `panasonic_heat_pump2`). Eine Loeschschnittstelle hat die simple-api auf
+  Port 8087 nicht - deren Endpunkte sind get/getBulk/set/setBulk/toggle/
+  objects/states/search/query, mehr nicht. Also Admin-Oberflaeche.
+
+Das Skript bleibt trotzdem sinnvoll: Sobald der Broker einmal ein echter
+mosquitto ist (z. B. im Container), greift der Retain-Mechanismus wie
+beschrieben.
 
 ## Fallstrick: MQTT-Client-ID bei schnellen Reconnects
 
