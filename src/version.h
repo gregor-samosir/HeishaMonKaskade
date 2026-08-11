@@ -1,5 +1,34 @@
 #pragma once
 // Changelog:
+// 3.3.0 - Die vier positionsgleichen State-Topic-Tabellen in decode.cpp durch
+//         EINE Tabelle ersetzt (struct StateTopic): Name, Quellbyte,
+//         Dekodierer und Einheit eines Topics stehen jetzt in einer Zeile
+//         statt ueber topicNames/topicBytes/topicFunctions/topicDescription
+//         verteilt, die nur ueber die Position und einen // TOPn-Kommentar
+//         zusammenhingen. Die 99 States::TOPn-Deklarationen in Topics.h/.cpp
+//         entfallen ersatzlos, die Namen stehen in der Tabelle.
+//         REIN INTERNER UMBAU - keine Verhaltensaenderung: gleiche Topics,
+//         gleiche Namen, gleiche Werte (Nachweis s. unten).
+//         Zwei Fallen sind dabei strukturell verschwunden:
+//         - 'number' ist ein DATENFELD, nicht der Array-Index. Zeilen koennen
+//           entfallen, ohne dass sich die TOP-Nummern der uebrigen
+//           verschieben - die Nummern stehen so in MQTT-Topics.md.
+//         - getTopicPayload entschied vorher per switch ueber fest
+//           verdrahtete TOP-Nummern (case 44:, case 90: ...), welches Topic
+//           mehrere Bytes braucht. Jede Verschiebung der Nummerierung haette
+//           diese Marken stillschweigend auf andere Topics zeigen lassen, und
+//           zwar OHNE Compilerfehler. Jetzt bringt die Zeile ihren
+//           Dekodierer selbst mit.
+//         Ausserdem: unknown() entfernt (war nur Platzhalter fuer die
+//         Mehrbyte-Topics und wurde nie aufgerufen), Bereichspruefung in
+//         getTopicPayload, sprintf -> snprintf im Publish-Log.
+//         Nachweis mit test/decode_vergleich.py: alter und neuer Stand auf
+//         dem Mac uebersetzt und mit denselben 756 Telegrammen gefuettert
+//         (jeder Bytewert 0..255 plus 500 Pseudozufallstelegramme) -
+//         74844 Zeilen aus Nummer, Name, Wert und Einheit identisch.
+//         Groessen: ESP8266 RAM +296 B (const-Tabellen liegen dort im RAM;
+//         die Feldreihenfolge im struct ist deshalb auf wenig Padding
+//         ausgelegt), Flash -712 B. ESP32 RAM -1184 B, Flash -176 B.
 // 3.2.2 - Wertebereiche der beiden Kurven-OutsideHigh-Parameter an der
 //         Anlage ausgemessen statt aus Quellen uebernommen:
 //           Z1HeatCurveOutsideHighTemp   war 15..35 -> jetzt -15..15
@@ -92,4 +121,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.2.2";
+static const char* heishamon_version = "3.3.0";

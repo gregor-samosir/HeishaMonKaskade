@@ -255,23 +255,25 @@ void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUEL
 
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
-  for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
+  // index laeuft ueber die Tabellenzeilen, angezeigt wird die TOP-Nummer der Zeile
+  for (unsigned int index = 0; index < NUMBEROFTOPICS; index++)
   {
+    const StateTopic &topic = stateTopics[index];
     const char *topicdesc;
-    if (strcmp(topicDescription[top_num][0], "value") == 0)
+    if (strcmp(topic.desc[0], "value") == 0)
     {
-      topicdesc = topicDescription[top_num][1];
+      topicdesc = topic.desc[1];
     }
     else
     {
-      int value = atoi(actual_data[top_num]);
+      int value = atoi(actual_data[index]);
       // bounds check: decoders return -1 for unknown raw values,
       // indexing with it read out of bounds before
-      topicdesc = (value < 0) ? "" : topicDescription[top_num][value];
+      topicdesc = (value < 0) ? "" : topic.desc[value];
     }
-    if (strcmp(actual_data[top_num], "unused") != 0)
+    if (strcmp(actual_data[index], "unused") != 0)
     {
-      int written = snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", top_num, topicNames[top_num], actual_data[top_num], topicdesc);
+      int written = snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", topic.number, topic.name, actual_data[index], topicdesc);
       if (written < 0)
       {
         continue; // formatting failed, skip this row

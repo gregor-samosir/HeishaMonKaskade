@@ -2,315 +2,11 @@
 #include "decode.h"
 // #include "commands.h"
 
-/* lookup tables, declared extern in decode.h */
-const char *topicNames[NUMBEROFTOPICS] = {
-    States::TOP0,
-    States::TOP1,
-    States::TOP2,
-    States::TOP3,
-    States::TOP4,
-    States::TOP5,
-    States::TOP6,
-    States::TOP7,
-    States::TOP8,
-    States::TOP9,
-    States::TOP10,
-    States::TOP11,
-    States::TOP12,
-    States::TOP13,
-    States::TOP14,
-    States::TOP15,
-    States::TOP16,
-    States::TOP17,
-    States::TOP18,
-    States::TOP19,
-    States::TOP20,
-    States::TOP21,
-    States::TOP22,
-    States::TOP23,
-    States::TOP24,
-    States::TOP25,
-    States::TOP26,
-    States::TOP27,
-    States::TOP28,
-    States::TOP29,
-    States::TOP30,
-    States::TOP31,
-    States::TOP32,
-    States::TOP33,
-    States::TOP34,
-    States::TOP35,
-    States::TOP36,
-    States::TOP37,
-    States::TOP38,
-    States::TOP39,
-    States::TOP40,
-    States::TOP41,
-    States::TOP42,
-    States::TOP43,
-    States::TOP44,
-    States::TOP45,
-    States::TOP46,
-    States::TOP47,
-    States::TOP48,
-    States::TOP49,
-    States::TOP50,
-    States::TOP51,
-    States::TOP52,
-    States::TOP53,
-    States::TOP54,
-    States::TOP55,
-    States::TOP56,
-    States::TOP57,
-    States::TOP58,
-    States::TOP59,
-    States::TOP60,
-    States::TOP61,
-    States::TOP62,
-    States::TOP63,
-    States::TOP64,
-    States::TOP65,
-    States::TOP66,
-    States::TOP67,
-    States::TOP68,
-    States::TOP69,
-    States::TOP70,
-    States::TOP71,
-    States::TOP72,
-    States::TOP73,
-    States::TOP74,
-    States::TOP75,
-    States::TOP76,
-    States::TOP77,
-    States::TOP78,
-    States::TOP79,
-    States::TOP80,
-    States::TOP81,
-    States::TOP82,
-    States::TOP83,
-    States::TOP84,
-    States::TOP85,
-    States::TOP86,
-    States::TOP87,
-    States::TOP88,
-    States::TOP89,
-    States::TOP90,
-    States::TOP91,
-    States::TOP92,
-    States::TOP93,
-    States::TOP94,
-    States::TOP95,
-    States::TOP96,
-    States::TOP97,
-    States::TOP98,
-};
-
-const byte topicBytes[NUMBEROFTOPICS] = {
-    // can store the index as byte (8-bit unsigned humber) as there aren't more then 255 bytes (actually only 203 bytes) to decode
-    4,   // TOP0
-    0,   // TOP1
-    4,   // TOP2
-    7,   // TOP3
-    6,   // TOP4
-    143, // TOP5
-    144, // TOP6
-    153, // TOP7
-    166, // TOP8
-    42,  // TOP9
-    141, // TOP10
-    0,   // TOP11
-    0,   // TOP12
-    5,   // TOP13
-    142, // TOP14
-    194, // TOP15
-    193, // TOP16
-    7,   // TOP17
-    7,   // TOP18
-    5,   // TOP19
-    111, // TOP20
-    158, // TOP21
-    99,  // TOP22
-    84,  // TOP23
-    94,  // TOP24
-    44,  // TOP25
-    111, // TOP26
-    38,  // TOP27
-    39,  // TOP28
-    75,  // TOP29
-    76,  // TOP30
-    78,  // TOP31
-    77,  // TOP32
-    156, // TOP33
-    40,  // TOP34
-    41,  // TOP35
-    145, // TOP36
-    146, // TOP37
-    196, // TOP38
-    195, // TOP39
-    198, // TOP40
-    197, // TOP41
-    147, // TOP42
-    148, // TOP43
-    0,   // TOP44
-    43,  // TOP45
-    149, // TOP46
-    150, // TOP47
-    151, // TOP48
-    154, // TOP49
-    155, // TOP50
-    157, // TOP51
-    159, // TOP52
-    160, // TOP53
-    161, // TOP54
-    162, // TOP55
-    139, // TOP56
-    140, // TOP57
-    9,   // TOP58
-    9,   // TOP59
-    112, // TOP60
-    112, // TOP61
-    173, // TOP62
-    174, // TOP63
-    163, // TOP64
-    171, // TOP65
-    164, // TOP66
-    165, // TOP67
-    5,   // TOP68
-    117, // TOP69
-    100, // TOP70
-    101, // TOP71
-    86,  // TOP72
-    87,  // TOP73
-    89,  // TOP74
-    88,  // TOP75
-    28,  // TOP76
-    83,  // TOP77
-    85,  // TOP78
-    95,  // TOP79
-    96,  // TOP80
-    28,  // TOP81
-    79,  // TOP82
-    80,  // TOP83
-    82,  // TOP84
-    81,  // TOP85
-    90,  // TOP86
-    91,  // TOP87
-    93,  // TOP88
-    92,  // TOP89
-    0,   // TOP90
-    0,   // TOP91
-    172, // TOP92
-    72,  // TOP93
-    71,  // TOP94
-    74,  // TOP95
-    73,  // TOP96
-    98,  // TOP97
-    97,  // TOP98
-};
-
-
-const topicFP topicFunctions[NUMBEROFTOPICS] = {
-    getBit7and8,          // TOP0
-    unknown,              // TOP1
-    getBit1and2,          // TOP2
-    getBit1and2,          // TOP3
-    getOpMode,            // TOP4
-    getIntMinus128,       // TOP5
-    getIntMinus128,       // TOP6
-    getIntMinus128,       // TOP7
-    getIntMinus1,         // TOP8
-    getIntMinus128,       // TOP9
-    getIntMinus128,       // TOP10
-    unknown,              // TOP11
-    unknown,              // TOP12
-    getBit1and2,          // TOP13
-    getIntMinus128,       // TOP14
-    getIntMinus1Times200, // TOP15
-    getIntMinus1Times200, // TOP16
-    getRight3bits,        // TOP17
-    getBit3and4and5,      // TOP18
-    getBit3and4,          // TOP19
-    getBit7and8,          // TOP20
-    getIntMinus128,       // TOP21
-    getIntMinus128,       // TOP22
-    getIntMinus128,       // TOP23
-    getIntMinus128,       // TOP24
-    getIntMinus128,       // TOP25
-    getBit5and6,          // TOP26
-    getIntMinus128,       // TOP27
-    getIntMinus128,       // TOP28
-    getIntMinus128,       // TOP29
-    getIntMinus128,       // TOP30
-    getIntMinus128,       // TOP31
-    getIntMinus128,       // TOP32
-    getIntMinus128,       // TOP33
-    getIntMinus128,       // TOP34
-    getIntMinus128,       // TOP35
-    getIntMinus128,       // TOP36
-    getIntMinus128,       // TOP37
-    getIntMinus1Times200, // TOP38
-    getIntMinus1Times200, // TOP39
-    getIntMinus1Times200, // TOP40
-    getIntMinus1Times200, // TOP41
-    getIntMinus128,       // TOP42
-    getIntMinus128,       // TOP43
-    unknown,              // TOP44
-    getIntMinus128,       // TOP45
-    getIntMinus128,       // TOP46
-    getIntMinus128,       // TOP47
-    getIntMinus128,       // TOP48
-    getIntMinus128,       // TOP49
-    getIntMinus128,       // TOP50
-    getIntMinus128,       // TOP51
-    getIntMinus128,       // TOP52
-    getIntMinus128,       // TOP53
-    getIntMinus128,       // TOP54
-    getIntMinus128,       // TOP55
-    getIntMinus128,       // TOP56
-    getIntMinus128,       // TOP57
-    getBit5and6,          // TOP58
-    getBit7and8,          // TOP59
-    getBit7and8,          // TOP60
-    getBit5and6,          // TOP61
-    getIntMinus1Times10,  // TOP62
-    getIntMinus1Times10,  // TOP63
-    getIntMinus1Div5,     // TOP64
-    getIntMinus1Times50,  // TOP65
-    getIntMinus1,         // TOP66
-    getIntMinus1Div5,     // TOP67
-    getBit5and6,          // TOP68
-    getBit5and6,          // TOP69
-    getIntMinus128,       // TOP70
-    getIntMinus1,         // TOP71
-    getIntMinus128,       // TOP72
-    getIntMinus128,       // TOP73
-    getIntMinus128,       // TOP74
-    getIntMinus128,       // TOP75
-    getBit7and8,          // TOP76
-    getIntMinus128,       // TOP77
-    getIntMinus128,       // TOP78
-    getIntMinus128,       // TOP79
-    getIntMinus128,       // TOP80
-    getBit5and6,          // TOP81
-    getIntMinus128,       // TOP82
-    getIntMinus128,       // TOP83
-    getIntMinus128,       // TOP84
-    getIntMinus128,       // TOP85
-    getIntMinus128,       // TOP86
-    getIntMinus128,       // TOP87
-    getIntMinus128,       // TOP88
-    getIntMinus128,       // TOP89
-    unknown,              // TOP90
-    unknown,              // TOP91
-    getIntMinus1,         // TOP92
-    getIntMinus1,         // TOP93
-    getIntMinus1,         // TOP94
-    getIntMinus1,         // TOP95
-    getIntMinus1,         // TOP96
-    getIntMinus1,         // TOP97
-    getIntMinus1Times30,  // TOP98
-};
-
+/*****************************************************************************/
+/* Einheiten und Klartexte fuer die Weboberflaeche                           */
+/* Index 0 == "value" heisst: der Wert ist eine Zahl und Index 1 ist ihre    */
+/* Einheit. Sonst ist der Wert ein Index in die Liste der Klartexte.         */
+/*****************************************************************************/
 static const char *DisabledEnabled[] = {"Disabled", "Enabled"};
 static const char *BlockedFree[] = {"Blocked", "Free"};
 static const char *OffOn[] = {"Off", "On"};
@@ -336,107 +32,121 @@ static const char *Duty[] = {"value", "Duty"};
 static const char *HeatCoolModeDesc[] = {"Comp. Curve", "Direct"};
 static const char *Percent[] = {"value", "&#37"};
 
-const char **topicDescription[NUMBEROFTOPICS] = {
-    OffOn,            // TOP0
-    LitersPerMin,     // TOP1
-    DisabledEnabled,  // TOP2
-    DisabledEnabled,  // TOP3
-    OpModeDesc,       // TOP4
-    Celsius,          // TOP5
-    Celsius,          // TOP6
-    Celsius,          // TOP7
-    Hertz,            // TOP8
-    Celsius,          // TOP9
-    Celsius,          // TOP10
-    Hours,            // TOP11
-    Counter,          // TOP12
-    DisabledEnabled,  // TOP13
-    Celsius,          // TOP14
-    Watt,             // TOP15
-    Watt,             // TOP16
-    Powerfulmode,     // TOP17
-    Quietmode,        // TOP18
-    HolidayState,     // TOP19
-    Valve,            // TOP20
-    Celsius,          // TOP21
-    Kelvin,           // TOP22
-    Kelvin,           // TOP23
-    Kelvin,           // TOP24
-    Kelvin,           // TOP25
-    DisabledEnabled,  // TOP26
-    Celsius,          // TOP27
-    Celsius,          // TOP28
-    Celsius,          // TOP29
-    Celsius,          // TOP30
-    Celsius,          // TOP31
-    Celsius,          // TOP32
-    Celsius,          // TOP33
-    Celsius,          // TOP34
-    Celsius,          // TOP35
-    Celsius,          // TOP36
-    Celsius,          // TOP37
-    Watt,             // TOP38
-    Watt,             // TOP39
-    Watt,             // TOP40
-    Watt,             // TOP41
-    Celsius,          // TOP42
-    Celsius,          // TOP43
-    ErrorState,       // TOP44
-    Kelvin,           // TOP45
-    Celsius,          // TOP46
-    Celsius,          // TOP47
-    Celsius,          // TOP48
-    Celsius,          // TOP49
-    Celsius,          // TOP50
-    Celsius,          // TOP51
-    Celsius,          // TOP52
-    Celsius,          // TOP53
-    Celsius,          // TOP54
-    Celsius,          // TOP55
-    Celsius,          // TOP56
-    Celsius,          // TOP57
-    BlockedFree,      // TOP58
-    BlockedFree,      // TOP59
-    InactiveActive,   // TOP60
-    InactiveActive,   // TOP61
-    RotationsPerMin,  // TOP62
-    RotationsPerMin,  // TOP63
-    Pressure,         // TOP64
-    RotationsPerMin,  // TOP65
-    Pressure,         // TOP66
-    Ampere,           // TOP67
-    InactiveActive,   // TOP68
-    InactiveActive,   // TOP69
-    Celsius,          // TOP70
-    Minutes,          // TOP71
-    Celsius,          // TOP72
-    Celsius,          // TOP73
-    Celsius,          // TOP74
-    Celsius,          // TOP75
-    HeatCoolModeDesc, // TOP76
-    Celsius,          // TOP77
-    Celsius,          // TOP78
-    Celsius,          // TOP79
-    Celsius,          // TOP80
-    HeatCoolModeDesc, // TOP81
-    Celsius,          // TOP82
-    Celsius,          // TOP83
-    Celsius,          // TOP84
-    Celsius,          // TOP85
-    Celsius,          // TOP86
-    Celsius,          // TOP87
-    Celsius,          // TOP88
-    Celsius,          // TOP89
-    Hours,            // TOP90
-    Hours,            // TOP91
-    Duty,             // TOP92
-    Percent,          // TOP93
-    Percent,          // TOP94
-    Percent,          // TOP95
-    Percent,          // TOP96
-    Minutes,          // TOP97
-    Minutes,          // TOP98
+
+/*****************************************************************************/
+/* Die State-Topic-Tabelle - eine Zeile pro Topic                            */
+/*                                                                           */
+/*   TOP-Nr | Byte im Telegramm | Name | 1-Byte-Dekodierer |                 */
+/*   Mehrbyte-Dekodierer | Einheit/Klartexte    (siehe struct StateTopic)    */
+/* 'number' ist die TOP-Nummer als Datenfeld, nicht der Index: Zeilen        */
+/* koennen entfallen, ohne dass sich die Nummern der uebrigen verschieben.   */
+/*****************************************************************************/
+const StateTopic stateTopics[NUMBEROFTOPICS] = {
+    {  0,   4, "Heatpump_State",                   getBit7and8,          nullptr,                   OffOn},
+    {  1,   0, "Pump_Flow",                        nullptr,              getPumpFlow,               LitersPerMin},
+    {  2,   4, "Force_DHW_State",                  getBit1and2,          nullptr,                   DisabledEnabled},
+    {  3,   7, "Quiet_Mode_Schedule",              getBit1and2,          nullptr,                   DisabledEnabled},
+    {  4,   6, "Operating_Mode_State",             getOpMode,            nullptr,                   OpModeDesc},
+    {  5, 143, "Main_Inlet_Temp",                  getIntMinus128,       getInletTempWithFraction,  Celsius},
+    {  6, 144, "Main_Outlet_Temp",                 getIntMinus128,       getOutletTempWithFraction, Celsius},
+    {  7, 153, "Main_Target_Temp",                 getIntMinus128,       nullptr,                   Celsius},
+    {  8, 166, "Compressor_Freq",                  getIntMinus1,         nullptr,                   Hertz},
+    {  9,  42, "DHW_Target_Temp",                  getIntMinus128,       nullptr,                   Celsius},
+    { 10, 141, "DHW_Temp",                         getIntMinus128,       nullptr,                   Celsius},
+    { 11,   0, "Operations_Hours",                 nullptr,              getOperationHour,          Hours},
+    { 12,   0, "Operations_Counter",               nullptr,              getOperationCount,         Counter},
+    { 13,   5, "Main_Schedule_State",              getBit1and2,          nullptr,                   DisabledEnabled},
+    { 14, 142, "Outside_Temp",                     getIntMinus128,       nullptr,                   Celsius},
+    { 15, 194, "Heat_Energy_Production",           getIntMinus1Times200, nullptr,                   Watt},
+    { 16, 193, "Heat_Energy_Consumption",          getIntMinus1Times200, nullptr,                   Watt},
+    { 17,   7, "Powerful_Mode_Time",               getRight3bits,        nullptr,                   Powerfulmode},
+    { 18,   7, "Quiet_Mode_Level",                 getBit3and4and5,      nullptr,                   Quietmode},
+    { 19,   5, "Holiday_Mode_State",               getBit3and4,          nullptr,                   HolidayState},
+    { 20, 111, "ThreeWay_Valve_State",             getBit7and8,          nullptr,                   Valve},
+    { 21, 158, "Outside_Pipe_Temp",                getIntMinus128,       nullptr,                   Celsius},
+    { 22,  99, "DHW_Heat_Delta",                   getIntMinus128,       nullptr,                   Kelvin},
+    { 23,  84, "Heat_Delta",                       getIntMinus128,       nullptr,                   Kelvin},
+    { 24,  94, "Cool_Delta",                       getIntMinus128,       nullptr,                   Kelvin},
+    { 25,  44, "DHW_Holiday_Shift_Temp",           getIntMinus128,       nullptr,                   Kelvin},
+    { 26, 111, "Defrosting_State",                 getBit5and6,          nullptr,                   DisabledEnabled},
+    { 27,  38, "Z1_Heat_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 28,  39, "Z1_Cool_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 29,  75, "Z1_Heat_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 30,  76, "Z1_Heat_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
+    { 31,  78, "Z1_Heat_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
+    { 32,  77, "Z1_Heat_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 33, 156, "Room_Thermostat_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 34,  40, "Z2_Heat_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 35,  41, "Z2_Cool_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 36, 145, "Z1_Water_Temp",                    getIntMinus128,       nullptr,                   Celsius},
+    { 37, 146, "Z2_Water_Temp",                    getIntMinus128,       nullptr,                   Celsius},
+    { 38, 196, "Cool_Energy_Production",           getIntMinus1Times200, nullptr,                   Watt},
+    { 39, 195, "Cool_Energy_Consumption",          getIntMinus1Times200, nullptr,                   Watt},
+    { 40, 198, "DHW_Energy_Production",            getIntMinus1Times200, nullptr,                   Watt},
+    { 41, 197, "DHW_Energy_Consumption",           getIntMinus1Times200, nullptr,                   Watt},
+    { 42, 147, "Z1_Water_Target_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 43, 148, "Z2_Water_Target_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 44,   0, "Error",                            nullptr,              getErrorInfo,              ErrorState},
+    { 45,  43, "Room_Holiday_Shift_Temp",          getIntMinus128,       nullptr,                   Kelvin},
+    { 46, 149, "Buffer_Temp",                      getIntMinus128,       nullptr,                   Celsius},
+    { 47, 150, "Solar_Temp",                       getIntMinus128,       nullptr,                   Celsius},
+    { 48, 151, "Pool_Temp",                        getIntMinus128,       nullptr,                   Celsius},
+    { 49, 154, "Main_Hex_Outlet_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    { 50, 155, "Discharge_Temp",                   getIntMinus128,       nullptr,                   Celsius},
+    { 51, 157, "Inside_Pipe_Temp",                 getIntMinus128,       nullptr,                   Celsius},
+    { 52, 159, "Defrost_Temp",                     getIntMinus128,       nullptr,                   Celsius},
+    { 53, 160, "Eva_Outlet_Temp",                  getIntMinus128,       nullptr,                   Celsius},
+    { 54, 161, "Bypass_Outlet_Temp",               getIntMinus128,       nullptr,                   Celsius},
+    { 55, 162, "Ipm_Temp",                         getIntMinus128,       nullptr,                   Celsius},
+    { 56, 139, "Z1_Temp",                          getIntMinus128,       nullptr,                   Celsius},
+    { 57, 140, "Z2_Temp",                          getIntMinus128,       nullptr,                   Celsius},
+    { 58,   9, "DHW_Heater_State",                 getBit5and6,          nullptr,                   BlockedFree},
+    { 59,   9, "Room_Heater_State",                getBit7and8,          nullptr,                   BlockedFree},
+    { 60, 112, "Internal_Heater_State",            getBit7and8,          nullptr,                   InactiveActive},
+    { 61, 112, "External_Heater_State",            getBit5and6,          nullptr,                   InactiveActive},
+    { 62, 173, "Fan1_Motor_Speed",                 getIntMinus1Times10,  nullptr,                   RotationsPerMin},
+    { 63, 174, "Fan2_Motor_Speed",                 getIntMinus1Times10,  nullptr,                   RotationsPerMin},
+    { 64, 163, "High_Pressure",                    getIntMinus1Div5,     nullptr,                   Pressure},
+    { 65, 171, "Pump_Speed",                       getIntMinus1Times50,  nullptr,                   RotationsPerMin},
+    { 66, 164, "Low_Pressure",                     getIntMinus1,         nullptr,                   Pressure},
+    { 67, 165, "Compressor_Current",               getIntMinus1Div5,     nullptr,                   Ampere},
+    { 68,   5, "Force_Heater_State",               getBit5and6,          nullptr,                   InactiveActive},
+    { 69, 117, "Sterilization_State",              getBit5and6,          nullptr,                   InactiveActive},
+    { 70, 100, "Sterilization_Temp",               getIntMinus128,       nullptr,                   Celsius},
+    { 71, 101, "Sterilization_Max_Time",           getIntMinus1,         nullptr,                   Minutes},
+    { 72,  86, "Z1_Cool_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 73,  87, "Z1_Cool_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
+    { 74,  89, "Z1_Cool_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
+    { 75,  88, "Z1_Cool_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 76,  28, "Heating_Mode",                     getBit7and8,          nullptr,                   HeatCoolModeDesc},
+    { 77,  83, "Heating_Off_Outdoor_Temp",         getIntMinus128,       nullptr,                   Celsius},
+    { 78,  85, "Heater_On_Outdoor_Temp",           getIntMinus128,       nullptr,                   Celsius},
+    { 79,  95, "Heat_To_Cool_Temp",                getIntMinus128,       nullptr,                   Celsius},
+    { 80,  96, "Cool_To_Heat_Temp",                getIntMinus128,       nullptr,                   Celsius},
+    { 81,  28, "Cooling_Mode",                     getBit5and6,          nullptr,                   HeatCoolModeDesc},
+    { 82,  79, "Z2_Heat_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 83,  80, "Z2_Heat_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
+    { 84,  82, "Z2_Heat_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
+    { 85,  81, "Z2_Heat_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 86,  90, "Z2_Cool_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 87,  91, "Z2_Cool_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
+    { 88,  93, "Z2_Cool_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
+    { 89,  92, "Z2_Cool_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
+    { 90,   0, "Room_Heater_Operations_Hours",     nullptr,              getRoomHeaterHour,         Hours},
+    { 91,   0, "DHW_Heater_Operations_Hours",      nullptr,              getDHWHeaterHour,          Hours},
+    { 92, 172, "Pump_Duty",                        getIntMinus1,         nullptr,                   Duty},
+    { 93,  72, "SGReady_Capacity1_Heat",           getIntMinus1,         nullptr,                   Percent},
+    { 94,  71, "SGReady_Capacity1_DHW",            getIntMinus1,         nullptr,                   Percent},
+    { 95,  74, "SGReady_Capacity2_Heat",           getIntMinus1,         nullptr,                   Percent},
+    { 96,  73, "SGReady_Capacity2_DHW",            getIntMinus1,         nullptr,                   Percent},
+    { 97,  98, "DHW_Heatup_Time",                  getIntMinus1,         nullptr,                   Minutes},
+    { 98,  97, "DHW_Room_Max_Time",                getIntMinus1Times30,  nullptr,                   Minutes},
 };
+
+// Haelt NUMBEROFTOPICS (Array-Groesse von actual_data) und die Tabelle zusammen
+static_assert(sizeof(stateTopics) / sizeof(stateTopics[0]) == NUMBEROFTOPICS,
+              "NUMBEROFTOPICS passt nicht zur Zeilenzahl von stateTopics[]");
+
 
 unsigned long nextalldatatime = 0;
 
@@ -455,20 +165,22 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
   }
 
   char top_value[MAXVALUELEN]; // stack buffer, decoders are String-free
-  for (unsigned int top_num = 0; top_num < NUMBEROFTOPICS; top_num++)
+  // index laeuft ueber die Tabellenzeilen, die TOP-Nummer kommt aus der Zeile
+  for (unsigned int index = 0; index < NUMBEROFTOPICS; index++)
   {
-    getTopicPayload(top_num, serial_data, top_value);
-    bool changed = (strcmp(actual_data[top_num], top_value) != 0);
+    const StateTopic &topic = stateTopics[index];
+    getTopicPayload(index, serial_data, top_value);
+    bool changed = (strcmp(actual_data[index], top_value) != 0);
 
     if (updatealltopics || changed)
     {
       if (changed) // write only changed topics to mqtt log
       {
-        sprintf(pub_msg, "<PUB> TOP%d %s: %s", top_num, topicNames[top_num], top_value);
+        (void)snprintf(pub_msg, sizeof(pub_msg), "<PUB> TOP%u %s: %s", topic.number, topic.name, top_value);
         write_mqtt_log(pub_msg);
       }
-      strlcpy(actual_data[top_num], top_value, MAXVALUELEN);
-      (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topicNames[top_num]);
+      strlcpy(actual_data[index], top_value, MAXVALUELEN);
+      (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topic.name);
       (void)mqtt_client.publish(mqtt_topic, top_value, MQTT_RETAIN_VALUES);
     }
   }
@@ -477,43 +189,38 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
 /*****************************************************************************/
 /* calculate the payload                                                     */
 /* out must hold at least MAXVALUELEN bytes                                  */
+/*                                                                           */
+/* Frueher entschied hier ein switch ueber fest verdrahtete TOP-Nummern,     */
+/* welches Topic mehrere Bytes braucht. Jede Verschiebung der Nummerierung   */
+/* haette diese case-Marken stillschweigend auf andere Topics zeigen lassen  */
+/* - es kompiliert ja weiter. Jetzt bringt die Tabellenzeile ihren           */
+/* Dekodierer selbst mit, die Zuordnung kann nicht mehr verrutschen.         */
 /*****************************************************************************/
-void getTopicPayload(unsigned int top_num, uint8_t *serial_data, char *out)
+void getTopicPayload(unsigned int index, uint8_t *serial_data, char *out)
 {
-  switch (top_num)
+  // Aufrufer indizieren mit Schleifenzaehlern: Bereich pruefen, statt am Ende
+  // der Tabelle vorbeizulesen
+  if (index >= NUMBEROFTOPICS)
   {
-  case 1: // Pump_Flow
-    getPumpFlow(serial_data, out);
-    break;
-  case 5: // InletTemp with fraction
-    getInletTempWithFraction(serial_data, out);
-    break;
-  case 6: // OutletTemp with fraction
-    getOutletTempWithFraction(serial_data, out);
-    break;
-  case 11: // Operations_Hours
-    getOperationHour(serial_data, out);
-    break;
-  case 12: // Operations_Counter
-    getOperationCount(serial_data, out);
-    break;
-  case 90: // Room_Heater_Operations_Hours
-    getRoomHeaterHour(serial_data, out);
-    break;
-  case 91: // DHW_Heater_Operations_Hours
-    getDHWHeaterHour(serial_data, out);
-    break;
-  case 44: // Error and decription
-    getErrorInfo(serial_data, out);
-    break;
-  default:
+    (void)strlcpy(out, "-1", MAXVALUELEN);
+    return;
+  }
+
+  const StateTopic &topic = stateTopics[index];
+
+  if (topic.wide != nullptr) // Topic braucht mehrere Bytes des Telegramms
   {
-    // call the topic function for 1 byte topics
-    byte serial_value = serial_data[topicBytes[top_num]];
-    topicFunctions[top_num](serial_value, out);
-    break;
+    topic.wide(&topic, serial_data, out);
+    return;
   }
+
+  if (topic.decode == nullptr) // weder 1-Byte- noch Mehrbyte-Dekodierer: Tabellenfehler
+  {
+    (void)strlcpy(out, "-1", MAXVALUELEN);
+    return;
   }
+
+  topic.decode(serial_data[topic.pos], out);
 }
 
 /*****************************************************************************/
@@ -590,11 +297,6 @@ void getIntMinus1Times30(byte input, char *out)
   (void)snprintf(out, MAXVALUELEN, "%d", ((int)input - 1) * 30);
 }
 
-void unknown(byte input, char *out)
-{
-  (void)strlcpy(out, "-1", MAXVALUELEN);
-}
-
 void getOpMode(byte input, char *out)
 {
   int mode;
@@ -637,35 +339,42 @@ void getOpMode(byte input, char *out)
 /*****************************************************************************/
 /* temperatures with fraction: integer part from the standard 1-byte        */
 /* decoder, fraction bits from byte 118 (raw 1..4, otherwise no fraction)   */
+/*                                                                          */
+/* Diese beiden holten Byte und Dekodierer frueher ueber topicBytes[5] bzw.  */
+/* [6] aus den Parallel-Tabellen - also ueber eine fest verdrahtete          */
+/* TOP-Nummer. Jetzt kommen beide aus der eigenen Tabellenzeile.            */
 /*****************************************************************************/
 static const char *fractionText[] = {".00", ".25", ".50", ".75"};
 
-void getInletTempWithFraction(uint8_t *serial_data, char *out)
+// Ganzzahlanteil ueber den 1-Byte-Dekodierer der Zeile, dann die Nachkommastelle
+static void appendFraction(const StateTopic *topic, uint8_t *serial_data, char *out, int fractional)
 {
-  int fractional = (int)(serial_data[118] & 0b111);
-  byte serial_value = serial_data[topicBytes[5]];
-  topicFunctions[5](serial_value, out); // TOP5 integer part
+  if (topic->decode == nullptr) // Tabellenfehler: Zeile ohne 1-Byte-Dekodierer
+  {
+    (void)strlcpy(out, "-1", MAXVALUELEN);
+    return;
+  }
+  topic->decode(serial_data[topic->pos], out);
   if (fractional >= 1 && fractional <= 4)
   {
     (void)strlcat(out, fractionText[fractional - 1], MAXVALUELEN);
   }
 }
 
-void getOutletTempWithFraction(uint8_t *serial_data, char *out)
+void getInletTempWithFraction(const StateTopic *topic, uint8_t *serial_data, char *out)
 {
-  int fractional = (int)((serial_data[118] >> 3) & 0b111);
-  byte serial_value = serial_data[topicBytes[6]];
-  topicFunctions[6](serial_value, out); // TOP6 integer part
-  if (fractional >= 1 && fractional <= 4)
-  {
-    (void)strlcat(out, fractionText[fractional - 1], MAXVALUELEN);
-  }
+  appendFraction(topic, serial_data, out, (int)(serial_data[118] & 0b111));
+}
+
+void getOutletTempWithFraction(const StateTopic *topic, uint8_t *serial_data, char *out)
+{
+  appendFraction(topic, serial_data, out, (int)((serial_data[118] >> 3) & 0b111));
 }
 
 /*****************************************************************************/
 /* multi-byte decoders                                                       */
 /*****************************************************************************/
-void getPumpFlow(uint8_t *serial_data, char *out)
+void getPumpFlow(const StateTopic *, uint8_t *serial_data, char *out)
 { // TOP1 //
   float PumpFlow1 = (float)serial_data[170];
   float PumpFlow2 = (((float)serial_data[169] - 1) / 256);
@@ -673,27 +382,27 @@ void getPumpFlow(uint8_t *serial_data, char *out)
   (void)dtostrf(PumpFlow1 + PumpFlow2, 1, 2, out);
 }
 
-void getOperationHour(uint8_t *serial_data, char *out)
+void getOperationHour(const StateTopic *, uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[183], serial_data[182]) - 1);
 }
 
-void getOperationCount(uint8_t *serial_data, char *out)
+void getOperationCount(const StateTopic *, uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[180], serial_data[179]) - 1);
 }
 
-void getRoomHeaterHour(uint8_t *serial_data, char *out)
+void getRoomHeaterHour(const StateTopic *, uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[186], serial_data[185]) - 1);
 }
 
-void getDHWHeaterHour(uint8_t *serial_data, char *out)
+void getDHWHeaterHour(const StateTopic *, uint8_t *serial_data, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (int)word(serial_data[189], serial_data[188]) - 1);
 }
 
-void getErrorInfo(uint8_t *serial_data, char *out)
+void getErrorInfo(const StateTopic *, uint8_t *serial_data, char *out)
 { // TOP44 //
   int Error_type = (int)serial_data[113];
   int Error_number = ((int)(serial_data[114])) - 17;
