@@ -52,6 +52,17 @@ struct SetCommand
 /* below makes it visible if it ever happens.                                */
 /*****************************************************************************/
 
+/*****************************************************************************/
+/* Warum die Nummerierung Luecken hat                                        */
+/*                                                                           */
+/* SET7 und SET8 waren die Zone-2-Anforderungstemperaturen und sind in 3.4.0 */
+/* entfallen - diese Anlage hat keine Zone 2, und in Node-RED wurden sie nie */
+/* benutzt. Die uebrigen Nummern sind ABSICHTLICH stehen geblieben: 'number' */
+/* ist ein Datenfeld, kein Index, und SET9 heisst in MQTT-Topics.md und in    */
+/* allen Notizen weiter SET9. Bitte nicht "aufraeumen" - eine Umnummerierung */
+/* macht jede Doku und jeden Mitschnitt von vorher falsch.                   */
+/*****************************************************************************/
+
 static const SetCommand setCommands[] = {
     // Nr topic            pos  mask  min  max  conversion    param
     {1, &Topics::SET1, 4, 0x03, 0, 1, CONV_ADD, 1},        // Heatpump off=1 on=2
@@ -60,8 +71,6 @@ static const SetCommand setCommands[] = {
     {4, &Topics::SET4, 7, 0xFF, 0, 3, CONV_ADD, 73},       // PowerfulMode 0/30/60/90 min
     {5, &Topics::SET5, 38, 0xFF, -5, 65, CONV_ADD, 128},   // Z1 heat: shift or direct temp
     {6, &Topics::SET6, 39, 0xFF, -5, 65, CONV_ADD, 128},   // Z1 cool: shift or direct temp
-    {7, &Topics::SET7, 40, 0xFF, -5, 65, CONV_ADD, 128},   // Z2 heat: shift or direct temp
-    {8, &Topics::SET8, 41, 0xFF, -5, 65, CONV_ADD, 128},   // Z2 cool: shift or direct temp
     {9, &Topics::SET9, 6, 0xFF, 0, 6, CONV_OPMODE, 0},     // OperationMode via lookup
     {10, &Topics::SET10, 4, 0xC0, 0, 1, CONV_MUL_INC, 64}, // ForceDHW off=64 on=128
     {11, &Topics::SET11, 42, 0xFF, 40, 75, CONV_ADD, 128}, // DHW target temp

@@ -1,5 +1,56 @@
 #pragma once
 // Changelog:
+// 3.4.0 - Zone 2 entfernt. Diese Anlagen haben keine Zone 2, die Topics
+//         trugen also nur dekodiertes Rauschen und legten im ioBroker
+//         13 Objekte an, die niemand deuten kann.
+//         Weg sind: TOP34, TOP35, TOP37, TOP43, TOP57 und TOP82-89 sowie
+//         die Set-Kommandos SET7/SET8 (Z2HeatRequestTemperature,
+//         Z2CoolRequestTemperature; in Node-RED nie benutzt, vom Betreiber
+//         bestaetigt). NUMBEROFTOPICS 99 -> 86.
+//         Die Nummerierung hat dadurch LUECKEN, und das ist Absicht: Dank
+//         'number' als Datenfeld (s. 3.3.0) behaelt jedes verbliebene Topic
+//         seine bisherige Nummer. TOP36 heisst weiter TOP36 - in
+//         MQTT-Topics.md, in alten Mitschnitten und im Original-Projekt.
+//         Bitte nicht durchnummerieren. Entsprechende Warnhinweise stehen
+//         ueber beiden Tabellen (decode.cpp, commands.cpp).
+//         Nachweis mit test/decode_vergleich.py --entfallen Z2_ gegen den
+//         Stand vor 3.3.0: 65016 Zeilen identisch, 86 Topics, exakt die 13
+//         Zone-2-Topics fehlen und sonst nichts.
+//         NACH dem Flashen beider Stufen: test/retained_loeschen.py (neu)
+//         ausfuehren. Die Firmware publiziert mit Retain-Flag, der Broker
+//         liefert die 13 alten Werte sonst weiter an jeden neuen Abonnenten
+//         aus - das Topic verschwindet nicht, es friert ein.
+//         Groessen gegenueber 3.3.0: ESP8266 RAM -960 B, Flash -824 B;
+//         ESP32 RAM -256 B, Flash -872 B.
+// 3.3.0 - Die vier positionsgleichen State-Topic-Tabellen in decode.cpp durch
+//         EINE Tabelle ersetzt (struct StateTopic): Name, Quellbyte,
+//         Dekodierer und Einheit eines Topics stehen jetzt in einer Zeile
+//         statt ueber topicNames/topicBytes/topicFunctions/topicDescription
+//         verteilt, die nur ueber die Position und einen // TOPn-Kommentar
+//         zusammenhingen. Die 99 States::TOPn-Deklarationen in Topics.h/.cpp
+//         entfallen ersatzlos, die Namen stehen in der Tabelle.
+//         REIN INTERNER UMBAU - keine Verhaltensaenderung: gleiche Topics,
+//         gleiche Namen, gleiche Werte (Nachweis s. unten).
+//         Zwei Fallen sind dabei strukturell verschwunden:
+//         - 'number' ist ein DATENFELD, nicht der Array-Index. Zeilen koennen
+//           entfallen, ohne dass sich die TOP-Nummern der uebrigen
+//           verschieben - die Nummern stehen so in MQTT-Topics.md.
+//         - getTopicPayload entschied vorher per switch ueber fest
+//           verdrahtete TOP-Nummern (case 44:, case 90: ...), welches Topic
+//           mehrere Bytes braucht. Jede Verschiebung der Nummerierung haette
+//           diese Marken stillschweigend auf andere Topics zeigen lassen, und
+//           zwar OHNE Compilerfehler. Jetzt bringt die Zeile ihren
+//           Dekodierer selbst mit.
+//         Ausserdem: unknown() entfernt (war nur Platzhalter fuer die
+//         Mehrbyte-Topics und wurde nie aufgerufen), Bereichspruefung in
+//         getTopicPayload, sprintf -> snprintf im Publish-Log.
+//         Nachweis mit test/decode_vergleich.py: alter und neuer Stand auf
+//         dem Mac uebersetzt und mit denselben 756 Telegrammen gefuettert
+//         (jeder Bytewert 0..255 plus 500 Pseudozufallstelegramme) -
+//         74844 Zeilen aus Nummer, Name, Wert und Einheit identisch.
+//         Groessen: ESP8266 RAM +296 B (const-Tabellen liegen dort im RAM;
+//         die Feldreihenfolge im struct ist deshalb auf wenig Padding
+//         ausgelegt), Flash -712 B. ESP32 RAM -1184 B, Flash -176 B.
 // 3.2.2 - Wertebereiche der beiden Kurven-OutsideHigh-Parameter an der
 //         Anlage ausgemessen statt aus Quellen uebernommen:
 //           Z1HeatCurveOutsideHighTemp   war 15..35 -> jetzt -15..15
@@ -92,4 +143,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.2.2";
+static const char* heishamon_version = "3.4.0";

@@ -4,8 +4,47 @@
 #include <PubSubClient.h>
 #include "Topics.h"
 
-#define NUMBEROFTOPICS 99 // last topic number + 1
-#define MAXVALUELEN 16    // longest payload value incl. terminator (e.g. "No error", "-123.75")
+// Anzahl der Zeilen in stateTopics[]. Wird als Array-Groesse gebraucht (siehe
+// actual_data in HeishaMon.cpp) und muss deshalb eine Konstante sein - dass sie
+// zur Tabelle passt, sichert ein static_assert in decode.cpp ab.
+constexpr unsigned int NUMBEROFTOPICS = 86;
+
+#define MAXVALUELEN 16 // longest payload value incl. terminator (e.g. "No error", "-123.75")
+
+struct StateTopic;
+
+// Dekodierer-Signaturen:
+//   topicFP  liest ein einzelnes Byte (der Normalfall)
+//   wideFP   braucht mehrere Bytes des Telegramms und bekommt deshalb die
+//            ganze Zeile mit, um pos/decode daraus verwenden zu koennen
+typedef void (*topicFP)(byte, char *);
+typedef void (*wideFP)(const StateTopic *, uint8_t *, char *);
+
+/*****************************************************************************/
+/* State topic table                                                         */
+/* Eine Zeile pro Topic - Name, Quellbyte, Dekodierer und Einheit stehen      */
+/* beieinander statt in vier positionsgleichen Parallel-Tabellen.            */
+/*                                                                           */
+/* Wichtig: 'number' ist ein Datenfeld, NICHT der Array-Index. Ein Topic      */
+/* behaelt damit seine TOP-Nummer, auch wenn Zeilen davor entfernt werden -   */
+/* die Nummern stehen so in MQTT-Topics.md und sind die gemeinsame Sprache    */
+/* mit dem Original-Projekt. Indiziert wird ueber die Position (actual_data,  */
+/* Web-Tabelle), ausgegeben wird 'number'.                                    */
+/*****************************************************************************/
+/* Feldreihenfolge: die beiden Bytes stehen bewusst nebeneinander. Auf dem     */
+/* ESP8266 liegen const-Tabellen im RAM, und mit einem Zeiger dazwischen       */
+/* kaeme je Zeile 3 Byte Padding dazu - ueber 99 Zeilen fast 400 Byte.         */
+struct StateTopic
+{
+  byte number;       // TOPn - nur fuer Anzeige und Log, NICHT der Index
+  byte pos;          // Byte im Telegramm (0, wenn nur 'wide' zustaendig ist)
+  const char *name;  // MQTT-Topic-Name unterhalb von <prefix>/state/
+  topicFP decode;    // 1-Byte-Dekodierer, nullptr bei reinen Mehrbyte-Topics
+  wideFP wide;       // Mehrbyte-Dekodierer, sonst nullptr
+  const char **desc; // Einheit bzw. Klartexte fuer die Weboberflaeche
+};
+
+extern const StateTopic stateTopics[NUMBEROFTOPICS];
 
 void publish_heatpump_data(uint8_t *, char (*)[MAXVALUELEN], PubSubClient &);
 
@@ -13,7 +52,6 @@ void publish_heatpump_data(uint8_t *, char (*)[MAXVALUELEN], PubSubClient &);
 // no String allocations in the decode path (runs every 5 seconds)
 void getTopicPayload(unsigned int, uint8_t *, char *);
 
-void unknown(byte, char *);
 void getBit1and2(byte, char *);
 void getBit3and4(byte, char *);
 void getBit5and6(byte, char *);
@@ -29,19 +67,12 @@ void getIntMinus1Times30(byte, char *);
 void getIntMinus1Times50(byte, char *);
 void getIntMinus1Times200(byte, char *);
 void getOpMode(byte, char *);
-void getPumpFlow(uint8_t *, char *);
-void getOperationHour(uint8_t *, char *);
-void getOperationCount(uint8_t *, char *);
-void getRoomHeaterHour(uint8_t *, char *);
-void getDHWHeaterHour(uint8_t *, char *);
-void getErrorInfo(uint8_t *, char *);
-void getInletTempWithFraction(uint8_t *, char *);
-void getOutletTempWithFraction(uint8_t *, char *);
 
-typedef void (*topicFP)(byte, char *);
-
-// lookup tables, defined once in decode.cpp (previously static copies per translation unit)
-extern const char *topicNames[NUMBEROFTOPICS];
-extern const byte topicBytes[NUMBEROFTOPICS];
-extern const topicFP topicFunctions[NUMBEROFTOPICS];
-extern const char **topicDescription[NUMBEROFTOPICS];
+void getPumpFlow(const StateTopic *, uint8_t *, char *);
+void getOperationHour(const StateTopic *, uint8_t *, char *);
+void getOperationCount(const StateTopic *, uint8_t *, char *);
+void getRoomHeaterHour(const StateTopic *, uint8_t *, char *);
+void getDHWHeaterHour(const StateTopic *, uint8_t *, char *);
+void getErrorInfo(const StateTopic *, uint8_t *, char *);
+void getInletTempWithFraction(const StateTopic *, uint8_t *, char *);
+void getOutletTempWithFraction(const StateTopic *, uint8_t *, char *);

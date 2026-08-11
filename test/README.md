@@ -31,6 +31,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `kurven_test.py` | Kurven-Kommandos SET27-SET34 nachweisen (schreibt die Ist-Werte zurueck, veraendert nichts) | Produktivgeraet |
 | `kurven_sync.py` | Heiz-/Kuehlkurve aus dem ioBroker-Konfigurationsbaum in die WPs spiegeln (`--dry-run`) | Produktivgeraet |
 | `kurven_grenzen.py` | Ermitteln, welche Kurvenwerte die WP wirklich annimmt (veraendert Werte, stellt sie zurueck) | Produktivgeraet |
+| `decode_vergleich.py` | Dekodierpfad zweier Codestaende gegeneinander laufen lassen, auf dem Mac | nein |
+| `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 
@@ -184,6 +186,61 @@ Wichtig zur Deutung dieser Messungen: Die WP klemmt beim Schreiben sofort, ein
 Rueckvergleich nach ~15 s reicht dafuer. Die Kopplung von TargetHigh an den
 Sollwert (naechster Abschnitt) wirkt dagegen VERZOEGERT ueber den 5-min-
 Re-Assert - wer nur 15 s misst, haelt einen Wert faelschlich fuer stabil.
+
+## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
+
+Wer an `decode.cpp` umbaut, will wissen, ob sich die AUSGABE veraendert hat -
+und zwar bevor geflasht wird. `decode_vergleich.py` uebersetzt dafuer zwei
+Codestaende auf dem Mac (Arduino-Ersatzheader liegen im Skript, kein Geraet
+noetig) und fuettert beide mit denselben Telegrammen. Verglichen werden je
+Topic TOP-Nummer, Name, dekodierter Wert und Einheit.
+
+```bash
+./decode_vergleich.py                  # Arbeitsstand gegen HEAD
+./decode_vergleich.py --basis v3.2.2   # gegen ein Tag
+```
+
+Die Telegramme sind bewusst nicht nur zufaellig: Phase 1 setzt jeden Bytewert
+von 0 bis 255 auf allen Positionen gleichzeitig und trifft damit jeden Zweig
+jedes Dekodierers - auch die seltenen wie die Fehlercodes F/H (Bytewerte 177
+und 161) und die Nachkommabits. Phase 2 haengt 500 Pseudozufallstelegramme an,
+um Kombinationen ueber mehrere Bytes zu erwischen. Zusammen 756 Telegramme,
+also 74844 verglichene Zeilen bei 99 Topics.
+
+Fuer den Fall, dass Topics absichtlich entfallen, gibt es `--entfallen`:
+
+```bash
+./decode_vergleich.py --entfallen Z2_   # Zone-2-Topics duerfen neu fehlen
+```
+
+Damit wurde 3.3.0 abgenommen (Umbau auf die eine `stateTopics`-Tabelle):
+74844 Zeilen identisch.
+
+## Entfallene Topics vom Broker raeumen (retained_loeschen.py)
+
+Die Firmware publiziert alle state-Topics mit Retain-Flag. Faellt ein Topic aus
+der Tabelle, hoert die Firmware zwar auf zu senden - der Broker liefert den
+zuletzt gesendeten Wert aber weiter an jeden neuen Abonnenten aus. Das Topic
+verschwindet also nicht, es **friert auf seinem letzten Wert ein**, was
+schlimmer ist als vorher: Es sieht aus wie ein Messwert, ist aber keiner.
+
+`retained_loeschen.py` raeumt das auf, indem es eine leere Nutzlast mit
+Retain-Flag auf die betroffenen Topics schickt. Welche das sind, wird nicht von
+Hand gepflegt, sondern aus dem Code ermittelt (Topic-Namen des Basisstandes
+gegen die des Arbeitsstandes) - die Liste kann also nicht veralten.
+
+```bash
+./retained_loeschen.py --basis v3.3.0              # nur anzeigen
+./retained_loeschen.py --basis v3.3.0 --loeschen   # wirklich loeschen
+```
+
+**Reihenfolge:** erst die neue Firmware auf BEIDE Stufen flashen, dann
+loeschen. Andersherum publiziert die noch laufende alte Firmware die Werte
+sofort wieder.
+
+**Was das nicht tut:** die Objekte unter `mqtt.0.*` im ioBroker entfernen. Die
+bleiben als Karteileichen stehen, bis sie dort von Hand geloescht werden - so
+wie es 2026-08-07 bewusst auch mit `panasonic_heat_pump_test.*` gehalten wurde.
 
 ## Fallstrick: MQTT-Client-ID bei schnellen Reconnects
 
