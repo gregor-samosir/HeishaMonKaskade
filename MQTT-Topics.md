@@ -1,6 +1,12 @@
 # MQTT Topics for HeishaMonKaskade
 
-Topic names compatible with the original HeishaMon
+Topic names compatible with the original HeishaMon. The tables are in English;
+the explanatory sections are given in English and German.
+
+*Deutsch: Topic-Namen kompatibel zum Original-HeishaMon. Die Tabellen sind
+englisch, die erläuternden Abschnitte stehen englisch und deutsch da – der
+Kurvenabschnitt als eigene [deutsche Fassung](#zone-1-heiz--und-kühlkurve-set27--set34--deutsche-fassung)
+am Ende.*
 
 ## Availability Topic:
 
@@ -126,6 +132,12 @@ The payload is a plain integer; values outside the range are rejected and
 logged. Ranges and byte positions below are generated from `commands.cpp` -
 that table is the single source of truth.
 
+*Deutsch: Gesendet wird an `<prefix>/set/<Topic>`, also z. B.
+`panasonic_heat_pump/set/Heatpump`. Die Nutzlast ist eine einfache ganze Zahl;
+Werte außerhalb des Bereichs werden abgewiesen und protokolliert. Bereiche und
+Byte-Positionen unten sind aus `commands.cpp` nachgezogen – diese Tabelle ist
+die einzige Quelle der Wahrheit.*
+
  ID | Topic | Byte | Description | Value/Range
 :--- | :--- | :--- | --- | ---
 SET1  | Heatpump | 4 | Set heatpump on or off | 0=off, 1=on
@@ -164,6 +176,10 @@ SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperatur
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
+
+*Deutsch: Im Direktbetrieb setzen die Topics, die auf `xxxRequestTemperature`
+enden, die absolute Zieltemperatur (statt einer Verschiebung gegenüber der
+Kurve).*
 
 ### Zone 1 heating and cooling curve (SET27 - SET34)
 
@@ -238,3 +254,68 @@ not come from there. Other curve parameters may have similar undocumented
 limits that only show when a value is pushed to its bound - `test/kurven_grenzen.py`
 measures them, and after any curve change the state topics should be read back
 and compared.
+
+### Zone 1 Heiz- und Kühlkurve (SET27 – SET34) – deutsche Fassung
+
+Dieser Abschnitt gibt den englischen Text darüber vollständig wieder. Das Thema
+ist fehleranfällig genug, dass es die Übersetzung wert ist – die Zuordnung der
+Feldnamen war in dieser Datei selbst schon einmal falsch beschrieben.
+
+Jede Kurve wird durch zwei Punkte festgelegt. Die gesetzten Werte lassen sich
+über die zugehörigen state-Topics zurücklesen; genau dagegen sollte eine
+Steuerung prüfen (Tabelle „Set | reads back as" oben).
+
+**Vorsicht bei der Benennung:** `High` und `Low` beziehen sich immer auf die
+**Außentemperatur**, bei der Heizkurve genauso wie bei der Kühlkurve.
+`Target_High` gehört also zu `Outside_High` und `Target_Low` zu `Outside_Low` –
+es gibt keine Überkreuzung und keinen Unterschied zwischen den beiden Kurven.
+Was tatsächlich stolpern lässt: `Target_High` ist in beiden Fällen der
+*niedrigere* Vorlaufwert. Je wärmer es draußen ist, desto weniger Vorlauf
+braucht eine Heizkurve – und desto mehr kühlt eine Kühlkurve. Eine Anlage, die
+die Heizkurve mit 34 °C bei −10 °C außen und 26 °C bei +15 °C fährt, meldet
+demnach:
+
+```text
+Z1_Heat_Curve_Target_High_Temp   26      Z1_Heat_Curve_Outside_High_Temp   15
+Z1_Heat_Curve_Target_Low_Temp    34      Z1_Heat_Curve_Outside_Low_Temp   -10
+```
+
+Diese Zuordnung wurde am 2026-08-11 an beiden Anlagen zurückgelesen und ist die
+einzige, die physikalisch Sinn ergibt: 34 °C Vorlauf gehören zu −10 °C außen,
+nicht zu +15 °C. Zu beachten: `Target_High` zeigt im Direktbetrieb nicht
+zwingend den konfigurierten Kurvenwert – es teilt sich die Speicherstelle mit
+der Vorlauf-Solltemperatur (siehe unten). Die Zone-2-Topics TOP82 – TOP89
+tragen dieselben Feldnamen; ihre Beschreibungen sind aus Zone 1 übertragen –
+diese Anlage hat keine Zone 2, gemessen ist das dort also nicht.
+
+Zweck dieser Kommandos ist der **Notbetrieb**: Die Wärmepumpe soll auf ihrer
+eigenen Kurve weiterlaufen können, wenn die externe Kaskadensteuerung ausfällt.
+Die Werte werden von dort gespiegelt, und der Betreiber muss am Bedienterminal
+nur von Direkt- auf Kurvenbetrieb umschalten.
+
+**`TargetHigh` ist die Vorlauf-Solltemperatur.** `Z1HeatCurveTargetHighTemp`
+(SET27, Byte 75) und `Z1HeatRequestTemperature` (SET5, Byte 38) sind in der
+Wärmepumpe derselbe Wert – im Direktmodus die Vorlauf-Solltemperatur, im
+Kurvenmodus der obere Kurvenpunkt; für das Kühlpaar SET31 / SET6 gilt dasselbe.
+Ihn zu schreiben verstellt also den Sollwert einer laufenden Anlage, und im
+Direktbetrieb hält er nicht: Der nächste Sollwert-Schreibvorgang zieht ihn mit.
+Deshalb liest sich `TargetHigh` an einer Anlage im Direktbetrieb als aktueller
+Sollwert statt als konfigurierter Kurvenpunkt, und deshalb überträgt
+`test/kurven_sync.py` ihn nicht. Gemessen an WP1 am 2026-08-10, Einzelheiten in
+`test/README.md`.
+
+**Die Bereiche der beiden `OutsideHigh`-Parameter wurden an der Anlage
+ausgemessen** statt aus Dokumentation übernommen – und beide veröffentlichten
+Angaben erwiesen sich als falsch (Messwerte im Codeblock oben). Der Heizwert ist
+der lehrreiche Fall: Gültig ist alles *bis* 15, nicht *ab* 15, wie verbreitet
+angegeben. Von den 21 Werten, die der alte Bereich zuließ, wurde genau einer
+angenommen – und das fiel nur auf, weil die Anlagenkonfiguration zufällig genau
+diesen einen nutzt. Die Wärmepumpe klemmt außerhalb liegende Werte kommentarlos
+auf den nächstgelegenen Rand.
+
+Zu beachten: Das Original-HeishaMon-Projekt prüft überhaupt keine Bereiche
+(`cmd[75] = value + 128`, ungefiltert). Die andernorts kursierenden Bereiche
+stammen also nicht von dort. Andere Kurvenparameter können ähnliche
+undokumentierte Grenzen haben, die sich erst zeigen, wenn ein Wert gegen den
+Rand gefahren wird – `test/kurven_grenzen.py` misst sie aus. **Nach jeder
+Kurvenänderung die state-Topics zurücklesen und vergleichen.**
