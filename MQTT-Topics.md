@@ -22,6 +22,20 @@ LOG1 | log | response from headpump (level switchable)
 
 ## Sensor Topics:
 
+**Zone 2 was removed in 3.4.0** and the numbering has gaps as a result: TOP34,
+TOP35, TOP37, TOP43, TOP57 and TOP82 - TOP89 are gone, on the command side
+SET7 and SET8. These plants have no zone 2, so the topics only ever carried
+decoded noise. The gaps are deliberate - every remaining topic keeps the number
+it always had, so this file, older captures and the numbers used by the
+upstream project all stay valid.
+
+*Deutsch: **Zone 2 ist in 3.4.0 entfallen**, deshalb hat die Nummerierung
+Lücken: TOP34, TOP35, TOP37, TOP43, TOP57 und TOP82 – TOP89 gibt es nicht mehr,
+auf der Kommandoseite SET7 und SET8. Diese Anlagen haben keine Zone 2, die
+Topics trugen also nur dekodiertes Rauschen. Die Lücken sind Absicht: Jedes
+verbliebene Topic behält seine bisherige Nummer, damit diese Datei, ältere
+Mitschnitte und die Nummern des Original-Projekts gültig bleiben.*
+
 ID | Topic | Response/Description
 :--- | --- | ---
 TOP0 | Heatpump_State | Heatpump state (0=off, 1=on)
@@ -58,16 +72,12 @@ TOP30 | Z1_Heat_Curve_Target_Low_Temp | Flow target at the lower outside tempera
 TOP31 | Z1_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve, paired with Target_High (°C)
 TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve, paired with Target_Low (°C)
 TOP33 | Room_Thermostat_Temp | Remote control thermostat temp (°C)
-TOP34 | Z2_Heat_Request_Temp | Zone 2 Heat Requested shift temp (-5 to 5) or direct heat temp (20 to max)
-TOP35 | Z2_Cool_Request_Temp | Zone 2 Cool Requested shift temp (-5 to 5) or direct cool temp (5 to 20)
 TOP36 | Z1_Water_Temp | Zone 1 Water outlet temperature (°C)
-TOP37 | Z2_Water_Temp | Zone 2 Water outlet temperature (°C)
 TOP38 | Cool_Energy_Production | Thermal cooling power production (Watt)
 TOP39 | Cool_Energy_Consumption | Elektrical cooling power consumption (Watt)
 TOP40 | DHW_Energy_Production | Thermal DHW power production (Watt)
 TOP41 | DHW_Energy_Consumption | Elektrical DHW power consumption (Watt)
 TOP42 | Z1_Water_Target_Temp | Zone 1 water target temperature (°C)
-TOP43 | Z2_Water_Target_Temp | Zone 2 water target temperature (°C)
 TOP44 | Error | Last active Error from Heat Pump
 TOP45 | Room_Holiday_Shift_Temp | Room heating Holiday shift temperature (-15 to 15)
 TOP46 | Buffer_Temp | Actual Buffer temperature (°C)
@@ -81,7 +91,6 @@ TOP53 | Eva_Outlet_Temp | Eva Outlet temperature (°C)
 TOP54 | Bypass_Outlet_Temp | Bypass Outlet temperature (°C)
 TOP55 | Ipm_Temp | Ipm temperature (°C)
 TOP56 | Z1_Temp | Zone1: Actual Temperature (°C) 
-TOP57 | Z2_Temp | Zone2: Actual Temperature (°C) 
 TOP58 | DHW_Heater_State | When enabled, backup/booster heater can be used for DHW heating (disabled - enabled)
 TOP59 | Room_Heater_State | When enabled, backup heater can be used for room heating (disabled - enabled)
 TOP60 | Internal_Heater_State | Internal backup heater state (inactive - active)
@@ -106,14 +115,6 @@ TOP78 | Heater_On_Outdoor_Temp | Below this temperature the backup heater is all
 TOP79 | Heat_To_Cool_Temp | Outdoor temperature to switch from heat to cool mode when in auto setting(°C)
 TOP80 | Cool_To_Heat_Temp | Outdoor temperature to switch from cool to heat mode when in auto setting (°C)
 TOP81 | Cooling_Mode | Compensation / Direct mode for cool (0 = compensation curve, 1 = direct)
-TOP82 | Z2_Heat_Curve_Target_High_Temp | Flow target at the upper outside temperature of the heating curve (°C)
-TOP83 | Z2_Heat_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the heating curve (°C)
-TOP84 | Z2_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve (°C)
-TOP85 | Z2_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve (°C)
-TOP86 | Z2_Cool_Curve_Target_High_Temp | Flow target at the upper outside temperature of the cooling curve (°C)
-TOP87 | Z2_Cool_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the cooling curve (°C)
-TOP88 | Z2_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve (°C)
-TOP89 | Z2_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve (°C)
 TOP90 | Room_Heater_Operations_Hours | Electric heater operating time for Room (Hour)
 TOP91 | DHW_Heater_Operations_Hours | Electric heater operating time for DHW (Hour)
 TOP92 | Pump_Duty | Pump duty
@@ -146,8 +147,6 @@ SET3  | QuietMode | 7 | Set quiet mode level | 0, 1, 2 or 3
 SET4  | PowerfulMode | 7 | Set powerful mode run time in minutes | 0=off, 1=30, 2=60 or 3=90
 SET5  | Z1HeatRequestTemperature | 38 | Set Z1 heat shift or direct heat temperature | -5 to 65
 SET6  | Z1CoolRequestTemperature | 39 | Set Z1 cool shift or direct cool temperature | -5 to 65
-SET7  | Z2HeatRequestTemperature | 40 | Set Z2 heat shift or direct heat temperature | -5 to 65
-SET8  | Z2CoolRequestTemperature | 41 | Set Z2 cool shift or direct cool temperature | -5 to 65
 SET9  | OperationMode | 6 | Sets operating mode | 0=Heat only, 1=Cool only, 2=Auto, 3=DHW only, 4=Heat+DHW, 5=Cool+DHW, 6=Auto+DHW
 SET10 | ForceDHW | 4 | Forces DHW (operating mode must first be one with DHW: 3, 4, 5 or 6 - see SET9) | 0, 1
 SET11 | DHWTemp | 42 | Set DHW target temperature | 40 - 75
@@ -215,9 +214,9 @@ That pairing was read back from both plants on 2026-08-11 and is the only one
 that makes physical sense: 34 &deg;C flow belongs to -10 &deg;C outside, not to
 +15 &deg;C. Note that `Target_High` will not necessarily show the configured
 curve value while the plant runs in direct mode - it shares its memory cell
-with the flow setpoint (see the `TargetHigh` note below). The zone 2 topics
-TOP82 - TOP89 carry the same field names; their descriptions follow zone 1 by
-analogy - this plant has no zone 2, so they are not verified by measurement.
+with the flow setpoint (see the `TargetHigh` note below). Zone 2 had the same
+set of curve topics (TOP82 - TOP89); they were never verified on these plants
+and are gone since 3.4.0.
 
 These commands exist so the heatpump can keep running on its own curve if the
 external cascade control is unavailable - the values are kept in sync from
@@ -284,9 +283,9 @@ Diese Zuordnung wurde am 2026-08-11 an beiden Anlagen zurückgelesen und ist die
 einzige, die physikalisch Sinn ergibt: 34 °C Vorlauf gehören zu −10 °C außen,
 nicht zu +15 °C. Zu beachten: `Target_High` zeigt im Direktbetrieb nicht
 zwingend den konfigurierten Kurvenwert – es teilt sich die Speicherstelle mit
-der Vorlauf-Solltemperatur (siehe unten). Die Zone-2-Topics TOP82 – TOP89
-tragen dieselben Feldnamen; ihre Beschreibungen sind aus Zone 1 übertragen –
-diese Anlage hat keine Zone 2, gemessen ist das dort also nicht.
+der Vorlauf-Solltemperatur (siehe unten). Zone 2 hatte denselben Satz
+Kurven-Topics (TOP82 – TOP89); sie waren an diesen Anlagen nie überprüfbar und
+sind seit 3.4.0 entfallen.
 
 Zweck dieser Kommandos ist der **Notbetrieb**: Die Wärmepumpe soll auf ihrer
 eigenen Kurve weiterlaufen können, wenn die externe Kaskadensteuerung ausfällt.

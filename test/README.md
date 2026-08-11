@@ -32,6 +32,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `kurven_sync.py` | Heiz-/Kuehlkurve aus dem ioBroker-Konfigurationsbaum in die WPs spiegeln (`--dry-run`) | Produktivgeraet |
 | `kurven_grenzen.py` | Ermitteln, welche Kurvenwerte die WP wirklich annimmt (veraendert Werte, stellt sie zurueck) | Produktivgeraet |
 | `decode_vergleich.py` | Dekodierpfad zweier Codestaende gegeneinander laufen lassen, auf dem Mac | nein |
+| `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 
@@ -214,6 +215,32 @@ Fuer den Fall, dass Topics absichtlich entfallen, gibt es `--entfallen`:
 
 Damit wurde 3.3.0 abgenommen (Umbau auf die eine `stateTopics`-Tabelle):
 74844 Zeilen identisch.
+
+## Entfallene Topics vom Broker raeumen (retained_loeschen.py)
+
+Die Firmware publiziert alle state-Topics mit Retain-Flag. Faellt ein Topic aus
+der Tabelle, hoert die Firmware zwar auf zu senden - der Broker liefert den
+zuletzt gesendeten Wert aber weiter an jeden neuen Abonnenten aus. Das Topic
+verschwindet also nicht, es **friert auf seinem letzten Wert ein**, was
+schlimmer ist als vorher: Es sieht aus wie ein Messwert, ist aber keiner.
+
+`retained_loeschen.py` raeumt das auf, indem es eine leere Nutzlast mit
+Retain-Flag auf die betroffenen Topics schickt. Welche das sind, wird nicht von
+Hand gepflegt, sondern aus dem Code ermittelt (Topic-Namen des Basisstandes
+gegen die des Arbeitsstandes) - die Liste kann also nicht veralten.
+
+```bash
+./retained_loeschen.py --basis v3.3.0              # nur anzeigen
+./retained_loeschen.py --basis v3.3.0 --loeschen   # wirklich loeschen
+```
+
+**Reihenfolge:** erst die neue Firmware auf BEIDE Stufen flashen, dann
+loeschen. Andersherum publiziert die noch laufende alte Firmware die Werte
+sofort wieder.
+
+**Was das nicht tut:** die Objekte unter `mqtt.0.*` im ioBroker entfernen. Die
+bleiben als Karteileichen stehen, bis sie dort von Hand geloescht werden - so
+wie es 2026-08-07 bewusst auch mit `panasonic_heat_pump_test.*` gehalten wurde.
 
 ## Fallstrick: MQTT-Client-ID bei schnellen Reconnects
 

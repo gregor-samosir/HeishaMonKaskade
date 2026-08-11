@@ -47,10 +47,13 @@ def build_connect(client_id, user=None, password=None, keepalive=30):
     return bytes([0x10]) + remaining_length(len(body)) + body
 
 
-def build_publish(topic, payload):
-    # QoS 0, kein Retain: der Pruefstand soll nichts auf dem Broker hinterlassen
+def build_publish(topic, payload, retain=False):
+    # QoS 0. Ohne Retain (Vorgabe) hinterlaesst der Pruefstand nichts auf dem
+    # Broker. Mit retain=True und leerer Nutzlast wird eine vorhandene Retained
+    # Message geloescht - das braucht retained_loeschen.py.
     body = mqtt_string(topic) + payload.encode("utf-8")
-    return bytes([0x30]) + remaining_length(len(body)) + body
+    header = 0x31 if retain else 0x30
+    return bytes([header]) + remaining_length(len(body)) + body
 
 
 CONNACK_MEANING = {
@@ -61,6 +64,14 @@ CONNACK_MEANING = {
     4: "abgelehnt: Benutzername/Passwort falsch",
     5: "abgelehnt: nicht autorisiert",
 }
+
+
+def read_connack(sock):
+    """CONNACK lesen und den Rueckgabecode liefern (-1, wenn keiner kam)."""
+    connack = sock.recv(4)
+    if len(connack) < 4 or connack[0] != 0x20:
+        return -1
+    return connack[3]
 
 
 def main():
@@ -88,11 +99,10 @@ def main():
 
     with sock:
         sock.sendall(build_connect(args.client_id, args.user, args.password))
-        connack = sock.recv(4)
-        if len(connack) < 4 or connack[0] != 0x20:
-            print(f"FEHLER: kein CONNACK erhalten (Antwort: {connack.hex()})")
+        code = read_connack(sock)
+        if code < 0:
+            print("FEHLER: kein CONNACK erhalten")
             return 1
-        code = connack[3]
         print(f"CONNACK {code}: {CONNACK_MEANING.get(code, 'unbekannter Code')}")
         if code != 0:
             return 1

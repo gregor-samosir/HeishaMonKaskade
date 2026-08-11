@@ -1,5 +1,27 @@
 #pragma once
 // Changelog:
+// 3.4.0 - Zone 2 entfernt. Diese Anlagen haben keine Zone 2, die Topics
+//         trugen also nur dekodiertes Rauschen und legten im ioBroker
+//         13 Objekte an, die niemand deuten kann.
+//         Weg sind: TOP34, TOP35, TOP37, TOP43, TOP57 und TOP82-89 sowie
+//         die Set-Kommandos SET7/SET8 (Z2HeatRequestTemperature,
+//         Z2CoolRequestTemperature; in Node-RED nie benutzt, vom Betreiber
+//         bestaetigt). NUMBEROFTOPICS 99 -> 86.
+//         Die Nummerierung hat dadurch LUECKEN, und das ist Absicht: Dank
+//         'number' als Datenfeld (s. 3.3.0) behaelt jedes verbliebene Topic
+//         seine bisherige Nummer. TOP36 heisst weiter TOP36 - in
+//         MQTT-Topics.md, in alten Mitschnitten und im Original-Projekt.
+//         Bitte nicht durchnummerieren. Entsprechende Warnhinweise stehen
+//         ueber beiden Tabellen (decode.cpp, commands.cpp).
+//         Nachweis mit test/decode_vergleich.py --entfallen Z2_ gegen den
+//         Stand vor 3.3.0: 65016 Zeilen identisch, 86 Topics, exakt die 13
+//         Zone-2-Topics fehlen und sonst nichts.
+//         NACH dem Flashen beider Stufen: test/retained_loeschen.py (neu)
+//         ausfuehren. Die Firmware publiziert mit Retain-Flag, der Broker
+//         liefert die 13 alten Werte sonst weiter an jeden neuen Abonnenten
+//         aus - das Topic verschwindet nicht, es friert ein.
+//         Groessen gegenueber 3.3.0: ESP8266 RAM -960 B, Flash -824 B;
+//         ESP32 RAM -256 B, Flash -872 B.
 // 3.3.0 - Die vier positionsgleichen State-Topic-Tabellen in decode.cpp durch
 //         EINE Tabelle ersetzt (struct StateTopic): Name, Quellbyte,
 //         Dekodierer und Einheit eines Topics stehen jetzt in einer Zeile
@@ -121,4 +143,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.3.0";
+static const char* heishamon_version = "3.4.0";

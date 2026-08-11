@@ -13,8 +13,6 @@ public:
     static const std::string SET4;
     static const std::string SET5;
     static const std::string SET6;
-    static const std::string SET7;
-    static const std::string SET8;
     static const std::string SET9;
     static const std::string SET10;
     static const std::string SET11;

@@ -7,7 +7,7 @@
 // Anzahl der Zeilen in stateTopics[]. Wird als Array-Groesse gebraucht (siehe
 // actual_data in HeishaMon.cpp) und muss deshalb eine Konstante sein - dass sie
 // zur Tabelle passt, sichert ein static_assert in decode.cpp ab.
-constexpr unsigned int NUMBEROFTOPICS = 99;
+constexpr unsigned int NUMBEROFTOPICS = 86;
 
 #define MAXVALUELEN 16 // longest payload value incl. terminator (e.g. "No error", "-123.75")
 

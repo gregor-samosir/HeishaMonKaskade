@@ -40,6 +40,12 @@ static const char *Percent[] = {"value", "&#37"};
 /*   Mehrbyte-Dekodierer | Einheit/Klartexte    (siehe struct StateTopic)    */
 /* 'number' ist die TOP-Nummer als Datenfeld, nicht der Index: Zeilen        */
 /* koennen entfallen, ohne dass sich die Nummern der uebrigen verschieben.   */
+/*                                                                           */
+/* Genau das ist hier passiert - die Nummerierung hat Luecken bei TOP34,     */
+/* 35, 37, 43, 57 und 82-89. Das waren die Zone-2-Topics, entfallen in       */
+/* 3.4.0, weil diese Anlage keine Zone 2 hat. Die Luecken sind Absicht:      */
+/* TOP36 heisst in MQTT-Topics.md und in jedem alten Mitschnitt weiter       */
+/* TOP36. Bitte nicht durchnummerieren.                                      */
 /*****************************************************************************/
 const StateTopic stateTopics[NUMBEROFTOPICS] = {
     {  0,   4, "Heatpump_State",                   getBit7and8,          nullptr,                   OffOn},
@@ -76,16 +82,12 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 31,  78, "Z1_Heat_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
     { 32,  77, "Z1_Heat_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
     { 33, 156, "Room_Thermostat_Temp",             getIntMinus128,       nullptr,                   Celsius},
-    { 34,  40, "Z2_Heat_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
-    { 35,  41, "Z2_Cool_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
     { 36, 145, "Z1_Water_Temp",                    getIntMinus128,       nullptr,                   Celsius},
-    { 37, 146, "Z2_Water_Temp",                    getIntMinus128,       nullptr,                   Celsius},
     { 38, 196, "Cool_Energy_Production",           getIntMinus1Times200, nullptr,                   Watt},
     { 39, 195, "Cool_Energy_Consumption",          getIntMinus1Times200, nullptr,                   Watt},
     { 40, 198, "DHW_Energy_Production",            getIntMinus1Times200, nullptr,                   Watt},
     { 41, 197, "DHW_Energy_Consumption",           getIntMinus1Times200, nullptr,                   Watt},
     { 42, 147, "Z1_Water_Target_Temp",             getIntMinus128,       nullptr,                   Celsius},
-    { 43, 148, "Z2_Water_Target_Temp",             getIntMinus128,       nullptr,                   Celsius},
     { 44,   0, "Error",                            nullptr,              getErrorInfo,              ErrorState},
     { 45,  43, "Room_Holiday_Shift_Temp",          getIntMinus128,       nullptr,                   Kelvin},
     { 46, 149, "Buffer_Temp",                      getIntMinus128,       nullptr,                   Celsius},
@@ -99,7 +101,6 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 54, 161, "Bypass_Outlet_Temp",               getIntMinus128,       nullptr,                   Celsius},
     { 55, 162, "Ipm_Temp",                         getIntMinus128,       nullptr,                   Celsius},
     { 56, 139, "Z1_Temp",                          getIntMinus128,       nullptr,                   Celsius},
-    { 57, 140, "Z2_Temp",                          getIntMinus128,       nullptr,                   Celsius},
     { 58,   9, "DHW_Heater_State",                 getBit5and6,          nullptr,                   BlockedFree},
     { 59,   9, "Room_Heater_State",                getBit7and8,          nullptr,                   BlockedFree},
     { 60, 112, "Internal_Heater_State",            getBit7and8,          nullptr,                   InactiveActive},
@@ -124,14 +125,6 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 79,  95, "Heat_To_Cool_Temp",                getIntMinus128,       nullptr,                   Celsius},
     { 80,  96, "Cool_To_Heat_Temp",                getIntMinus128,       nullptr,                   Celsius},
     { 81,  28, "Cooling_Mode",                     getBit5and6,          nullptr,                   HeatCoolModeDesc},
-    { 82,  79, "Z2_Heat_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
-    { 83,  80, "Z2_Heat_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
-    { 84,  82, "Z2_Heat_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
-    { 85,  81, "Z2_Heat_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
-    { 86,  90, "Z2_Cool_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
-    { 87,  91, "Z2_Cool_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
-    { 88,  93, "Z2_Cool_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},
-    { 89,  92, "Z2_Cool_Curve_Outside_Low_Temp",   getIntMinus128,       nullptr,                   Celsius},
     { 90,   0, "Room_Heater_Operations_Hours",     nullptr,              getRoomHeaterHour,         Hours},
     { 91,   0, "DHW_Heater_Operations_Hours",      nullptr,              getDHWHeaterHour,          Hours},
     { 92, 172, "Pump_Duty",                        getIntMinus1,         nullptr,                   Duty},
