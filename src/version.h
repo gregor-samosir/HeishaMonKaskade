@@ -1,5 +1,15 @@
 #pragma once
 // Changelog:
+// 3.4.1 - Stufe 2 laeuft jetzt ebenfalls auf dem offiziellen HeishaMon-
+//         ESP32-S3-Board (loest den D1 mini H2 ab). KEINE Aenderung an der
+//         Firmware-Logik - nur zwei neue Envs in platformio.ini:
+//         heishamon_esp32_h2_usb (Erstflash ueber USB, weil die
+//         Partitionstabelle der Original-Firmware getauscht werden muss)
+//         und heishamon_esp32_h2_ota (alle spaeteren Updates, 192.168.2.122).
+//         Der abgeloeste D1 mini H2 (192.168.2.193) ist Reserve und gehoert
+//         STROMLOS - sonst hoeren zwei Geraete auf dieselben Set-Topics.
+//         Beide Stufen auf denselben Stand gebracht, damit die Versions-
+//         anzeige weiter als Flash-Nachweis taugt.
 // 3.4.0 - Zone 2 entfernt. Diese Anlagen haben keine Zone 2, die Topics
 //         trugen also nur dekodiertes Rauschen und legten im ioBroker
 //         13 Objekte an, die niemand deuten kann.
@@ -150,4 +160,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.4.0";
+static const char* heishamon_version = "3.4.1";
