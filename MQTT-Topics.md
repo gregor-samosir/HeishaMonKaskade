@@ -47,8 +47,8 @@ TOP25 | DHW_Holiday_Shift_Temp | DHW Holiday shift temperature  (-15 to +15)
 TOP26 | Defrosting_State | Defrost state (0=off, 1=on)
 TOP27 | Z1_Heat_Request_Temp | Zone 1 Heat Requested shift temp (-5 to 5) or direct heat temp (20 to max)
 TOP28 | Z1_Cool_Request_Temp | Zone 1 Cool Requested shift temp (-5 to 5) or direct cool temp (5 to 20)
-TOP29 | Z1_Heat_Curve_Target_High_Temp | Target temperature at lowest point on the heating curve (°C)
-TOP30 | Z1_Heat_Curve_Target_Low_Temp | Target temperature at highest point on the heating curve (°C)
+TOP29 | Z1_Heat_Curve_Target_High_Temp | Flow target at the upper outside temperature of the heating curve, paired with Outside_High (°C)
+TOP30 | Z1_Heat_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the heating curve, paired with Outside_Low (°C)
 TOP31 | Z1_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve, paired with Target_High (°C)
 TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve, paired with Target_Low (°C)
 TOP33 | Room_Thermostat_Temp | Remote control thermostat temp (°C)
@@ -90,24 +90,24 @@ TOP68 | Force_Heater_State | Force heater status (0=inactive, 1=active)
 TOP69 | sdC/Sterilization_State | Sterilisation State (0=inactive, 1=active)
 TOP70 | sdC/Sterilization_Temp | Sterilisation Temperature (°C)
 TOP71 | sdC/Sterilization_Max_Time | Sterilisation maximum time (minutes)
-TOP72 | Z1_Cool_Curve_Target_High_Temp | Target temperature at lowest point on the cooling curve (°C)
-TOP73 | Z1_Cool_Curve_Target_Low_Temp | Target temperature at highest point on the cooling curve (°C)
-TOP74 | Z1_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve (°C)
-TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve (°C)
+TOP72 | Z1_Cool_Curve_Target_High_Temp | Flow target at the upper outside temperature of the cooling curve, paired with Outside_High (°C)
+TOP73 | Z1_Cool_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the cooling curve, paired with Outside_Low (°C)
+TOP74 | Z1_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve, paired with Target_High (°C)
+TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve, paired with Target_Low (°C)
 TOP76 | Heating_Mode | Compensation / Direct mode for heat (0 = compensation curve, 1 = direct)
 TOP77 | Heating_Off_Outdoor_Temp | Above this outdoor temperature all heating is turned off(5 to 35 °C)
 TOP78 | Heater_On_Outdoor_Temp | Below this temperature the backup heater is allowed to be used by heatpump heating logic(-15 to 20 °C)
 TOP79 | Heat_To_Cool_Temp | Outdoor temperature to switch from heat to cool mode when in auto setting(°C)
 TOP80 | Cool_To_Heat_Temp | Outdoor temperature to switch from cool to heat mode when in auto setting (°C)
 TOP81 | Cooling_Mode | Compensation / Direct mode for cool (0 = compensation curve, 1 = direct)
-TOP82 | Z2_Heat_Curve_Target_High_Temp | Target temperature at lowest point on the heating curve (°C)
-TOP83 | Z2_Heat_Curve_Target_Low_Temp | Target temperature at highest point on the heating curve (°C)
-TOP84 | Z2_Heat_Curve_Outside_High_Temp | Lowest outside temperature on the heating curve (°C)
-TOP85 | Z2_Heat_Curve_Outside_Low_Temp | Highest outside temperature on the heating curve (°C)
-TOP86 | Z2_Cool_Curve_Target_High_Temp | Target temperature at lowest point on the cooling curve (°C)
-TOP87 | Z2_Cool_Curve_Target_Low_Temp | Target temperature at highest point on the cooling curve (°C)
-TOP88 | Z2_Cool_Curve_Outside_High_Temp | Lowest outside temperature on the cooling curve (°C)
-TOP89 | Z2_Cool_Curve_Outside_Low_Temp | Highest outside temperature on the cooling curve (°C)
+TOP82 | Z2_Heat_Curve_Target_High_Temp | Flow target at the upper outside temperature of the heating curve (°C)
+TOP83 | Z2_Heat_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the heating curve (°C)
+TOP84 | Z2_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve (°C)
+TOP85 | Z2_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve (°C)
+TOP86 | Z2_Cool_Curve_Target_High_Temp | Flow target at the upper outside temperature of the cooling curve (°C)
+TOP87 | Z2_Cool_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the cooling curve (°C)
+TOP88 | Z2_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve (°C)
+TOP89 | Z2_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve (°C)
 TOP90 | Room_Heater_Operations_Hours | Electric heater operating time for Room (Hour)
 TOP91 | DHW_Heater_Operations_Hours | Electric heater operating time for DHW (Hour)
 TOP92 | Pump_Duty | Pump duty
@@ -158,8 +158,8 @@ SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target at the upper
 SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target at the lower outside temperature | 20 - 55
 SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: lower outside temperature | -15 to 15
 SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperature | -15 to 15
-SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the lower outside temperature | 5 - 20
-SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the upper outside temperature | 5 - 20
+SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the upper outside temperature | 5 - 20
+SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the lower outside temperature | 5 - 20
 SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
 
@@ -181,22 +181,42 @@ SET32 Z1CoolCurveTargetLowTemp | TOP73 Z1_Cool_Curve_Target_Low_Temp
 SET33 Z1CoolCurveOutsideLowTemp | TOP75 Z1_Cool_Curve_Outside_Low_Temp
 SET34 Z1CoolCurveOutsideHighTemp | TOP74 Z1_Cool_Curve_Outside_High_Temp
 
-Careful with the naming: for the **heating** curve the low outside temperature
-pairs with `Target_Low` (cold outside, high flow temperature), while for the
-**cooling** curve the low outside temperature pairs with `Target_High`. Those
-are Panasonic's own field names, not a mistake in this firmware. A plant
-running the heating curve 35 &deg;C at -5 &deg;C outside and 20 &deg;C at
-+15 &deg;C therefore reports:
+Careful with the naming: `High` and `Low` always refer to the **outside**
+temperature, for the heating as well as for the cooling curve. `Target_High`
+therefore belongs to `Outside_High` and `Target_Low` to `Outside_Low` - there
+is no crossing over and no difference between the two curves. What does trip
+people up is that `Target_High` is the *lower* flow temperature in both cases:
+the warmer it is outside, the less flow temperature a heating curve needs, and
+the more a cooling curve cools. A plant running the heating curve 34 &deg;C at
+-10 &deg;C outside and 26 &deg;C at +15 &deg;C therefore reports:
 
 ```text
-Z1_Heat_Curve_Target_High_Temp   20      Z1_Heat_Curve_Outside_High_Temp   15
-Z1_Heat_Curve_Target_Low_Temp    35      Z1_Heat_Curve_Outside_Low_Temp    -5
+Z1_Heat_Curve_Target_High_Temp   26      Z1_Heat_Curve_Outside_High_Temp   15
+Z1_Heat_Curve_Target_Low_Temp    34      Z1_Heat_Curve_Outside_Low_Temp   -10
 ```
+
+That pairing was read back from both plants on 2026-08-11 and is the only one
+that makes physical sense: 34 &deg;C flow belongs to -10 &deg;C outside, not to
++15 &deg;C. Note that `Target_High` will not necessarily show the configured
+curve value while the plant runs in direct mode - it shares its memory cell
+with the flow setpoint (see the `TargetHigh` note below). The zone 2 topics
+TOP82 - TOP89 carry the same field names; their descriptions follow zone 1 by
+analogy - this plant has no zone 2, so they are not verified by measurement.
 
 These commands exist so the heatpump can keep running on its own curve if the
 external cascade control is unavailable - the values are kept in sync from
 there, and the operator only has to switch the terminal from direct mode to
 curve mode.
+
+**`TargetHigh` is the flow setpoint.** `Z1HeatCurveTargetHighTemp` (SET27,
+byte 75) and `Z1HeatRequestTemperature` (SET5, byte 38) are the same value
+inside the heatpump - the flow setpoint in direct mode, the upper curve point
+in curve mode; the same holds for the cooling pair SET31 / SET6. Writing it
+therefore changes the setpoint of a running plant, and in direct mode it does
+not hold: the next setpoint write drags it along. That is why `TargetHigh` on
+a plant in direct mode reads back as the current setpoint instead of the
+configured curve point, and why `test/kurven_sync.py` does not mirror it.
+Measured on WP1 on 2026-08-10, details in `test/README.md`.
 
 **The ranges of both `OutsideHigh` parameters were measured on the plant, not
 taken from documentation** - and both published values turned out wrong:
