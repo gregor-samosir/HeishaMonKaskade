@@ -12,11 +12,21 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Toolchains und Bibliotheken für ESP8266 und ESP32 zusammen: 1163 MB,
-      # am 2026-08-12 am angelegten Cache gemessen. Ohne Cache lädt sie jeder
-      # Lauf neu - das fiel erst auf, seit alle Envs gebaut werden.
+      # Cache für Toolchains und Bibliotheken (ESP8266 + ESP32, 1163 MB).
+      #
+      # WARUM er hier steht - nicht wegen der Laufzeit. Am 2026-08-12 gemessen,
+      # Lauf #6 (kalt) gegen #7 (warm) bei identischem Code: Job ~287 s -> ~246 s,
+      # also gut 40 s von rund vier Minuten, und davon ist ein Teil Streuung des
+      # Runners (pip allein schwankte um 11 s). Der Hauptposten sind die ~220 s
+      # Kompilierzeit für zehn Envs, die der Cache nicht berührt; das
+      # Wiederherstellen der 1163 MB kostet umgekehrt selbst 11 s.
+      # Der Cache bleibt, weil er die CI von den Espressif-Downloadservern
+      # unabhängig macht: sind die nicht erreichbar, läuft sie trotzdem durch.
+      # Für eine CI, deren Zweck das Absichern der ESP8266-Rückfallebene ist,
+      # wiegt das mehr als eine halbe Minute.
+      #
       # Der Schlüssel hängt an platformio.ini, weil dort steht, welche
-      # Plattformen und Bibliotheken gebraucht werden. Zwei bewusste Folgen:
+      # Plattformen und Bibliotheken gebraucht werden. Zwei Folgen davon:
       # - Die Plattformen sind dort NICHT auf eine Version gepinnt, ein
       #   Toolchain-Update erreicht die CI also erst mit der nächsten Änderung
       #   an platformio.ini.
