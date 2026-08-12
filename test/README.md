@@ -269,7 +269,7 @@ sofort wieder.
 Am 2026-08-11 beim Zone-2-Ausbau nachgemessen: Der Broker auf
 192.168.2.147:1883 ist **kein eigenstaendiger Broker, sondern der
 ioBroker-MQTT-Adapter im Server-Modus** (`mqtt.0.info.connection` fuehrt die
-verbundenen Clients auf, darunter HeishaMon32_h1 und HeishaMonH2). Damit
+verbundenen Clients auf, darunter HeishaMon32_h1 und HeishaMon32_h2). Damit
 gibt es keinen getrennten Retained-Speicher: Der Adapter bedient neue
 Abonnenten aus seiner eigenen Objektdatenbank, und zwar mit **retain=0** -
 auch bei Zone-1-Topics, die es noch gibt.
