@@ -12,5 +12,7 @@ jobs:
           python-version: '3.x'
       - name: Install PlatformIO
         run: pip install --upgrade platformio
+      - name: Setup platformio_user_env.ini
+        run: cp platformio_user_env_sample.ini platformio_user_env.ini
       - name: Run PlatformIO Build
         run: pio run
