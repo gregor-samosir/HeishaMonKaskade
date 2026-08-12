@@ -51,6 +51,31 @@ void saveConfigCallback()
   shouldSaveConfig = true;
 }
 
+/*****************************************************************************/
+/* Ein Feld aus der config.json uebernehmen                                  */
+/*                                                                           */
+/* Fehlt der Schluessel oder steht dort kein Text, bleibt der einkompilierte  */
+/* Standardwert stehen. Vorher stand hier strncpy(dst, jsonDoc[key], 39):     */
+/* ArduinoJson liefert fuer einen fehlenden Schluessel einen NULLZEIGER, und  */
+/* strncpy stuerzt damit ab - das Geraet waere in einer Boot-Endlosschleife    */
+/* gelandet und nur per USB an der Waermepumpe zu retten.                     */
+/* Der realistische Ausloeser ist nicht das Bearbeiten der Datei von Hand,    */
+/* sondern ein spaeterer Firmware-Stand, der ein NEUES Feld liest: die        */
+/* config.json auf dem Geraet kennt es noch nicht, und beide Kaskadenstufen   */
+/* wuerden direkt nach dem OTA gleichzeitig ausfallen.                        */
+/*****************************************************************************/
+static void loadConfigValue(char *dst, size_t dstsize, JsonDocument &jsonDoc, const char *key)
+{
+  const char *value = jsonDoc[key];
+  if (value == nullptr)
+  {
+    Serial.printf("Config: key '%s' missing, keeping default '%s'\n", key, dst);
+    return;
+  }
+  // strlcpy terminiert immer - die frueheren dst[n] = '\0'-Zeilen entfallen
+  (void)strlcpy(dst, value, dstsize);
+}
+
 void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
 {
   // Local intialization. Once its business is done, there is no need to keep it around
@@ -75,29 +100,26 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
       {
         Serial.println("Open config file");
         size_t size = configFile.size();
-        // Allocate a buffer to store contents of the file.
-        std::unique_ptr<char[]> buf(new char[size]);
+        // Puffer eins groesser als die Datei und selbst terminieren:
+        // deserializeJson erwartet einen nullterminierten String und haette
+        // sonst hinter dem Dateiende weitergelesen
+        std::unique_ptr<char[]> buf(new char[size + 1]);
 
-        configFile.readBytes(buf.get(), size);
+        size_t read = configFile.readBytes(buf.get(), size);
+        buf[read] = '\0';
         DynamicJsonDocument jsonDoc(1024);
         DeserializationError error = deserializeJson(jsonDoc, buf.get());
         serializeJson(jsonDoc, Serial);
         if (!error)
         {
           Serial.println("\nparsed json");
-          // read updated parameters, make sure no overflow
-          strncpy(wifi_hostname, jsonDoc["wifi_hostname"], 39);
-          wifi_hostname[39] = '\0';
-          strncpy(ota_password, jsonDoc["ota_password"], 39);
-          ota_password[39] = '\0';
-          strncpy(mqtt_server, jsonDoc["mqtt_server"], 39);
-          mqtt_server[39] = '\0';
-          strncpy(mqtt_port, jsonDoc["mqtt_port"], 5);
-          mqtt_port[5] = '\0';
-          strncpy(mqtt_username, jsonDoc["mqtt_username"], 39);
-          mqtt_username[39] = '\0';
-          strncpy(mqtt_password, jsonDoc["mqtt_password"], 39);
-          mqtt_password[39] = '\0';
+          // fehlende Schluessel lassen den Standardwert stehen, siehe oben
+          loadConfigValue(wifi_hostname, CONFIG_FIELD_LEN, jsonDoc, "wifi_hostname");
+          loadConfigValue(ota_password, CONFIG_FIELD_LEN, jsonDoc, "ota_password");
+          loadConfigValue(mqtt_server, CONFIG_FIELD_LEN, jsonDoc, "mqtt_server");
+          loadConfigValue(mqtt_port, CONFIG_PORT_LEN, jsonDoc, "mqtt_port");
+          loadConfigValue(mqtt_username, CONFIG_FIELD_LEN, jsonDoc, "mqtt_username");
+          loadConfigValue(mqtt_password, CONFIG_FIELD_LEN, jsonDoc, "mqtt_password");
         }
         else
         {
@@ -122,13 +144,13 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   // After connecting, parameter.getValue() will get you the configured value
   // id/name placeholder/prompt default length
   WiFiManagerParameter custom_text1("<p>Hostname and OTA password</p>");
-  WiFiManagerParameter custom_wifi_hostname("wifi_hostname", "wifi hostname", wifi_hostname, 39);
-  WiFiManagerParameter custom_ota_password("ota_password", "ota password", ota_password, 39);
+  WiFiManagerParameter custom_wifi_hostname("wifi_hostname", "wifi hostname", wifi_hostname, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_ota_password("ota_password", "ota password", ota_password, CONFIG_FIELD_LEN - 1);
   WiFiManagerParameter custom_text2("<p>MQTT settings</p>");
-  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 39);
-  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 5);
-  WiFiManagerParameter custom_mqtt_username("username", "mqtt username", mqtt_username, 39);
-  WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 39);
+  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, CONFIG_PORT_LEN - 1);
+  WiFiManagerParameter custom_mqtt_username("username", "mqtt username", mqtt_username, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, CONFIG_FIELD_LEN - 1);
 
   // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -157,19 +179,13 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   // if you get here you have connected to the WiFi
   Serial.println("Wifi connected...yeey :)");
 
-  // read updated parameters, make sure no overflow
-  strncpy(wifi_hostname, custom_wifi_hostname.getValue(), 39);
-  wifi_hostname[39] = '\0';
-  strncpy(ota_password, custom_ota_password.getValue(), 39);
-  ota_password[39] = '\0';
-  strncpy(mqtt_server, custom_mqtt_server.getValue(), 39);
-  mqtt_server[39] = '\0';
-  strncpy(mqtt_port, custom_mqtt_port.getValue(), 5);
-  mqtt_port[5] = '\0';
-  strncpy(mqtt_username, custom_mqtt_username.getValue(), 39);
-  mqtt_username[39] = '\0';
-  strncpy(mqtt_password, custom_mqtt_password.getValue(), 39);
-  mqtt_password[39] = '\0';
+  // Werte aus dem Konfigurationsportal uebernehmen (strlcpy terminiert immer)
+  (void)strlcpy(wifi_hostname, custom_wifi_hostname.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(ota_password, custom_ota_password.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(mqtt_server, custom_mqtt_server.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(mqtt_port, custom_mqtt_port.getValue(), CONFIG_PORT_LEN);
+  (void)strlcpy(mqtt_username, custom_mqtt_username.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(mqtt_password, custom_mqtt_password.getValue(), CONFIG_FIELD_LEN);
 
   // Set hostname on wifi rather than ESP_xxxxx
 #if defined(ESP32)

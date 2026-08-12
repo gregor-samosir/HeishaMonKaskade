@@ -18,12 +18,14 @@ bool serialquerysent = false; // mutex for serial sending
 #endif
 const char *update_path = "/firmware";
 const char *update_username = "admin";
-char wifi_hostname[40] = HEISHA_HOSTNAME;
-char ota_password[40] = "heisha";
-char mqtt_server[40];
-char mqtt_port[6] = "1883";
-char mqtt_username[40];
-char mqtt_password[40];
+// Groessen aus webfunctions.h - dort werden die Felder aus der config.json
+// gefuellt, und beide Seiten muessen dieselbe Puffergroesse annehmen
+char wifi_hostname[CONFIG_FIELD_LEN] = HEISHA_HOSTNAME;
+char ota_password[CONFIG_FIELD_LEN] = "heisha";
+char mqtt_server[CONFIG_FIELD_LEN];
+char mqtt_port[CONFIG_PORT_LEN] = "1883";
+char mqtt_username[CONFIG_FIELD_LEN];
+char mqtt_password[CONFIG_FIELD_LEN];
 
 // log and debug
 bool outputMqttLog = true;   // toggle to write logmessages to mqtt (true) or telnetstream (false)
@@ -111,9 +113,10 @@ void write_hex_log(uint8_t *hex, unsigned int hex_len)
     buffer[bytesperline * 3] = '\0';
     for (unsigned int j = 0; ((j < (unsigned int)bytesperline) && ((i + j) < hex_len)); j++)
     {
-      (void)sprintf(&buffer[3 * j], "%02X ", (unsigned char)hex[i + j]);
+      // 4 = zwei Hexziffern, Leerzeichen, Terminator
+      (void)snprintf(&buffer[3 * j], 4, "%02X ", (unsigned char)hex[i + j]);
     }
-    (void)sprintf(log_msg, "data: %s", buffer);
+    (void)snprintf(log_msg, sizeof(log_msg), "data: %s", buffer);
     write_telnet_log(log_msg);
   }
 }
@@ -240,39 +243,10 @@ bool mqtt_reconnect()
   {
     mqtt_client.publish(Topics::WILL.c_str(), "Online");
 
-    mqtt_client.subscribe(Topics::SET1.c_str());
-    mqtt_client.subscribe(Topics::SET2.c_str());
-    mqtt_client.subscribe(Topics::SET3.c_str());
-    mqtt_client.subscribe(Topics::SET4.c_str());
-    mqtt_client.subscribe(Topics::SET5.c_str());
-    mqtt_client.subscribe(Topics::SET6.c_str());
-    mqtt_client.subscribe(Topics::SET9.c_str());
-    mqtt_client.subscribe(Topics::SET10.c_str());
-    mqtt_client.subscribe(Topics::SET11.c_str());
-    mqtt_client.subscribe(Topics::SET12.c_str());
-    mqtt_client.subscribe(Topics::SET13.c_str());
-    mqtt_client.subscribe(Topics::SET14.c_str());
-    mqtt_client.subscribe(Topics::SET15.c_str());
-    mqtt_client.subscribe(Topics::SET16.c_str());
-    mqtt_client.subscribe(Topics::SET17.c_str());
-    mqtt_client.subscribe(Topics::SET18.c_str());
-    mqtt_client.subscribe(Topics::SET19.c_str());
-    mqtt_client.subscribe(Topics::SET20.c_str());
-    mqtt_client.subscribe(Topics::SET21.c_str());
-    mqtt_client.subscribe(Topics::SET22.c_str());
-    mqtt_client.subscribe(Topics::SET23.c_str());
-    mqtt_client.subscribe(Topics::SET24.c_str());
-    mqtt_client.subscribe(Topics::SET25.c_str());
-    mqtt_client.subscribe(Topics::SET26.c_str());
-    // Zone 1 heating/cooling curve (kept in sync for standalone operation)
-    mqtt_client.subscribe(Topics::SET27.c_str());
-    mqtt_client.subscribe(Topics::SET28.c_str());
-    mqtt_client.subscribe(Topics::SET29.c_str());
-    mqtt_client.subscribe(Topics::SET30.c_str());
-    mqtt_client.subscribe(Topics::SET31.c_str());
-    mqtt_client.subscribe(Topics::SET32.c_str());
-    mqtt_client.subscribe(Topics::SET33.c_str());
-    mqtt_client.subscribe(Topics::SET34.c_str());
+    // Set-Topics kommen aus setCommands[] in commands.cpp. Hier stand bis
+    // 3.4.1 je Topic ein eigener subscribe-Aufruf - eine zweite Liste, die
+    // stillschweigend hinter der Tabelle zurueckbleiben konnte.
+    (void)subscribe_set_topics(mqtt_client);
   }
   return mqtt_client.connected();
 }
@@ -307,7 +281,7 @@ void setupMqtt()
   char *endptr;
   long port = strtol(mqtt_port, &endptr, 10);
   if (endptr == mqtt_port || *endptr != '\0' || port < 1 || port > 65535) {
-    (void)sprintf(log_msg, "Warning: Invalid MQTT port '%s'. Using default 1883.", mqtt_port);
+    (void)snprintf(log_msg, sizeof(log_msg), "Warning: Invalid MQTT port '%s'. Using default 1883.", mqtt_port);
     write_mqtt_log(log_msg);
     port = 1883;
   }
@@ -394,7 +368,7 @@ bool readSerial()
     return false;
   }
 
-  sprintf(log_msg, "Partial data length %d, please fix Read_Pana_Data_Timer", serial_length);
+  (void)snprintf(log_msg, sizeof(log_msg), "Partial data length %u, please fix Read_Pana_Data_Timer", serial_length);
   write_telnet_log(log_msg);
   serial_length = 0;
   return false;
