@@ -268,32 +268,60 @@ dient `platformio_user_env_sample.ini`:
 cp platformio_user_env_sample.ini platformio_user_env.ini
 ```
 
-Die Envs in `platformio.ini` — die Werte sind die dieser Anlage und dienen als
-Beispiel:
+In `platformio_user_env.ini` stehen ausschließlich Upload-Ziele, getrennt nach
+Board: `[usb_defaults]` und `[ota_defaults_h1|h2]` für den D1 mini,
+`[usb32_defaults]` und `[ota32_defaults_h1|h2|test]` für das ESP32-Board. Alle
+Sektionen müssen vorhanden sein, auch wenn nur ein Board benutzt wird.
+
+`platformio.ini` selbst ist in Bausteine gegliedert: Board-Basis
+(`[esp8266_base]`, `[esp32_base]`), Stufen-Identität (`[stage_h1]`,
+`[stage_h2]`, `[stage_test_*]`) und darauf aufbauend die Envs — die Werte sind
+die dieser Anlage und dienen als Beispiel:
+
+**Produktiv (Update per OTA):**
 
 | Env | Board | Zweck |
 | --- | --- | --- |
-| `heishamon_esp32_h1_ota` | ESP32-S3 | Stufe 1 an WP1, produktiv, Update per OTA |
-| `heishamon_esp32_h2_ota` | ESP32-S3 | Stufe 2 an WP2, produktiv, Update per OTA |
-| `heishamon_esp32_h2_usb` | ESP32-S3 | Erstflash der Stufe 2 über USB (s. u.) |
+| `heishamon_esp32_h1_ota` | ESP32-S3 | Stufe 1 an WP1 |
+| `heishamon_esp32_h2_ota` | ESP32-S3 | Stufe 2 an WP2 |
 | `d1_mini_h1_ota` | D1 mini | Stufe 1 auf ESP8266 (Rückfallebene) |
 | `d1_mini_h2_ota` | D1 mini | Stufe 2 auf ESP8266 (Rückfallebene) |
+
+**Erstsetup (Flash über USB):**
+
+| Env | Board | Zweck |
+| --- | --- | --- |
+| `heishamon_esp32_h1_usb` | ESP32-S3 | Erstflash der Stufe 1 (s. u.) |
+| `heishamon_esp32_h2_usb` | ESP32-S3 | Erstflash der Stufe 2 (s. u.) |
+| `d1_mini_usb` | D1 mini | Erstflash ohne Stufen-Flags |
+
+**Test:**
+
+| Env | Board | Zweck |
+| --- | --- | --- |
 | `heishamon_esp32_usb` / `_ota` | ESP32-S3 | Testgerät mit eigenem MQTT-Präfix |
 | `d1_mini_test` | D1 mini | Prüfstand **ohne** Wärmepumpe |
-| `d1_mini_usb` | D1 mini | Erstflash über USB |
 
 ```bash
 pio run -e heishamon_esp32_h1_ota -t upload
 ```
 
-Für eine eigene Anlage sind die Build-Flags der Stufen anzupassen:
+Für eine eigene Anlage sind die Build-Flags der Stufen anzupassen — Präfix und
+Web-Titel in der Stufen-Sektion, der Hostname im Env (ESP8266- und ESP32-Board
+derselben Stufe können parallel im Netz hängen und brauchen eindeutige Namen):
 
 ```ini
-[env:meine_stufe]
-build_flags = ${env.build_flags}
+[stage_h1]
+build_flags =
 	-D HEISHA_MQTT_PREFIX='"panasonic_heat_pump"'
 	-D HEISHA_STAGE_NAME='"Heisha Stufe 1"'
-	-D HEISHA_HOSTNAME='"HeishaMon"'
+
+[env:meine_stufe]
+extends = esp32_base
+build_flags =
+	${esp32_base.build_flags}
+	${stage_h1.build_flags}
+	-D HEISHA_HOSTNAME='"HeishaMon32_h1"'
 ```
 
 Ohne diese Flags greifen die Stufe-1-Fallbacks aus dem Code. **Für ein
