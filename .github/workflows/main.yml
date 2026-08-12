@@ -12,13 +12,16 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Die Toolchains für ESP8266 und ESP32 sind zusammen mehrere hundert MB.
-      # Ohne Cache lädt sie jeder Lauf neu - das fällt erst auf, seit alle Envs
-      # gebaut werden. Der Schlüssel hängt an platformio.ini, weil dort steht,
-      # welche Plattformen und Bibliotheken gebraucht werden.
-      # Bewusste Folge: Die Plattformen sind dort NICHT auf eine Version
-      # gepinnt, ein Toolchain-Update kommt also erst mit der nächsten
-      # Änderung an platformio.ini in die CI.
+      # Toolchains und Bibliotheken für ESP8266 und ESP32 zusammen: 1163 MB,
+      # am 2026-08-12 am angelegten Cache gemessen. Ohne Cache lädt sie jeder
+      # Lauf neu - das fiel erst auf, seit alle Envs gebaut werden.
+      # Der Schlüssel hängt an platformio.ini, weil dort steht, welche
+      # Plattformen und Bibliotheken gebraucht werden. Zwei bewusste Folgen:
+      # - Die Plattformen sind dort NICHT auf eine Version gepinnt, ein
+      #   Toolchain-Update erreicht die CI also erst mit der nächsten Änderung
+      #   an platformio.ini.
+      # - Bei GitHubs Grenze von 10 GB je Repository passen rund acht solcher
+      #   Einträge; ältere verdrängt GitHub selbst.
       - name: PlatformIO-Cache
         uses: actions/cache@v4
         with:
