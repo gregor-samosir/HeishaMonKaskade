@@ -7,12 +7,57 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Install PlatformIO
+
+      # Die Toolchains für ESP8266 und ESP32 sind zusammen mehrere hundert MB.
+      # Ohne Cache lädt sie jeder Lauf neu - das fällt erst auf, seit alle Envs
+      # gebaut werden. Der Schlüssel hängt an platformio.ini, weil dort steht,
+      # welche Plattformen und Bibliotheken gebraucht werden.
+      # Bewusste Folge: Die Plattformen sind dort NICHT auf eine Version
+      # gepinnt, ein Toolchain-Update kommt also erst mit der nächsten
+      # Änderung an platformio.ini in die CI.
+      - name: PlatformIO-Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+
+      - name: PlatformIO installieren
         run: pip install --upgrade platformio
-      - name: Setup platformio_user_env.ini
+
+      # Die echte platformio_user_env.ini ist nicht in git (Ports, IPs, OTA-
+      # Passwort). Für einen Build genügt die Vorlage: sie enthält alle
+      # Sektionen, die platformio.ini über ${...} referenziert - nur die
+      # Upload-Ziele darin sind Platzhalter, und die braucht ein Build nicht.
+      - name: Upload-Ziele aus der Vorlage bereitstellen
         run: cp platformio_user_env_sample.ini platformio_user_env.ini
-      - name: Run PlatformIO Build
-        run: pio run
+
+      # Merge-Logik der Set-Kommandos auf dem Host durchspielen, ohne Hardware.
+      # ACHTUNG, damit niemand mehr erwartet als drinsteckt: Das Programm gibt
+      # seine Ergebnisse aus, prüft sie aber nicht selbst. Dieser Schritt fängt
+      # deshalb nur Übersetzungsfehler und Abstürze - für eine echte
+      # Regressionsprüfung fehlen Zusicherungen in merge_test.cpp.
+      - name: Merge-Logik übersetzen und ausführen
+        run: |
+          c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
+          /tmp/merge_test
+
+      # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
+      # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt
+      # kaputtgehen - auffallen würde das erst, wenn man sie im Notfall braucht.
+      # Die Liste kommt aus platformio.ini selbst: neue Envs werden dadurch
+      # automatisch mitgebaut, und es gibt keine zweite Liste, die hinter der
+      # ersten zurückbleiben kann.
+      - name: Alle Envs bauen
+        run: |
+          envs=$(pio project config --json-output \
+            | python3 -c "import json,sys; print(' '.join('-e '+s[0][4:] for s in json.load(sys.stdin) if s[0].startswith('env:')))")
+          echo "Baue: $envs"
+          pio run $envs
