@@ -1,5 +1,58 @@
 #pragma once
 // Changelog:
+// 3.5.0 - Drei Haertungen aus der Codedurchsicht. KEINE Aenderung an Topic-
+//         Namen, Wertebereichen oder am Protokoll (Nachweis s. unten).
+//
+//         (1) Set-Topics haben nur noch EINE Wahrheit: setCommands in
+//             commands.cpp. Bisher fuehrte jeder Name drei Leben - Deklaration
+//             in Topics.h, Definition in Topics.cpp, Verweis in der Tabelle -
+//             und dazu kam ein handgeschriebener subscribe-Aufruf je Topic in
+//             mqtt_reconnect(). Wer den vergass, bekam KEINEN Compilerfehler:
+//             das Topic war einfach stumm, die Waermepumpe folgte einem
+//             Kommando nicht mehr und niemand haette gewusst, warum.
+//             Jetzt steht der Name in der Tabellenzeile (gleiches Muster wie
+//             stateTopics in decode.cpp), und subscribe_set_topics() laeuft
+//             ueber dieselbe Tabelle. Ein neues Set-Kommando ist eine Zeile.
+//             Topics.h behaelt nur die Pfadwurzeln (STATE, SET, LOG, WILL).
+//
+//         (2) sprintf -> snprintf in allen Logpfaden. Der Fall in
+//             build_heatpump_command war kein Schoenheitsfehler: die Meldung
+//             "Invalid integer value ..." brauchte bei maximaler MQTT-Payload
+//             303 Bytes in einem 256-Byte-Puffer auf dem Stack. Ein langer,
+//             nicht numerischer Wert auf einem set-Topic - etwa ein JSON-
+//             Objekt aus einem verbauten Node-RED-Flow - konnte das Geraet
+//             damit zum Absturz bringen. Payload und Topic sind im Format
+//             zusaetzlich begrenzt (%.32s/%.64s), damit die Meldung kurz
+//             bleibt und in ein MQTT-Paket passt.
+//
+//         (3) config.json: ein fehlender Schluessel liess das Geraet beim
+//             Booten abstuerzen. strncpy(dst, jsonDoc[key], 39) bekommt von
+//             ArduinoJson einen NULLZEIGER, wenn der Schluessel fehlt - das
+//             Ergebnis ist eine Boot-Endlosschleife, die nur per USB an der
+//             Waermepumpe zu beheben ist. Jetzt bleibt der einkompilierte
+//             Standardwert stehen und das Geraet kommt hoch (loadConfigValue).
+//             Der realistische Ausloeser ist nicht die Handbearbeitung der
+//             Datei, sondern ein SPAETERER Firmware-Stand, der ein neues Feld
+//             liest: die config.json auf dem Geraet kennt es dann nicht, und
+//             beide Kaskadenstufen wuerden direkt nach dem OTA gleichzeitig
+//             ausfallen. Dazu: Puffer beim Einlesen selbst terminiert (las
+//             sonst hinter dem Dateiende weiter), Feldlaengen als
+//             CONFIG_FIELD_LEN/CONFIG_PORT_LEN an einer Stelle statt 39/40
+//             und 5/6 ueber ein Dutzend Stellen verstreut, strlcpy statt
+//             strncpy samt Hand-Terminierung.
+//
+//         Nachweis zu (1): alle 32 vollstaendigen Topic-Pfade samt ihrer
+//         Zuordnung auf (Protokollbyte, Maske, min, max, Umrechnung,
+//         Parameter) gegen den Stand von 3.4.1 verglichen - identisch, keine
+//         Abweichung. Zusaetzlich geprueft, dass die neue Match-Logik
+//         (Wurzel pruefen, abschneiden, Namen vergleichen) jeden Pfad findet
+//         und Muell abweist (Wurzel ohne Namen, unbekannter Name,
+//         state-Pfad, Leerstring).
+//         Beide Plattformen gebaut. Groessen gegenueber 3.4.1:
+//         ESP8266 RAM -928 B, Flash -1992 B; ESP32 RAM -768 B, Flash -2988 B.
+//         Die 32 std::string-Objekte entfallen samt der Heap-Allokation fuer
+//         ihren Pfadtext - Letztere taucht in diesen Zahlen nicht auf und war
+//         auf dem ESP8266 dauerhaft belegt.
 // 3.4.1 - Stufe 2 laeuft jetzt ebenfalls auf dem offiziellen HeishaMon-
 //         ESP32-S3-Board (loest den D1 mini H2 ab). KEINE Aenderung an der
 //         Firmware-Logik - nur zwei neue Envs in platformio.ini:
@@ -160,4 +213,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.4.1";
+static const char* heishamon_version = "3.5.0";

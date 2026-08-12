@@ -193,11 +193,20 @@ MQTT-Präfix, Web-Titel und Hostname kommen als Build-Flags aus
 `platformio.ini`. Beim Wechsel zwischen Stufe 1 und Stufe 2 wird kein Code mehr
 angefasst — nur das Env gewechselt.
 
-### Datengetriebene Tabellen (2.2.0, 3.3.0)
+### Datengetriebene Tabellen (2.2.0, 3.3.0, 3.5.0)
 
 Set-Kommandos und State-Topics stehen in je einer Tabelle, eine Zeile pro
 Topic. Vorher waren die Angaben zu einem State-Topic über vier positionsgleiche
 Arrays verteilt, die nur über den Index und einen Kommentar zusammenhingen.
+
+Seit 3.5.0 gilt das auch für die **Namen** der Set-Topics. Bis dahin führte
+jeder Name drei Leben — Deklaration in `Topics.h`, Definition in `Topics.cpp`,
+Verweis in der Tabelle — und dazu kam ein handgeschriebener `subscribe`-Aufruf
+je Topic in `mqtt_reconnect()`. Wer den vergaß, bekam **keinen Compilerfehler**:
+Das Topic war stumm, die Wärmepumpe folgte einem Kommando nicht mehr, und im
+Log stand nichts. Jetzt trägt die Tabellenzeile den Namen, `Topics.h` nur noch
+die Pfadwurzeln, und `subscribe_set_topics()` läuft über dieselbe Tabelle. Ein
+neues Set-Kommando ist damit genau eine Zeile.
 
 Wichtig dabei: Die TOP-Nummer ist ein **Datenfeld, nicht der Array-Index**.
 Zeilen können entfallen, ohne dass sich die Nummern der übrigen verschieben —
@@ -247,6 +256,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht ESP8266/ESP32, Timing-Konstanten |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
+| [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
 | [`src/webfunctions.cpp`](src/webfunctions.cpp) | Weboberfläche und Einstellungen |
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
