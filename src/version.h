@@ -55,6 +55,17 @@
 //         Alle 10 Envs gebaut. Groessen gegenueber 3.5.0: ESP8266 RAM +244 B,
 //         Flash +780 B; ESP32 RAM +16 B, Flash +676 B - im Wesentlichen die
 //         neuen Logtexte (Stringliterale liegen auf dem ESP8266 im RAM).
+//
+//         Abnahme an Stufe 1 (2026-08-13, 7-Minuten-Telnet-Mitschnitt):
+//         68 Abfragen + 4 Kommandos = 72 gueltige Telegramme, KEIN verworfenes
+//         Telegramm, keine Restdaten, kein Serial-Timeout, kein MQTT-Reconnect,
+//         Zyklusabstand konstant 6 s. Damit ist auch die offene Frage
+//         beantwortet, ob die Waermepumpe ein Kommando (0xF1) mit einem
+//         anderen Telegrammtyp quittiert: Sie antwortet mit demselben
+//         203-Byte-0x71-Telegramm wie auf eine Abfrage. Belegt am QuietMode
+//         (SET3 0->1->0, "Send command" direkt gefolgt von "Valid data",
+//         TOP18 zog nach) und am 6-Kanal-Re-Assert der Node-RED-Steuerung
+//         (6 Callbacks in einem 500-ms-Fenster -> ein Kommandotelegramm).
 // 3.5.0 - Drei Haertungen aus der Codedurchsicht. KEINE Aenderung an Topic-
 //         Namen, Wertebereichen oder am Protokoll (Nachweis s. unten).
 //
