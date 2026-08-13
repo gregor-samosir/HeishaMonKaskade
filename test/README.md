@@ -189,7 +189,7 @@ Nur laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt.
 ./kurven_grenzen.py --esp 192.168.2.120 --prefix panasonic_heat_pump
 ```
 
-Messung 2026-08-10 an WP1:
+Messung 2026-08-10 an WP1 (Panasonic WH-MDC05H3E5, 5 kW Monoblock):
 
 | Parameter | gemessener Bereich | Anmerkung |
 | --- | --- | --- |

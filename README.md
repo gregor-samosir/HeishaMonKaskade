@@ -41,7 +41,8 @@ Documentation is in German from here on. The MQTT reference
 
 ## Worum es geht
 
-Zwei Panasonic-Wärmepumpen laufen als Kaskade. Wer sie führt, wann welche
+Zwei Panasonic-Wärmepumpen laufen als Kaskade — WH-MDC05H3E5, 5-kW-Monoblöcke
+und damit die Baureihe, mit der HeishaMon seinerzeit angefangen hat. Wer sie führt, wann welche
 zuschaltet, mit welcher Vorlauftemperatur und welcher Pumpendrehzahl — das
 entscheidet eine Steuerung in Node-RED unter ioBroker. HeishaMonKaskade ist die
 **Schnittstelle** dazwischen: je ein Mikrocontroller pro Wärmepumpe, angebunden
