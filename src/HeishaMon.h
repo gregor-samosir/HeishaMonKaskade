@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <LittleFS.h>
+#include "telegram.h" // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 
 // platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
 // (official HeishaMon board), differences are isolated here
@@ -68,10 +69,24 @@ typedef ESP8266HTTPUpdateServer HTTPUpdateServerClass;
 #define SERIALTIMEOUT 600 // Serial Timout / timer to wait on serial to read all 203 bytes from HP
 #define NTPTIMEOUT 30000  // max. wait for NTP at boot before continuing without valid time
 
+// MQTT-Wiederverbindung: PubSubClient wartet ohne setSocketTimeout 15 s je
+// Versuch, und zwar mitten in loop() - der 5-s-Abfragetakt der Waermepumpe
+// steht so lange still. 2 s reichen im LAN, der Rest ist Backoff.
+#define MQTT_SOCKET_TIMEOUT_S 2   // Sekunden, ersetzt den Bibliotheksstandard 15
+#define MQTT_RECONNECT_MIN 5000   // erster Wiederverbindungsversuch nach 5 s
+#define MQTT_RECONNECT_MAX 60000  // Obergrenze, danach im Minutentakt
+
+// WLAN-Watchdog: ohne WLAN ist das Geraet fuer die Kaskadenregelung blind.
+// Stufe 1 erneuter Verbindungsversuch, Stufe 2 Neustart.
+#define WIFI_RETRY_TIMEOUT 30000   // 30 s ohne WLAN -> WiFi.reconnect()
+#define WIFI_REBOOT_TIMEOUT 300000 // 5 min ohne WLAN -> Neustart
+
 void send_pana_command(void);
 void send_pana_mainquery(void);
 void read_pana_data(void);
 void timeout_serial(void);
+void flush_serial_input(void);
+void check_wifi(void);
 void write_mqtt_log(char *);
 void write_telnet_log(char *);
 void register_new_command(void);

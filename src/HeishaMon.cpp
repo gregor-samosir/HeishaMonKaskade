@@ -52,6 +52,13 @@ HTTPUpdateServerClass httpUpdater;
 WiFiClient mqtt_wifi_client;
 PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
+unsigned long mqttReconnectDelay = MQTT_RECONNECT_MIN; // waechst bei Misserfolg
+
+// WLAN-Watchdog (siehe check_wifi)
+bool wifiIsDown = false;
+unsigned long wifiDownSince = 0;
+unsigned long lastWifiRetry = 0;
+unsigned long wifiOutageSeconds = 0; // letzte Ausfalldauer, wartet auf MQTT
 
 byte mainQuery[] = {0x71, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 byte mainCommand[] = {0xF1, 0x6c, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -247,6 +254,14 @@ bool mqtt_reconnect()
     // 3.4.1 je Topic ein eigener subscribe-Aufruf - eine zweite Liste, die
     // stillschweigend hinter der Tabelle zurueckbleiben konnte.
     (void)subscribe_set_topics(mqtt_client);
+
+    // ein waehrend des Ausfalls gemerkter WLAN-Abriss wird jetzt meldbar
+    if (wifiOutageSeconds > 0)
+    {
+      (void)snprintf(log_msg, sizeof(log_msg), "WLAN war %lu s weg", wifiOutageSeconds);
+      write_mqtt_log(log_msg);
+      wifiOutageSeconds = 0;
+    }
   }
   return mqtt_client.connected();
 }
@@ -287,7 +302,63 @@ void setupMqtt()
   }
   mqtt_client.setServer(mqtt_server, (uint16_t)port);
   mqtt_client.setCallback(mqtt_callback);
+  // ohne das blockiert jeder Verbindungsversuch bis zu 15 s in loop()
+  mqtt_client.setSocketTimeout(MQTT_SOCKET_TIMEOUT_S);
   mqtt_reconnect();
+}
+
+/*****************************************************************************/
+/* WLAN-Watchdog  (aus loop aufgerufen, blockiert nie)                       */
+/*                                                                           */
+/* Bis 3.5.0 gab es keine Pruefung: faellt das WLAN dauerhaft aus, laeuft    */
+/* das Geraet blind weiter - es fragt die Waermepumpe ab, kann aber weder    */
+/* Messwerte melden noch Sollwerte empfangen, und niemand merkt es. Der      */
+/* Fallback des WiFiManagers greift nur beim Booten.                         */
+/*****************************************************************************/
+void check_wifi()
+{
+  unsigned long now = millis();
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    if (wifiIsDown) // gerade zurueckgekehrt
+    {
+      // Dauer nur merken, nicht sofort loggen: MQTT ist in diesem Moment noch
+      // getrennt, die Meldung ginge verloren. Sie geht nach dem naechsten
+      // erfolgreichen mqtt_reconnect() raus.
+      wifiOutageSeconds = (now - wifiDownSince) / 1000UL;
+      wifiIsDown = false;
+      write_telnet_log((char *)"WLAN wieder verbunden");
+    }
+    return;
+  }
+
+  if (!wifiIsDown) // erster Durchlauf ohne Verbindung: Zeitpunkt merken
+  {
+    wifiIsDown = true;
+    wifiDownSince = now;
+    lastWifiRetry = now;
+    write_telnet_log((char *)"WLAN-Verbindung verloren");
+    return;
+  }
+
+  // Stufe 1: alle 30 s einen neuen Verbindungsversuch anstossen (nicht blockierend)
+  if ((now - lastWifiRetry) >= WIFI_RETRY_TIMEOUT)
+  {
+    lastWifiRetry = now;
+    write_telnet_log((char *)"WLAN weg, erneuter Verbindungsversuch");
+    (void)WiFi.reconnect();
+  }
+
+  // Stufe 2: nach 5 min neu starten. Fuer die Waermepumpe ist das
+  // ungefaehrlich - sie behaelt ihre Sollwerte, und die Node-RED-Steuerung
+  // schreibt sie ohnehin alle 5 min neu.
+  if ((now - wifiDownSince) >= WIFI_REBOOT_TIMEOUT)
+  {
+    write_telnet_log((char *)"WLAN seit 5 min weg, Neustart");
+    delay(100);
+    ESP.restart();
+  }
 }
 
 /*****************************************************************************/
@@ -295,12 +366,8 @@ void setupMqtt()
 /*****************************************************************************/
 bool validate_checksum()
 {
-  byte chk = 0;
-  for (int i = 0; i < serial_length; i++)
-  {
-    chk += serial_data[i];
-  }
-  return (chk == 0); // all received bytes + checksum should result in 0
+  // Regel liegt in telegram.h, damit Firmware und Hosttest dieselbe benutzen
+  return telegram_checksum_ok(serial_data, serial_length);
 }
 
 /*****************************************************************************/
@@ -346,14 +413,15 @@ bool readSerial()
       break;
   }
 
-  if (serial_length == (serial_data[1] + 3))
+  // Erst hier entscheidet sich, ob das Gelesene ueberhaupt ein Antwort-
+  // telegramm ist. Vor 3.6.0 genuegte "Laenge passt zum Laengenbyte" plus
+  // Pruefsumme - ein um n Bytes verschobener Strom (Rest einer abgebrochenen
+  // Antwort) konnte damit mit Wahrscheinlichkeit 1/256 als gueltige Messdaten
+  // durchgehen und retained in die Kaskadenregelung laufen. Regeln: telegram.h
+  TelegramCheck result = check_telegram(serial_data, serial_length);
+
+  if (result == TELEGRAM_OK)
   {
-    if (!validate_checksum())
-    {
-      write_telnet_log((char *)"Checksum error");
-      serial_length = 0;
-      return false;
-    }
     write_telnet_log((char *)"Valid data");
     if (outputHexLog)
       write_hex_log(serial_data, serial_length);
@@ -361,17 +429,44 @@ bool readSerial()
     return true;
   }
 
-  if (serial_length > (serial_data[1] + 3))
-  {
-    write_telnet_log((char *)"Data longer than header suggests");
-    serial_length = 0;
-    return false;
-  }
-
-  (void)snprintf(log_msg, sizeof(log_msg), "Partial data length %u, please fix Read_Pana_Data_Timer", serial_length);
+  // Fehlerfall: Typbyte und Laenge mitloggen, sonst ist im Betrieb nicht zu
+  // unterscheiden, ob die Leitung stumm ist oder Muell liefert
+  (void)snprintf(log_msg, sizeof(log_msg), "Telegramm verworfen (%s): Typ 0x%02X, Laenge %u (erwartet 0x%02X, %u)",
+                 telegram_check_text(result), (serial_length > 0) ? serial_data[0] : 0, serial_length,
+                 TELEGRAM_TYPE_DATA, TELEGRAM_DATA_LEN);
   write_telnet_log(log_msg);
+  if (outputHexLog && (serial_length > 0))
+    write_hex_log(serial_data, serial_length);
   serial_length = 0;
   return false;
+}
+
+/*****************************************************************************/
+/* Empfangspuffer leeren, bevor gesendet wird                                */
+/*                                                                           */
+/* Ohne das startet jede Abfrage auf den Resten der vorigen: nach einem      */
+/* Serial-Timeout (WP antwortet langsam oder unvollstaendig) bleiben Bytes   */
+/* im UART-Puffer stehen und schieben sich vor die naechste Antwort. Der     */
+/* Telegrammcheck in readSerial wirft das inzwischen weg - besser ist, es    */
+/* gar nicht erst entstehen zu lassen.                                       */
+/*****************************************************************************/
+void flush_serial_input()
+{
+  unsigned int dropped = 0;
+  // Obergrenze gegen eine dauerhaft sendende Leitung: die Schleife darf die
+  // loop() nicht festhalten
+  while ((heatpumpSerial.available() > 0) && (dropped < (2 * MAXDATASIZE)))
+  {
+    (void)heatpumpSerial.read();
+    dropped++;
+  }
+  serial_length = 0;
+
+  if (dropped > 0)
+  {
+    (void)snprintf(log_msg, sizeof(log_msg), "Restdaten vor dem Senden verworfen: %u Bytes", dropped);
+    write_telnet_log(log_msg);
+  }
 }
 
 /*****************************************************************************/
@@ -394,6 +489,16 @@ void send_pana_command()
 {
   if (newcommand == true)
   {
+    // Saubere Ausgangslage: alles, was noch im Empfangspuffer liegt, gehoert
+    // zu einem abgeschlossenen Zyklus und darf die neue Antwort nicht stoeren.
+    //
+    // Der interessante Fall ist ein SET, das mitten in ein laufendes Lesefenster
+    // faellt (serialquerysent wird vor dem Senden bewusst nicht geprueft, s.
+    // offene Punkte). Vorher schoben sich die halb gelesenen Bytes vor die
+    // Antwort auf das Kommando - jetzt geht eine Messrunde verloren statt
+    // falscher Werte zu entstehen. Die naechste Antwort kommt 5 s spaeter.
+    flush_serial_input();
+
     if (!setDataPending)
     {
       heatpumpSerial.write(mainQuery, QUERYSIZE);
@@ -581,16 +686,33 @@ void loop()
 #endif
 
   handle_telnetstream();
+  check_wifi();
 
   if (!mqtt_client.connected())
   {
     unsigned long now = millis();
-    if (now - lastReconnectAttempt > 5000)
+    // Ohne WLAN ist ein Verbindungsversuch reine Blockadezeit: er kann nur
+    // scheitern und wuerde den Abfragetakt anhalten. Backoff nicht hochzaehlen.
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      lastReconnectAttempt = now;
+    }
+    else if ((now - lastReconnectAttempt) >= mqttReconnectDelay)
     {
       lastReconnectAttempt = now;
       if (mqtt_reconnect())
       {
-        lastReconnectAttempt = 0;
+        mqttReconnectDelay = MQTT_RECONNECT_MIN; // Verbindung steht wieder
+      }
+      else
+      {
+        // Broker weg (z. B. ioBroker-Neustart): Abstand verdoppeln statt alle
+        // 5 s erneut in den Socket-Timeout zu laufen
+        mqttReconnectDelay *= 2;
+        if (mqttReconnectDelay > MQTT_RECONNECT_MAX)
+        {
+          mqttReconnectDelay = MQTT_RECONNECT_MAX;
+        }
       }
     }
   }

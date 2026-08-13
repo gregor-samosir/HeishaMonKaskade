@@ -101,8 +101,44 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 | Gerätespezifisches | Code anpassen | Build-Flags je Stufe |
 | Web-UI | jQuery/CSS vom CDN | inline, ohne externe Abhängigkeiten, mit Auth |
 | Dekodierpfad | `String`-Objekte | feste Puffer, keine Heap-Allokation |
+| Empfangenes Telegramm | Prüfsumme entscheidet allein | zusätzlich Typ (0x71) und Länge (203) |
+| WLAN-Ausfall | keine Prüfung im Betrieb | Watchdog: Reconnect nach 30 s, Neustart nach 5 min |
 
 Im Detail:
+
+### Nur echte Antworttelegramme werden ausgewertet (3.6.0)
+
+Der einzige gefundene Weg, auf dem **falsche Messwerte** in die
+Kaskadenregelung geraten konnten. Bis 3.5.0 galt ein Telegramm als
+vollständig, sobald die Anzahl gelesener Bytes zum Längenbyte passte — danach
+entschied allein die 8-Bit-Prüfsumme, also 1 von 256. Blieben nach einem
+Serial-Timeout Reste einer abgebrochenen Antwort im UART-Puffer stehen, las der
+nächste Zyklus sie mit; ein so verschobener Bytestrom konnte als Messdaten
+durchgehen, retained im ioBroker landen und die Regelung füttern.
+
+Die Wärmepumpe antwortet auf die Abfrage mit genau einem Telegramm: Typ `0x71`,
+Längenbyte `0xC8`, 203 Bytes. Genau das prüft
+[`src/telegram.h`](src/telegram.h) jetzt — vor der Prüfsumme, damit ein
+verschobener Strom schon am Typbyte auffällt und nicht erst mit 1/256 an der
+Prüfsumme. Verworfene Telegramme stehen mit Typ und Länge im Log. Zusätzlich
+wird der UART-Empfangspuffer **vor** jedem Senden geleert, damit solche Reste
+gar nicht erst entstehen.
+
+Wichtig war dabei die Gegenrichtung: Die Prüfung darf kein gültiges Telegramm
+wegen seines *Inhalts* verwerfen — sonst stünde die Anlage still.
+[`test/telegramm_test.cpp`](test/telegramm_test.cpp) bindet `src/telegram.h`
+direkt ein (kein nachgebauter Zwilling) und belegt beides: 1386
+Telegrammvarianten werden weiterhin angenommen, abgewiesen werden dagegen das
+111-Byte-Abfrageecho, Typ `0xF1`, 204 Bytes, unvollständige Antworten und alle
+202 möglichen Verschiebungen. Über 200 000 Zufallspuffer, deren Länge zum
+Längenbyte passt: alte Regel 817 Annahmen (0,41 % — die erwarteten 1/256), neue
+Regel 0.
+
+Aus derselben Durchsicht stammen zwei weitere Härtungen: Der MQTT-Reconnect
+blockiert die Hauptschleife nicht mehr (2 s Socket-Timeout statt der 15 s des
+PubSubClient, Backoff bis 60 s, ohne WLAN gar kein Versuch), und ein
+WLAN-Watchdog beendet den Zustand "läuft, aber redet mit niemandem" — nach 30 s
+ohne Verbindung ein Reconnect-Versuch, nach 5 Minuten ein Neustart.
 
 ### Set-Kommandos bitgenau mischen (3.1.0)
 
@@ -254,6 +290,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | --- | --- |
 | [`src/HeishaMon.cpp`](src/HeishaMon.cpp) | Hauptschleife, Timing-Kette, serielle Anbindung, MQTT, OTA |
 | [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht ESP8266/ESP32, Timing-Konstanten |
+| [`src/telegram.h`](src/telegram.h) | Typ-, Längen- und Prüfsummenregel des Antworttelegramms (auch vom Hosttest genutzt) |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |

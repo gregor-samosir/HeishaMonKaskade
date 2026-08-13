@@ -25,6 +25,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | Datei | Zweck | Braucht Hardware |
 | --- | --- | --- |
 | `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
+| `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
@@ -56,8 +57,13 @@ curl -u admin:heisha "http://<ip>/settings?mqtt_server=192.168.2.147"
 
 ## Ausfuehren
 
+Die beiden C++-Programme pruefen ihre Ergebnisse seit 3.6.0 selbst und geben
+bei gebrochener Zusicherung `1` zurueck - die CI bricht dann ab. Vorher gaben
+sie ihre Zahlen nur aus.
+
 ```bash
 c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
+c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
 
 ./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
 ./verteiler_test.py  --esp 192.168.2.197
@@ -116,12 +122,38 @@ naiver Parser klebt beide zu 313 Bytes zusammen. `heisha_probe.py` schneidet
 deshalb ab dem `F1`-Header hart nach 110 Bytes ab. Auf dem Pruefstand ohne WP
 faellt das nicht auf, am Produktivgeraet sofort.
 
+## Telegrammpruefung (telegramm_test.cpp, 3.6.0)
+
+Bis 3.5.0 galt ein empfangenes Telegramm als vollstaendig, sobald die Anzahl
+gelesener Bytes zum Laengenbyte passte - danach entschied allein die
+8-Bit-Pruefsumme, also 1 von 256. Blieben nach einem Serial-Timeout Reste einer
+abgebrochenen Antwort im UART-Puffer stehen, las der naechste Zyklus sie mit;
+ein so verschobener Bytestrom konnte als Messdaten durchgehen und retained in
+die Kaskadenregelung laufen.
+
+`telegramm_test.cpp` bindet `src/telegram.h` direkt ein - es prueft also den
+Code, der auf dem Geraet laeuft, nicht eine Nachbildung. Ergebnis:
+
+```text
+Fall 1  echtes Antworttelegramm (203 Bytes, 0x71/0xC8)      angenommen
+Fall 2  1386 Varianten mit nachgezogener Pruefsumme          0 verworfen
+Fall 3  111-Byte-Abfrageecho, Typ 0xF1, 204 Bytes,
+        unvollstaendige Antwort, gekipptes Byte              alle abgewiesen
+Fall 4  alle 202 Verschiebungen des Antworttelegramms        alle abgewiesen
+Fall 5  200000 Zufallspuffer, Laenge passend zum Laengenbyte
+        alte Regel 817 Annahmen (0,41 % = 1/256), neue Regel 0
+```
+
+Fall 2 ist die wichtigere Haelfte: Die Pruefung darf kein gueltiges Telegramm
+wegen seines Inhalts verwerfen, sonst stuende die Anlage still.
+
 ## Verhaeltnis zu `pio test`
 
 Das sind eigenstaendige Diagnosewerkzeuge, keine Unity-Testsuites - `pio test`
 nutzt sie nicht. Echte Unit-Tests fuer Encoder, Decoder und Merge (Schritt 5
-des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp` ist die Vorlage
-dafuer.
+des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp` und
+`telegramm_test.cpp` sind die Vorlage dafuer - beide brechen seit 3.6.0 mit
+Rueckgabewert 1 ab, wenn eine Zusicherung bricht, und laufen so in der CI.
 
 ## Kurven-Set-Kommandos (SET27-SET34)
 

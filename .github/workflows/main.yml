@@ -52,15 +52,20 @@ jobs:
       - name: Upload-Ziele aus der Vorlage bereitstellen
         run: cp platformio_user_env_sample.ini platformio_user_env.ini
 
-      # Merge-Logik der Set-Kommandos auf dem Host durchspielen, ohne Hardware.
-      # ACHTUNG, damit niemand mehr erwartet als drinsteckt: Das Programm gibt
-      # seine Ergebnisse aus, prüft sie aber nicht selbst. Dieser Schritt fängt
-      # deshalb nur Übersetzungsfehler und Abstürze - für eine echte
-      # Regressionsprüfung fehlen Zusicherungen in merge_test.cpp.
-      - name: Merge-Logik übersetzen und ausführen
+      # Hosttests ohne Hardware. Beide prüfen ihre Ergebnisse seit 3.6.0 selbst
+      # und geben bei gebrochener Zusicherung != 0 zurück - der Schritt fängt
+      # also nicht mehr nur Übersetzungsfehler und Abstürze ab.
+      #
+      # merge_test:     Merge-Logik der Set-Kommandos (Masken, Umrechnung)
+      # telegramm_test: Typ-, Längen- und Prüfsummenregel für das
+      #                 Antworttelegramm - bindet src/telegram.h direkt ein,
+      #                 prüft also den Code, der auf dem Gerät läuft
+      - name: Hosttests übersetzen und ausführen
         run: |
           c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
           /tmp/merge_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/telegramm_test test/telegramm_test.cpp
+          /tmp/telegramm_test
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
       # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt
