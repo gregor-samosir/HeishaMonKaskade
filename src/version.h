@@ -1,5 +1,71 @@
 #pragma once
 // Changelog:
+// 3.6.0 - Die vier verbliebenen Befunde der Codedurchsicht vom 2026-08-12.
+//         KEINE Aenderung an Topic-Namen, Wertebereichen oder am Protokoll.
+//
+//         (1) readSerial() prueft jetzt Telegrammtyp UND Laenge, nicht mehr
+//             nur die Pruefsumme. Das war der einzige gefundene Weg, auf dem
+//             FALSCHE MESSWERTE in die Kaskadenregelung geraten konnten:
+//             bisher galt ein Telegramm als vollstaendig, sobald die Anzahl
+//             gelesener Bytes zum Laengenbyte passte - danach entschied allein
+//             die 8-Bit-Pruefsumme, also 1 von 256. Ein um n Bytes
+//             verschobener Strom (Rest einer abgebrochenen Antwort im
+//             UART-Puffer) konnte damit als Messdaten durchgehen, retained im
+//             ioBroker landen und die Regelung fuettern. Die Regel steht in
+//             src/telegram.h und gilt genau einem Telegramm: Typ 0x71,
+//             Laengenbyte 0xC8, 203 Bytes (ProtocolByteDecrypt.md, "Panasonic
+//             answer example"); der Decoder liest bis Byte 202, jedes
+//             kuerzere Telegramm wurde vorher ueber das Pufferende hinaus
+//             ausgewertet.
+//             Dazu leert flush_serial_input() den UART-Empfangspuffer VOR
+//             jedem Senden - so entstehen die verschobenen Stroeme gar nicht
+//             erst. Verworfene Telegramme werden mit Typ und Laenge geloggt.
+//
+//         (2) mqtt_reconnect() haelt die loop() nicht mehr an. PubSubClient
+//             wartet ohne setSocketTimeout 15 s je Versuch, und zwar mitten im
+//             5-s-Abfragetakt - bei einem ioBroker-Neustart stand die
+//             Abfrage der Waermepumpe sekundenweise still. Jetzt 2 s Timeout,
+//             Backoff von 5 s auf bis zu 60 s, und ohne WLAN wird gar nicht
+//             erst verbunden (der Versuch koennte nur scheitern).
+//
+//         (3) WLAN-Watchdog (check_wifi). Bisher gab es keine Pruefung: fiel
+//             das WLAN dauerhaft aus, lief das Geraet blind weiter - es fragte
+//             die Waermepumpe ab, konnte aber weder Messwerte melden noch
+//             Sollwerte empfangen. Der Fallback des WiFiManagers greift nur
+//             beim Booten. Jetzt: nach 30 s ohne Verbindung WiFi.reconnect(),
+//             nach 5 min Neustart. Fuer die Waermepumpe ungefaehrlich, sie
+//             behaelt ihre Sollwerte, und die Node-RED-Steuerung schreibt sie
+//             ohnehin alle 5 min neu. Die Ausfalldauer wird gemerkt und nach
+//             der naechsten MQTT-Verbindung als Logzeile gemeldet.
+//
+//         (4) Die Hosttests pruefen ihre Ergebnisse selbst. merge_test.cpp gab
+//             seine Zahlen bisher nur aus - der CI-Schritt fing damit nur
+//             Uebersetzungsfehler und Abstuerze ab. Jetzt hat jede Zeile eine
+//             Zusicherung und der Rueckgabewert bricht die CI. Neu dazu
+//             test/telegramm_test.cpp, das src/telegram.h direkt einbindet
+//             (kein nachgebauter Zwilling, der auseinanderlaufen kann).
+//
+//         Nachweis zu (1): 1386 Telegrammvarianten mit nachgezogener
+//         Pruefsumme werden weiterhin angenommen - die Pruefung entscheidet
+//         nichts anhand der Daten. Abgewiesen werden dagegen das 111-Byte-
+//         Abfrageecho, Typ 0xF1, 204 Bytes, unvollstaendige Antworten und alle
+//         202 moeglichen Verschiebungen des Antworttelegramms. Ueber 200000
+//         Zufallspuffer, deren Laenge zum Laengenbyte passt: alte Regel 817
+//         Annahmen (0,41 % = die erwarteten 1/256), neue Regel 0.
+//         Alle 10 Envs gebaut. Groessen gegenueber 3.5.0: ESP8266 RAM +244 B,
+//         Flash +780 B; ESP32 RAM +16 B, Flash +676 B - im Wesentlichen die
+//         neuen Logtexte (Stringliterale liegen auf dem ESP8266 im RAM).
+//
+//         Abnahme an Stufe 1 (2026-08-13, 7-Minuten-Telnet-Mitschnitt):
+//         68 Abfragen + 4 Kommandos = 72 gueltige Telegramme, KEIN verworfenes
+//         Telegramm, keine Restdaten, kein Serial-Timeout, kein MQTT-Reconnect,
+//         Zyklusabstand konstant 6 s. Damit ist auch die offene Frage
+//         beantwortet, ob die Waermepumpe ein Kommando (0xF1) mit einem
+//         anderen Telegrammtyp quittiert: Sie antwortet mit demselben
+//         203-Byte-0x71-Telegramm wie auf eine Abfrage. Belegt am QuietMode
+//         (SET3 0->1->0, "Send command" direkt gefolgt von "Valid data",
+//         TOP18 zog nach) und am 6-Kanal-Re-Assert der Node-RED-Steuerung
+//         (6 Callbacks in einem 500-ms-Fenster -> ein Kommandotelegramm).
 // 3.5.0 - Drei Haertungen aus der Codedurchsicht. KEINE Aenderung an Topic-
 //         Namen, Wertebereichen oder am Protokoll (Nachweis s. unten).
 //
@@ -213,4 +279,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.5.0";
+static const char* heishamon_version = "3.6.0";
