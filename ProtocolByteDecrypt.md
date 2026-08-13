@@ -213,6 +213,22 @@ To get decimal values you must convert from hexadecimal and do some calulation d
 As example 43 byte value to get DHW set temperature b1 (HEX) = 177(DEC) - 128 = 49 C  \s
 Panasonic query, answer and commands are using 8-bit Checksum to verify serial data ( sum(all bytes) & 0xFF == 0 ). Last byte is checksum value.
 
+### The heat pump answers a command exactly like a query
+
+Measured on 2026-08-13 on a running CZ-TAW1-connected unit (both a single
+`SET QuietMode` and a six-channel command from the cascade controller): after a
+**command** (`F1 6C 01 10 ...`, 111 bytes) the heat pump replies with the very
+same **203-byte data telegram** it sends after a query — `71 C8 01 10 ...`, not
+a short acknowledgement and not a different telegram type. Evidence is the
+firmware log, where `Send command` is followed directly by `Valid data` and a
+full decode of all 86 topics, with no discarded telegram in a seven-minute
+capture.
+
+This matters for anyone writing a receiver: you may validate the incoming
+telegram strictly on type `0x71` **and** length 203 without losing the reply to
+a command. Validating on the checksum alone lets a byte stream that got shifted
+after a serial timeout pass as measurement data with probability 1/256 — that is
+what `src/telegram.h` in this repository guards against.
 
 ## Query Examples:
 
