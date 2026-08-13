@@ -76,6 +76,14 @@ typedef ESP8266HTTPUpdateServer HTTPUpdateServerClass;
 #define MQTT_RECONNECT_MIN 5000   // erster Wiederverbindungsversuch nach 5 s
 #define MQTT_RECONNECT_MAX 60000  // Obergrenze, danach im Minutentakt
 
+// Karenzzeit nach jedem erfolgreichen Abonnieren der Set-Topics. Der
+// ioBroker-MQTT-Adapter beantwortet ein neues Abonnement aus seiner
+// Objektdatenbank und schickt den gespeicherten Wert JEDES Set-Topics -
+// teils Monate alt. Ohne diese Sperre laufen sie als frische Kommandos in die
+// Waermepumpe (gemessen 2026-08-13, s. Changelog 3.6.1). Der Schwall kommt
+// unmittelbar nach dem SUBACK, 5 s sind reichlich bemessen.
+#define SUBSCRIBE_GRACE 5000
+
 // WLAN-Watchdog: ohne WLAN ist das Geraet fuer die Kaskadenregelung blind.
 // Stufe 1 erneuter Verbindungsversuch, Stufe 2 Neustart.
 #define WIFI_RETRY_TIMEOUT 30000   // 30 s ohne WLAN -> WiFi.reconnect()

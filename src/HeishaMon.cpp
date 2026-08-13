@@ -54,6 +54,11 @@ PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 unsigned long mqttReconnectDelay = MQTT_RECONNECT_MIN; // waechst bei Misserfolg
 
+// Karenzfenster nach dem Abonnieren (siehe SUBSCRIBE_GRACE) und Zaehler der
+// dabei verworfenen Kommandos - er wird einmal gemeldet, wenn das Fenster zu ist
+unsigned long setCommandsIgnoredUntil = 0;
+unsigned int ignoredSetCommands = 0;
+
 // WLAN-Watchdog (siehe check_wifi)
 bool wifiIsDown = false;
 unsigned long wifiDownSince = 0;
@@ -262,6 +267,10 @@ bool mqtt_reconnect()
     // stillschweigend hinter der Tabelle zurueckbleiben konnte.
     (void)subscribe_set_topics(mqtt_client);
 
+    // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
+    // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
+    setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+
     // ein waehrend des Ausfalls gemerkter WLAN-Abriss wird jetzt meldbar
     if (wifiOutageSeconds > 0)
     {
@@ -278,6 +287,25 @@ bool mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
+  // Karenzzeit nach dem Abonnieren, VOR allem anderen: Der ioBroker-Adapter
+  // schickt einem neuen Abonnenten den gespeicherten Wert jedes Set-Topics.
+  // Am 2026-08-13 gemessen, was das an der Anlage anrichtet: ein Kurvenwert
+  // vom 10.08. setzte nach jedem Neustart den Vorlauf-Sollwert auf 55 Grad,
+  // und QuietMode 3 zusammen mit PowerfulMode 0 im selben Sammelfenster
+  // schaltete den Fluestermodus ab (beide schreiben Byte 7, der letzte
+  // gewinnt). Ueber das Retain-Bit ist das NICHT zu filtern: der Adapter
+  // sendet die Wiedereinspielung mit retain=0, und PubSubClient reicht das
+  // Flag ohnehin nicht an den Callback durch. Ein in diesem Fenster wirklich
+  // gemeintes Kommando geht verloren - der Re-Assert der Steuerung holt es
+  // binnen 5 Minuten nach.
+  if ((long)(millis() - setCommandsIgnoredUntil) < 0)
+  {
+    ignoredSetCommands++;
+    (void)snprintf(log_msg, sizeof(log_msg), "Verworfen (Wiedereinspielung nach Connect): %.64s", topic);
+    write_telnet_log(log_msg);
+    return; // kein Timer angefasst, der Abfragezyklus laeuft unveraendert weiter
+  }
+
   Send_Pana_Mainquery_Timer.stop();
   write_telnet_log((char *)"Callback from mqtt");
   char msg[length + 1];
@@ -726,6 +754,17 @@ void loop()
   else
   {
     (void)mqtt_client.loop(); // Trigger the mqtt_callback and send the set command to the buffer
+  }
+
+  // Bilanz des Karenzfensters einmal melden, sobald es zu ist. Einzeln waeren
+  // das 32 MQTT-Nachrichten in einem Schwung - die Einzelheiten stehen im
+  // Telnet-Log, hier reicht die Zahl.
+  if ((ignoredSetCommands > 0) && ((long)(millis() - setCommandsIgnoredUntil) >= 0))
+  {
+    (void)snprintf(log_msg, sizeof(log_msg),
+                   "%u wiedereingespielte Set-Kommandos nach dem Verbinden verworfen", ignoredSetCommands);
+    write_mqtt_log(log_msg);
+    ignoredSetCommands = 0;
   }
 
   Send_Pana_Command_Timer.update();   // trigger send_pana_command()   - send command or query from buffer
