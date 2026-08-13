@@ -106,6 +106,45 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 
 Im Detail:
 
+### Der Broker spielt beim Verbinden alles wieder ein (3.6.1)
+
+Gefunden am 2026-08-13 mit einem gezielten Neustart, weil der Flüstermodus
+nach jedem Reboot auf 0 stand. Beim Booten abonniert die Firmware die 32
+Set-Topics — und der ioBroker-MQTT-Adapter beantwortet **jedes neue Abonnement
+aus seiner Objektdatenbank**: Er schickt den gespeicherten Wert *jedes*
+Set-Topics, teils Monate alt. Die Firmware sah 32 frische Kommandos, alle im
+selben 500-ms-Sammelfenster, und schickte sie als ein Telegramm an die
+Wärmepumpe.
+
+Zwei davon taten weh:
+
+```text
+14:07:44  Reboot ausgelöst
+14:07:58  Quiet_Mode_Level                3  -> 0
+14:07:58  Z1_Heat_Curve_Target_High_Temp  20 -> 55
+14:08:04  Z1_Heat_Request_Temp            20 -> 55
+14:11:18  von der Node-RED-Steuerung zurückgesetzt auf 20
+14:11:57  Quiet_Mode_Level zurück auf 3
+```
+
+`set/Z1HeatCurveTargetHighTemp` stand seit drei Tagen auf 55 — der
+Werksvorgabe, die die Wärmepumpe beim Moduswechsel selbst gesetzt hatte. Dieser
+Kurvenpunkt *ist* in der Wärmepumpe der Vorlauf-Sollwert (siehe oben), also
+sprang die Solltemperatur nach jedem Neustart für gut drei Minuten auf 55 °C.
+Unbemerkt geblieben war das nur, weil die Anlage im Kühlbetrieb lief. Der
+Flüstermodus wiederum fiel, weil `QuietMode 3` und `PowerfulMode 0` beide Byte 7
+schreiben — der bekannte Protokoll-Überlappungsfall, und PowerfulMode trägt ein
+implizites „quiet aus".
+
+**Über das Retain-Bit ist das nicht zu filtern:** Der Adapter sendet die
+Wiedereinspielung mit `retain=0` (er hat gar keinen getrennten Retained-Speicher),
+und PubSubClient reicht das Flag ohnehin nicht an den Callback durch. Deshalb
+verwirft die Firmware Set-Kommandos jetzt für 5 Sekunden ab dem SUBACK — der
+Schwall kommt unmittelbar danach. Ein in diesem Fenster wirklich gemeintes
+Kommando geht verloren; der 5-Minuten-Re-Assert der Steuerung holt es nach.
+Verworfene Topics stehen einzeln im Telnet-Log, ihre Zahl als eine Zeile im
+MQTT-Log.
+
 ### Nur echte Antworttelegramme werden ausgewertet (3.6.0)
 
 Der einzige gefundene Weg, auf dem **falsche Messwerte** in die

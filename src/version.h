@@ -1,5 +1,47 @@
 #pragma once
 // Changelog:
+// 3.6.1 - Der Broker spielt beim Verbinden alle Set-Topics wieder ein - die
+//         Firmware verwirft sie jetzt (SUBSCRIBE_GRACE, 5 s ab SUBACK).
+//
+//         Gefunden am 2026-08-13 mit einem gezielten Reboot von Stufe 1, weil
+//         der Fluestermodus nach jedem Neustart auf 0 stand. Ablauf: beim
+//         Booten abonniert mqtt_reconnect() die 32 Set-Topics; der
+//         ioBroker-MQTT-Adapter beantwortet jedes neue Abonnement aus seiner
+//         Objektdatenbank und schickt den gespeicherten Wert JEDES Set-Topics.
+//         Die Firmware sah 32 frische Kommandos, alle im selben 500-ms-
+//         Sammelfenster, und schickte sie als EIN Telegramm an die
+//         Waermepumpe. Zwei davon taten weh:
+//
+//         (1) set/Z1HeatCurveTargetHighTemp stand seit dem 10.08. auf 55 -
+//             der Werksvorgabe, die die WP beim Moduswechsel selbst gesetzt
+//             hatte. Dieser Kurvenpunkt IST in der WP der Vorlauf-Sollwert
+//             (SET5): nach jedem Neustart sprang die Solltemperatur von 20
+//             auf 55 Grad, bis die Node-RED-Steuerung sie nach gut drei
+//             Minuten zurueckschrieb. Unbemerkt geblieben ist das nur, weil
+//             die Anlage im Kuehlbetrieb lief.
+//         (2) QuietMode 3 (Byte 7 = 32) und PowerfulMode 0 (Byte 7 = 73)
+//             ueberlappen im Protokoll und werden beide mit Maske 0xFF
+//             geschrieben - der letzte gewinnt, und PowerfulMode traegt ein
+//             implizites "quiet aus". Der Fluestermodus fiel deshalb bei
+//             jedem Neustart auf 0.
+//
+//         Ueber das Retain-Bit ist das nicht zu filtern: Der Adapter sendet
+//         die Wiedereinspielung mit retain=0, und PubSubClient reicht das
+//         Flag ohnehin nicht an den Callback durch. Deshalb die Karenzzeit -
+//         der Schwall kommt unmittelbar nach dem SUBACK. Ein in diesem
+//         Fenster wirklich gemeintes Kommando geht verloren; der 5-Minuten-
+//         Re-Assert der Steuerung holt es nach. Verworfene Topics stehen
+//         einzeln im Telnet-Log, ihre Zahl als eine Zeile im MQTT-Log.
+//
+//         Messschrieb des Nachweises (H1, Reboot 14:07:44):
+//           14:07:58  Quiet_Mode_Level 3 -> 0
+//           14:07:58  Z1_Heat_Curve_Target_High_Temp 20 -> 55
+//           14:08:04  Z1_Heat_Request_Temp 20 -> 55
+//           14:11:18  von Node-RED zurueckgesetzt auf 20
+//           14:11:57  Quiet_Mode_Level zurueck auf 3
+//         Dasselbe Muster beim OTA um 13:18 und bei den Neustarts am 08.08.
+//         und 11.08. Stufe 2 zeigte es nicht - dort steht im Set-Objekt
+//         derselbe Wert, der ohnehin aktiv ist.
 // 3.6.0 - Die vier verbliebenen Befunde der Codedurchsicht vom 2026-08-12.
 //         KEINE Aenderung an Topic-Namen, Wertebereichen oder am Protokoll.
 //
@@ -279,4 +321,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.6.0";
+static const char* heishamon_version = "3.6.1";
