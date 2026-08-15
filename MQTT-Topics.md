@@ -124,6 +124,42 @@ TOP95 | SGReady_Capacity2_Heat | SGReady (%)
 TOP96 | SGReady_Capacity2_DHW | SGReady (%)
 TOP97 | DHW_Heatup_Time | DHW Heatup Time (Minutes)
 TOP98 | DHW_Room_Max_Time | DHW Max Room Max Time (Minutes)
+TOP99 | Quiet_Mode_Active | Quiet mode actually running (0=off, 1=on) - on/off only, the level is TOP18
+TOP100 | Powerful_Mode_Active | Powerful mode actually running (0=off, 1=on)
+TOP101 | Heat_Cool_SW_State | Actual heat/cool state of the unit (0=heat, 1=cool)
+TOP102 | External_SW_State | External switch state (0=off, 1=on)
+
+### Actual states from byte 110 (TOP99 - TOP102, new in 3.7.0)
+
+These four report what the heat pump is *doing*, not what it was last told to
+do. The upstream HeishaMon does not decode byte 110; the bit assignment comes
+from `ProtocolByteDecrypt.md` and was confirmed on unit 1 on 2026-08-15. Each
+field is two bits, encoded as everywhere else in this protocol (`b01` = 0,
+`b10` = 1).
+
+The useful one is **TOP101**: it follows the real state of the unit no matter
+who switched it - the KNX actor, an MQTT `set/OperationMode`, or the local
+control panel. Byte 6 (TOP4 `Operating_Mode_State`) only shows the last
+commanded mode.
+
+Two caveats, both from the measurement:
+
+* **TOP99 is binary.** Quiet levels 1, 2 and 3 all read as `On`; the level
+  stays in TOP18 `Quiet_Mode_Level`.
+* **TOP100 and TOP102 were only ever observed in their off state.** The `b10`
+  side is unverified for those two.
+
+*Deutsch: Die vier Topics melden, was die Wärmepumpe tatsächlich TUT - nicht,
+was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
+dekodiert; die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und ist am
+2026-08-15 an WP1 belegt. Jedes Feld sind zwei Bits mit der üblichen Kodierung
+(`b01` = 0, `b10` = 1).*
+
+*Das nützliche ist **TOP101**: Es folgt dem echten Zustand unabhängig davon, wer
+umgeschaltet hat - KNX-Aktor, MQTT-`set/OperationMode` oder Bedienterminal.
+Byte 6 (TOP4) zeigt dagegen nur den zuletzt kommandierten Modus. Zwei
+Vorbehalte: TOP99 meldet nur AN/AUS (die Stufe steht weiter in TOP18), und bei
+TOP100 und TOP102 wurde nur der Aus-Zustand beobachtet.*
 
 
 ## Command Topics:

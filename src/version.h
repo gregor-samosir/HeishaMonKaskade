@@ -1,5 +1,59 @@
 #pragma once
 // Changelog:
+// 3.7.0 - Vier neue State-Topics aus Byte 110: die IST-Zustaende der
+//         Waermepumpe (TOP99 Quiet_Mode_Active, TOP100 Powerful_Mode_Active,
+//         TOP101 Heat_Cool_SW_State, TOP102 External_SW_State).
+//         NUMBEROFTOPICS 86 -> 90. Keine Aenderung an bestehenden Topics, am
+//         Protokoll oder an der Set-Seite - es wird nur ein bisher
+//         undekodiertes Byte des Antworttelegramms mit ausgewertet.
+//
+//         Wozu: TOP101 meldet, ob die Anlage TATSAECHLICH heizt oder kuehlt -
+//         unabhaengig davon, wer umgeschaltet hat (KNX-Aktor, MQTT-SET9 oder
+//         Bedienterminal). Byte 6 (TOP4 Operating_Mode_State) zeigt dagegen
+//         nur den zuletzt kommandierten Modus. Damit laesst sich der KNX-Aktor
+//         als Statusquelle der Kaskadensteuerung ersetzen.
+//
+//         Byte 110 ist im Original-HeishaMon nicht dekodiert. Die Bitzuordnung
+//         stammt aus ProtocolByteDecrypt.md und ist am 2026-08-15 an WP1
+//         empirisch belegt: Stufentest Quiet 0->1->2->3->0 (23:04-23:07, plus
+//         Gegenprobe 23:28 bei Stufe 3) sowie beide Moduswechsel, Cool->Heat
+//         ueber KNX (21:41:18) und Heat->Cool ueber MQTT SET9 (23:18:52), in
+//         beiden Faellen synchron zu Operating_Mode_State. Zwei Vorbehalte
+//         stehen so auch in MQTT-Topics.md: TOP99 meldet nur AN/AUS und keine
+//         Stufe (die bleibt in TOP18), und bei TOP100/TOP102 wurde nur der
+//         Aus-Zustand beobachtet - die b10-Seite ist unbelegt.
+//
+//         Die beiden neuen desc-Arrays haben DREI Elemente ("Off"/"On"/
+//         "unknown"), obwohl nur zwei Zustaende vorkommen koennen sollten. Die
+//         Web-Tabelle (webfunctions.cpp) faengt nur negative Indizes ab, nach
+//         oben gibt es keine Grenze und das struct fuehrt keine Array-Laenge
+//         mit. Ein 2-Bit-Feld kann aber b11 liefern - das ergibt Index 2 und
+//         haette hinter dem Array gelesen. Mit drei Elementen ist der gesamte
+//         moegliche Bereich -1..2 gedeckt. Dieselbe Luecke haben aeltere
+//         2-Bit-Topics (z. B. ThreeWay_Valve_State mit zweielementigem
+//         Valve[]) - Altbestand, bewusst nicht in dieser Aenderung angefasst.
+//
+//         Nachweise, beide ohne Hardware:
+//         - test/byte110_test.cpp (neu): uebersetzt src/decode.cpp mit und
+//           prueft ueber getTopicPayload(), dass jedes der vier Topics ueber
+//           alle 256 Rohwerte genau seine zwei Bits liest, dass die Klartexte
+//           der belegten Zustaende stimmen (0x55 Grundzustand, 0x95 Quiet an,
+//           0x59 Kuehlen) und dass der Anzeigeindex nie aus -1..2 laeuft.
+//           Gegenprobe gemacht: mit vertauschter Bitgruppe schlaegt der Test
+//           mit 192 Abweichungen fehl.
+//         - test/decode_vergleich.py --neu ...: 65016 Zeilen ueber 86
+//           bestehende Topics identisch zu 3.6.1, die vier neuen ausgeblendet.
+//           Neue Option --neu als Gegenstueck zu --entfallen.
+//         Die Arduino-Ersatzheader liegen jetzt als Dateien in test/stubs/
+//         statt als Zeichenketten in decode_vergleich.py - beide Hosttests
+//         benutzen dieselbe Fassung.
+//
+//         Groessen gegenueber 3.6.1: ESP8266 RAM +232 B, Flash +176 B;
+//         ESP32 RAM +80 B, Flash +204 B (vier Tabellenzeilen samt Namen; die
+//         const-Tabelle liegt auf dem ESP8266 im RAM).
+//
+//         NACH dem Flashen: Heat_Cool_SW_State gegen den KNX-Aktor
+//         gegenpruefen, bevor die Statusquelle umgestellt wird.
 // 3.6.1 - Der Broker spielt beim Verbinden alle Set-Topics wieder ein - die
 //         Firmware verwirft sie jetzt (SUBSCRIBE_GRACE, 5 s ab SUBACK).
 //
@@ -321,4 +375,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.6.1";
+static const char* heishamon_version = "3.7.0";

@@ -26,6 +26,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | --- | --- | --- |
 | `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
+| `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
+| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
@@ -37,6 +39,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
+| `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
 
 ## Pruefstand aufsetzen
 
@@ -58,13 +61,17 @@ curl -u admin:heisha "http://<ip>/settings?mqtt_server=192.168.2.147"
 
 ## Ausfuehren
 
-Die beiden C++-Programme pruefen ihre Ergebnisse seit 3.6.0 selbst und geben
-bei gebrochener Zusicherung `1` zurueck - die CI bricht dann ab. Vorher gaben
-sie ihre Zahlen nur aus.
+Die drei C++-Programme pruefen ihre Ergebnisse selbst und geben bei gebrochener
+Zusicherung `1` zurueck - die CI bricht dann ab. Vorher (bis 3.5.0) gaben sie
+ihre Zahlen nur aus.
+
+`byte110_test.cpp` laeuft ueber das Skript, weil dabei `decode.cpp` neben die
+Ersatzheader kopiert werden muss (Begruendung im Skriptkopf).
 
 ```bash
 c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
 c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
+./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
 
 ./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
 ./verteiler_test.py  --esp 192.168.2.197
@@ -147,6 +154,41 @@ Fall 5  200000 Zufallspuffer, Laenge passend zum Laengenbyte
 
 Fall 2 ist die wichtigere Haelfte: Die Pruefung darf kein gueltiges Telegramm
 wegen seines Inhalts verwerfen, sonst stuende die Anlage still.
+
+## Ist-Zustaende aus Byte 110 (byte110_test.cpp, 3.7.0)
+
+Byte 110 traegt vier 2-Bit-Felder mit den TATSAECHLICHEN Zustaenden der
+Waermepumpe (TOP99-TOP102). Bei vier Topics auf EINEM Byte ist der
+naheliegende Fehler, dass ein Topic die Bits eines anderen liest - das faellt
+im Betrieb nur auf, wenn beide Felder gerade unterschiedlich stehen.
+
+Der Test uebersetzt `src/decode.cpp` mit und ruft `getTopicPayload()` auf,
+prueft also den Code, der auf dem Geraet laeuft. Die Erwartung wird unabhaengig
+vom Dekodierer aus dem Rohwert gerechnet.
+
+```text
+Fall 1  vier Zeilen in stateTopics[], TOP99-102, Quellbyte 110
+Fall 2  je 256 Rohwerte gegen die erwartete Bitgruppe      0 Abweichungen
+Fall 3  belegte Zustaende: 0x55 Grundzustand (= Byte 110 im
+        Antwortbeispiel), 0x95 Quiet an, 0x59 Kuehlen
+Fall 4  Anzeigeindex bleibt in -1..2, desc[2] = "unknown"
+Fall 5  keine doppelten TOP-Nummern oder Topic-Namen in der ganzen Tabelle
+```
+
+Fall 4 ist der Grund fuer das dritte Array-Element: Die Web-Tabelle
+(`webfunctions.cpp`) faengt nur negative Indizes ab, und ein 2-Bit-Feld kann
+`b11` liefern - das ergibt Index 2. Bei Byte 110 ist das kein theoretischer
+Fall, weil `Powerful_Mode_Active` und `External_SW_State` bisher nur in ihrem
+Aus-Zustand beobachtet sind.
+
+Gegenprobe zum Test selbst: mit vertauschter Bitgruppe (`getBit3and4` statt
+`getBit1and2` bei TOP99) meldet Fall 2 192 Abweichungen und der Lauf bricht ab.
+
+Der Baurahmen ist ein Skript, weil `decode.cpp` mit `#include "HeishaMon.h"`
+beginnt und ein Include in Anfuehrungszeichen immer zuerst im Verzeichnis der
+einbindenden Datei sucht: aus `src/` heraus gewinnt der echte Header und zieht
+LittleFS, WiFi und den Rest der Arduino-Welt nach. `decode_hosttest.sh` kopiert
+die Uebersetzungseinheit deshalb neben die Ersatzheader aus `stubs/`.
 
 ## Verhaeltnis zu `pio test`
 
@@ -268,14 +310,21 @@ und 161) und die Nachkommabits. Phase 2 haengt 500 Pseudozufallstelegramme an,
 um Kombinationen ueber mehrere Bytes zu erwischen. Zusammen 756 Telegramme,
 also 74844 verglichene Zeilen bei 99 Topics.
 
-Fuer den Fall, dass Topics absichtlich entfallen, gibt es `--entfallen`:
+Fuer den Fall, dass Topics absichtlich entfallen oder dazukommen, gibt es
+`--entfallen` und `--neu`:
 
 ```bash
-./decode_vergleich.py --entfallen Z2_   # Zone-2-Topics duerfen neu fehlen
+./decode_vergleich.py --entfallen Z2_               # Zone-2-Topics duerfen neu fehlen
+./decode_vergleich.py --neu Quiet_Mode_Active ...   # diese Topics duerfen neu sein
 ```
 
 Damit wurde 3.3.0 abgenommen (Umbau auf die eine `stateTopics`-Tabelle):
-74844 Zeilen identisch.
+74844 Zeilen identisch. Und 3.7.0 (Byte-110-Topics): 65016 Zeilen ueber die 86
+bestehenden Topics identisch, die vier neuen ausgeblendet - was die neuen
+liefern, prueft `byte110_test.cpp`.
+
+Die Arduino-Ersatzheader stehen seit 3.7.0 nicht mehr als Zeichenketten im
+Skript, sondern in `stubs/` - `byte110_test.cpp` benutzt dieselben Dateien.
 
 ## Entfallene Topics aufraeumen (retained_loeschen.py)
 

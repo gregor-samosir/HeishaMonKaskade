@@ -60,12 +60,16 @@ jobs:
       # telegramm_test: Typ-, Längen- und Prüfsummenregel für das
       #                 Antworttelegramm - bindet src/telegram.h direkt ein,
       #                 prüft also den Code, der auf dem Gerät läuft
+      # byte110_test:   Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
+      #                 übersetzt src/decode.cpp mit, deshalb über das Skript
+      #                 (Arduino-Ersatzheader aus test/stubs/)
       - name: Hosttests übersetzen und ausführen
         run: |
           c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
           /tmp/merge_test
           c++ -std=c++17 -O2 -Wall -o /tmp/telegramm_test test/telegramm_test.cpp
           /tmp/telegramm_test
+          ./test/decode_hosttest.sh
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
       # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt
