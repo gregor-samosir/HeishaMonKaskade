@@ -33,6 +33,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `kurven_sync.py` | Heiz-/Kuehlkurve aus dem ioBroker-Konfigurationsbaum in die WPs spiegeln (`--dry-run`) | Produktivgeraet |
 | `kurven_grenzen.py` | Ermitteln, welche Kurvenwerte die WP wirklich annimmt (veraendert Werte, stellt sie zurueck) | Produktivgeraet |
 | `decode_vergleich.py` | Dekodierpfad zweier Codestaende gegeneinander laufen lassen, auf dem Mac | nein |
+| `frame_diff.py` | Rohtelegramme eines Mitschnitts ueber alle 203 Bytes vergleichen, angereichert aus `ProtocolByteDecrypt.md` | nein |
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
