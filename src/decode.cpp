@@ -31,6 +31,14 @@ static const char *Minutes[] = {"value", "Minutes"};
 static const char *Duty[] = {"value", "Duty"};
 static const char *HeatCoolModeDesc[] = {"Comp. Curve", "Direct"};
 static const char *Percent[] = {"value", "&#37"};
+// Die beiden Arrays fuer Byte 110 haben bewusst DREI Elemente, obwohl nur zwei
+// Zustaende beobachtet sind: Ein 2-Bit-Feld kann b11 liefern, das ergibt nach
+// "Rohwert - 1" den Index 2. Die Web-Tabelle (webfunctions.cpp) faengt nur
+// negative Indizes ab, nach oben gibt es keine Grenze und das struct fuehrt
+// keine Array-Laenge mit. Mit drei Elementen ist der gesamte moegliche Bereich
+// -1..2 gedeckt: b00 -> -1 -> leer, b01/b10/b11 -> 0/1/2 -> im Array.
+static const char *OffOnUnknown[] = {"Off", "On", "unknown"};
+static const char *HeatCoolActual[] = {"Heat", "Cool", "unknown"};
 
 
 /*****************************************************************************/
@@ -134,6 +142,19 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 96,  73, "SGReady_Capacity2_DHW",            getIntMinus1,         nullptr,                   Percent},
     { 97,  98, "DHW_Heatup_Time",                  getIntMinus1,         nullptr,                   Minutes},
     { 98,  97, "DHW_Room_Max_Time",                getIntMinus1Times30,  nullptr,                   Minutes},
+    // Byte 110 - die IST-Zustaende der Waermepumpe. Im Original-HeishaMon nicht
+    // dekodiert; die Bitzuordnung stammt aus ProtocolByteDecrypt.md und ist am
+    // 2026-08-15 an WP1 empirisch belegt (Stufentest Quiet 0->1->2->3->0,
+    // Moduswechsel Cool->Heat ueber KNX und Heat->Cool ueber SET9).
+    // Zwei Vorbehalte: Quiet meldet nur AN/AUS, keine Stufe (dafuer TOP18), und
+    // b10 wurde bei Powerful und External SW nie beobachtet.
+    // Wert ist TOP101: Heat_Cool_SW_State folgt dem tatsaechlichen Zustand
+    // unabhaengig davon, wer umgeschaltet hat - anders als Byte 6, das den
+    // zuletzt kommandierten Modus zeigt.
+    { 99, 110, "Quiet_Mode_Active",                getBit1and2,          nullptr,                   OffOnUnknown},
+    {100, 110, "Powerful_Mode_Active",             getBit3and4,          nullptr,                   OffOnUnknown},
+    {101, 110, "Heat_Cool_SW_State",               getBit5and6,          nullptr,                   HeatCoolActual},
+    {102, 110, "External_SW_State",                getBit7and8,          nullptr,                   OffOnUnknown},
 };
 
 // Haelt NUMBEROFTOPICS (Array-Groesse von actual_data) und die Tabelle zusammen

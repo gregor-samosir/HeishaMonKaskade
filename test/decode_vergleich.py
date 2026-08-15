@@ -14,6 +14,7 @@ Pseudozufall an, um Kombinationen ueber mehrere Bytes zu erwischen.
   ./decode_vergleich.py                      # Arbeitsstand gegen HEAD
   ./decode_vergleich.py --basis v3.2.2       # gegen ein Tag
   ./decode_vergleich.py --entfallen Z2_      # Topics, die neu fehlen DUERFEN
+  ./decode_vergleich.py --neu Quiet_Mode_Active   # Topics, die NEU sein duerfen
 
 Voraussetzung: g++ (Xcode Command Line Tools). Kein Geraet noetig.
 """
@@ -27,33 +28,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 QUELLEN = ["decode.cpp", "decode.h", "Topics.h", "Topics.cpp"]
 
-# Arduino-Ersatz: nur so viel, wie der Dekodierpfad wirklich anfasst
-STUBS = {
-    "Arduino.h": """#pragma once
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-typedef uint8_t byte;
-static inline unsigned int word(byte h, byte l) { return ((unsigned int)h << 8) | l; }
-static inline char *dtostrf(double val, signed char width, unsigned char prec, char *out)
-{
-  snprintf(out, 32, "%*.*f", (int)width, (int)prec, val);
-  return out;
-}
-static inline unsigned long millis() { return 0; }
-""",
-    "PubSubClient.h": """#pragma once
-class PubSubClient { public: bool publish(const char *, const char *, bool) { return true; } };
-""",
-    "HeishaMon.h": """#pragma once
-#include "Arduino.h"
-#include "PubSubClient.h"
-#define UPDATEALLTIME 300000
-#define MQTT_RETAIN_VALUES true
-void write_telnet_log(char *);
-void write_mqtt_log(char *);
-""",
-}
+# Arduino-Ersatz: nur so viel, wie der Dekodierpfad wirklich anfasst. Seit
+# 3.7.0 liegen die Header als Dateien in test/stubs/ - byte110_test.cpp
+# benutzt dieselben, und zwei Fassungen koennten auseinanderlaufen.
+STUB_VERZEICHNIS = REPO / "test" / "stubs"
 
 # Testtreiber. Der Zugriff auf Nummer und Name unterscheidet sich zwischen den
 # Staenden, deshalb zwei Varianten - der Rest ist identisch.
@@ -118,8 +96,8 @@ def stand_bauen(ziel, quelle_lesen, name):
         if inhalt is None:
             sys.exit(f"FEHLER: {datei} im Stand '{name}' nicht gefunden")
         (ziel / datei).write_text(inhalt)
-    for datei, inhalt in STUBS.items():
-        (ziel / datei).write_text(inhalt)
+    for stub in sorted(STUB_VERZEICHNIS.glob("*.h")):
+        (ziel / stub.name).write_text(stub.read_text())
 
     schleife = SCHLEIFE_TABELLE if hat_tabelle(ziel) else SCHLEIFE_PARALLEL
     (ziel / "main.cpp").write_text(TREIBER_KOPF % schleife)
@@ -145,10 +123,15 @@ def main():
     ap.add_argument("--entfallen", action="append", default=[],
                     help="Namensteil von Topics, die im neuen Stand fehlen duerfen "
                          "(mehrfach angebbar, z. B. --entfallen Z2_)")
+    ap.add_argument("--neu", action="append", default=[],
+                    help="Namensteil von Topics, die im neuen Stand DAZUGEKOMMEN "
+                         "sein duerfen (mehrfach angebbar, z. B. --neu Quiet_Mode_Active)")
     args = ap.parse_args()
 
     if shutil.which("g++") is None:
         sys.exit("FEHLER: g++ nicht gefunden - Xcode Command Line Tools installieren")
+    if not STUB_VERZEICHNIS.is_dir():
+        sys.exit(f"FEHLER: Ersatzheader nicht gefunden ({STUB_VERZEICHNIS})")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -177,6 +160,17 @@ def main():
                if not any(teil in z.split(" ")[2] for teil in args.entfallen)]
         print(f"   {vorher - len(alt)} Zeilen als erwartet entfallen ausgeblendet "
               f"({', '.join(args.entfallen)})")
+
+    # Umgekehrter Fall: neue Topics. Sie aus dem NEUEN Lauf herausnehmen, damit
+    # der Rest Zeile fuer Zeile vergleichbar bleibt - der Nachweis lautet dann
+    # "die neuen Topics haben an keinem bestehenden Topic etwas veraendert".
+    # Was die neuen Topics selbst liefern, prueft byte110_test.cpp.
+    if args.neu:
+        vorher = len(neu)
+        neu = [z for z in neu
+               if not any(teil in z.split(" ")[2] for teil in args.neu)]
+        print(f"   {vorher - len(neu)} Zeilen als erwartet neu ausgeblendet "
+              f"({', '.join(args.neu)})")
 
     print(f"\n== Vergleich: {len(alt)} gegen {len(neu)} Zeilen ==")
     if alt == neu:

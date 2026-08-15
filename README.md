@@ -104,8 +104,35 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 | Dekodierpfad | `String`-Objekte | feste Puffer, keine Heap-Allokation |
 | Empfangenes Telegramm | Prüfsumme entscheidet allein | zusätzlich Typ (0x71) und Länge (203) |
 | WLAN-Ausfall | keine Prüfung im Betrieb | Watchdog: Reconnect nach 30 s, Neustart nach 5 min |
+| Byte 110 | nicht dekodiert | vier Topics mit den Ist-Zuständen (heizt/kühlt tatsächlich) |
 
 Im Detail:
+
+### Die Ist-Zustände aus Byte 110 (3.7.0)
+
+Byte 110 des Antworttelegramms trägt vier 2-Bit-Felder, die das Original nicht
+auswertet: ob Flüstermodus und Powerful-Modus **tatsächlich laufen**, ob die
+Anlage **tatsächlich heizt oder kühlt**, und den Zustand des externen
+Schalters. Daraus werden TOP99 – TOP102.
+
+Der praktische Nutzen steckt in `Heat_Cool_SW_State` (TOP101): Byte 6
+(`Operating_Mode_State`) zeigt nur den zuletzt *kommandierten* Modus, TOP101
+dagegen den echten Zustand — egal ob per KNX-Aktor, per MQTT oder am
+Bedienterminal umgeschaltet wurde. Damit kann die Kaskadensteuerung den
+KNX-Aktor als Statusquelle ersetzen.
+
+Die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und wurde am 2026-08-15
+an Stufe 1 nachgemessen: Flüstermodus 0 → 1 → 2 → 3 → 0 und beide
+Moduswechsel, einer über KNX, einer über MQTT. Zwei Vorbehalte stehen so auch
+in der Topic-Referenz: Der Flüstermodus meldet hier nur AN/AUS (die Stufe
+bleibt in TOP18), und bei Powerful und External SW wurde nur der Aus-Zustand
+beobachtet.
+
+Weil ein 2-Bit-Feld auch `b11` liefern kann und die Web-Tabelle Indizes nur
+nach unten prüft, haben die beiden neuen Klartext-Arrays ein drittes Element
+(`unknown`) — sonst läse die Anzeige hinter dem Array. Geprüft von
+[`test/byte110_test.cpp`](test/byte110_test.cpp), das den echten Dekodierpfad
+mitübersetzt.
 
 ### Der Broker spielt beim Verbinden alles wieder ein (3.6.1)
 
@@ -450,7 +477,7 @@ keiner Zeit ein Leerwert (−128, −1) auf einem produktiven State-Topic.
 
 ## MQTT-Schnittstelle
 
-86 State-Topics und 32 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
+90 State-Topics und 32 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
 Die vollständige Referenz mit Byte-Spalte und Wertebereichen steht in
 [`MQTT-Topics.md`](MQTT-Topics.md).
 
