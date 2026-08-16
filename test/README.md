@@ -26,6 +26,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | --- | --- | --- |
 | `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
+| `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
@@ -71,6 +72,7 @@ Ersatzheader kopiert werden muss (Begruendung im Skriptkopf).
 ```bash
 c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
 c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
+c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindow_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
 
 ./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
@@ -199,9 +201,40 @@ die Uebersetzungseinheit deshalb neben die Ersatzheader aus `stubs/`.
 
 Das sind eigenstaendige Diagnosewerkzeuge, keine Unity-Testsuites - `pio test`
 nutzt sie nicht. Echte Unit-Tests fuer Encoder, Decoder und Merge (Schritt 5
-des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp` und
-`telegramm_test.cpp` sind die Vorlage dafuer - beide brechen seit 3.6.0 mit
-Rueckgabewert 1 ab, wenn eine Zusicherung bricht, und laufen so in der CI.
+des Umbauplans) waeren der naechste Ausbau; `merge_test.cpp`,
+`telegramm_test.cpp` und `sendwindow_test.cpp` sind die Vorlage dafuer - alle
+brechen mit Rueckgabewert 1 ab, wenn eine Zusicherung bricht, und laufen so in
+der CI.
+
+## Zeitregeln des Sendepfads (sendwindow_test.cpp, 3.8.0)
+
+Dasselbe Muster wie bei der Telegrammpruefung: Die Regeln stehen in
+`src/sendwindow.h`, Firmware und Hosttest binden dieselbe Datei ein. Geprueft
+werden der Deckel des Sammelfensters (`COMMAND_WINDOW_MAX`) und die Grenze
+fuers Verschieben des Sendens (`COMMAND_DEFER_MAX`).
+
+Der Test deckt drei Dinge ab, die sich sonst nirgends belegen liessen:
+
+* **Terminierung** unter SET-Stroemen mit 1, 100 und 400 ms Abstand. Bis 3.7.0
+  stiess jedes SET den 500-ms-Timer neu an - ein Strom dichter als 500 ms hielt
+  Senden und Abfrage unbegrenzt an.
+* **Die zugesagte Obergrenze** ueber jeden Abstand von 1 bis 3000 ms. Sie
+  betraegt 2499 ms und nicht 2500: der letzte Anstoss kann hoechstens bei
+  `COMMAND_WINDOW_MAX - 1` liegen, weil auf dem Deckel selbst nicht mehr
+  verlaengert wird.
+* **Den `millis()`-Ueberlauf nach 49,7 Tagen.** Das Geraet laeuft monatelang
+  durch, der Zaehler laeuft im Betrieb also wirklich ueber - abwarten liesse
+  sich das nicht. Eine Gegenprobe im Test zeigt, dass die naive Schreibweise
+  `now < start + limit` genau an dieser Naht falsch liegt.
+
+Deshalb rechnen die Regeln in `uint32_t` und nicht in `unsigned long`: auf
+ESP8266 und ESP32 ist beides 32 Bit, auf dem Mac waere `unsigned long` 64 Bit
+und der Ueberlauftest wuerde gegen nichts pruefen.
+
+Gegenprobe gemacht: mit ungedeckeltem Fenster faellt der Test mit 10
+Abweichungen durch. **Was er nicht abdeckt**, sind die Zustandsuebergaenge in
+`HeishaMon.cpp` selbst (Ticker, Serial, Flags) - die sind ohne die halbe
+Arduino-Welt nicht uebersetzbar und bleiben Sache des Abnahmetests.
 
 ## Kurven-Set-Kommandos (SET27-SET34)
 

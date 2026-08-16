@@ -1,5 +1,79 @@
 #pragma once
 // Changelog:
+// 3.8.0 - Die drei offenen Punkte der Codedurchsicht vom 2026-08-12 abgeraeumt.
+//         Keine Aenderung am Protokoll, an den Topics oder an der Dekodierung -
+//         nur der Sendepfad. Nachweis: test/decode_vergleich.py --basis v3.7.0
+//         meldet 68040 Zeilen ueber 90 Topics identisch.
+//
+//         (1) DECKEL FUERS SAMMELFENSTER. Jedes eintreffende SET stiess den
+//         500-ms-Timer neu an, damit mehrere Felder in ein Telegramm wandern
+//         (register_new_command). Kommen die SETs dichter als 500 ms, wurde das
+//         Fenster damit unbegrenzt verlaengert - Senden UND Abfrage standen
+//         still, und zwar ohne jede Logzeile. Auffallen wuerde es erst daran,
+//         dass die Messwerte nicht mehr nachziehen. Ab COMMAND_WINDOW_MAX
+//         (2000 ms) wird nicht mehr verlaengert; der laufende Timer feuert von
+//         selbst, das Telegramm geht spaetestens 2499 ms nach dem ersten SET
+//         raus. Das eintreffende Feld geht dabei nicht verloren - es steht zu
+//         diesem Zeitpunkt schon in mainCommand und faehrt mit.
+//         Am Normalbetrieb aendert sich nichts: der 5-min-Re-Assert der
+//         Node-RED-Steuerung schickt seine sechs Kanaele im Millisekunden-
+//         abstand, die landen weiter alle in einem Telegramm.
+//
+//         (2) serialquerysent WIRD VOR DEM SENDEN GEPRUEFT. Das Flag hiess
+//         schon immer "mutex", wurde aber nur gelesen, nicht beachtet. Traf ein
+//         SET 0 bis 500 ms nach dem Absenden einer Abfrage ein, feuerte der
+//         Sammeltimer kurz VOR dem Lesetimer: send_pana_command warf ueber
+//         flush_serial_input die bereits vollstaendig eingetroffene Antwort weg,
+//         und die anschliessende Leserunde lief ins Leere ("Telegramm
+//         verworfen", eine Messrunde verloren). Jetzt wird das Senden statt
+//         dessen um COMMANDTIMER verschoben. timeout_serial gibt die Leitung
+//         nach SERIALTIMEOUT (600 ms) in jedem Fall frei, das dauert also
+//         hoechstens zwei Runden. COMMAND_DEFER_MAX (4) ist der Notausgang,
+//         falls das Flag doch haengt: dann wird wie bisher gesendet und die
+//         Warnung geht ins MQTT-Log - im Betrieb darf sie nie auftauchen.
+//
+//         (3) getLeft5bits ENTFERNT (decode.cpp/decode.h). Deklariert und
+//         definiert, aber von keiner Tabellenzeile benutzt - toter Code seit
+//         der Tabellenumstellung in 3.3.0. Owner-Entscheid 2026-08-13, beim
+//         naechsten Umbau mitzunehmen. initialQuery bleibt dagegen bewusst
+//         stehen, Begruendung steht als Kommentar im Code.
+//
+//         Die beiden Zeitregeln stehen in der neuen Datei src/sendwindow.h,
+//         gleiches Muster wie src/telegram.h seit 3.6.0: Firmware und Hosttest
+//         benutzen dieselbe Fassung, es gibt keine zweite Wahrheit. Sie rechnen
+//         bewusst in uint32_t und nicht in unsigned long - auf beiden Chips ist
+//         das dasselbe wie millis(), auf dem Mac waere unsigned long 64 Bit und
+//         der Ueberlauftest wuerde gegen nichts pruefen.
+//
+//         Nachweis, ohne Hardware:
+//         - test/sendwindow_test.cpp (neu, laeuft in der CI mit): Raender des
+//           Deckels, Terminierung unter SET-Stroemen mit 1/100/400 ms Abstand,
+//           die zugesagte Obergrenze ueber alle Abstaende von 1 bis 3000 ms,
+//           der millis()-Ueberlauf nach 49,7 Tagen samt Gegenprobe gegen die
+//           naive Schreibweise (now < start + limit), und dass das
+//           Verschiebefenster laenger ist als SERIALTIMEOUT. Gegenprobe
+//           gemacht: mit ungedeckeltem Fenster faellt der Test mit 10
+//           Abweichungen durch.
+//         - Beim Aufschreiben der Zusicherung fiel auf, dass die Obergrenze
+//           2499 ms betraegt und nicht 2500: der letzte Anstoss kann hoechstens
+//           bei COMMAND_WINDOW_MAX - 1 liegen. Im Test steht jetzt der
+//           hergeleitete Wert.
+//
+//         WAS DER HOSTTEST NICHT ABDECKT: die Zustandsuebergaenge in
+//         HeishaMon.cpp selbst (Ticker, Serial, Flags) sind nicht ohne die
+//         halbe Arduino-Welt uebersetzbar. Beim Abnahmetest ist deshalb auf
+//         zwei Logzeilen zu achten - "Lesefenster laeuft noch, Senden
+//         verschoben" darf vereinzelt nach einem SET auftreten (das ist der
+//         behobene Fall), "Sammelfenster am Deckel" und die erzwungene
+//         Warnung duerfen im Normalbetrieb gar nicht kommen.
+//
+//         Groessen gegenueber 3.7.0 (alle 10 Envs gebaut):
+//         ESP32 RAM +16 B, Flash +368 B; ESP8266 RAM +192 B, Flash +352 B.
+//         Die 192 Byte auf dem ESP8266 sind fast vollstaendig die drei neuen
+//         Logtexte - Zeichenketten ohne PROGMEM liegen dort im RAM, wie bei
+//         allen bestehenden Meldungen auch. Belegung danach: ESP8266 55,8 %
+//         RAM, ESP32 17,4 %.
+//
 // 3.7.0 - Vier neue State-Topics aus Byte 110: die IST-Zustaende der
 //         Waermepumpe (TOP99 Quiet_Mode_Active, TOP100 Powerful_Mode_Active,
 //         TOP101 Heat_Cool_SW_State, TOP102 External_SW_State).
@@ -382,4 +456,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.7.0";
+static const char* heishamon_version = "3.8.0";

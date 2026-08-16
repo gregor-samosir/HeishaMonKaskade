@@ -1,7 +1,8 @@
 #pragma once
 #include <Arduino.h>
 #include <LittleFS.h>
-#include "telegram.h" // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
+#include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
+#include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
 
 // platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
 // (official HeishaMon board), differences are isolated here
@@ -63,6 +64,9 @@ typedef ESP8266HTTPUpdateServer HTTPUpdateServerClass;
 #define MQTT_RETAIN_VALUES 1
 
 // config your timing
+// Die zwei Grenzen des Sammelfensters (COMMAND_WINDOW_MAX, COMMAND_DEFER_MAX)
+// stehen bewusst nicht hier, sondern in sendwindow.h - sie gehoeren zu den
+// Regeln, die der Hosttest mituebersetzt.
 #define COMMANDTIMER 500  // Command / timer to send commands from buffer to HP
 #define QUERYTIMER 5000   // Query / timer to initiate a query
 #define BUFFERTIMEOUT 500 // Serial Buffer Filltime / timer to fill the UART buffer with all 203 bytes from HP board

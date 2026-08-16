@@ -374,7 +374,16 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 Zeitverhalten (Konstanten in `HeishaMon.h`): alle 5 s eine Abfrage an die
 Wärmepumpe, 500 ms Sammelfenster für eingehende Set-Kommandos, 600 ms Timeout
 für die 203 Bytes Antwort. Gesendet wird immer nur eine Sache zur Zeit —
-`serialquerysent` wirkt als Mutex.
+`serialquerysent` wirkt als Mutex und wird seit 3.8.0 vor dem Senden auch
+geprüft: Fällt ein Sendezeitpunkt in ein laufendes Lesefenster, wird das Senden
+verschoben, statt die bereits eingetroffene Antwort wegzuwerfen.
+
+Das Sammelfenster hat seit 3.8.0 außerdem einen Deckel (`COMMAND_WINDOW_MAX`,
+2 s): Jedes eintreffende Set-Kommando stößt den 500-ms-Timer neu an, damit
+mehrere Felder in ein Telegramm wandern — ein Kommandostrom mit weniger als
+500 ms Abstand verlängerte das Fenster vorher unbegrenzt und hielt Senden *und*
+Abfrage an. Die beiden Zeitregeln stehen in `src/sendwindow.h`, damit Firmware
+und Hosttest dieselbe Fassung benutzen (`test/sendwindow_test.cpp`).
 
 ## Bauen und Flashen
 

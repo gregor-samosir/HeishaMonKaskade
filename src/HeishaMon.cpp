@@ -8,7 +8,10 @@ Ticker Send_Pana_Mainquery_Timer(send_pana_mainquery, QUERYTIMER, 1); // one tim
 Ticker Read_Pana_Data_Timer(read_pana_data, BUFFERTIMEOUT, 1);        // one time
 Ticker Timeout_Serial_Timer(timeout_serial, SERIALTIMEOUT, 1);        // one time
 
-bool serialquerysent = false; // mutex for serial sending
+// Eine Antwort steht aus - die Leitung gehoert bis zum Lesen oder bis zum
+// Serial-Timeout dem laufenden Zyklus. Seit 3.8.0 wird das Flag vor dem
+// Senden auch tatsaechlich geprueft (send_pana_command).
+bool serialquerysent = false;
 
 // Default settings if config does not exists
 // stage-specific hostname comes as build flag from platformio.ini, fallback = stage 1
@@ -45,6 +48,16 @@ char log_msg[MAXDATASIZE];
 
 bool newcommand = false;    // a send is due (command or plain query)
 bool setDataPending = false; // the buffer holds at least one real SET field
+
+// Sammelfenster: Zeitpunkt, an dem es geoeffnet wurde, und Zahl der bisher
+// eingesammelten Verlaengerungen. Regeln und Begruendung in sendwindow.h.
+// uint32_t passend zur Regel dort - auf beiden Chips dasselbe wie millis().
+uint32_t commandWindowStart = 0;
+unsigned int commandWindowExtensions = 0;
+
+// Wie oft das Senden schon verschoben wurde, weil noch ein Lesefenster lief.
+// Wird bei jedem tatsaechlichen Senden zurueckgesetzt.
+unsigned int commandSendDeferrals = 0;
 
 WebServerClass httpServer(80);
 HTTPUpdateServerClass httpUpdater;
@@ -507,12 +520,48 @@ void flush_serial_input()
 /*****************************************************************************/
 /* Register new command
 /* Wait COMMANDTIMER for multible commands from mqtt
+/*
+/* Das Sammelfenster hat seit 3.8.0 einen Deckel: Bis dahin stiess JEDES
+/* eintreffende SET den 500-ms-Timer neu an, damit mehrere Felder in ein
+/* Telegramm wandern. Kommen die SETs dichter als 500 ms, wurde das Fenster
+/* damit unbegrenzt verlaengert - Senden und Abfrage standen still, ohne dass
+/* im Log etwas aufgefallen waere. Die Regel dafuer steht in sendwindow.h.
+/*
+/* Das Feld selbst ist zu diesem Zeitpunkt bereits in mainCommand eingetragen
+/* (build_heatpump_command macht das VOR dem Aufruf hier). Am Deckel geht
+/* also nichts verloren - der Wert faehrt mit dem gleich abgehenden Telegramm.
 /*****************************************************************************/
 void register_new_command()
 {
-  newcommand = true;
-  Send_Pana_Command_Timer.start(); // wait countdown for multible SET commands
-  write_telnet_log((char *)"Register command/query");
+  uint32_t now = (uint32_t)millis();
+
+  // Fall 1: kein Fenster offen - eines oeffnen und den Sammeltimer anstossen
+  if (!newcommand)
+  {
+    newcommand = true;
+    commandWindowStart = now;
+    commandWindowExtensions = 0;
+    Send_Pana_Command_Timer.start();
+    write_telnet_log((char *)"Register command/query");
+    return;
+  }
+
+  // Fall 2: Fenster laeuft und darf noch verlaengert werden
+  if (send_window_may_extend(now, commandWindowStart, COMMAND_WINDOW_MAX))
+  {
+    commandWindowExtensions++;
+    Send_Pana_Command_Timer.start(); // weiter sammeln
+    write_telnet_log((char *)"Register command/query");
+    return;
+  }
+
+  // Fall 3: Deckel erreicht - Timer NICHT neu anstossen. Er laeuft aus dem
+  // letzten Anstoss noch und feuert von selbst, spaetestens
+  // COMMAND_WINDOW_MAX + COMMANDTIMER nach dem ersten SET.
+  (void)snprintf(log_msg, sizeof(log_msg),
+                 "Sammelfenster am Deckel (%u Verlaengerungen), wird jetzt gesendet",
+                 commandWindowExtensions);
+  write_telnet_log(log_msg);
 }
 
 /*****************************************************************************/
@@ -522,42 +571,76 @@ void register_new_command()
 /*****************************************************************************/
 void send_pana_command()
 {
-  if (newcommand == true)
+  if (newcommand == false)
   {
-    // Saubere Ausgangslage: alles, was noch im Empfangspuffer liegt, gehoert
-    // zu einem abgeschlossenen Zyklus und darf die neue Antwort nicht stoeren.
-    //
-    // Der interessante Fall ist ein SET, das mitten in ein laufendes Lesefenster
-    // faellt (serialquerysent wird vor dem Senden bewusst nicht geprueft, s.
-    // offene Punkte). Vorher schoben sich die halb gelesenen Bytes vor die
-    // Antwort auf das Kommando - jetzt geht eine Messrunde verloren statt
-    // falscher Werte zu entstehen. Die naechste Antwort kommt 5 s spaeter.
-    flush_serial_input();
-
-    if (!setDataPending)
-    {
-      heatpumpSerial.write(mainQuery, QUERYSIZE);
-      heatpumpSerial.write(calculate_checksum(mainQuery));
-      serialquerysent = true;
-      write_telnet_log((char *)"Send query");
-    }
-    else
-    {
-      heatpumpSerial.write(mainCommand, QUERYSIZE);
-      heatpumpSerial.write(calculate_checksum(mainCommand));
-      serialquerysent = true;
-      write_telnet_log((char *)"Send command");
-      if (outputHexLog)
-        write_hex_log(mainCommand, QUERYSIZE);
-      // buffer is on the wire: drop both the payload and the claimed bits
-      memcpy(mainCommand, cleanCommand, QUERYSIZE);
-      memset(usedMask, 0, QUERYSIZE);
-      setDataPending = false;
-    }
-    newcommand = false;
-    Read_Pana_Data_Timer.start();
-    Timeout_Serial_Timer.start();
+    return;
   }
+
+  // Laeuft noch ein Lesefenster, wartet die Waermepumpe gerade mit einer
+  // Antwort auf. Bis 3.7.0 wurde trotzdem gesendet - das flush_serial_input()
+  // unten warf die schon eingetroffene Antwort weg, und die anschliessende
+  // Leserunde lief ins Leere ("Telegramm verworfen", eine Messrunde weg).
+  // Auftreten konnte das, wenn ein SET 0 bis 500 ms nach dem Absenden einer
+  // Abfrage eintraf: der Sammeltimer feuerte dann kurz vor dem Lesetimer.
+  //
+  // Jetzt wird stattdessen nachgefasst. timeout_serial gibt die Leitung nach
+  // SERIALTIMEOUT (600 ms) in jedem Fall wieder frei, das dauert also
+  // hoechstens ein bis zwei Runden. COMMAND_DEFER_MAX ist der Notausgang,
+  // falls das Flag doch einmal haengt - sonst bliebe das Kommando fuer immer
+  // liegen (Regel und Begruendung in sendwindow.h).
+  //
+  // Der Preis: Read_Pana_Data_Timer wird in loop() NACH diesem Timer
+  // aktualisiert. Wird im selben Durchlauf gelesen, ist die Leitung sofort
+  // frei, das Kommando wartet aber trotzdem die vollen COMMANDTIMER ab.
+  // 500 ms Verzoegerung gegen eine verlorene Messrunde von ueber 5 s - der
+  // Tausch lohnt, und bei einem 6-s-Takt faellt er nicht auf.
+  if (serialquerysent == true)
+  {
+    if (send_may_defer(commandSendDeferrals, COMMAND_DEFER_MAX))
+    {
+      commandSendDeferrals++;
+      Send_Pana_Command_Timer.start(); // in COMMANDTIMER erneut versuchen
+      write_telnet_log((char *)"Lesefenster laeuft noch, Senden verschoben");
+      return;
+    }
+
+    // Notausgang: Verhalten wie bis 3.7.0 - senden und die alte Antwort
+    // verwerfen. Auffaellig genug loggen, das darf im Betrieb nicht vorkommen.
+    (void)snprintf(log_msg, sizeof(log_msg),
+                   "Warnung: Lesefenster nach %u Versuchen noch offen, Senden erzwungen",
+                   commandSendDeferrals);
+    write_mqtt_log(log_msg);
+    serialquerysent = false;
+  }
+  commandSendDeferrals = 0;
+
+  // Saubere Ausgangslage: alles, was noch im Empfangspuffer liegt, gehoert
+  // zu einem abgeschlossenen Zyklus und darf die neue Antwort nicht stoeren.
+  flush_serial_input();
+
+  if (!setDataPending)
+  {
+    heatpumpSerial.write(mainQuery, QUERYSIZE);
+    heatpumpSerial.write(calculate_checksum(mainQuery));
+    serialquerysent = true;
+    write_telnet_log((char *)"Send query");
+  }
+  else
+  {
+    heatpumpSerial.write(mainCommand, QUERYSIZE);
+    heatpumpSerial.write(calculate_checksum(mainCommand));
+    serialquerysent = true;
+    write_telnet_log((char *)"Send command");
+    if (outputHexLog)
+      write_hex_log(mainCommand, QUERYSIZE);
+    // buffer is on the wire: drop both the payload and the claimed bits
+    memcpy(mainCommand, cleanCommand, QUERYSIZE);
+    memset(usedMask, 0, QUERYSIZE);
+    setDataPending = false;
+  }
+  newcommand = false;
+  Read_Pana_Data_Timer.start();
+  Timeout_Serial_Timer.start();
 }
 
 /*****************************************************************************/

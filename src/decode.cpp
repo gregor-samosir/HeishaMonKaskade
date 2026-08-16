@@ -267,11 +267,6 @@ void getBit3and4and5(byte input, char *out)
   (void)snprintf(out, MAXVALUELEN, "%d", ((input >> 3) & 0b111) - 1);
 }
 
-void getLeft5bits(byte input, char *out)
-{
-  (void)snprintf(out, MAXVALUELEN, "%d", (input >> 3) - 1);
-}
-
 void getRight3bits(byte input, char *out)
 {
   (void)snprintf(out, MAXVALUELEN, "%d", (input & 0b111) - 1);
