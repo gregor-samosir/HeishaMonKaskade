@@ -145,9 +145,10 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     // Byte 110 - die IST-Zustaende der Waermepumpe. Im Original-HeishaMon nicht
     // dekodiert; die Bitzuordnung stammt aus ProtocolByteDecrypt.md und ist am
     // 2026-08-15 an WP1 empirisch belegt (Stufentest Quiet 0->1->2->3->0,
-    // Moduswechsel Cool->Heat ueber KNX und Heat->Cool ueber SET9).
+    // Moduswechsel Cool->Heat ueber KNX und Heat->Cool ueber SET9), Powerful am
+    // 2026-08-16 an der laufenden 3.7.0 (SET4 = 1, TOP100 zog auf 1 nach).
     // Zwei Vorbehalte: Quiet meldet nur AN/AUS, keine Stufe (dafuer TOP18), und
-    // b10 wurde bei Powerful und External SW nie beobachtet.
+    // b10 wurde bei External SW nie beobachtet.
     // Wert ist TOP101: Heat_Cool_SW_State folgt dem tatsaechlichen Zustand
     // unabhaengig davon, wer umgeschaltet hat - anders als Byte 6, das den
     // zuletzt kommandierten Modus zeigt.

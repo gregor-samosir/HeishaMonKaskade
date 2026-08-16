@@ -133,7 +133,7 @@ int main()
     pruefe(abweichungen == 0, text);
   }
 
-  printf("\n== Fall 3: die an WP1 belegten Zustaende (2026-08-15) ==\n");
+  printf("\n== Fall 3: die an WP1 belegten Zustaende (2026-08-15/16) ==\n");
   {
     // 0x55 = b01 01 01 01: alles aus, Heizbetrieb. Dieser Wert steht auch im
     // Antwortbeispiel aus ProtocolByteDecrypt.md an Byte 110.
@@ -143,10 +143,16 @@ int main()
     const char *soll_95[] = {"On", "Off", "Heat", "Off"};
     // 0x59 = b01 01 10 01: Kuehlbetrieb
     const char *soll_59[] = {"Off", "Off", "Cool", "Off"};
+    // 0x69 = b01 10 10 01: Powerful aktiv im Kuehlbetrieb. Am 2026-08-16 an
+    // der laufenden 3.7.0 belegt ist der Feldwert - nach set/PowerfulMode 1
+    // meldeten TOP17 (30 min) und TOP100 (On) gemeinsam; das Rohbyte steht im
+    // Log nicht, es ist hier aus den vier Feldwerten zusammengesetzt.
+    const char *soll_69[] = {"Off", "On", "Cool", "Off"};
     struct { uint8_t roh; const char **soll; const char *was; } faelle[] = {
         {0x55, soll_55, "0x55 Grundzustand: alles aus, Heizen"},
         {0x95, soll_95, "0x95 Quiet aktiv"},
         {0x59, soll_59, "0x59 Kuehlbetrieb"},
+        {0x69, soll_69, "0x69 Powerful aktiv beim Kuehlen"},
     };
     for (auto &fall : faelle)
     {
