@@ -125,8 +125,9 @@ Die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und wurde am 2026-08-15
 an Stufe 1 nachgemessen: Flüstermodus 0 → 1 → 2 → 3 → 0 und beide
 Moduswechsel, einer über KNX, einer über MQTT. Zwei Vorbehalte stehen so auch
 in der Topic-Referenz: Der Flüstermodus meldet hier nur AN/AUS (die Stufe
-bleibt in TOP18), und bei Powerful und External SW wurde nur der Aus-Zustand
-beobachtet.
+bleibt in TOP18), und beim externen Schalter wurde nur der Aus-Zustand
+beobachtet. Powerful ist seit dem 2026-08-16 in beiden Zuständen belegt —
+`set/PowerfulMode 1` an Stufe 1, TOP17 und TOP100 zogen gemeinsam nach.
 
 Weil ein 2-Bit-Feld auch `b11` liefern kann und die Web-Tabelle Indizes nur
 nach unten prüft, haben die beiden neuen Klartext-Arrays ein drittes Element

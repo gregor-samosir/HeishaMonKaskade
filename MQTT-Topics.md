@@ -146,8 +146,9 @@ Two caveats, both from the measurement:
 
 * **TOP99 is binary.** Quiet levels 1, 2 and 3 all read as `On`; the level
   stays in TOP18 `Quiet_Mode_Level`.
-* **TOP100 and TOP102 were only ever observed in their off state.** The `b10`
-  side is unverified for those two.
+* **TOP102 was only ever observed in its off state.** The `b10` side is
+  unverified for the external switch. TOP100 is confirmed in both states
+  (2026-08-16, `set/PowerfulMode 1` on unit 1: TOP17 and TOP100 both followed).
 
 *Deutsch: Die vier Topics melden, was die Wärmepumpe tatsächlich TUT - nicht,
 was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
@@ -159,7 +160,9 @@ dekodiert; die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und ist am
 umgeschaltet hat - KNX-Aktor, MQTT-`set/OperationMode` oder Bedienterminal.
 Byte 6 (TOP4) zeigt dagegen nur den zuletzt kommandierten Modus. Zwei
 Vorbehalte: TOP99 meldet nur AN/AUS (die Stufe steht weiter in TOP18), und bei
-TOP100 und TOP102 wurde nur der Aus-Zustand beobachtet.*
+TOP102 wurde nur der Aus-Zustand beobachtet. TOP100 ist seit dem 2026-08-16 in
+beiden Zuständen belegt (`set/PowerfulMode 1` an WP1, TOP17 und TOP100 zogen
+gemeinsam nach).*
 
 
 ## Command Topics:

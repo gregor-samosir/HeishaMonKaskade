@@ -20,8 +20,12 @@
 //         ueber KNX (21:41:18) und Heat->Cool ueber MQTT SET9 (23:18:52), in
 //         beiden Faellen synchron zu Operating_Mode_State. Zwei Vorbehalte
 //         stehen so auch in MQTT-Topics.md: TOP99 meldet nur AN/AUS und keine
-//         Stufe (die bleibt in TOP18), und bei TOP100/TOP102 wurde nur der
-//         Aus-Zustand beobachtet - die b10-Seite ist unbelegt.
+//         Stufe (die bleibt in TOP18), und bei TOP102 wurde nur der
+//         Aus-Zustand beobachtet - dort ist die b10-Seite unbelegt.
+//         NACHGETRAGEN 2026-08-16 an der laufenden 3.7.0: TOP100 ist in beiden
+//         Zustaenden belegt. Nach set/PowerfulMode 1 (SET4) meldete die WP im
+//         naechsten Zyklus TOP17 Powerful_Mode_Time 1 (30 min) UND TOP100
+//         Powerful_Mode_Active 1 - Bits 3&4 verhalten sich wie erwartet.
 //
 //         Die beiden neuen desc-Arrays haben DREI Elemente ("Off"/"On"/
 //         "unknown"), obwohl nur zwei Zustaende vorkommen koennen sollten. Die

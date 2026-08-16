@@ -170,7 +170,8 @@ vom Dekodierer aus dem Rohwert gerechnet.
 Fall 1  vier Zeilen in stateTopics[], TOP99-102, Quellbyte 110
 Fall 2  je 256 Rohwerte gegen die erwartete Bitgruppe      0 Abweichungen
 Fall 3  belegte Zustaende: 0x55 Grundzustand (= Byte 110 im
-        Antwortbeispiel), 0x95 Quiet an, 0x59 Kuehlen
+        Antwortbeispiel), 0x95 Quiet an, 0x59 Kuehlen,
+        0x69 Powerful an beim Kuehlen
 Fall 4  Anzeigeindex bleibt in -1..2, desc[2] = "unknown"
 Fall 5  keine doppelten TOP-Nummern oder Topic-Namen in der ganzen Tabelle
 ```
@@ -178,8 +179,8 @@ Fall 5  keine doppelten TOP-Nummern oder Topic-Namen in der ganzen Tabelle
 Fall 4 ist der Grund fuer das dritte Array-Element: Die Web-Tabelle
 (`webfunctions.cpp`) faengt nur negative Indizes ab, und ein 2-Bit-Feld kann
 `b11` liefern - das ergibt Index 2. Bei Byte 110 ist das kein theoretischer
-Fall, weil `Powerful_Mode_Active` und `External_SW_State` bisher nur in ihrem
-Aus-Zustand beobachtet sind.
+Fall, weil `External_SW_State` bisher nur in seinem Aus-Zustand beobachtet ist
+(`Powerful_Mode_Active` ist seit dem 2026-08-16 in beiden Zustaenden belegt).
 
 Gegenprobe zum Test selbst: mit vertauschter Bitgruppe (`getBit3and4` statt
 `getBit1and2` bei TOP99) meldet Fall 2 192 Abweichungen und der Lauf bricht ab.
