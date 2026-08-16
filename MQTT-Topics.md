@@ -142,6 +142,33 @@ who switched it - the KNX actor, an MQTT `set/OperationMode`, or the local
 control panel. Byte 6 (TOP4 `Operating_Mode_State`) only shows the last
 commanded mode.
 
+Switching was recorded on the running firmware on 2026-08-16, with the plant
+idle and the raw byte captured from the hex log (heat/cool commanded from the
+house control):
+
+```text
+10:35:09  byte 110 = 0x59   Cool      starting point, stable over 11 frames
+10:36:11  byte 110 = 0x55   Heat      cool -> heat
+10:37:44  byte 110 = 0x59   Cool      heat -> cool
+10:39:39  byte 110 = 0x99   Cool      + quiet on (cooling switched on)
+```
+
+Three results worth keeping:
+
+* **No transitional value.** Not a single frame showed `b00` or `b11` - the
+  field flips straight from `b10` to `b01` within one query cycle. That matters
+  if you want to use TOP101 as a control input.
+* **TOP101 and TOP4 change in the same cycle** and reach the broker in the same
+  second; the second cascade stage followed at 10:37:43, so the field is
+  confirmed in both directions on both units.
+* **TOP99 confirmed in operation** as well: switching the plant on took byte 110
+  from 0x59 to 0x99, quiet going `On` alongside TOP18 `Level 3`.
+
+The delay between pressing the button and the new value is *not* part of this
+measurement - the moment of switching is only known roughly. What is measured is
+the part that belongs to the firmware: once the pump reports the new state, it
+is published within one query cycle (6 s at most).
+
 Two caveats, both from the measurement:
 
 * **TOP99 is binary.** Quiet levels 1, 2 and 3 all read as `On`; the level
@@ -165,6 +192,18 @@ was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
 dekodiert; die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und ist am
 2026-08-15 an WP1 belegt. Jedes Feld sind zwei Bits mit der üblichen Kodierung
 (`b01` = 0, `b10` = 1).*
+
+*Das Umschalten ist am 2026-08-16 an der laufenden Firmware mitgeschnitten
+worden, bei stehender Anlage und mit dem Rohbyte aus dem Hexlog: 10:36:11
+`0x59` → `0x55` (Cool → Heat), 10:37:44 zurück auf `0x59`, 10:39:39 auf `0x99`
+(Kühlung eingeschaltet, Quiet dazu). **Kein einziger Frame zeigte einen
+Zwischenwert** (`b00` oder `b11`) - das Feld springt innerhalb eines
+Abfragezyklus direkt um, was für die Nutzung als Regelgröße der entscheidende
+Punkt ist. TOP101 und TOP4 wechseln im selben Zyklus und stehen sekundengleich
+im Broker; die zweite Kaskadenstufe zog um 10:37:43 nach. Auch TOP99 ist damit
+im Betrieb belegt. Die Zeit zwischen Tastendruck und neuem Wert gehört NICHT zur
+Messung - der Schaltzeitpunkt ist nur ungefähr bekannt; gemessen ist der Teil
+der Firmware: ab der Meldung der WP vergeht höchstens ein Abfragezyklus (6 s).*
 
 *Das nützliche ist **TOP101**: Es folgt dem echten Zustand unabhängig davon, wer
 umgeschaltet hat - KNX-Aktor, MQTT-`set/OperationMode` oder Bedienterminal.
