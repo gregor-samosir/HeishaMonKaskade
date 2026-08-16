@@ -146,9 +146,19 @@ Two caveats, both from the measurement:
 
 * **TOP99 is binary.** Quiet levels 1, 2 and 3 all read as `On`; the level
   stays in TOP18 `Quiet_Mode_Level`.
-* **TOP102 was only ever observed in its off state.** The `b10` side is
-  unverified for the external switch. TOP100 is confirmed in both states
-  (2026-08-16, `set/PowerfulMode 1` on unit 1: TOP17 and TOP100 both followed).
+* **TOP102 cannot be verified on this installation.** The external switch input
+  is not wired here, so the field never leaves its off state - the `b10` side
+  stays unconfirmed, and no measurement on these units can change that. If your
+  installation uses that input, a report either way is welcome.
+  TOP100 is confirmed in both states (2026-08-16, `set/PowerfulMode 1` on
+  unit 1: TOP17 and TOP100 both followed).
+
+What *is* wired here is the **external compressor switch**, and no status byte
+has been found for it. It was operated during the 2026-08-15/16 measurements
+with no reaction anywhere in the 203-byte answer telegram (compared byte by
+byte with `test/frame_diff.py`). So the obvious approach - diff the frames
+while flipping the switch - is exhausted; finding it would need a different
+angle.
 
 *Deutsch: Die vier Topics melden, was die Wärmepumpe tatsächlich TUT - nicht,
 was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
@@ -159,10 +169,20 @@ dekodiert; die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und ist am
 *Das nützliche ist **TOP101**: Es folgt dem echten Zustand unabhängig davon, wer
 umgeschaltet hat - KNX-Aktor, MQTT-`set/OperationMode` oder Bedienterminal.
 Byte 6 (TOP4) zeigt dagegen nur den zuletzt kommandierten Modus. Zwei
-Vorbehalte: TOP99 meldet nur AN/AUS (die Stufe steht weiter in TOP18), und bei
-TOP102 wurde nur der Aus-Zustand beobachtet. TOP100 ist seit dem 2026-08-16 in
-beiden Zuständen belegt (`set/PowerfulMode 1` an WP1, TOP17 und TOP100 zogen
-gemeinsam nach).*
+Vorbehalte: TOP99 meldet nur AN/AUS (die Stufe steht weiter in TOP18), und
+**TOP102 ist an dieser Anlage überhaupt nicht prüfbar** – der External-SW-
+Eingang ist hier nicht belegt, das Feld bleibt deshalb dauerhaft im
+Aus-Zustand. Keine Messung an diesen Geräten kann daran etwas ändern;
+Rückmeldungen aus Anlagen, die den Eingang nutzen, sind willkommen. TOP100 ist
+seit dem 2026-08-16 in beiden Zuständen belegt (`set/PowerfulMode 1` an WP1,
+TOP17 und TOP100 zogen gemeinsam nach).*
+
+*Belegt ist hier stattdessen der **externe Kompressor-Schalter** – und für den
+wurde bisher kein Statusbyte gefunden. Er wurde bei den Messungen am
+2026-08-15/16 betätigt, ohne jede Reaktion in den 203 Bytes des
+Antworttelegramms (byteweiser Vergleich mit `test/frame_diff.py`). Der
+naheliegende Weg – Frames vergleichen, während der Schalter umgelegt wird – ist
+damit ausgereizt; ihn zu finden bräuchte einen anderen Ansatz.*
 
 
 ## Command Topics:

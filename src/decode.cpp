@@ -148,7 +148,8 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     // Moduswechsel Cool->Heat ueber KNX und Heat->Cool ueber SET9), Powerful am
     // 2026-08-16 an der laufenden 3.7.0 (SET4 = 1, TOP100 zog auf 1 nach).
     // Zwei Vorbehalte: Quiet meldet nur AN/AUS, keine Stufe (dafuer TOP18), und
-    // b10 wurde bei External SW nie beobachtet.
+    // TOP102 ist hier gar nicht pruefbar - der External-SW-Eingang ist an
+    // dieser Anlage nicht belegt, das Feld bleibt dauerhaft auf b01.
     // Wert ist TOP101: Heat_Cool_SW_State folgt dem tatsaechlichen Zustand
     // unabhaengig davon, wer umgeschaltet hat - anders als Byte 6, das den
     // zuletzt kommandierten Modus zeigt.
