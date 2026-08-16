@@ -57,7 +57,6 @@ void getBit3and4(byte, char *);
 void getBit5and6(byte, char *);
 void getBit7and8(byte, char *);
 void getBit3and4and5(byte, char *);
-void getLeft5bits(byte, char *);
 void getRight3bits(byte, char *);
 void getIntMinus1(byte, char *);
 void getIntMinus128(byte, char *);

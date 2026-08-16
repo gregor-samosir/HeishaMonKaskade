@@ -52,23 +52,29 @@ jobs:
       - name: Upload-Ziele aus der Vorlage bereitstellen
         run: cp platformio_user_env_sample.ini platformio_user_env.ini
 
-      # Hosttests ohne Hardware. Beide prüfen ihre Ergebnisse seit 3.6.0 selbst
+      # Hosttests ohne Hardware. Alle prüfen ihre Ergebnisse seit 3.6.0 selbst
       # und geben bei gebrochener Zusicherung != 0 zurück - der Schritt fängt
       # also nicht mehr nur Übersetzungsfehler und Abstürze ab.
       #
-      # merge_test:     Merge-Logik der Set-Kommandos (Masken, Umrechnung)
-      # telegramm_test: Typ-, Längen- und Prüfsummenregel für das
-      #                 Antworttelegramm - bindet src/telegram.h direkt ein,
-      #                 prüft also den Code, der auf dem Gerät läuft
-      # byte110_test:   Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
-      #                 übersetzt src/decode.cpp mit, deshalb über das Skript
-      #                 (Arduino-Ersatzheader aus test/stubs/)
+      # merge_test:      Merge-Logik der Set-Kommandos (Masken, Umrechnung)
+      # telegramm_test:  Typ-, Längen- und Prüfsummenregel für das
+      #                  Antworttelegramm - bindet src/telegram.h direkt ein,
+      #                  prüft also den Code, der auf dem Gerät läuft
+      # sendwindow_test: Zeitregeln des Kommando-Sammelfensters aus 3.8.0,
+      #                  bindet src/sendwindow.h direkt ein. Deckt als einziger
+      #                  den millis()-Überlauf nach 49,7 Tagen ab - an der
+      #                  Anlage wäre der nicht abzuwarten.
+      # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
+      #                  übersetzt src/decode.cpp mit, deshalb über das Skript
+      #                  (Arduino-Ersatzheader aus test/stubs/)
       - name: Hosttests übersetzen und ausführen
         run: |
           c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
           /tmp/merge_test
           c++ -std=c++17 -O2 -Wall -o /tmp/telegramm_test test/telegramm_test.cpp
           /tmp/telegramm_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/sendwindow_test test/sendwindow_test.cpp
+          /tmp/sendwindow_test
           ./test/decode_hosttest.sh
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
