@@ -179,8 +179,12 @@ Fall 5  keine doppelten TOP-Nummern oder Topic-Namen in der ganzen Tabelle
 Fall 4 ist der Grund fuer das dritte Array-Element: Die Web-Tabelle
 (`webfunctions.cpp`) faengt nur negative Indizes ab, und ein 2-Bit-Feld kann
 `b11` liefern - das ergibt Index 2. Bei Byte 110 ist das kein theoretischer
-Fall, weil `External_SW_State` bisher nur in seinem Aus-Zustand beobachtet ist
-(`Powerful_Mode_Active` ist seit dem 2026-08-16 in beiden Zustaenden belegt).
+Fall, weil `External_SW_State` an dieser Anlage dauerhaft unbelegt bleibt - der
+External-SW-Eingang ist hier nicht angeschlossen, das Feld ist also nicht
+pruefbar (`Powerful_Mode_Active` ist seit dem 2026-08-16 in beiden Zustaenden
+belegt). Benutzt wird hier der externe Kompressor-Schalter; fuer ihn war beim
+Betaetigen in keinem der 203 Bytes eine Reaktion zu sehen (`frame_diff.py`),
+ein Statusbyte dafuer ist bisher nicht gefunden.
 
 Gegenprobe zum Test selbst: mit vertauschter Bitgruppe (`getBit3and4` statt
 `getBit1and2` bei TOP99) meldet Fall 2 192 Abweichungen und der Lauf bricht ab.

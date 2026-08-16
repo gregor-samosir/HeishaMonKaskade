@@ -20,8 +20,11 @@
 //         ueber KNX (21:41:18) und Heat->Cool ueber MQTT SET9 (23:18:52), in
 //         beiden Faellen synchron zu Operating_Mode_State. Zwei Vorbehalte
 //         stehen so auch in MQTT-Topics.md: TOP99 meldet nur AN/AUS und keine
-//         Stufe (die bleibt in TOP18), und bei TOP102 wurde nur der
-//         Aus-Zustand beobachtet - dort ist die b10-Seite unbelegt.
+//         Stufe (die bleibt in TOP18), und TOP102 ist an dieser Anlage gar
+//         nicht pruefbar - der External-SW-Eingang ist hier nicht belegt, das
+//         Feld bleibt dauerhaft auf b01. Benutzt wird der externe
+//         Kompressor-Schalter, fuer den in den 203 Bytes kein Statusbyte zu
+//         finden war (betaetigt waehrend der Messungen, keine Reaktion).
 //         NACHGETRAGEN 2026-08-16 an der laufenden 3.7.0: TOP100 ist in beiden
 //         Zustaenden belegt. Nach set/PowerfulMode 1 (SET4) meldete die WP im
 //         naechsten Zyklus TOP17 Powerful_Mode_Time 1 (30 min) UND TOP100
