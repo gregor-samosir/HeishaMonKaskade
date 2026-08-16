@@ -160,14 +160,18 @@ Three results worth keeping:
   if you want to use TOP101 as a control input.
 * **TOP101 and TOP4 change in the same cycle** and reach the broker in the same
   second; the second cascade stage followed at 10:37:43, so the field is
-  confirmed in both directions on both units.
+  confirmed in both directions on both units. This does not always hold - a
+  later measurement caught a flank with 7.0 s between the two, see *TOP101 end
+  to end* below.
 * **TOP99 confirmed in operation** as well: switching the plant on took byte 110
   from 0x59 to 0x99, quiet going `On` alongside TOP18 `Level 3`.
 
 The delay between pressing the button and the new value is *not* part of this
 measurement - the moment of switching is only known roughly. What is measured is
 the part that belongs to the firmware: once the pump reports the new state, it
-is published within one query cycle (6 s at most).
+is published within one query cycle (6 s at most). The full path, from a
+switching command with a known timestamp to the value on the broker, was
+measured separately - see *TOP101 end to end* below.
 
 Two caveats, both from the measurement:
 
@@ -200,10 +204,13 @@ worden, bei stehender Anlage und mit dem Rohbyte aus dem Hexlog: 10:36:11
 Zwischenwert** (`b00` oder `b11`) - das Feld springt innerhalb eines
 Abfragezyklus direkt um, was für die Nutzung als Regelgröße der entscheidende
 Punkt ist. TOP101 und TOP4 wechseln im selben Zyklus und stehen sekundengleich
-im Broker; die zweite Kaskadenstufe zog um 10:37:43 nach. Auch TOP99 ist damit
+im Broker (gilt nicht immer, s. *TOP101 end to end* weiter unten); die zweite
+Kaskadenstufe zog um 10:37:43 nach. Auch TOP99 ist damit
 im Betrieb belegt. Die Zeit zwischen Tastendruck und neuem Wert gehört NICHT zur
 Messung - der Schaltzeitpunkt ist nur ungefähr bekannt; gemessen ist der Teil
-der Firmware: ab der Meldung der WP vergeht höchstens ein Abfragezyklus (6 s).*
+der Firmware: ab der Meldung der WP vergeht höchstens ein Abfragezyklus (6 s).
+Der ganze Weg — vom Schaltbefehl mit bekanntem Zeitstempel bis zum Wert auf dem
+Broker — ist separat gemessen, s. denselben Abschnitt.*
 
 *Das nützliche ist **TOP101**: Es folgt dem echten Zustand unabhängig davon, wer
 umgeschaltet hat - KNX-Aktor, MQTT-`set/OperationMode` oder Bedienterminal.
@@ -222,6 +229,79 @@ wurde bisher kein Statusbyte gefunden. Er wurde bei den Messungen am
 Antworttelegramms (byteweiser Vergleich mit `test/frame_diff.py`). Der
 naheliegende Weg – Frames vergleichen, während der Schalter umgelegt wird – ist
 damit ausgereizt; ihn zu finden bräuchte einen anderen Ansatz.*
+
+### TOP101 end to end: from the switch command to the broker (2026-08-16)
+
+The measurement above deliberately leaves out the delay between pressing the
+button and the new value, because the moment of switching was only known
+roughly. This one closes that gap. Heat/cool is commanded here from the house
+control through a KNX actor, and the KNX command datapoint carries a
+millisecond timestamp - so `t0` is known exactly. Both directions were recorded
+by polling the ioBroker states once per second; the resolution comes from the
+datapoint timestamps, not from the poll. The plant was switched off (cascade
+mode 0) for the whole recording.
+
+```text
+Cool -> Heat                                      after t0
+  12:51:37.327  KNX command       true -> false   t0
+  12:51:37.396  KNX actor feedback                +0.069 s
+  12:51:39.460  TOP101 unit 1     1 -> 0          +2.133 s
+  12:51:42.526  TOP101 unit 2     1 -> 0          +5.199 s
+  12:51:46.493  TOP4   unit 1     1 -> 0          +9.166 s
+
+Heat -> Cool
+  12:53:27.858  KNX command       false -> true   t0
+  12:53:27.927  KNX actor feedback                +0.069 s
+  12:53:35.564  TOP4   unit 1     0 -> 1          +7.706 s
+  12:53:35.565  TOP101 unit 1     0 -> 1          +7.707 s
+  12:53:35.605  TOP101 unit 2     0 -> 1          +7.747 s
+```
+
+Three results:
+
+* **Budget 2 to 8 seconds, not one query cycle.** End to end the two flanks took
+  2.1 s and 7.7 s. The second one is longer than a query cycle, so it is not
+  covered by the "6 s at most" above - that figure is the firmware's share,
+  counted from the moment the pump reports the new state. How long the unit
+  itself takes to adopt the KNX input is not separable from these numbers, and
+  why the two directions differ by a factor of 3.6 is not established here.
+  Anyone using TOP101 as a control input should budget for the full range.
+* **TOP101 and TOP4 do not always change in the same cycle.** They did on the
+  second flank (1 ms apart), but on the first one 7.0 s lay between them. There
+  TOP4 did not follow the plant at all: it moved 7.0 s *after* the controller
+  had sent its own `set/OperationMode`, while TOP101 had already reported the
+  switch 2.1 s after `t0`. This sharpens the point made above - as a control
+  input TOP4 would be circular, because it can end up reporting the command the
+  controller just issued rather than the state of the unit.
+* **The second cascade stage follows on its own,** but not with a fixed offset:
+  3.1 s behind unit 1 on the first flank, 40 ms on the second.
+
+*Deutsch: Die Messung weiter oben klammert die Zeit zwischen Tastendruck und
+neuem Wert bewusst aus, weil der Schaltzeitpunkt nur ungefähr bekannt war -
+diese hier schließt die Lücke. Heizen/Kühlen wird an dieser Anlage aus der
+Haussteuerung über einen KNX-Aktor geschaltet, und der KNX-Befehlsdatenpunkt
+trägt einen Millisekunden-Zeitstempel; `t0` ist damit exakt bekannt. Beide
+Richtungen wurden am 2026-08-16 durch sekündliches Abfragen der
+ioBroker-States mitgeschnitten, die Auflösung stammt aus den Zeitstempeln der
+Datenpunkte. Die Anlage stand während der ganzen Aufzeichnung (Kaskade
+Modus 0).*
+
+*Drei Ergebnisse: **(1)** Von Ende zu Ende dauerten die beiden Flanken
+**2,1 s und 7,7 s**. Die zweite liegt über einem Abfragezyklus und ist damit
+NICHT von den „höchstens 6 s" oben abgedeckt - die gelten für den Anteil der
+Firmware, gerechnet ab der Meldung der WP. Wie lange die WP selbst braucht, um
+den KNX-Eingang zu übernehmen, lässt sich aus diesen Zahlen nicht abtrennen,
+und warum die beiden Richtungen um den Faktor 3,6 auseinanderliegen, ist hier
+nicht geklärt. Wer TOP101 als Regelgröße nutzt, sollte die ganze Spanne
+einplanen. **(2)** TOP101 und TOP4 wechseln **nicht immer im selben Zyklus**:
+auf der zweiten Flanke lagen sie 1 ms auseinander, auf der ersten 7,0 s. Dort
+folgte TOP4 überhaupt nicht der Anlage, sondern sprang 7,0 s NACH dem eigenen
+`set/OperationMode` der Steuerung um, während TOP101 den Wechsel schon 2,1 s
+nach `t0` gemeldet hatte. Das schärft die Aussage von oben: Als Regelgröße wäre
+TOP4 zirkulär - er kann den Befehl zurückmelden, den die Steuerung gerade
+abgesetzt hat, statt den Zustand des Geräts. **(3)** Die zweite Kaskadenstufe
+zieht selbständig nach, aber ohne festen Versatz: 3,1 s hinter Stufe 1 auf der
+ersten Flanke, 40 ms auf der zweiten.*
 
 
 ## Command Topics:
