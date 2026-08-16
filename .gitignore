@@ -14,3 +14,11 @@ extensions.json
 platformio_user_env.ini
 __pycache__
 *.pyc
+
+# Interne Unterlagen, die NICHT ins oeffentliche Repo gehoeren: Panasonic-
+# Servicedokumente und aehnliches Material, das urheberrechtlich geschuetzt
+# ist. Es darf hier liegen, um lokal darin nachzuschlagen - veroeffentlicht
+# wird daraus nichts, auch nicht auszugsweise. Die zweite Zeile faengt den
+# Fall ab, dass jemand einzelne Dateien mit vollem Pfad hinzufuegt.
+doku-intern/
+doku-intern/**
