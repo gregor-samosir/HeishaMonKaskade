@@ -177,6 +177,33 @@ Kommando geht verloren; der 5-Minuten-Re-Assert der Steuerung holt es nach.
 Verworfene Topics stehen einzeln im Telnet-Log, ihre Zahl als eine Zeile im
 MQTT-Log.
 
+**Im laufenden Betrieb bestätigt am 2026-08-17.** Bis dahin war nur der
+Neustart nachgewiesen; der häufigere Fall ist aber der Reconnect ohne Reboot.
+Ein Update der Synology nahm die gesamte ioBroker-Umgebung für einige Minuten
+vom Netz, das WLAN blieb dabei durchgehend stehen. Der Telnet-Mitschnitt der
+Wiederverbindung, gekürzt:
+
+```text
+16:59:18  Mqtt reconnect
+16:59:18  Verworfen (Wiedereinspielung nach Connect): .../set/QuietMode
+16:59:18  … 30 weitere Topics in derselben Sekunde …
+16:59:18  Verworfen (Wiedereinspielung nach Connect): .../set/Z1CoolCurveOutsideHighTemp
+16:59:23  32 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+Alle 32 Topics kamen in **derselben Sekunde** wie das SUBACK — der Schwall
+folgt dem Abonnement also unmittelbar, und die 5 Sekunden Karenzzeit haben
+reichlich Reserve. Die Bilanzzeile fällt auf 16:59:23, genau beim Zufallen des
+Fensters. Gewollt war in diesen Sekunden nichts: Es war ein reiner
+Broker-Ausfall, die Steuerung hat nicht geschaltet — es ging also kein echtes
+Kommando verloren.
+
+Mitbelegt ist damit die zweite Anforderung an den Filter: Das Verwerfen
+passiert **vor** `Send_Pana_Mainquery_Timer.stop()` und fasst keinen Timer an,
+der Abfragezyklus lief im 6-Sekunden-Raster ununterbrochen weiter (…:09, :15,
+:21, :27, :33, :39, :45). Ohne diese Reihenfolge hätten 32 Callbacks am Stück
+den Zyklus zerhackt.
+
 ### Nur echte Antworttelegramme werden ausgewertet (3.6.0)
 
 Der einzige gefundene Weg, auf dem **falsche Messwerte** in die
