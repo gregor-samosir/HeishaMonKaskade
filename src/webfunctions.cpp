@@ -76,6 +76,32 @@ static void loadConfigValue(char *dst, size_t dstsize, JsonDocument &jsonDoc, co
   (void)strlcpy(dst, value, dstsize);
 }
 
+/*****************************************************************************/
+/* Passwort des Setup-Hotspots (WPA2, seit 3.8.1)                            */
+/*                                                                           */
+/* Das Konfigurationsportal ist kein reines Erstboot-Thema: Faellt das WLAN   */
+/* aus, startet der Watchdog das Geraet nach 5 min neu, autoConnect scheitert */
+/* nach 10 s und oeffnet dann fuer 180 s den AP - zyklisch, solange die       */
+/* Stoerung dauert. Die Parameterfelder sind dabei mit den ECHTEN Werten      */
+/* vorbefuellt, darunter OTA- und MQTT-Passwort. Ohne WPA2 waere das ein      */
+/* Fenster, in dem jeder in Funkreichweite die Zugangsdaten mitlesen oder     */
+/* dem Geraet einen fremden MQTT-Broker unterschieben kann.                   */
+/*                                                                           */
+/* Das Passwort kommt als Build-Flag aus platformio_user_env.ini und steht    */
+/* NICHT in git - gleiches Muster wie Ports, IPs und OTA-Passwort. Der        */
+/* Fallback unten ist nur der Notnagel fuer einen Build ohne diese Datei; er  */
+/* liegt im oeffentlichen Repo und schuetzt entsprechend wenig.               */
+/*****************************************************************************/
+#ifndef HEISHA_AP_PASSWORD
+#define HEISHA_AP_PASSWORD "heishamon"
+#warning "HEISHA_AP_PASSWORD nicht gesetzt - der Setup-AP laeuft mit dem oeffentlich bekannten Fallback (siehe platformio_user_env_sample.ini)"
+#endif
+// WPA2-Grenzen pruefen, solange es nichts kostet: ein zu kurzes Passwort
+// verwirft der WiFiManager still und macht den AP wieder offen auf. Der Build
+// bricht hier lieber, als dass es erst an der Waermepumpe auffaellt.
+static_assert(sizeof(HEISHA_AP_PASSWORD) >= 9, "HEISHA_AP_PASSWORD braucht mindestens 8 Zeichen (WPA2)");
+static_assert(sizeof(HEISHA_AP_PASSWORD) <= 64, "HEISHA_AP_PASSWORD darf hoechstens 63 Zeichen haben (WPA2)");
+
 void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
 {
   // Local intialization. Once its business is done, there is no need to keep it around
@@ -167,7 +193,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 
   wifiManager.setConfigPortalTimeout(180);
   wifiManager.setConnectTimeout(10);
-  if (!wifiManager.autoConnect("HeishaMon-Setup"))
+  // AP mit WPA2 statt offen - Begruendung und Herkunft des Passworts siehe oben
+  if (!wifiManager.autoConnect("HeishaMon-Setup", HEISHA_AP_PASSWORD))
   {
     Serial.println("failed to connect and hit timeout");
     delay(3000);

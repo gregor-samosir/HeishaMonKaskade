@@ -695,10 +695,13 @@ void handle_telnetstream()
   {
     switch (TelnetStream.read())
     {
+    // K1 (3.8.1): Kein Reboot mehr ueber Telnet. Port 23 ist unauthentifiziert,
+    // /reboot in der Weboberflaeche verlangt dagegen Login - ein Tastendruck
+    // durfte damit die Waermepumpe von der Steuerung trennen, ohne dass
+    // irgendjemand sich anmelden musste. Die Taste bleibt belegt und antwortet,
+    // damit der Weg im Ernstfall nicht erraten werden muss.
     case 'R':
-      TelnetStream.stop();
-      delay(100);
-      ESP.restart();
+      TelnetStream.println("Reboot geht nur noch ueber die Weboberflaeche: http://<ip>/reboot (Login erforderlich)");
       break;
     case 'C':
       TelnetStream.println("bye bye");

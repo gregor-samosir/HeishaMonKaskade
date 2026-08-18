@@ -23,17 +23,25 @@ Nach Projektkonvention ([Rettungsanker](README.md)):
 
 Vorgeschlagene Bündelung:
 
-| Version | Inhalt | Art |
-| --- | --- | --- |
-| 3.8.1 | Maßnahme 1 + 2 (je eine Zeile, kein Protokoll-/Topic-Einfluss) | Fix |
-| 3.9.0 | Maßnahme 3 (Tabellenerweiterung + Testausbau) | Umbau |
-| — | Kleinpunkte: erst Entscheidung, dann ggf. eigene Version | Entscheid |
+| Version | Inhalt | Art | Stand |
+| --- | --- | --- | --- |
+| 3.8.1 | Maßnahme 1 + K1 (Zugangswege, kein Protokoll-/Topic-Einfluss) | Fix | **umgesetzt 2026-08-18**, Branch `zugangsschutz-ap-telnet` |
+| offen | Maßnahme 2 (retained `Online`) | Fix | offen — lohnt erst mit einem echten Broker |
+| 3.9.0 | Maßnahme 3 (Tabellenerweiterung + Testausbau) | Umbau | offen, Weg A/B noch zu wählen |
+| — | Kleinpunkte K2–K4: erst Entscheidung, dann ggf. eigene Version | Entscheid | offen |
+
+Abweichung von der ursprünglich vorgeschlagenen Bündelung: In 3.8.1 sind
+Maßnahme 1 und K1 zusammengefasst, weil beide denselben Punkt betreffen — einen
+Zugang, der ohne Anmeldung ans Gerät führt. Maßnahme 2 blieb draußen, damit die
+Version genau eine Sache belegt und der Nachweis für das Retain-Flag nicht auf
+einen Broker warten muss, den es hier noch nicht gibt.
 
 ---
 
-## Maßnahme 1 — Setup-AP mit Passwort schützen
+## Maßnahme 1 — Setup-AP mit Passwort schützen — ERLEDIGT (3.8.1)
 
-**Priorität: hoch. Aufwand: eine Zeile.**
+**Priorität: hoch. Aufwand: eine Zeile.** Umgesetzt am 2026-08-18, siehe
+Changelog `src/version.h` 3.8.1.
 
 **Problem:** `wifiManager.autoConnect("HeishaMon-Setup")` in
 `src/webfunctions.cpp` öffnet das Konfigurationsportal als **offenen** AP, und
@@ -49,12 +57,26 @@ Zugangsdaten lesen oder dem Gerät einen fremden MQTT-Broker unterschieben.
 `platformio_user_env.ini` (gleiches Muster wie Ports und IPs), mit Fallback im
 Code wie bei `HEISHA_HOSTNAME`.
 
+**So umgesetzt:** neue Sektion `[ap_defaults]` in `platformio_user_env.ini` mit
+`-D HEISHA_AP_PASSWORD`, eingebunden in beide Board-Basen (`[esp8266_base]`,
+`[esp32_base]`) — damit gilt sie für alle zehn Envs, ohne dass jedes Env eine
+weitere Zeile bekommt. Im Code (`src/webfunctions.cpp`) ein Fallback samt
+`#warning`, wenn das Flag fehlt, und zwei `static_assert` auf die WPA2-Längen
+8–63: ein zu kurzes Passwort verwirft der WiFiManager still und öffnet den AP
+wieder — der Build bricht jetzt stattdessen ab. Nachweise ohne Hardware:
+Gegenprobe mit vierstelligem Passwort (Build bricht), Gegenprobe ohne Flag
+(`#warning`), `pio project config` (alle zehn Envs führen das Flag), alle zehn
+Envs gebaut (ESP32 Flash +112 B, ESP8266 RAM +112 B / Flash +104 B), vier
+Hosttests grün.
+
 **Nachweis:** Am ESP32-Testgerät (`heishamon_esp32_usb`, eigenes MQTT-Prefix)
 die hinterlegte SSID unerreichbar machen → das Portal muss WPA2 verlangen;
 mit Passwort verbinden und prüfen, dass die Konfiguration weiter funktioniert.
 
-**Folgeaufgabe:** AP-Passwort in die Notfall-Unterlage für die Familie
-aufnehmen — sonst ist im Ernstfall genau der Rettungsweg versperrt.
+**Folgeaufgabe (offen):** AP-Passwort in die Notfall-Unterlage für die Familie
+aufnehmen — sonst ist im Ernstfall genau der Rettungsweg versperrt. Eine solche
+Unterlage liegt nicht im Repository; sie zu pflegen bleibt außerhalb dieses
+Branches.
 
 ---
 
@@ -132,11 +154,14 @@ MQTT-Werte bleiben identisch.
 
 ## Kleinpunkte — erst entscheiden, dann umsetzen
 
-**K1 — Telnet (Port 23) ohne Auth, `R` löst Reboot aus.** Der Web-`/reboot`
-verlangt Login, Telnet nicht — inkonsequent. Optionen: (a) bewusst so lassen
-(Heimnetz, dokumentieren), (b) Reboot-Kommando aus dem Telnet-Menü nehmen,
-(c) Telnet abschaltbar machen. Empfehlung: (b) — kostet nichts, die
-Log-Toggles bleiben nutzbar, Reboot geht weiter über die geschützte Web-UI.
+**K1 — Telnet (Port 23) ohne Auth, `R` löst Reboot aus. — ERLEDIGT (3.8.1),
+Weg (b).** Der Web-`/reboot` verlangt Login, Telnet nicht — inkonsequent.
+Optionen waren: (a) bewusst so lassen (Heimnetz, dokumentieren), (b)
+Reboot-Kommando aus dem Telnet-Menü nehmen, (c) Telnet abschaltbar machen.
+Umgesetzt ist (b): `case 'R'` in `handle_telnetstream()` startet nicht mehr neu,
+sondern antwortet mit dem Verweis auf `http://<ip>/reboot` — still ignorieren
+hätte nur Rätselraten erzeugt. Die Umschalter `L`/`D`/`H` und die Abfragen
+`M`/`W`/`I` bleiben unverändert, sie werden für die Abnahme gebraucht.
 
 **K2 — `SUBSCRIBE_GRACE` (5 s) ist lastabhängig.** Braucht der
 ioBroker-Replay nach dem SUBACK einmal länger als 5 s (großer Objektbaum,

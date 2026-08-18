@@ -1,5 +1,66 @@
 #pragma once
 // Changelog:
+// 3.8.1 - Zwei offene Zugangswege dichtgemacht: der Setup-Hotspot bekommt WPA2,
+//         der Telnet-Port verliert das Reboot-Kommando. Das sind Massnahme 1
+//         und Kleinpunkt K1 aus dem Massnahmenplan zur Codedurchsicht vom
+//         2026-08-18 (Massnahme 2, das retained "Online", ist bewusst NICHT
+//         dabei - sie lohnt erst mit einem echten Broker). Keine Aenderung am
+//         Protokoll, an den Topics oder an der Dekodierung.
+//
+//         (1) SETUP-AP MIT PASSWORT. wifiManager.autoConnect oeffnete das
+//         Konfigurationsportal als OFFENEN AP - mit den echten Werten in den
+//         Feldern, OTA- und MQTT-Passwort eingeschlossen. Das ist kein
+//         Erstboot-Thema: der WLAN-Watchdog startet nach 5 min Ausfall neu,
+//         autoConnect scheitert nach 10 s und macht dann fuer 180 s den AP
+//         auf - zyklisch, solange ein Router-Ausfall dauert. In diesem Fenster
+//         konnte jeder in Funkreichweite die Zugangsdaten mitlesen oder dem
+//         Geraet einen fremden MQTT-Broker unterschieben, und zwar ausgerechnet
+//         dann, wenn die Anlage ohnehin gestoert ist.
+//         Das Passwort kommt als Build-Flag HEISHA_AP_PASSWORD aus
+//         platformio_user_env.ini (neue Sektion [ap_defaults], nicht in git) -
+//         gleiches Muster wie Ports, IPs und OTA-Passwort. Beide Board-Basen
+//         binden die Sektion ein, das Flag gilt damit fuer alle zehn Envs. Im
+//         Code steht ein Fallback wie bei HEISHA_HOSTNAME; er liegt im
+//         oeffentlichen Repo und schuetzt entsprechend wenig, deshalb gibt der
+//         Build eine #warning aus, wenn das Flag fehlt.
+//         Zwei static_assert halten die WPA2-Grenzen (8 bis 63 Zeichen): ein zu
+//         kurzes Passwort verwirft der WiFiManager STILL und macht den AP
+//         wieder offen auf - das waere an der Waermepumpe nicht aufgefallen.
+//
+//         (2) TELNET STARTET NICHT MEHR NEU (K1). Port 23 hat keine Anmeldung,
+//         der Web-/reboot dagegen schon. Ein Tastendruck 'R' konnte also ohne
+//         jede Legitimation die Waermepumpe fuer die Dauer des Boots von der
+//         Steuerung trennen. Die Taste bleibt belegt und verweist jetzt auf
+//         http://<ip>/reboot, damit der Weg im Ernstfall nicht zu erraten ist.
+//         Die Umschalter L/D/H und die Abfragen M/W/I bleiben unveraendert -
+//         sie werden fuer die Abnahme nach dem Flashen gebraucht.
+//
+//         Nachweise, ohne Hardware:
+//         - Gegenprobe zum static_assert: mit einem vierstelligen Passwort
+//           bricht der Build ab ("braucht mindestens 8 Zeichen (WPA2)").
+//         - Gegenprobe zum Fallback: ohne das Build-Flag uebersetzt es weiter,
+//           gibt aber die #warning aus.
+//         - pio project config: alle zehn Envs fuehren HEISHA_AP_PASSWORD.
+//         - Die vier Hosttests (merge, telegramm, sendwindow, byte110) laufen
+//           unveraendert gruen; angefasst wurde nichts, was sie pruefen.
+//
+//         AM GERAET NACHZUWEISEN (Testgeraet heishamon_esp32_usb, eigenes
+//         Prefix): hinterlegte SSID unerreichbar machen - das Portal muss WPA2
+//         verlangen, und mit Passwort muss die Konfiguration weiter
+//         funktionieren. Am Telnet muss 'R' die Hinweiszeile bringen statt neu
+//         zu starten.
+//
+//         FOLGEAUFGABE: AP-Passwort in die Notfall-Unterlage der Familie
+//         aufnehmen - ohne es ist bei WLAN-Ausfall genau der Rettungsweg
+//         versperrt.
+//
+//         Groessen gegenueber 3.8.0 (alle zehn Envs gebaut):
+//         ESP32 RAM +-0 B, Flash +112 B; ESP8266 RAM +112 B, Flash +104 B.
+//         Die 112 Byte RAM auf dem ESP8266 sind die neue Telnet-Hinweiszeile
+//         und das AP-Passwort - Zeichenketten ohne PROGMEM liegen dort im RAM,
+//         wie bei allen bestehenden Meldungen auch. Belegung danach:
+//         ESP8266 55,9 % RAM, ESP32 17,4 %.
+//
 // 3.8.0 - Die drei offenen Punkte der Codedurchsicht vom 2026-08-12 abgeraeumt.
 //         Keine Aenderung am Protokoll, an den Topics oder an der Dekodierung -
 //         nur der Sendepfad. Nachweis: test/decode_vergleich.py --basis v3.7.0
@@ -456,4 +517,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.8.0";
+static const char* heishamon_version = "3.8.1";
