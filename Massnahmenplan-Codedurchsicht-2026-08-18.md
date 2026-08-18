@@ -69,9 +69,14 @@ Gegenprobe mit vierstelligem Passwort (Build bricht), Gegenprobe ohne Flag
 Envs gebaut (ESP32 Flash +112 B, ESP8266 RAM +112 B / Flash +104 B), vier
 Hosttests grün.
 
-**Nachweis:** Am ESP32-Testgerät (`heishamon_esp32_usb`, eigenes MQTT-Prefix)
-die hinterlegte SSID unerreichbar machen → das Portal muss WPA2 verlangen;
-mit Passwort verbinden und prüfen, dass die Konfiguration weiter funktioniert.
+**Nachweis — erbracht am 2026-08-18** (am D1 mini statt am ESP32-Testgerät, das
+hing am USB; Env `d1_mini_test`, MQTT-Server leer gelassen). Statt die SSID
+unerreichbar zu machen, wurde der Flash vorher gelöscht — dann geht das Gerät
+ohne Umweg ins Portal. Ergebnis: Der AP verlangt ein Passwort und nimmt es an,
+die WLAN-Konfiguration funktioniert danach unverändert (Gerät unter
+192.168.2.198, `config.json` gespeichert). Der Zyklus aus dem Befund war dabei
+im seriellen Log direkt zu sehen: Portal-Timeout nach 180 s → Neustart → AP
+wieder auf. K1 im selben Durchgang geprüft, siehe dort.
 
 **Folgeaufgabe (offen):** AP-Passwort in die Notfall-Unterlage für die Familie
 aufnehmen — sonst ist im Ernstfall genau der Rettungsweg versperrt. Eine solche
@@ -162,6 +167,13 @@ Umgesetzt ist (b): `case 'R'` in `handle_telnetstream()` startet nicht mehr neu,
 sondern antwortet mit dem Verweis auf `http://<ip>/reboot` — still ignorieren
 hätte nur Rätselraten erzeugt. Die Umschalter `L`/`D`/`H` und die Abfragen
 `M`/`W`/`I` bleiben unverändert, sie werden für die Abnahme gebraucht.
+
+**Nachweis am Gerät (2026-08-18, D1 mini, 192.168.2.198):** `R` bringt die
+Hinweiszeile, die Telnet-Verbindung bleibt bestehen, `M` und `I` antworten auf
+derselben Verbindung weiter — bei einem Reboot wäre die Verbindung sofort weg.
+Gegenprobe auf der seriellen Konsole: keine Bootmeldung im Testfenster.
+Ersatzweg geprüft: `/reboot` ohne Login → HTTP 401, mit Login → HTTP 200, Gerät
+startet neu und kommt mit gespeicherter Konfiguration wieder hoch.
 
 **K2 — `SUBSCRIBE_GRACE` (5 s) ist lastabhängig.** Braucht der
 ioBroker-Replay nach dem SUBACK einmal länger als 5 s (großer Objektbaum,

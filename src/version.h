@@ -44,11 +44,25 @@
 //         - Die vier Hosttests (merge, telegramm, sendwindow, byte110) laufen
 //           unveraendert gruen; angefasst wurde nichts, was sie pruefen.
 //
-//         AM GERAET NACHZUWEISEN (Testgeraet heishamon_esp32_usb, eigenes
-//         Prefix): hinterlegte SSID unerreichbar machen - das Portal muss WPA2
-//         verlangen, und mit Passwort muss die Konfiguration weiter
-//         funktionieren. Am Telnet muss 'R' die Hinweiszeile bringen statt neu
-//         zu starten.
+//         AM GERAET NACHGEWIESEN 2026-08-18, D1 mini am USB (Env d1_mini_test,
+//         Prefix panasonic_heat_pump_test, MQTT-Server bewusst leer - so
+//         entstehen im ioBroker keine Testobjekte). Flash vorher komplett
+//         geloescht, damit das Geraet garantiert ins Portal geht:
+//         - Der AP "HeishaMon-Setup" verlangt ein Passwort und nimmt es an;
+//           danach WLAN konfiguriert, Geraet unter 192.168.2.198 im Netz,
+//           config.json gespeichert (Owner-Bestaetigung 07:34).
+//         - Nebenbei bestaetigt sich der Befund selbst: das Portal lief in
+//           Zyklen von 180 s ("config portal has timed out" -> "failed to
+//           connect and hit timeout" -> Neustart -> "StartAP with SSID"). Genau
+//           dieses Fenster stand vorher offen.
+//         - Telnet 192.168.2.198:23: 'R' bringt die Hinweiszeile, die
+//           Verbindung bleibt stehen, 'M' und 'I' antworten auf DERSELBEN
+//           Verbindung weiter (Memory 81, localIP 192.168.2.198). Auf der
+//           seriellen Konsole kam dabei keine einzige Zeile - bei einem
+//           Neustart waeren die Bootmeldungen erschienen.
+//         - Der Ersatzweg ist geprueft: /reboot ohne Login antwortet 401, mit
+//           Login 200 und das Geraet startet neu (07:36:37) und kommt mit
+//           gespeicherter Konfiguration wieder hoch. Web-UI meldet 3.8.1.
 //
 //         FOLGEAUFGABE: AP-Passwort in die Notfall-Unterlage der Familie
 //         aufnehmen - ohne es ist bei WLAN-Ausfall genau der Rettungsweg
