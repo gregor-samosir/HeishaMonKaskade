@@ -68,6 +68,23 @@
 //         aufnehmen - ohne es ist bei WLAN-Ausfall genau der Rettungsweg
 //         versperrt.
 //
+//         AUSGEROLLT 2026-08-18: beide Stufen per OTA auf 3.8.1
+//         (heishamon_esp32_h1_ota 07:45, _h2_ota 07:48; beide Anlagen standen
+//         zu dem Zeitpunkt still, Heatpump_State Off, Kompressor 0 Hz).
+//         Abnahme nach dem ueblichen Verfahren, /tablerefresh vor und nach dem
+//         Flash: je 90 Topics verglichen, Nummer und Name deckungsgleich, an
+//         H1 null Abweichungen, an H2 nur Pump_Flow 16,24 -> 15,89 l/min und
+//         DHW_Temp 43 -> 44 Grad - laufende Messwerte, keine Sollwerte. Die
+//         kritischen Sollwerte (Quiet_Mode_Level, Z1_Heat_Request_Temp,
+//         Z1_Heat_Curve_Target_High_Temp) stehen unveraendert, die
+//         SUBSCRIBE_GRACE aus 3.6.1 hat also auch bei diesem Reboot gegriffen.
+//         MQTT-Seite getrennt geprueft: beide Praefixe publizieren frisch
+//         (ack=true, Zeitstempel unter einer Minute), info/LWT steht auf beiden
+//         Stufen auf "Online". Telnet-Stichprobe an beiden Geraeten: 'R' bringt
+//         die Hinweiszeile, 'M' antwortet danach weiter (Memory 75).
+//         Rollback-Binaries liegen als heishamon_esp32_h[12]_ota_v3.8.1.bin
+//         neben denen von 3.8.0.
+//
 //         Groessen gegenueber 3.8.0 (alle zehn Envs gebaut):
 //         ESP32 RAM +-0 B, Flash +112 B; ESP8266 RAM +112 B, Flash +104 B.
 //         Die 112 Byte RAM auf dem ESP8266 sind die neue Telnet-Hinweiszeile
