@@ -487,6 +487,25 @@ WiFi-Manager-Hotspot ein; MQTT-Server und Zugangsdaten stehen danach unter
 `http://<ip>/settings`. Weboberfläche, Telnet-Log (Port 23) und OTA sind
 verfügbar wie gewohnt.
 
+**Der Setup-Hotspot ist seit 3.8.1 mit WPA2 geschützt.** Das Passwort kommt als
+Build-Flag aus `platformio_user_env.ini` (Sektion `[ap_defaults]`, nicht in git —
+Vorlage: `platformio_user_env_sample.ini`) und ist dort vor dem ersten Flash
+einzutragen; der Build prüft die WPA2-Längen (8–63 Zeichen) und bricht sonst ab.
+Der Grund ist nicht der Erstboot: Fällt das WLAN aus, startet der Watchdog das
+Gerät nach 5 min neu, der Verbindungsversuch scheitert nach 10 s, und das Portal
+geht für 180 s auf — zyklisch, solange die Störung dauert. Seine Felder sind
+dabei mit den **echten** Werten vorbefüllt, OTA- und MQTT-Passwort eingeschlossen.
+**Das AP-Passwort gehört in die Notfall-Unterlage** — ohne es ist im Ernstfall
+genau der Rettungsweg versperrt.
+
+**Telnet (Port 23) verlangt keine Anmeldung** und ist deshalb bewusst nur
+Beobachtungsweg: Logausgabe, die Umschalter `L` (MQTT-Log), `D` (Debug),
+`H` (Hexlog) und die Abfragen `M` (freier Speicher), `W` (WLAN-Qualität),
+`I` (IP), dazu `C` (trennen). `R` löste früher einen Neustart aus — seit 3.8.1
+antwortet die Taste nur noch mit dem Verweis auf `http://<ip>/reboot`, das hinter
+dem Web-Login liegt. Ein Neustart trennt die Wärmepumpe für die Dauer des Boots
+von der Steuerung; das soll niemand ohne Anmeldung auslösen können.
+
 ### Erstflash eines ESP32-Boards, das noch die Original-Firmware trägt
 
 Der erste Flash muss **über USB** laufen: die Original-Firmware bringt eine
@@ -496,8 +515,8 @@ Punkte, die dabei überraschen (beide am 2026-08-11 an Stufe 2 durchgemessen):
 * **Die WLAN-Zugangsdaten der Original-Firmware werden nicht übernommen.** Sie
   liegen dort in deren eigenem Speicher, nicht an der Stelle, an der der
   WiFiManager sucht. Das Board geht nach dem Flash in den Setup-Hotspot
-  `HeishaMon-Setup` (`http://192.168.4.1`, Portal-Timeout 180 s, danach Reboot
-  und der Hotspot kommt neu). WLAN, Hostname, OTA-Passwort und **MQTT-Server**
+  `HeishaMon-Setup` (WPA2, Passwort aus `[ap_defaults]`, `http://192.168.4.1`,
+  Portal-Timeout 180 s, danach Reboot und der Hotspot kommt neu). WLAN, Hostname, OTA-Passwort und **MQTT-Server**
   dort eintragen — der MQTT-Server hat keinen Default und bleibt sonst leer.
 * **Der Hostname aus der `config.json` gewinnt gegen das Build-Flag.** Das Flag
   `HEISHA_HOSTNAME` ist nur der Default für den Fall, dass keine Konfiguration
