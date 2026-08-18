@@ -64,9 +64,10 @@
 //           Login 200 und das Geraet startet neu (07:36:37) und kommt mit
 //           gespeicherter Konfiguration wieder hoch. Web-UI meldet 3.8.1.
 //
-//         FOLGEAUFGABE: AP-Passwort in die Notfall-Unterlage der Familie
-//         aufnehmen - ohne es ist bei WLAN-Ausfall genau der Rettungsweg
-//         versperrt.
+//         FOLGEAUFGABE ERLEDIGT (Owner-Bestaetigung 2026-08-18): Das
+//         AP-Passwort steht in der Offline-Notfallliste. Es gehoert dorthin und
+//         nicht hierher - ohne es ist bei WLAN-Ausfall genau der Rettungsweg
+//         versperrt, und im oeffentlichen Repo hat es nichts zu suchen.
 //
 //         AUSGEROLLT 2026-08-18: beide Stufen per OTA auf 3.8.1
 //         (heishamon_esp32_h1_ota 07:45, _h2_ota 07:48; beide Anlagen standen

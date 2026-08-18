@@ -25,7 +25,7 @@ Vorgeschlagene Bündelung:
 
 | Version | Inhalt | Art | Stand |
 | --- | --- | --- | --- |
-| 3.8.1 | Maßnahme 1 + K1 (Zugangswege, kein Protokoll-/Topic-Einfluss) | Fix | **umgesetzt 2026-08-18**, Branch `zugangsschutz-ap-telnet` |
+| 3.8.1 | Maßnahme 1 + K1 (Zugangswege, kein Protokoll-/Topic-Einfluss) | Fix | **erledigt 2026-08-18** — umgesetzt, am Gerät abgenommen, auf beiden Stufen ausgerollt |
 | offen | Maßnahme 2 (retained `Online`) | Fix | offen — lohnt erst mit einem echten Broker |
 | 3.9.0 | Maßnahme 3 (Tabellenerweiterung + Testausbau) | Umbau | offen, Weg A/B noch zu wählen |
 | — | Kleinpunkte K2–K4: erst Entscheidung, dann ggf. eigene Version | Entscheid | offen |
@@ -78,10 +78,11 @@ die WLAN-Konfiguration funktioniert danach unverändert (Gerät unter
 im seriellen Log direkt zu sehen: Portal-Timeout nach 180 s → Neustart → AP
 wieder auf. K1 im selben Durchgang geprüft, siehe dort.
 
-**Folgeaufgabe (offen):** AP-Passwort in die Notfall-Unterlage für die Familie
-aufnehmen — sonst ist im Ernstfall genau der Rettungsweg versperrt. Eine solche
-Unterlage liegt nicht im Repository; sie zu pflegen bleibt außerhalb dieses
-Branches.
+**Folgeaufgabe — erledigt (2026-08-18):** Das AP-Passwort ist in der
+Offline-Notfallliste eingetragen (Owner-Bestätigung). Damit ist der Rettungsweg
+bei WLAN-Ausfall wieder vollständig: Hotspot ansprechbar, Passwort dort
+nachschlagbar. Im Repository steht es bewusst nirgends — es liegt allein in
+`platformio_user_env.ini` (nicht in git) und in der Notfallliste.
 
 ---
 
