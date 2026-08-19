@@ -6,39 +6,50 @@
 /* Einheiten und Klartexte fuer die Weboberflaeche                           */
 /* Index 0 == "value" heisst: der Wert ist eine Zahl und Index 1 ist ihre    */
 /* Einheit. Sonst ist der Wert ein Index in die Liste der Klartexte.         */
+/*                                                                           */
+/* JEDE Liste endet mit nullptr, auch die Einheiten. Daran erkennt           */
+/* desc_text() (decode.h) das Ende, ohne die Laenge zu kennen - der Nachschlag*/
+/* in der Weboberflaeche kann damit nicht mehr ueber das Array hinauslesen.  */
+/*                                                                           */
+/* Ausserdem deckt jede Liste den GESAMTEN Indexbereich ihres Dekodierers ab, */
+/* aufgefuellt mit "unknown": die 2-Bit-Dekodierer (getBit1and2 usw.) liefern */
+/* nach ihrem -1 die Werte -1..2, brauchen also drei Eintraege; die 3-Bit-    */
+/* Dekodierer (getRight3bits, getBit3and4and5) liefern -1..6 und brauchen     */
+/* sieben. Vorher endeten die meisten Listen bei zwei Eintraegen - ein        */
+/* Rohwert b11 von der Waermepumpe zeigte damit in den Speicher dahinter.     */
+/* Das haelt byte110_test Fall 4 fuer die ganze Tabelle nach.                 */
 /*****************************************************************************/
-static const char *DisabledEnabled[] = {"Disabled", "Enabled"};
-static const char *BlockedFree[] = {"Blocked", "Free"};
-static const char *OffOn[] = {"Off", "On"};
-static const char *InactiveActive[] = {"Inactive", "Active"};
-static const char *HolidayState[] = {"Off", "Scheduled", "Active"};
-static const char *OpModeDesc[] = {"Heat", "Cool", "Auto(Heat)", "DHW", "Heat+DHW", "Cool+DHW", "Auto(Heat)+DHW", "Auto(Cool)", "Auto(Cool)+DHW"};
-static const char *Powerfulmode[] = {"Off", "30min", "60min", "90min"};
-static const char *Quietmode[] = {"Off", "Level 1", "Level 2", "Level 3"};
-static const char *Valve[] = {"Room", "DHW"};
-static const char *LitersPerMin[] = {"value", "l/min"};
-static const char *RotationsPerMin[] = {"value", "1/min"};
-static const char *Pressure[] = {"value", "Kgf/cm2"};
-static const char *Celsius[] = {"value", "&deg;C"};
-static const char *Kelvin[] = {"value", "K"};
-static const char *Hertz[] = {"value", "Hz"};
-static const char *Counter[] = {"value", "Count"};
-static const char *Hours[] = {"value", "Hours"};
-static const char *Watt[] = {"value", "Watt"};
-static const char *ErrorState[] = {"value", "Error"};
-static const char *Ampere[] = {"value", "Ampere"};
-static const char *Minutes[] = {"value", "Minutes"};
-static const char *Duty[] = {"value", "Duty"};
-static const char *HeatCoolModeDesc[] = {"Comp. Curve", "Direct"};
-static const char *Percent[] = {"value", "&#37"};
-// Die beiden Arrays fuer Byte 110 haben bewusst DREI Elemente, obwohl nur zwei
-// Zustaende beobachtet sind: Ein 2-Bit-Feld kann b11 liefern, das ergibt nach
-// "Rohwert - 1" den Index 2. Die Web-Tabelle (webfunctions.cpp) faengt nur
-// negative Indizes ab, nach oben gibt es keine Grenze und das struct fuehrt
-// keine Array-Laenge mit. Mit drei Elementen ist der gesamte moegliche Bereich
-// -1..2 gedeckt: b00 -> -1 -> leer, b01/b10/b11 -> 0/1/2 -> im Array.
-static const char *OffOnUnknown[] = {"Off", "On", "unknown"};
-static const char *HeatCoolActual[] = {"Heat", "Cool", "unknown"};
+static const char *DisabledEnabled[] = {"Disabled", "Enabled", "unknown", nullptr};
+static const char *BlockedFree[] = {"Blocked", "Free", "unknown", nullptr};
+static const char *OffOn[] = {"Off", "On", "unknown", nullptr};
+static const char *InactiveActive[] = {"Inactive", "Active", "unknown", nullptr};
+static const char *HolidayState[] = {"Off", "Scheduled", "Active", nullptr};
+static const char *OpModeDesc[] = {"Heat", "Cool", "Auto(Heat)", "DHW", "Heat+DHW", "Cool+DHW", "Auto(Heat)+DHW", "Auto(Cool)", "Auto(Cool)+DHW", nullptr};
+static const char *Powerfulmode[] = {"Off", "30min", "60min", "90min", "unknown", "unknown", "unknown", nullptr};
+static const char *Quietmode[] = {"Off", "Level 1", "Level 2", "Level 3", "unknown", "unknown", "unknown", nullptr};
+static const char *Valve[] = {"Room", "DHW", "unknown", nullptr};
+static const char *LitersPerMin[] = {"value", "l/min", nullptr};
+static const char *RotationsPerMin[] = {"value", "1/min", nullptr};
+static const char *Pressure[] = {"value", "Kgf/cm2", nullptr};
+static const char *Celsius[] = {"value", "&deg;C", nullptr};
+static const char *Kelvin[] = {"value", "K", nullptr};
+static const char *Hertz[] = {"value", "Hz", nullptr};
+static const char *Counter[] = {"value", "Count", nullptr};
+static const char *Hours[] = {"value", "Hours", nullptr};
+static const char *Watt[] = {"value", "Watt", nullptr};
+static const char *ErrorState[] = {"value", "Error", nullptr};
+static const char *Ampere[] = {"value", "Ampere", nullptr};
+static const char *Minutes[] = {"value", "Minutes", nullptr};
+static const char *Duty[] = {"value", "Duty", nullptr};
+static const char *HeatCoolModeDesc[] = {"Comp. Curve", "Direct", "unknown", nullptr};
+static const char *Percent[] = {"value", "&#37", nullptr};
+// Die beiden Arrays fuer Byte 110 haben seit 3.7.0 DREI Elemente, obwohl nur
+// zwei Zustaende beobachtet sind: Ein 2-Bit-Feld kann b11 liefern, das ergibt
+// nach "Rohwert - 1" den Index 2. Damals war das die Ausnahme, seit 3.9.0 ist
+// es die Regel fuer alle Listen (siehe oben). Der Bereich -1..2 ist damit
+// vollstaendig gedeckt: b00 -> -1 -> leer, b01/b10/b11 -> 0/1/2 -> im Array.
+static const char *OffOnUnknown[] = {"Off", "On", "unknown", nullptr};
+static const char *HeatCoolActual[] = {"Heat", "Cool", "unknown", nullptr};
 
 
 /*****************************************************************************/

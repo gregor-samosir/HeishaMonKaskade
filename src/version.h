@@ -1,5 +1,68 @@
 #pragma once
 // Changelog:
+// 3.9.0 - Die Weboberflaeche kann nicht mehr ueber ein Klartext-Array hinaus
+//         lesen. Das ist Massnahme 3 aus dem Massnahmenplan zur Codedurchsicht
+//         vom 2026-08-18, umgesetzt als Weg B (Listen auffuellen) mit einem
+//         Zusatz, siehe unten. Am Dekodierpfad aendert sich NICHTS - die
+//         publizierten MQTT-Werte sind Byte fuer Byte dieselben (Nachweis
+//         decode_vergleich.py). Betroffen ist allein die Anzeige unter
+//         /tablerefresh.
+//
+//         PROBLEM. handleTableRefresh() schlug den Klartext mit dem
+//         dekodierten Wert als Index nach und pruefte nur nach unten (-1 fuer
+//         unbekannte Rohwerte). Nach oben gab es keine Grenze, und das struct
+//         fuehrt keine Array-Laenge mit. Die 2-Bit-Dekodierer liefern nach
+//         ihrem -1 aber bis Index 2, die 3-Bit-Dekodierer bis Index 6 -
+//         waehrend die meisten Listen nur zwei bzw. vier Eintraege hatten.
+//         Ein Rohwert b11 von der Waermepumpe ergab damit einen wilden
+//         const char*, den %s formatierte: Absturz AN DER LAUFENDEN ANLAGE,
+//         sobald ein Browser die Seite offen hat. Betroffen waren 22 Zeilen,
+//         darunter TOP0 (Heatpump_State), TOP17/18 (Powerful/Quiet) und
+//         TOP58-61. Fuer die vier Byte-110-Zeilen war die Luecke seit 3.7.0
+//         geschlossen, fuer den Rest nicht - der Kommentar in decode.cpp
+//         benannte sie selbst.
+//
+//         FIX, zwei Teile. (1) Jede Liste deckt jetzt den gesamten
+//         Indexbereich ihres Dekodierers ab, aufgefuellt mit "unknown" -
+//         drei Eintraege bei 2-Bit-, sieben bei 3-Bit-Feldern. (2) Zusaetzlich
+//         endet JEDE Liste mit nullptr, und der Nachschlag laeuft ueber die
+//         neue Funktion desc_text() in decode.h, die bis zum gesuchten Index
+//         hochzaehlt statt direkt zuzugreifen.
+//         Warum der Zusatz: Weg B allein haette die Zusicherung nur im Test
+//         stehen, nicht im Code - und der Test braucht die Laenge, die das
+//         struct nicht kennt. Der nullptr-Abschluss loest beides. Er macht die
+//         Grenze im Code wirksam (ein kuenftiger Dekodierer mit groesserem
+//         Index zeigt eine leere Zelle, statt das Geraet neu zu starten) und
+//         erlaubt dem Hosttest, die Laenge jeder Liste selbst zu bestimmen -
+//         ohne eine zweite Liste, die hinter der ersten zurueckbleiben kann.
+//         Weg A (desc_count als Feld im StateTopic) wurde verworfen: 90
+//         angefasste Tabellenzeilen und Padding-Risiko auf dem ESP8266 fuer
+//         dasselbe Ergebnis.
+//         desc_text() steht als inline-Funktion im Header, damit Firmware und
+//         Hosttest dieselbe Regel benutzen - byte110_test.cpp hatte die
+//         Anzeigelogik bis hierher NACHGEBILDET, die Nachbildung entfaellt.
+//
+//         NACHWEIS.
+//         - byte110_test Fall 6 (neu): jede der 90 Zeilen, alle 256 Rohwerte
+//           durch den echten Dekodierer; der entstehende Index muss in seiner
+//           Liste liegen und dort einen Text finden. 22 Klartext-Zeilen
+//           geprueft, hoechster Index je Zeile gegen die Listenlaenge.
+//           Ausserdem: alle 90 Listen sind mit nullptr abgeschlossen.
+//         - Gegenprobe, wie im Massnahmenplan verlangt: OffOn und Quietmode
+//           testweise auf die alte Laenge gekuerzt -> Fall 6 schlaegt an
+//           ("Rohwert 0x03 ergibt Index 2, Liste hat 2"), Rueckgabewert 1.
+//           Nach dem Rueckbau wieder gruen. Zusaetzlich prueft der Test die
+//           Regel an einer bewusst zu kurzen Liste direkt.
+//         - decode_vergleich.py --basis v3.8.2: 68040 Zeilen, IDENTISCH -
+//           90 Topics, Nummer, Name, Wert und Einheit gleich.
+//         - Die drei uebrigen Hosttests (merge, telegramm, sendwindow) gruen.
+//         - Alle zehn Envs gebaut. RAM/Flash gegen 3.8.2:
+//           ESP32   RAM +160 B (56976 -> 57136), Flash +188 B
+//           ESP8266 RAM +152 B (45800 -> 45952), Flash +184 B
+//           Das sind die 38 zusaetzlichen Zeiger (26 Abschluesse, 12
+//           Auffuellungen) a 4 Byte - auf dem ESP8266 liegen die Listen im
+//           RAM. 56,1 % statt 55,9 % belegt.
+//
 // 3.8.2 - Zwei Stellen im MQTT-Sendepfad, an denen ein Abonnent einen
 //         veralteten oder falschen Zustand bekommt. Das sind Massnahme 2 und
 //         Kleinpunkt K3 aus dem Massnahmenplan zur Codedurchsicht vom
@@ -601,4 +664,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.8.2";
+static const char* heishamon_version = "3.9.0";
