@@ -317,6 +317,12 @@ Werte außerhalb des Bereichs werden abgewiesen und protokolliert. Bereiche und
 Byte-Positionen unten sind aus `commands.cpp` nachgezogen – diese Tabelle ist
 die einzige Quelle der Wahrheit.*
 
+Which state topic reads each command back — and which four commands have no
+readback at all — is listed in
+[`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) (German, tables are
+language-neutral). *Deutsch: Welches State-Topic ein Set-Kommando zurückliest,
+steht in [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md).*
+
  ID | Topic | Byte | Description | Value/Range
 :--- | :--- | :--- | --- | ---
 SET1  | Heatpump | 4 | Set heatpump on or off | 0=off, 1=on
