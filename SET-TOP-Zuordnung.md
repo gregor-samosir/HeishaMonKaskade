@@ -160,7 +160,7 @@ SET | Kommando | Byte | Bits | Lage
 :--- | :--- | ---: | :--- | :---
 SET12 | `ForceDefrost` | 8 | 7 | Byte 8 ist im Antworttelegramm unbelegt — kein Rücklesen möglich
 SET13 | `ForceSterilization` | 8 | 6 | dito
-SET14 | `WaterPump` | 4 | 3+4 | Antwortbyte führt das Feld, *Auto* gemessen — **teilweise belegt**, Abschnitt 4
+SET14 | `WaterPump` | 4 | 3+4 | Antwortbyte am Gerät belegt (Auto und On) — **Lücke, direkt schließbar**, Abschnitt 4
 SET15 | `WaterPumpSpeed` | 45 | ganz | Antwortbyte am Gerät belegt — **Lücke, direkt schließbar**, Abschnitt 4
 
 Für die beiden Force-Kommandos gibt es keinen Rückgabewert, wohl aber einen
@@ -253,9 +253,10 @@ Kommandoname `WaterPumpSpeed` führt hier in die Irre, siehe Abschnitt 4.
 
 ## 4. Was sich schließen ließe
 
-Nach Aufwand und Risiko geordnet. Die ersten beiden ändern nur die Leseseite —
-an die Wärmepumpe wird nichts geschrieben, es kann dort also nichts kaputtgehen.
-Erst der dritte Punkt fasst eine laufende Anlage an.
+Nach Aufwand und Risiko geordnet. Die ersten beiden sind je eine Zeile in
+`decode.cpp` und am Gerät ausgemessen — sie ergänzen nur die Leseseite, am
+Schreibpfad ändert sich nichts. Erst der dritte Punkt fasst eine laufende
+Anlage an.
 
 **1. Rücklesen für SET15 — `Pump_Duty_Max` auf Byte 45 (eine Zeile in
 `decode.cpp`).**
@@ -264,8 +265,9 @@ Erst der dritte Punkt fasst eine laufende Anlage an.
 {103, 45, "Pump_Duty_Max", getIntMinus1, nullptr, Duty},
 ```
 
-Dazu `NUMBEROFTOPICS` von 90 auf 91. Kein Eingriff in den Schreibpfad, keine
-Messung an der Anlage nötig — die Klartextliste `Duty` gibt es schon (TOP92).
+Dazu `NUMBEROFTOPICS` um eins hoch; die Klartextliste `Duty` gibt es schon
+(TOP92). Kein Eingriff in den Schreibpfad. Zusammen mit Punkt 2 sind es zwei
+neue Zeilen und `NUMBEROFTOPICS` 92.
 
 **Byte 45 ist am Gerät gemessen, nicht aus der Referenz übernommen**
 (2026-08-19, Rohbytes über den Hexlog mit
@@ -286,36 +288,56 @@ selben Mitschnitt (ein Telegramm mit dem alten, die folgenden mit dem neuen
 Wert). Byte 95 blieb über alle vier Messungen unverändert bei 20 und ist die
 Heiz/Kühl-Umschalttemperatur TOP79.
 
-**Der Wert ist ein Duty, keine Drehzahl** — die Obergrenze, bis zu der die
-Pumpe modulieren darf. Dazu passen die Umrechnung `X−1` wie bei TOP92
-`Pump_Duty` (Byte 172, die Ist-Drehzahl TOP65 rechnet `(X−1)×50`) und die
-Regelart auf Byte 29, die die Referenz mit den Zuständen *deltaT* und
-*Max. Duty* führt. Die **Ist**-Werte stehen bereits in TOP65 `Pump_Speed` und
-TOP92 `Pump_Duty`; `Pump_Duty_Max` wäre die Grenze zu TOP92, nicht dessen
-Ersatz. Der Kommandoname `WaterPumpSpeed` führt in die Irre — ob er auf
+**Der Wert ist ein Duty, keine Drehzahl** — und auch das ist gemessen, nicht
+geschlossen. Bei laufender Umwälzpumpe (Wärmepumpe stand, Pumpe über SET14 von
+Hand eingeschaltet) folgte TOP92 `Pump_Duty` der Grenze aus Byte 45 unmittelbar:
+
+Byte 45 als `X−1` | TOP92 `Pump_Duty` | TOP65 `Pump_Speed` | TOP1 `Pump_Flow`
+---: | ---: | ---: | ---:
+100 | **100** | 2300 1/min | 11,95 l/min
+80 | **80** | 1500 1/min | 6,93 l/min
+
+Die Pumpe läuft im Handbetrieb also genau bis zur konfigurierten Obergrenze und
+nicht darüber; Drehzahl und Durchfluss gehen mit. `Pump_Duty_Max` ist damit die
+Grenze zu TOP92, nicht dessen Ersatz — die Ist-Werte stehen weiter in TOP65 und
+TOP92. Der Kommandoname `WaterPumpSpeed` führt in die Irre; ob er auf
 `MaxPumpDuty` geändert wird, ist eine Entscheidung über die Kompatibilität der
-Topic-Namen und steht hier bewusst nicht offen; die Kaskadensteuerung schreibt
-heute auf den alten Namen.
+Topic-Namen und steht hier bewusst nicht offen, denn die Kaskadensteuerung
+schreibt heute auf den alten Namen.
 
 Beim Nachschlagen in `ProtocolByteDecrypt.md`: Byte 45 trägt dort in der ersten
 Spalte die Nummer TOP95 — das ist die Topic-Nummer des Original-Projekts, keine
 Byte-Position.
 
-**2. Rücklesen für SET14 — ein Zustand gemessen, zwei offen.**
-Byte 4 wurde bei denselben Messungen mitgeschnitten. Die Bits 3+4 standen an
-beiden Stufen durchgehend auf `b01`, also *Auto* — der Ruhezustand ist damit
-belegt, und dass die Wärmepumpe das Feld überhaupt führt.
+**2. Rücklesen für SET14 — `Water_Pump_Mode` auf Byte 4 (eine Zeile in
+`decode.cpp`).**
 
-Der Rest ist offen: `On` (`b10`) und `Air purge` (`b11`) gibt es nur über das
-Servicemenü. Sie zu messen hieße, die Umwälzpumpe einer laufenden Anlage von
-Hand einzuschalten oder eine Entlüftung auszulösen — das ist kein passiver
-Mitschnitt mehr und braucht eine bewusste Freigabe. Bis dahin steht es wie
-TOP102 `External_SW_State`, dessen zweiter Zustand an dieser Anlage ebenfalls
-nicht herstellbar ist: dokumentiert, halb belegt.
+```c
+{104,  4, "Water_Pump_Mode", getBit3and4, nullptr, WaterPumpMode},
+```
 
-Ein Rücklese-Topic wäre `getBit3and4` auf Byte 4 mit der Klartextliste
-`{"Auto", "On", "Air purge", nullptr}` — sie deckt den Indexbereich `−1..2` des
-Dekodierers vollständig ab, wie es seit 3.9.0 für alle Listen gilt.
+Dazu die Klartextliste `WaterPumpMode[] = {"Auto", "On", "Air purge", nullptr}`
+— sie deckt den Indexbereich `−1..2` des Dekodierers vollständig ab, wie es
+seit 3.9.0 für alle Listen gilt.
+
+Am 2026-08-19 an Stufe 1 gemessen, bei stehender Wärmepumpe:
+
+`set/WaterPump` | Byte 4 roh | Bits 3+4 | dekodiert | Pumpe
+---: | ---: | :--- | :--- | :---
+0 (Ausgangslage) | `0x55` | `01` | Auto | steht
+1 | `0x65` | `10` | **On** | läuft, 2300 1/min
+0 (zurück) | `0x55` | `01` | Auto | steht
+
+Das Antwortbyte führt das Feld also, und der Wert `0x65` deckt sich mit der
+Referenz („Water pump on=65"). Dass die Pumpe dabei tatsächlich anlief, ist
+über TOP65, TOP92 und TOP1 belegt — das Bitfeld meldet keinen Wunsch, sondern
+den wirksamen Zustand.
+
+**Ungemessen bleibt `Air purge`** (`b11`, laut Referenz `0x75`). Diesen Zustand
+zu erzeugen hieße, an einer intakten Anlage eine Entlüftungsroutine
+auszulösen — dafür gibt es keinen Anlass. Der Eintrag in der Klartextliste
+stützt sich auf die Referenz, so wie der zweite Zustand von TOP102
+`External_SW_State`, der an dieser Anlage ebenfalls nicht herstellbar ist.
 
 **3. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
 Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
@@ -372,8 +394,9 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
 * **Die Zuordnung ist aus dem Code abgeleitet, das meiste nicht durchgemessen.**
   Am Gerät belegt sind die Kurven-Kommandos SET27–SET34 (Rücklesen an beiden
   Anlagen, 2026-08-10/11), SET3, SET4 und SET9 im laufenden Betrieb
-  (2026-08-15/16) sowie SET15 auf Byte 45 mit Änderung in beide Richtungen
-  (2026-08-19, Abschnitt 4). Die übrigen Paare stützen sich auf die identische
+  (2026-08-15/16) sowie SET14 auf Byte 4 und SET15 auf Byte 45, beide mit
+  Änderung in beide Richtungen (2026-08-19, Abschnitt 4). Die übrigen Paare
+  stützen sich auf die identische
   Byte-Position, die bei jedem einzelnen der 28 Paare zutrifft. Wo Zweifel an
   einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)
   in wenigen Minuten — Byte beobachten, Wert ändern, Flanke ansehen.

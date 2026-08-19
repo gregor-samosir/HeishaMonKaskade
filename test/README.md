@@ -292,6 +292,32 @@ verschiedene Werte konfiguriert (100 und 125), und Byte 45 zeigte an Stufe 2
 `0x7E` = 125. Wo zwei Stufen unterschiedlich eingestellt sind, ist der
 Stufenvergleich der billigste Nachweis - ganz ohne Schreibvorgang.
 
+**Byte 4, Bits 3+4 (SET14 WaterPump)** am selben Tag an H1 gemessen, bei
+stehender Waermepumpe: `set/WaterPump` 0 -> 1 -> 0 liess Byte 4 von `0x55` auf
+`0x65` und zurueck gehen, die Bits 3+4 also von `b01` (Auto) auf `b10` (On).
+Der Wert `0x65` deckt sich mit der Referenz. Dass die Pumpe dabei wirklich
+anlief, zeigen TOP65 (2300 1/min), TOP1 (11,95 l/min) und TOP92 - das Bitfeld
+meldet den wirksamen Zustand, nicht nur den Wunsch. `Air purge` (`b11`) ist
+bewusst NICHT gemessen: Das haette an einer intakten Anlage eine
+Entlueftungsroutine ausgeloest.
+
+**Die Bedeutung von Byte 45** faellt bei laufender Pumpe gleich mit ab. Mit
+eingeschalteter Pumpe die Grenze verstellen:
+
+```
+  Byte 45 (X-1)   TOP92 Pump_Duty   TOP65 Pump_Speed   TOP1 Pump_Flow
+            100               100         2300 1/min      11,95 l/min
+             80                80         1500 1/min       6,93 l/min
+```
+
+Die Pumpe laeuft im Handbetrieb genau bis zur konfigurierten Obergrenze. Byte
+45 ist damit als **maximaler Duty** belegt, nicht als Drehzahl - der Topic-Name
+`WaterPumpSpeed` fuehrt in die Irre, das Rueckleseziel heisst `Pump_Duty_Max`.
+
+Nach jedem solchen Test die Sollwerte zuruecksetzen und nachsehen, dass die
+Anlage wieder steht (`Pump_Speed` und `Pump_Duty` auf 0). Node-RED zieht seinen
+5-min-Re-Assert zwar ohnehin nach, aber darauf ist kein Nachweis zu bauen.
+
 Zwei Hinweise: Der Hexlog haengt am Telnet-Debugflag (`write_hex_log` schreibt
 ueber `write_telnet_log`) - steht `outputTelnetLog` auf false, kommt nichts an.
 Und `H` ist ein Umschalter: War der Hexlog schon an, schaltet der erste Druck
