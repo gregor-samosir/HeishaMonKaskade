@@ -40,6 +40,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `tablesnap.py` | Momentaufnahme der Topic-Tabelle ueber `/tablerefresh`, zeilenweise diffbar - fuer die Abnahme nach dem Flashen | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
+| `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
@@ -253,12 +254,48 @@ legt die Richtung selbst fest.
 Nach jeder Aenderung an `setCommands[]` oder `stateTopics[]` laufen lassen und
 die Ausgabe gegen die Doku halten.
 
-**Fallstrick beim Nachschlagen in `ProtocolByteDecrypt.md`:** Die Zahl in der
-ersten Spalte ist die Topic-Nummer des *Original*-Projekts, keine
-Byte-Position. Byte 45 (max. Pumpen-Duty) traegt dort die Nummer TOP95 - und
-Byte 95 ist in dieser Firmware TOP79 `Heat_To_Cool_Temp`. Am 2026-08-19 an
-beiden Stufen gegengeprueft: TOP79 meldet 20 Grad, TOP80 15 Grad, waehrend auf
-SET15 die Werte 100 (Stufe 1) und 125 (Stufe 2) geschrieben werden.
+**Beim Nachschlagen in `ProtocolByteDecrypt.md`:** Die Zahl in der ersten
+Spalte ist eine Topic-Nummer des *Original*-Projekts, keine Byte-Position.
+Wo eine Zuordnung zweifelhaft ist, entscheidet die Messung - `byte_monitor.py`,
+siehe naechster Abschnitt.
+
+## Byte-Zuordnung belegen (byte_monitor.py, 3.9.0)
+
+Ein Byte beobachten, den zugehoerigen Wert aendern, die Flanke ansehen. Damit
+wird aus einer abgeleiteten Zuordnung eine gemessene. Das Werkzeug schaltet den
+Hexlog per Telnet ein, schneidet die 203-Byte-Antworten mit, rechnet die
+gewuenschten Bytes in alle im Protokoll ueblichen Formen um und schaltet den
+Hexlog danach wieder ab - auch dann, wenn es mit einem Fehler abbricht.
+
+```
+./byte_monitor.py 192.168.2.120 4 45 95 --dauer 20
+```
+
+**Ablauf fuer einen Aenderungsnachweis** (Beispiel SET15, 2026-08-19):
+
+```
+./byte_monitor.py 192.168.2.120 45 95                      # Ausgangslage
+./mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/WaterPumpSpeed=110
+./byte_monitor.py 192.168.2.120 45 95                      # geaendert
+./mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/WaterPumpSpeed=100
+./byte_monitor.py 192.168.2.120 45 95                      # zurueck
+```
+
+Ergebnis: Byte 45 ging `0x65` -> `0x6F` -> `0x65`, also `X-1` = 100 -> 110 ->
+100 im Gleichschritt mit dem Kommando; Byte 95 blieb ueber alle Messungen auf
+`0x94` (`X-128` = 20). Die Flanke stand jeweils **innerhalb** eines
+Mitschnitts - ein Telegramm mit dem alten, die folgenden mit dem neuen Wert;
+die Zeile "Waehrend des Mitschnitts veraendert" weist genau darauf hin.
+
+Die zweite Kontrolle kostet gar nichts: Die beiden Kaskadenstufen haben hier
+verschiedene Werte konfiguriert (100 und 125), und Byte 45 zeigte an Stufe 2
+`0x7E` = 125. Wo zwei Stufen unterschiedlich eingestellt sind, ist der
+Stufenvergleich der billigste Nachweis - ganz ohne Schreibvorgang.
+
+Zwei Hinweise: Der Hexlog haengt am Telnet-Debugflag (`write_hex_log` schreibt
+ueber `write_telnet_log`) - steht `outputTelnetLog` auf false, kommt nichts an.
+Und `H` ist ein Umschalter: War der Hexlog schon an, schaltet der erste Druck
+ihn aus. Das Skript erkennt das und nimmt es zurueck.
 
 ## Verhaeltnis zu `pio test`
 

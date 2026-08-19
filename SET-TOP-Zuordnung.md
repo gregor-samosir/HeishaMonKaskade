@@ -160,8 +160,8 @@ SET | Kommando | Byte | Bits | Lage
 :--- | :--- | ---: | :--- | :---
 SET12 | `ForceDefrost` | 8 | 7 | Byte 8 ist im Antworttelegramm unbelegt — kein Rücklesen möglich
 SET13 | `ForceSterilization` | 8 | 6 | dito
-SET14 | `WaterPump` | 4 | 3+4 | Bits auf der Schreibseite bekannt, Antwortbyte unbelegt — **erst messen**, Abschnitt 4
-SET15 | `WaterPumpSpeed` | 45 | ganz | Byte beschrieben und dekodierbar — **Lücke, direkt schließbar**, Abschnitt 4
+SET14 | `WaterPump` | 4 | 3+4 | Antwortbyte führt das Feld, *Auto* gemessen — **teilweise belegt**, Abschnitt 4
+SET15 | `WaterPumpSpeed` | 45 | ganz | Antwortbyte am Gerät belegt — **Lücke, direkt schließbar**, Abschnitt 4
 
 Für die beiden Force-Kommandos gibt es keinen Rückgabewert, wohl aber einen
 **Wirkungsnachweis**: Läuft die angestoßene Routine, meldet das ein
@@ -267,59 +267,55 @@ Erst der dritte Punkt fasst eine laufende Anlage an.
 Dazu `NUMBEROFTOPICS` von 90 auf 91. Kein Eingriff in den Schreibpfad, keine
 Messung an der Anlage nötig — die Klartextliste `Duty` gibt es schon (TOP92).
 
-**Der Wert ist ein Duty, keine Drehzahl.** Das Kommando heißt zwar
-`WaterPumpSpeed` und die Referenz nennt Byte 45 „Maximum set pump speed", aber
-gemeint ist die Obergrenze, bis zu der die Pumpe modulieren darf:
+**Byte 45 ist am Gerät gemessen, nicht aus der Referenz übernommen**
+(2026-08-19, Rohbytes über den Hexlog mit
+[`test/byte_monitor.py`](test/byte_monitor.py)). Zwei Kontrollen: der Vergleich
+der beiden Stufen, die verschiedene Werte konfiguriert haben, und eine
+Änderung an Stufe 1 in beide Richtungen.
 
-* Die Referenz führt auf Byte 29 die Regelart der Pumpe mit den beiden
-  Zuständen *deltaT* und ***Max. Duty*** — es gibt also einen Max-Duty-Parameter,
-  und Byte 45 ist der einzige Kandidat dafür.
-* Byte 45 wird mit `X−1` umgerechnet, genau wie TOP92 `Pump_Duty` (Byte 172).
-  Die Ist-Drehzahl TOP65 (Byte 171) rechnet dagegen `(X−1)×50`.
-* Der Wertebereich 65–254 ist ein Duty-Bereich. Die Kaskadensteuerung schreibt
-  hier 100 (Stufe 1) und 125 (Stufe 2) — als Drehzahl in 1/min wäre das sinnlos.
+Messung | `set/WaterPumpSpeed` | Byte 45 roh | Byte 45 als `X−1` | Byte 95 als `X−128`
+:--- | ---: | ---: | ---: | ---:
+Stufe 1, Ausgangslage | 100 | `0x65` | **100** | 20
+Stufe 2, Ausgangslage | 125 | `0x7E` | **125** | 20
+Stufe 1, auf 110 gesetzt | 110 | `0x6F` | **110** | 20
+Stufe 1, zurück auf 100 | 100 | `0x65` | **100** | 20
 
-Die **Ist**-Werte der Pumpe stehen bereits in TOP65 `Pump_Speed` (Drehzahl) und
-TOP92 `Pump_Duty` (Modulationsgrad). `Pump_Duty_Max` wäre die Obergrenze zu
-TOP92, nicht dessen Ersatz.
+Damit ist belegt: Byte 45 trägt den Wert, die Umrechnung ist `X−1`, und die
+Flanke folgt dem Kommando in beide Richtungen — beim Umschalten stand sie im
+selben Mitschnitt (ein Telegramm mit dem alten, die folgenden mit dem neuen
+Wert). Byte 95 blieb über alle vier Messungen unverändert bei 20 und ist die
+Heiz/Kühl-Umschalttemperatur TOP79.
 
-> **Fußangel bei Byte 45.** In `ProtocolByteDecrypt.md` trägt diese Zeile in
-> der ersten Spalte die Nummer **TOP95** — das ist die Topic-Nummer des
-> Original-Projekts, nicht die Byte-Position. Byte 95 ist in dieser Firmware
-> TOP79 `Heat_To_Cool_Temp`, nachgeprüft am 2026-08-19 an beiden Stufen: TOP79
-> meldet 20 °C und TOP80 15 °C, ein Umschaltpaar mit 5 K Hysterese. Läge der
-> Max-Duty dort, müsste TOP79 die geschriebenen 100 bzw. 125 zeigen — tut es
-> nicht, und beide Stufen melden trotz unterschiedlicher Duty-Konfiguration
-> denselben Wert.
+**Der Wert ist ein Duty, keine Drehzahl** — die Obergrenze, bis zu der die
+Pumpe modulieren darf. Dazu passen die Umrechnung `X−1` wie bei TOP92
+`Pump_Duty` (Byte 172, die Ist-Drehzahl TOP65 rechnet `(X−1)×50`) und die
+Regelart auf Byte 29, die die Referenz mit den Zuständen *deltaT* und
+*Max. Duty* führt. Die **Ist**-Werte stehen bereits in TOP65 `Pump_Speed` und
+TOP92 `Pump_Duty`; `Pump_Duty_Max` wäre die Grenze zu TOP92, nicht dessen
+Ersatz. Der Kommandoname `WaterPumpSpeed` führt in die Irre — ob er auf
+`MaxPumpDuty` geändert wird, ist eine Entscheidung über die Kompatibilität der
+Topic-Namen und steht hier bewusst nicht offen; die Kaskadensteuerung schreibt
+heute auf den alten Namen.
 
-Ob der Kommandoname `WaterPumpSpeed` auf `MaxPumpDuty` geändert werden soll,
-ist eine Entscheidung über die Kompatibilität der Topic-Namen und steht hier
-bewusst nicht. Die Kaskadensteuerung schreibt heute auf den alten Namen.
+Beim Nachschlagen in `ProtocolByteDecrypt.md`: Byte 45 trägt dort in der ersten
+Spalte die Nummer TOP95 — das ist die Topic-Nummer des Original-Projekts, keine
+Byte-Position.
 
-**2. Rücklesen für SET14 — erst messen, dann implementieren.**
-Anders als bei SET15 ist hier offen, ob das Antwortbyte das Feld überhaupt
-führt. Belegt ist nur die Kodierung auf der Schreibseite: Die Rohwerte der
-Referenz zu Byte 4 (`0x56` = Auto, `0x65` = Pumpe an, `0x75` = Entlüften)
-ergeben in den Bits 3+4 genau die Folge `b01`/`b10`/`b11`, die `commands.cpp`
-mit `(n+1)×16` erzeugt. Ein Rücklese-Topic wäre `getBit3and4` auf Byte 4 mit
-der Klartextliste `{"Auto", "On", "Air purge", nullptr}` — sie deckt den
-Indexbereich `−1..2` des Dekodierers vollständig ab, wie es seit 3.9.0 für alle
-Listen gilt.
+**2. Rücklesen für SET14 — ein Zustand gemessen, zwei offen.**
+Byte 4 wurde bei denselben Messungen mitgeschnitten. Die Bits 3+4 standen an
+beiden Stufen durchgehend auf `b01`, also *Auto* — der Ruhezustand ist damit
+belegt, und dass die Wärmepumpe das Feld überhaupt führt.
 
-Was fehlt, ist der Nachweis, dass die Wärmepumpe diese Bits im Antworttelegramm
-auch belegt. **Beide offenen Fragen — Byte 4 und Byte 45 — klärt ein einziger
-passiver Mitschnitt**, denn beide Bytes stehen im selben Telegramm:
+Der Rest ist offen: `On` (`b10`) und `Air purge` (`b11`) gibt es nur über das
+Servicemenü. Sie zu messen hieße, die Umwälzpumpe einer laufenden Anlage von
+Hand einzuschalten oder eine Entlüftung auszulösen — das ist kein passiver
+Mitschnitt mehr und braucht eine bewusste Freigabe. Bis dahin steht es wie
+TOP102 `External_SW_State`, dessen zweiter Zustand an dieser Anlage ebenfalls
+nicht herstellbar ist: dokumentiert, halb belegt.
 
-* Hexlog einschalten (Telnet, Taste `H`), ein Telegramm mitschneiden, wieder
-  ausschalten. Kein Schreibvorgang, die Anlage wird nicht angefasst.
-* Byte 45 muss `101` (Stufe 1, geschrieben wird 100) bzw. `126` (Stufe 2, 125)
-  zeigen. Trifft das zu, sind Byte-Position **und** Umrechnung `X−1` belegt.
-* Byte 4 Bits 3+4 müssen im Normalbetrieb `b01` (Auto) zeigen. Das belegt einen
-  von drei Zuständen; `On` und `Air purge` gibt es nur im Servicemenü und sie
-  bleiben unbelegt — so wie TOP102 `External_SW_State`, dessen zweiter Zustand
-  an dieser Anlage ebenfalls nicht herstellbar ist.
-* Zu beachten: Die Bytewerte im Mitschnitt sind **hexadezimal**; dezimal
-  gelesen ergeben sie Unsinn. `101` erscheint als `65`, `126` als `7e`.
+Ein Rücklese-Topic wäre `getBit3and4` auf Byte 4 mit der Klartextliste
+`{"Auto", "On", "Air purge", nullptr}` — sie deckt den Indexbereich `−1..2` des
+Dekodierers vollständig ab, wie es seit 3.9.0 für alle Listen gilt.
 
 **3. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
 Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
@@ -373,20 +369,21 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
 
 ## Vorbehalte
 
-* **Die Zuordnung ist aus dem Code abgeleitet, nicht durchgemessen.** Für die
-  Kurven-Kommandos SET27–SET34 ist das Rücklesen an beiden Anlagen belegt
-  (2026-08-10/11), für SET3, SET4 und SET9 im laufenden Betrieb
-  (2026-08-15/16). Die übrigen Paare stützen sich auf die identische
-  Byte-Position, die bei jedem einzelnen der 28 Paare zutrifft.
+* **Die Zuordnung ist aus dem Code abgeleitet, das meiste nicht durchgemessen.**
+  Am Gerät belegt sind die Kurven-Kommandos SET27–SET34 (Rücklesen an beiden
+  Anlagen, 2026-08-10/11), SET3, SET4 und SET9 im laufenden Betrieb
+  (2026-08-15/16) sowie SET15 auf Byte 45 mit Änderung in beide Richtungen
+  (2026-08-19, Abschnitt 4). Die übrigen Paare stützen sich auf die identische
+  Byte-Position, die bei jedem einzelnen der 28 Paare zutrifft. Wo Zweifel an
+  einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)
+  in wenigen Minuten — Byte beobachten, Wert ändern, Flanke ansehen.
 * **Abschnitt 3a listet Möglichkeiten, keine Befunde.** Dass ein Byte im
   Kommandotelegramm erreichbar ist, heißt nicht, dass die Wärmepumpe es annimmt.
 * **`ProtocolByteDecrypt.md` ist Referenz des Original-Projekts.** Die dortigen
   TOP-Nummern gehören zu jenem Projekt und stimmen mit den Nummern dieser
   Firmware **nicht** überein; benutzt wurden von dort ausschließlich die
-  Byte-Positionen und Bit-Bedeutungen. Wer dort nachschlägt, darf die Zahl in
-  der ersten Spalte nicht für eine Byte-Position halten — Byte 45 trägt dort
-  die Nummer TOP95, und Byte 95 ist in dieser Firmware etwas ganz anderes
-  (siehe die Fußangel in Abschnitt 4).
+  Byte-Positionen und Bit-Bedeutungen. Die Zahl in der ersten Spalte ist eine
+  Topic-Nummer, keine Byte-Position.
 * **SG Ready ist an dieser Anlage ausgetestet und arbeitet wie gewollt.** Die
   Referenz führt Byte 71 als *Heating* und Byte 72 als *DHW*, `decode.cpp` und
   `commands.cpp` halten es umgekehrt — maßgeblich ist die Firmware, die
