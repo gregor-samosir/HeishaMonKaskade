@@ -46,6 +46,7 @@ struct SetCommand
 /*   byte 4:  Heatpump 0x03  |  WaterPump 0x30  |  ForceDHW 0xC0             */
 /*   byte 5:  HolidayMode 0x30                                               */
 /*   byte 8:  ForceDefrost 0x02  |  ForceSterilization 0x04                  */
+/*   byte 28: CoolingMode 0x0C  |  HeatingMode 0x03                          */
 /*                                                                           */
 /* Exception - byte 7: QuietMode ((n+1)*8) and PowerfulMode (73..76) really  */
 /* do overlap in bit 3, PowerfulMode carries an implicit "quiet off". That   */
@@ -124,6 +125,24 @@ static const SetCommand setCommands[] = {
     // darunter auf 15 - beides ohne jede Rueckmeldung. Genau die Art
     // stiller Verluste, die mit 3.1.0 beseitigt wurde.
     {34, 89, 0xFF, CONV_ADD,     "Z1CoolCurveOutsideHighTemp",   15,  30, 128},
+    // Betriebsart je Kreis: 0 = Kompensationskurve, 1 = Direktvorgabe.
+    // Byte 28 traegt BEIDE Betriebsarten in zwei Bitfeldern - die Masken sind
+    // hier deshalb Pflicht, nicht Kosmetik: ohne sie schaltete ein Kuehl-
+    // Kommando die Heizung mit um. Rueckgelesen ueber TOP76 Heating_Mode
+    // (getBit7and8) und TOP81 Cooling_Mode (getBit5and6); die Kodierung ist
+    // aus genau diesen Dekodierern zurueckgerechnet:
+    //   HeatingMode 0 -> (0+1)*1 = 0b01, gelesen (0b01 & 0b11) - 1     = 0
+    //   HeatingMode 1 -> (1+1)*1 = 0b10, gelesen (0b10 & 0b11) - 1     = 1
+    //   CoolingMode 0 -> (0+1)*4 = 0b0100, gelesen ((4>>2) & 0b11) - 1 = 0
+    //   CoolingMode 1 -> (1+1)*4 = 0b1000, gelesen ((8>>2) & 0b11) - 1 = 1
+    // ACHTUNG, NICHT FOLGENLOS UMKEHRBAR: Ein Wechsel von Direkt auf Kurve
+    // setzt die vier Kurvenpunkte des betroffenen Kreises auf die Panasonic-
+    // Werksvorgaben zurueck, und das Zurueckschalten stellt sie NICHT wieder
+    // her. Ausserdem uebernimmt der Direktsollwert dabei den unteren
+    // Kurvenpunkt. Wer hierher schreibt, muss die Kurve danach aus dem
+    // ioBroker nachziehen (test/kurven_sync.py) - siehe test/README.md.
+    {35, 28, 0x03, CONV_MUL_INC, "HeatingMode",                   0,   1,   1},
+    {36, 28, 0x0C, CONV_MUL_INC, "CoolingMode",                   0,   1,   4},
 };
 
 static const unsigned int SETCOMMANDCOUNT = sizeof(setCommands) / sizeof(setCommands[0]);

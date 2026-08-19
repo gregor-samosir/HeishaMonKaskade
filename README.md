@@ -414,7 +414,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
-| [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Geplant: Kurve ↔ Direkt als Set-Kommando, damit der Notbetrieb fernschaltbar wird |
+| [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — Kühlseite erledigt in 3.11.0, Heizseite offen |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 
@@ -556,10 +556,10 @@ keiner Zeit ein Leerwert (−128, −1) auf einem produktiven State-Topic.
 
 ## MQTT-Schnittstelle
 
-92 State-Topics und 32 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
+92 State-Topics und 34 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
 Die vollständige Referenz mit Byte-Spalte und Wertebereichen steht in
 [`MQTT-Topics.md`](MQTT-Topics.md). Welches State-Topic ein Set-Kommando
-zurückliest — und welche vier Kommandos gar keine Rückmeldung haben —, steht in
+zurückliest — und welche zwei Kommandos gar keine Rückmeldung haben —, steht in
 [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md).
 
 ```

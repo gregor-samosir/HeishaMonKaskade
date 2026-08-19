@@ -55,7 +55,7 @@ Daraus ergibt sich die Zweiteilung des Telegramms: Bytes 4–106 tragen
 Einstellungen und spiegeln das Kommandotelegramm, ab Byte 110 kommen
 Ist-Zustände und Messwerte. Jedes der 30 Paare liegt unter Byte 110.
 
-## 1. Set-Kommandos mit Rückmeldung (30 von 32)
+## 1. Set-Kommandos mit Rückmeldung (32 von 34)
 
 Die Spalte *Bits* zählt wie das Projekt: **Bit 1 ist das höchstwertige Bit**,
 `ganz` heißt, das Kommando belegt das volle Byte. *Art* sagt, ob das Topic
@@ -93,6 +93,8 @@ SET31 | `Z1CoolCurveTargetHighTemp` | 86 | ganz | TOP72 | `Z1_Cool_Curve_Target_
 SET32 | `Z1CoolCurveTargetLowTemp` | 87 | ganz | TOP73 | `Z1_Cool_Curve_Target_Low_Temp` | voll
 SET33 | `Z1CoolCurveOutsideLowTemp` | 88 | ganz | TOP75 | `Z1_Cool_Curve_Outside_Low_Temp` | voll
 SET34 | `Z1CoolCurveOutsideHighTemp` | 89 | ganz | TOP74 | `Z1_Cool_Curve_Outside_High_Temp` | voll
+SET35 | `HeatingMode` | 28 | 7+8 | TOP76 | `Heating_Mode` | voll ⁶
+SET36 | `CoolingMode` | 28 | 5+6 | TOP81 | `Cooling_Mode` | voll ⁶
 
 Bei den Kurven kreuzen sich `High` und `Low` zwischen SET- und TOP-Nummer
 (SET29 `OutsideLow` → TOP32, SET30 `OutsideHigh` → TOP31). Das ist kein Fehler
@@ -192,6 +194,47 @@ hieße, an einer intakten Anlage eine Entlüftungsroutine auszulösen. Er stütz
 sich auf `ProtocolByteDecrypt.md`, so wie der zweite Zustand von TOP102
 `External_SW_State`.
 
+### ⁶ Betriebsart Kurve ↔ Direkt (neu in 3.11.0)
+
+SET35 und SET36 teilen sich Byte 28: Bits 7+8 tragen die Heiz-, Bits 5+6 die
+Kühl-Betriebsart, je `0` = Kompensationskurve, `1` = Direktvorgabe. Die
+Bitmasken `0x03` und `0x0C` sind hier keine Kosmetik — ohne sie schaltete ein
+Kühl-Kommando die Heizung mit um.
+
+**Die Kühlseite ist am 2026-08-19 an Stufe 1 bei stehender Anlage gemessen**,
+die Heizseite nicht (siehe Abschnitt 4). `set/CoolingMode 0` ließ Byte 28 im
+laufenden Mitschnitt von `0x0A` auf `0x06` wandern; TOP81 ging auf 0, TOP76
+blieb auf 1. `set/CoolingMode 1` stellte beides wieder her.
+
+⚠️ **Das Umschalten ist nicht folgenlos umkehrbar.** Der Wechsel auf
+Kurvenbetrieb setzt die Kurve auf die Panasonic-Werksvorgaben zurück, und das
+Zurückschalten stellt sie *nicht* wieder her. Gemessen wurde dabei mehr, als zu
+erwarten war:
+
+Wert | vorher | nach `CoolingMode 0` | nach `CoolingMode 1`
+:--- | ---: | ---: | ---:
+TOP81 `Cooling_Mode` | 1 | **0** | 1
+TOP76 `Heating_Mode` | 1 | 1 | 1
+TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10**
+TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | **10**
+TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10**
+TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35**
+
+15/10 sind die Werks-Kühlkurve, 35 der untere Punkt der Werks-*Heiz*kurve.
+**TOP27 ist der überraschende Eintrag:** Die Heizseite wurde nie geschaltet,
+TOP76 stand durchgehend auf Direkt — der Heiz-Sollwert wanderte trotzdem mit.
+Die Wärmepumpe fasst beim Betriebsartwechsel offenbar beide Kreise an. Das
+Protokollfeld ist sauber getrennt, die Wirkung im Gerät ist es nicht.
+
+Die Außentemperatur-Stützpunkte TOP74/TOP75 blieben unverändert — sie standen
+hier schon auf den Werksvorgaben (30 und 20) und konnten deshalb nichts zeigen.
+
+**Folge für jeden, der SET35 oder SET36 benutzt:** danach Kurve *und* Sollwerte
+**beider** Kreise nachziehen — [`test/kurven_sync.py`](test/kurven_sync.py) für
+die Kurve, SET5/SET6 für die Sollwerte. Der 5-Minuten-Re-Assert der
+Kaskadensteuerung genügt nicht: Bei stehender Anlage kam er im Test nicht, die
+Sollwerte mussten von Hand zurückgestellt werden.
+
 ## 2. Set-Kommandos ohne Rückmeldung (2)
 
 SET | Kommando | Byte | Bits | Lage
@@ -217,11 +260,11 @@ angefangen hat, nicht dass das Kommando angekommen ist. Bleibt die Routine aus,
 lässt sich daraus nicht ableiten, ob das Kommando verworfen wurde oder die
 Wärmepumpe es abgelehnt hat.
 
-## 3. State-Topics ohne Set-Kommando (62)
+## 3. State-Topics ohne Set-Kommando (60)
 
-### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (13)
+### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (11)
 
-Diese 13 Topics liegen unter Byte 110, ihre Adresse existiert im
+Diese 11 Topics liegen unter Byte 110, ihre Adresse existiert im
 Kommandotelegramm also. **Das heißt nicht, dass die Wärmepumpe dort auch
 schreiben lässt** — belegt ist nur die Leseseite. Die Spalte *Kodierung* ist
 aus dem vorhandenen Dekodierer zurückgerechnet und damit nicht geraten; offen
@@ -229,8 +272,6 @@ ist allein, ob das Feld beschreibbar ist und welchen Bereich es zulässt.
 
 TOP | State-Topic | Byte | Bits | Kodierung eines Set-Kommandos | Nutzen
 :--- | :--- | ---: | :--- | :--- | :---
-TOP76 | `Heating_Mode` | 28 | 7+8 | Maske `0x03`, `(n+1)×1` | **hoch** — Kurve ↔ Direkt
-TOP81 | `Cooling_Mode` | 28 | 5+6 | Maske `0x0C`, `(n+1)×4` | **hoch** — Kurve ↔ Direkt
 TOP68 | `Force_Heater_State` | 5 | 5+6 | Maske `0x0C`, `(n+1)×4` | mittel
 TOP79 | `Heat_To_Cool_Temp` | 95 | ganz | `Wert + 128` | mittel
 TOP80 | `Cool_To_Heat_Temp` | 96 | ganz | `Wert + 128` | mittel
@@ -297,29 +338,41 @@ Kommandoname `WaterPumpSpeed` führt hier in die Irre, siehe Abschnitt 4.
 `Pump_Duty_Max`, TOP104 `Water_Pump_Mode`) — je eine Zeile in `decode.cpp`,
 beide Byte-Positionen vorher am Gerät ausgemessen, Belege in Fußnote ⁵. Damit
 hat jedes Set-Kommando, für das es überhaupt ein Antwortbyte gibt, eine
-Rückmeldung. Offen bleibt:
+Rückmeldung.
 
-**1. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
-Eigenes Vorhaben mit Messplan, Bitkodierung und den Fallstricken:
-[`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md).
-Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
-jemand ans Bedienterminal und von Direkt- auf Kurvenbetrieb umschalten — die
-Kurvenwerte werden dafür schon vorgehalten (SET27–SET34). Mit einem Set-Kommando
-auf Byte 28 wäre der Notbetrieb vollständig fernschaltbar. Das Rücklesen ist
-mit TOP76/TOP81 bereits vorhanden, der Nachweis also gratis.
+**Erledigt in 3.11.0: `Heating_Mode` / `Cooling_Mode` als Set-Kommando
+(Byte 28).** SET35 `HeatingMode` und SET36 `CoolingMode`, je 0 = Kurve,
+1 = Direkt. Damit ist der Notbetrieb vollständig fernschaltbar — bis hierher
+musste beim Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
 
-Vorher zu klären, in dieser Reihenfolge:
+Am 2026-08-19 an Stufe 1 bei stehender Anlage gemessen, Ablauf und Rohdaten in
+[`test/README.md`](test/README.md):
 
-* Nimmt die Wärmepumpe Byte 28 überhaupt an? Ein Schreibversuch mit
-  anschließendem Rücklesen von TOP76 beantwortet das in einem Durchgang —
-  dasselbe Vorgehen wie bei den Pumpen-Bytes, nur dass hier ein *Kommando*
-  erprobt wird und nicht bloß eine Zuordnung.
-* Byte 28 trägt beide Modi (Heizen Bits 7+8, Kühlen Bits 5+6). Die Masken
-  müssen bitgenau greifen, sonst schaltet ein Kühl-Kommando die Heizung mit um
-  — genau der Fehler, den 3.1.0 beseitigt hat.
-* **Ein Fehlversuch verstellt eine laufende Anlage.** Anders als bei den
-  Pumpen-Messungen wird hier die Betriebsart der Heizung angefasst: nur bei
-  stehender Anlage testen und den Ausgangswert vorher notieren.
+* **Die Wärmepumpe nimmt Byte 28 an.** `set/CoolingMode 0` ließ Byte 28 im
+  laufenden Mitschnitt von `0x0A` auf `0x06` wandern (`byte_monitor.py`,
+  11 Telegramme, Flanke zwischen dem fünften und sechsten).
+* **Die Maske greift bitgenau.** TOP81 `Cooling_Mode` ging auf 0, TOP76
+  `Heating_Mode` blieb auf 1 stehen. Bits 5+6 `10` → `01`, Bits 7+8
+  unverändert `10`.
+* **Der Rückweg funktioniert ebenso** — `set/CoolingMode 1` stellte `0x0A` und
+  TOP81 = 1 wieder her.
+
+⚠️ **Das Umschalten hat Nebenwirkungen, und eine davon war neu.** Erwartet und
+bestätigt: die Kühlkurve stand danach auf den Panasonic-Werksvorgaben
+(TOP72/TOP73 auf 15/10), und TOP28 `Z1_Cool_Request_Temp` meldete im
+Kurvenbetrieb 0. **Nicht erwartet:** dasselbe Kommando zog auch den
+**Heiz**-Sollwert mit — TOP27 `Z1_Heat_Request_Temp` sprang von 20 auf 35,
+obwohl TOP76 durchgehend auf Direkt stand. 35 ist der untere Punkt der
+Werks-*Heiz*kurve. Die Wärmepumpe fasst beim Betriebsartwechsel also beide
+Kreise an, nicht nur den geschalteten — das Protokollfeld ist sauber getrennt,
+die Wirkung im Gerät ist es nicht. Wer SET35 oder SET36 benutzt, muss danach
+Kurve *und* Sollwerte beider Kreise nachziehen.
+
+Offen bleibt:
+
+**1. Die Heizseite (SET35).** Nur die Kühlseite ist gemessen. Für die Heizseite
+ist derselbe Ablauf nötig, und zwar bei stehender Anlage — sie setzt die
+Heizkurve auf 55 °C bei −5 °C und 35 °C bei +15 °C zurück.
 
 **2. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
 dieser Werte ist eine Zeile in `setCommands[]`; die Arbeit steckt nicht im
