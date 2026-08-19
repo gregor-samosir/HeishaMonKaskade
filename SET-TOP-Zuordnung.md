@@ -1,8 +1,8 @@
 # SET-TOP-Zuordnung
 
 Welches State-Topic liest ein Set-Kommando zurück? Diese Datei beantwortet das
-für alle 32 Set-Kommandos und alle 90 State-Topics der Firmware 3.9.0 und hält
-fest, wo es kein Gegenstück gibt.
+für alle 32 Set-Kommandos und alle 92 State-Topics der Firmware 3.10.0 und
+hält fest, wo es kein Gegenstück gibt.
 
 Wozu: Eine Steuerung, die schreibt, muss prüfen können, ob der Wert angekommen
 ist. Die Wärmepumpe quittiert nichts — sie klemmt Werte außerhalb ihres
@@ -12,13 +12,13 @@ einzige Nachweis ist das Rücklesen des zugehörigen State-Topics. Wo diese
 Spalte leer bleibt, schreibt die Steuerung blind.
 
 *In English: which state topic reads a set command back? This file maps all 32
-set commands and all 90 state topics of firmware 3.9.0 against each other and
+set commands and all 92 state topics of firmware 3.10.0 against each other and
 records where no counterpart exists. The heat pump acknowledges nothing and
 silently clamps out-of-range values, so reading the matching state topic back
 is the only proof a write arrived — where that column is empty, a controller
 writes blind. Tables are language-neutral; the notes are German.*
 
-**Stand:** 2026-08-19, Firmware 3.9.0. Quelle sind ausschließlich die beiden
+**Stand:** 2026-08-19, Firmware 3.10.0. Quelle sind ausschließlich die beiden
 Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
 und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
 sind nicht von Hand gepflegt, sondern von
@@ -43,7 +43,7 @@ Byte 7).
 Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 * **Kommando- und Antworttelegramm benutzen dieselben Byte-Positionen.** Alle
-  28 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
+  30 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
   Heizanforderung und Byte 38 liest sie zurück, ohne eine einzige Ausnahme. Die
   Zuordnung ist damit nicht geraten, sondern abgelesen.
 * **Das Kommandotelegramm ist 110 Bytes lang** (`QUERYSIZE`, Indizes 0–109),
@@ -53,9 +53,9 @@ Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 Daraus ergibt sich die Zweiteilung des Telegramms: Bytes 4–106 tragen
 Einstellungen und spiegeln das Kommandotelegramm, ab Byte 110 kommen
-Ist-Zustände und Messwerte. Jedes der 28 Paare liegt unter Byte 110.
+Ist-Zustände und Messwerte. Jedes der 30 Paare liegt unter Byte 110.
 
-## 1. Set-Kommandos mit Rückmeldung (28 von 32)
+## 1. Set-Kommandos mit Rückmeldung (30 von 32)
 
 Die Spalte *Bits* zählt wie das Projekt: **Bit 1 ist das höchstwertige Bit**,
 `ganz` heißt, das Kommando belegt das volle Byte. *Art* sagt, ob das Topic
@@ -72,6 +72,8 @@ SET6 | `Z1CoolRequestTemperature` | 39 | ganz | TOP28 | `Z1_Cool_Request_Temp` |
 SET9 | `OperationMode` | 6 | ganz | TOP4 | `Operating_Mode_State` | teilweise ³
 SET10 | `ForceDHW` | 4 | 1+2 | TOP2 | `Force_DHW_State` | voll
 SET11 | `DHWTemp` | 42 | ganz | TOP9 | `DHW_Target_Temp` | voll
+SET14 | `WaterPump` | 4 | 3+4 | TOP104 | `Water_Pump_Mode` | voll ⁵
+SET15 | `WaterPumpSpeed` | 45 | ganz | TOP103 | `Pump_Duty_Max` | voll ⁵
 SET16 | `HeatDelta` | 84 | ganz | TOP23 | `Heat_Delta` | voll
 SET17 | `CoolDelta` | 94 | ganz | TOP24 | `Cool_Delta` | voll
 SET18 | `DHWHeatDelta` | 99 | ganz | TOP22 | `DHW_Heat_Delta` | voll
@@ -154,14 +156,52 @@ Als Regelgröße ist TOP101 `Heat_Cool_SW_State` zu nehmen.
 SET26 wird in Schritten zu 30 Minuten geschrieben, TOP98 meldet Minuten zurück:
 `TOP98 = SET26 × 30`. Ein Vergleich ohne diese Umrechnung schlägt fehl.
 
-## 2. Set-Kommandos ohne Rückmeldung (4)
+### ⁵ Die zwei Pumpen-Rückmeldungen (neu in 3.10.0)
+
+TOP103 und TOP104 sind die Rückmeldungen zu SET15 und SET14. Beide
+Byte-Positionen sind am 2026-08-19 an Stufe 1 im Hexlog ausgemessen worden statt
+aus Unterlagen übernommen — Wert verstellt, Rohbyte beobachtet, zurückgestellt
+([`test/byte_monitor.py`](test/byte_monitor.py)):
+
+Kommando | geschrieben | Byte | Rohwert
+:--- | :--- | ---: | :---
+SET15 `WaterPumpSpeed` | 100 → 110 → 100 | 45 | `0x65` → `0x6F` → `0x65`
+SET14 `WaterPump` | 0 → 1 → 0 | 4, Bits 3+4 | `b01` → `b10` → `b01`
+
+Zweite Kontrolle ganz ohne Schreibvorgang: Die beiden Stufen sind auf
+verschiedene Werte konfiguriert (100 und 125), und Byte 45 zeigte an Stufe 2
+entsprechend `0x7E`.
+
+**TOP103 ist eine Duty-Grenze, keine Drehzahl.** Bei laufender Pumpe folgte
+TOP92 `Pump_Duty` der Grenze exakt:
+
+Byte 45 als `X−1` | TOP92 `Pump_Duty` | TOP65 `Pump_Speed` | TOP1 `Pump_Flow`
+---: | ---: | ---: | ---:
+100 | **100** | 2300 1/min | 11,95 l/min
+80 | **80** | 1500 1/min | 6,93 l/min
+
+Die Pumpe läuft im Handbetrieb also genau bis zur konfigurierten Obergrenze und
+nicht darüber. Der Kommandoname `WaterPumpSpeed` führt in die Irre und bleibt
+nur deshalb stehen, weil die Kaskadensteuerung darauf schreibt; die Ist-Werte
+sind weiter TOP65 und TOP92, TOP103 ist die Grenze zu TOP92.
+
+**TOP104 meldet den wirksamen Zustand**, nicht den Wunsch: Beim Umschalten auf
+`Fix` lief die Pumpe tatsächlich an (TOP65, TOP1 und TOP92 zogen alle nach).
+Der dritte Zustand `Air purge` (`b11`) ist **nicht** gemessen — ihn herzustellen
+hieße, an einer intakten Anlage eine Entlüftungsroutine auszulösen. Er stützt
+sich auf `ProtocolByteDecrypt.md`, so wie der zweite Zustand von TOP102
+`External_SW_State`.
+
+## 2. Set-Kommandos ohne Rückmeldung (2)
 
 SET | Kommando | Byte | Bits | Lage
 :--- | :--- | ---: | :--- | :---
 SET12 | `ForceDefrost` | 8 | 7 | Byte 8 ist im Antworttelegramm unbelegt — kein Rücklesen möglich
 SET13 | `ForceSterilization` | 8 | 6 | dito
-SET14 | `WaterPump` | 4 | 3+4 | Antwortbyte am Gerät belegt (Auto und On) — **Lücke, direkt schließbar**, Abschnitt 4
-SET15 | `WaterPumpSpeed` | 45 | ganz | Antwortbyte am Gerät belegt — **Lücke, direkt schließbar**, Abschnitt 4
+
+Byte 8 trägt im Antworttelegramm nichts — für diese beiden ist keine
+Rückmeldung möglich, das ist keine Lücke im Code. Die früher hier gelisteten
+SET14 und SET15 haben seit 3.10.0 ihr Rücklese-Topic, siehe Fußnote ⁵.
 
 Für die beiden Force-Kommandos gibt es keinen Rückgabewert, wohl aber einen
 **Wirkungsnachweis**: Läuft die angestoßene Routine, meldet das ein
@@ -253,93 +293,13 @@ Kommandoname `WaterPumpSpeed` führt hier in die Irre, siehe Abschnitt 4.
 
 ## 4. Was sich schließen ließe
 
-Nach Aufwand und Risiko geordnet. Die ersten beiden sind je eine Zeile in
-`decode.cpp` und am Gerät ausgemessen — sie ergänzen nur die Leseseite, am
-Schreibpfad ändert sich nichts. Erst der dritte Punkt fasst eine laufende
-Anlage an.
+**Erledigt in 3.10.0:** die Rückmeldungen für SET14 und SET15 (TOP103
+`Pump_Duty_Max`, TOP104 `Water_Pump_Mode`) — je eine Zeile in `decode.cpp`,
+beide Byte-Positionen vorher am Gerät ausgemessen, Belege in Fußnote ⁵. Damit
+hat jedes Set-Kommando, für das es überhaupt ein Antwortbyte gibt, eine
+Rückmeldung. Offen bleibt:
 
-**1. Rücklesen für SET15 — `Pump_Duty_Max` auf Byte 45 (eine Zeile in
-`decode.cpp`).**
-
-```c
-{103, 45, "Pump_Duty_Max", getIntMinus1, nullptr, Duty},
-```
-
-Dazu `NUMBEROFTOPICS` um eins hoch; die Klartextliste `Duty` gibt es schon
-(TOP92). Kein Eingriff in den Schreibpfad. Zusammen mit Punkt 2 sind es zwei
-neue Zeilen und `NUMBEROFTOPICS` 92.
-
-**Byte 45 ist am Gerät gemessen, nicht aus der Referenz übernommen**
-(2026-08-19, Rohbytes über den Hexlog mit
-[`test/byte_monitor.py`](test/byte_monitor.py)). Zwei Kontrollen: der Vergleich
-der beiden Stufen, die verschiedene Werte konfiguriert haben, und eine
-Änderung an Stufe 1 in beide Richtungen.
-
-Messung | `set/WaterPumpSpeed` | Byte 45 roh | Byte 45 als `X−1` | Byte 95 als `X−128`
-:--- | ---: | ---: | ---: | ---:
-Stufe 1, Ausgangslage | 100 | `0x65` | **100** | 20
-Stufe 2, Ausgangslage | 125 | `0x7E` | **125** | 20
-Stufe 1, auf 110 gesetzt | 110 | `0x6F` | **110** | 20
-Stufe 1, zurück auf 100 | 100 | `0x65` | **100** | 20
-
-Damit ist belegt: Byte 45 trägt den Wert, die Umrechnung ist `X−1`, und die
-Flanke folgt dem Kommando in beide Richtungen — beim Umschalten stand sie im
-selben Mitschnitt (ein Telegramm mit dem alten, die folgenden mit dem neuen
-Wert). Byte 95 blieb über alle vier Messungen unverändert bei 20 und ist die
-Heiz/Kühl-Umschalttemperatur TOP79.
-
-**Der Wert ist ein Duty, keine Drehzahl** — und auch das ist gemessen, nicht
-geschlossen. Bei laufender Umwälzpumpe (Wärmepumpe stand, Pumpe über SET14 von
-Hand eingeschaltet) folgte TOP92 `Pump_Duty` der Grenze aus Byte 45 unmittelbar:
-
-Byte 45 als `X−1` | TOP92 `Pump_Duty` | TOP65 `Pump_Speed` | TOP1 `Pump_Flow`
----: | ---: | ---: | ---:
-100 | **100** | 2300 1/min | 11,95 l/min
-80 | **80** | 1500 1/min | 6,93 l/min
-
-Die Pumpe läuft im Handbetrieb also genau bis zur konfigurierten Obergrenze und
-nicht darüber; Drehzahl und Durchfluss gehen mit. `Pump_Duty_Max` ist damit die
-Grenze zu TOP92, nicht dessen Ersatz — die Ist-Werte stehen weiter in TOP65 und
-TOP92. Der Kommandoname `WaterPumpSpeed` führt in die Irre; ob er auf
-`MaxPumpDuty` geändert wird, ist eine Entscheidung über die Kompatibilität der
-Topic-Namen und steht hier bewusst nicht offen, denn die Kaskadensteuerung
-schreibt heute auf den alten Namen.
-
-Beim Nachschlagen in `ProtocolByteDecrypt.md`: Byte 45 trägt dort in der ersten
-Spalte die Nummer TOP95 — das ist die Topic-Nummer des Original-Projekts, keine
-Byte-Position.
-
-**2. Rücklesen für SET14 — `Water_Pump_Mode` auf Byte 4 (eine Zeile in
-`decode.cpp`).**
-
-```c
-{104,  4, "Water_Pump_Mode", getBit3and4, nullptr, WaterPumpMode},
-```
-
-Dazu die Klartextliste `WaterPumpMode[] = {"Auto", "On", "Air purge", nullptr}`
-— sie deckt den Indexbereich `−1..2` des Dekodierers vollständig ab, wie es
-seit 3.9.0 für alle Listen gilt.
-
-Am 2026-08-19 an Stufe 1 gemessen, bei stehender Wärmepumpe:
-
-`set/WaterPump` | Byte 4 roh | Bits 3+4 | dekodiert | Pumpe
----: | ---: | :--- | :--- | :---
-0 (Ausgangslage) | `0x55` | `01` | Auto | steht
-1 | `0x65` | `10` | **On** | läuft, 2300 1/min
-0 (zurück) | `0x55` | `01` | Auto | steht
-
-Das Antwortbyte führt das Feld also, und der Wert `0x65` deckt sich mit der
-Referenz („Water pump on=65"). Dass die Pumpe dabei tatsächlich anlief, ist
-über TOP65, TOP92 und TOP1 belegt — das Bitfeld meldet keinen Wunsch, sondern
-den wirksamen Zustand.
-
-**Ungemessen bleibt `Air purge`** (`b11`, laut Referenz `0x75`). Diesen Zustand
-zu erzeugen hieße, an einer intakten Anlage eine Entlüftungsroutine
-auszulösen — dafür gibt es keinen Anlass. Der Eintrag in der Klartextliste
-stützt sich auf die Referenz, so wie der zweite Zustand von TOP102
-`External_SW_State`, der an dieser Anlage ebenfalls nicht herstellbar ist.
-
-**3. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
+**1. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
 Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
 jemand ans Bedienterminal und von Direkt- auf Kurvenbetrieb umschalten — die
 Kurvenwerte werden dafür schon vorgehalten (SET27–SET34). Mit einem Set-Kommando
@@ -349,14 +309,17 @@ mit TOP76/TOP81 bereits vorhanden, der Nachweis also gratis.
 Vorher zu klären, in dieser Reihenfolge:
 
 * Nimmt die Wärmepumpe Byte 28 überhaupt an? Ein Schreibversuch mit
-  anschließendem Rücklesen von TOP76 beantwortet das in einem Durchgang.
+  anschließendem Rücklesen von TOP76 beantwortet das in einem Durchgang —
+  dasselbe Vorgehen wie bei den Pumpen-Bytes, nur dass hier ein *Kommando*
+  erprobt wird und nicht bloß eine Zuordnung.
 * Byte 28 trägt beide Modi (Heizen Bits 7+8, Kühlen Bits 5+6). Die Masken
   müssen bitgenau greifen, sonst schaltet ein Kühl-Kommando die Heizung mit um
   — genau der Fehler, den 3.1.0 beseitigt hat.
-* Ein Fehlversuch verstellt eine laufende Anlage. Nur bei stehender Anlage
-  testen und den Ausgangswert vorher notieren.
+* **Ein Fehlversuch verstellt eine laufende Anlage.** Anders als bei den
+  Pumpen-Messungen wird hier die Betriebsart der Heizung angefasst: nur bei
+  stehender Anlage testen und den Ausgangswert vorher notieren.
 
-**4. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
+**2. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
 dieser Werte ist eine Zeile in `setCommands[]`; die Arbeit steckt nicht im
 Code, sondern im Ausmessen des zulässigen Bereichs. Wie das geht und warum es
 nötig ist, steht in [`MQTT-Topics.md`](MQTT-Topics.md) — von den 21 Werten, die
@@ -395,7 +358,7 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
   Am Gerät belegt sind die Kurven-Kommandos SET27–SET34 (Rücklesen an beiden
   Anlagen, 2026-08-10/11), SET3, SET4 und SET9 im laufenden Betrieb
   (2026-08-15/16) sowie SET14 auf Byte 4 und SET15 auf Byte 45, beide mit
-  Änderung in beide Richtungen (2026-08-19, Abschnitt 4). Die übrigen Paare
+  Änderung in beide Richtungen (2026-08-19, Fußnote ⁵). Die übrigen Paare
   stützen sich auf die identische
   Byte-Position, die bei jedem einzelnen der 28 Paare zutrifft. Wo Zweifel an
   einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)

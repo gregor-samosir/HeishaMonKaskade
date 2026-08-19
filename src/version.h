@@ -1,5 +1,52 @@
 #pragma once
 // Changelog:
+// 3.10.0 - Zwei neue State-Topics: TOP103 Pump_Duty_Max und TOP104
+//         Water_Pump_Mode. Damit haben alle Set-Kommandos, fuer die es
+//         ueberhaupt ein Antwortbyte gibt, eine Rueckmeldung. Reine Leseseite -
+//         am Schreibpfad und an den 90 bestehenden Topics aendert sich nichts
+//         (Nachweis decode_vergleich.py --neu).
+//
+//         WARUM. SET14 WaterPump und SET15 WaterPumpSpeed waren bis hierher die
+//         einzigen Kommandos, die sich nicht zurueckpruefen liessen. Die
+//         Waermepumpe quittiert nichts und klemmt Werte ausserhalb ihres
+//         Bereichs kommentarlos auf den naechsten Rand; ohne Rueckmeldung
+//         schreibt eine Steuerung dort blind. Die vollstaendige Gegenueber-
+//         stellung steht in SET-TOP-Zuordnung.md.
+//
+//         GEMESSEN, NICHT ABGELEITET. Beide Byte-Positionen sind am 2026-08-19
+//         an WP1 im Hexlog nachgewiesen worden - Wert verstellt, Rohbyte
+//         beobachtet, zurueckgestellt (test/byte_monitor.py):
+//           Byte 45: set/WaterPumpSpeed 100 -> 110 -> 100 ergab 0x65 -> 0x6F ->
+//             0x65. Zweite Kontrolle ohne Schreibvorgang: Stufe 2 ist auf 125
+//             konfiguriert und zeigt 0x7E.
+//           Byte  4: set/WaterPump 0 -> 1 -> 0 ergab in den Bits 3+4
+//             b01 -> b10 -> b01, Rohbyte 0x55 -> 0x65 -> 0x55.
+//
+//         PUMP_DUTY_MAX, NICHT MAX_PUMP_SPEED. Byte 45 ist die Obergrenze, bis
+//         zu der die Pumpe modulieren darf, keine Drehzahl. Bei laufender Pumpe
+//         folgte TOP92 Pump_Duty der Grenze exakt: 100 -> Duty 100 bei
+//         2300 1/min und 11,95 l/min, 80 -> Duty 80 bei 1500 1/min und
+//         6,93 l/min. Der Kommandoname WaterPumpSpeed bleibt unveraendert,
+//         weil die Kaskadensteuerung darauf schreibt.
+//
+//         DER DRITTE PUMPENMODUS IST UNGEMESSEN. WaterPumpMode[] fuehrt
+//         "Air purge" fuer b11 aus ProtocolByteDecrypt.md; gemessen sind "Auto"
+//         (b01) und "Fix" (b10). Den dritten Zustand herzustellen hiesse, an
+//         einer intakten Anlage eine Entlueftungsroutine auszuloesen. Wie bei
+//         TOP102 External_SW_State bleibt damit ein Zustand dokumentiert, aber
+//         unbelegt.
+//
+//         NUMBEROFTOPICS 90 -> 92. Die Nummern 103 und 104 schliessen an TOP102
+//         an; die Luecken der Nummerierung (Zone 2) bleiben wie sie sind.
+//
+//         NACHWEIS. decode_vergleich.py gegen v3.9.0: 68040 Zeilen identisch,
+//         die 90 bestehenden Topics in Nummer, Name, Wert und Einheit gleich
+//         (1512 Zeilen der zwei neuen Topics als erwartet ausgeblendet).
+//         decode_hosttest.sh: alle 92 Zeilen mit nullptr abgeschlossen,
+//         Water_Pump_Mode hoechster Index 2 bei 3 Eintraegen. Alle 10 Envs
+//         gebaut. Groessen ggue. 3.9.0: ESP32 RAM +48 B/Flash +140 B,
+//         ESP8266 RAM +144 B/Flash +112 B.
+//
 // 3.9.0 - Die Weboberflaeche kann nicht mehr ueber ein Klartext-Array hinaus
 //         lesen. Das ist Massnahme 3 aus dem Massnahmenplan zur Codedurchsicht
 //         vom 2026-08-18, umgesetzt als Weg B (Listen auffuellen) mit einem
@@ -664,4 +711,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.9.0";
+static const char* heishamon_version = "3.10.0";

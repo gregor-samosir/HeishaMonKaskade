@@ -128,6 +128,8 @@ TOP99 | Quiet_Mode_Active | Quiet mode actually running (0=off, 1=on) - on/off o
 TOP100 | Powerful_Mode_Active | Powerful mode actually running (0=off, 1=on)
 TOP101 | Heat_Cool_SW_State | Actual heat/cool state of the unit (0=heat, 1=cool)
 TOP102 | External_SW_State | External switch state (0=off, 1=on)
+TOP103 | Pump_Duty_Max | Upper limit the water pump may modulate up to (duty) - the readback of SET15
+TOP104 | Water_Pump_Mode | Water pump mode (0=auto, 1=fix, 2=air purge) - the readback of SET14
 
 ### Actual states from byte 110 (TOP99 - TOP102, new in 3.7.0)
 
@@ -303,6 +305,43 @@ abgesetzt hat, statt den Zustand des Geräts. **(3)** Die zweite Kaskadenstufe
 zieht selbständig nach, aber ohne festen Versatz: 3,1 s hinter Stufe 1 auf der
 ersten Flanke, 40 ms auf der zweiten.*
 
+
+### Pump readback (TOP103, TOP104, new in 3.10.0)
+
+Both are the missing readback for the two pump commands, and both byte
+positions were measured on the plant rather than taken from documentation
+(2026-08-19, raw bytes from the hex log, `test/byte_monitor.py`): the value was
+changed, the byte watched, the value put back.
+
+Command | written | byte | raw value
+:--- | ---: | ---: | :---
+SET15 `WaterPumpSpeed` | 100 → 110 → 100 | 45 | `0x65` → `0x6F` → `0x65`
+SET14 `WaterPump` | 0 → 1 → 0 | 4, bits 3+4 | `b01` → `b10` → `b01`
+
+**TOP103 is a duty limit, not a speed.** With the pump running, TOP92
+`Pump_Duty` followed the limit exactly - 100 gave duty 100 at 2300 rpm and
+11.95 l/min, 80 gave duty 80 at 1500 rpm and 6.93 l/min. The command name
+`WaterPumpSpeed` is misleading and stays as it is only for compatibility. The
+actual values remain TOP65 `Pump_Speed` and TOP92 `Pump_Duty`; TOP103 is the
+ceiling for the latter.
+
+**TOP104 reports the effective state**, not the request: when the mode went to
+`Fix`, the pump really started (TOP65, TOP1 and TOP92 all followed). The third
+state `Air purge` (`b11`) is **not** measured - producing it would mean starting
+an air purge routine on an intact plant. That entry rests on
+`ProtocolByteDecrypt.md`, the same way the second state of TOP102 does.
+
+*Deutsch: Beide sind die fehlende Rückmeldung zu den zwei Pumpenkommandos, und
+beide Byte-Positionen sind an der Anlage ausgemessen statt aus Unterlagen
+übernommen (2026-08-19, Rohbytes aus dem Hexlog mit `test/byte_monitor.py`):
+Wert verstellt, Byte beobachtet, zurückgestellt. **TOP103 ist eine
+Duty-Grenze, keine Drehzahl** - bei laufender Pumpe folgte TOP92 der Grenze
+exakt (100 → Duty 100 bei 2300 1/min, 80 → Duty 80 bei 1500 1/min). Der
+Kommandoname `WaterPumpSpeed` führt in die Irre und bleibt nur aus
+Kompatibilitätsgründen stehen. **TOP104 meldet den wirksamen Zustand**, nicht
+den Wunsch: Beim Umschalten auf `Fix` lief die Pumpe tatsächlich an. Der dritte
+Zustand `Air purge` ist NICHT gemessen - ihn herzustellen hieße, an einer
+intakten Anlage eine Entlüftungsroutine auszulösen.*
 
 ## Command Topics:
 

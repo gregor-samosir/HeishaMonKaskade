@@ -318,6 +318,12 @@ Nach jedem solchen Test die Sollwerte zuruecksetzen und nachsehen, dass die
 Anlage wieder steht (`Pump_Speed` und `Pump_Duty` auf 0). Node-RED zieht seinen
 5-min-Re-Assert zwar ohnehin nach, aber darauf ist kein Nachweis zu bauen.
 
+Aus diesen Messungen sind in 3.10.0 die Topics **TOP103 `Pump_Duty_Max`** und
+**TOP104 `Water_Pump_Mode`** geworden - die Rueckmeldung zu SET15 und SET14.
+Damit hat jedes Set-Kommando, fuer das es ueberhaupt ein Antwortbyte gibt, eine
+Rueckmeldung; Byte 8 (ForceDefrost, ForceSterilization) traegt im
+Antworttelegramm nichts.
+
 Zwei Hinweise: Der Hexlog haengt am Telnet-Debugflag (`write_hex_log` schreibt
 ueber `write_telnet_log`) - steht `outputTelnetLog` auf false, kommt nichts an.
 Und `H` ist ein Umschalter: War der Hexlog schon an, schaltet der erste Druck
