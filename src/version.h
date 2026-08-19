@@ -1,5 +1,57 @@
 #pragma once
 // Changelog:
+// 3.8.2 - Zwei Stellen im MQTT-Sendepfad, an denen ein Abonnent einen
+//         veralteten oder falschen Zustand bekommt. Das sind Massnahme 2 und
+//         Kleinpunkt K3 aus dem Massnahmenplan zur Codedurchsicht vom
+//         2026-08-18. Gemeinsam in einer Version, weil es derselbe Fehler in
+//         zwei Auspraegungen ist: der Broker haelt einen Wert fuer aktuell,
+//         den das Geraet laengst ueberholt hat. Keine Aenderung am Protokoll,
+//         an den Topics oder an der Dekodierung.
+//
+//         (1) LWT "ONLINE" JETZT RETAINED (Massnahme 2). mqtt_reconnect()
+//         publizierte "Online" ohne Retain-Flag, waehrend das Will "Offline"
+//         retained beim Broker liegt. Auf einem echten Broker bleibt damit
+//         nach jedem Reconnect "Offline" als gespeicherter Wert stehen: wer
+//         sich spaeter verbindet - Node-RED-Neustart, Kaskaden-Waechter -
+//         bekommt beim Subscribe "Offline" geliefert und haelt die Stufe fuer
+//         tot, obwohl sie laeuft. Der ioBroker-MQTT-Adapter verdeckt das
+//         heute, weil er neue Abonnenten aus seiner State-DB bedient; der
+//         Fehler ist also vorhanden, aber unsichtbar - und schlaegt genau dann
+//         zu, wenn der Umzug auf einen mosquitto kommt.
+//
+//         (2) FEHLGESCHLAGENES STATE-PUBLISH WIRD WIEDERHOLT (K3).
+//         publish_heatpump_data() schrieb den Wert in den Vergleichspuffer
+//         actual_data und warf den Rueckgabewert von publish() weg. Schlug das
+//         Senden fehl, galt der Wert trotzdem als gesendet. Der praktisch
+//         relevante Fall ist nicht der einzelne verlorene Publish, sondern die
+//         MQTT-Unterbrechung: die Schleife laeuft weiter und schreibt den
+//         Puffer fort, nach dem Reconnect gilt jeder zwischenzeitlich
+//         geaenderte Wert als gesendet - beim Broker steht bis zu 5 min lang
+//         der alte, retained. Jetzt merkt sich eine Marke, dass etwas
+//         liegenblieb, und der naechste Durchlauf (5 s) schickt die Tabelle
+//         erneut. Eine Marke fuer die ganze Tabelle statt einer je Zeile:
+//         ein Publish scheitert praktisch nur bei fehlender Verbindung, und
+//         dann ist ohnehin alles betroffen (1 Byte RAM statt 90).
+//         Die <PUB>-Zeile im Log bleibt an die echte Wertaenderung geknuepft -
+//         sonst fuellt eine laufende Wiederholung das Log alle 5 s.
+//
+//         Nachweise, ohne Hardware:
+//         - Alle zehn Envs gebaut, RAM/Flash-Delta siehe unten.
+//         - Die vier Hosttests (merge, telegramm, sendwindow, byte110) laufen
+//           unveraendert gruen.
+//         - Bewusste Entscheidung: der Retain-Nachweis gegen einen echten
+//           Broker (neuer Abonnent auf <prefix>/info/LWT muss retained
+//           "Online" bekommen; Geraet stromlos -> nach Keepalive "Offline")
+//           steht aus und wandert in die Vorbereitung des mosquitto-Umzugs -
+//           hier gibt es keinen Broker, der Retain ueberhaupt zeigt.
+//
+//         RAM/Flash gegen 3.8.1, alle zehn Envs gebaut:
+//         - ESP32 (sechs Envs):   RAM +/-0, Flash +40 B (1174085 -> 1174125)
+//         - ESP8266 (vier Envs):  RAM +/-0, Flash +48 B (459015 -> 459063,
+//           d1_mini_test 459023 -> 459071)
+//         Die Marke ist ein static bool und geht auf beiden Plattformen in
+//         vorhandenem Ausrichtungs-Verschnitt auf, deshalb 0 Byte RAM.
+//
 // 3.8.1 - Zwei offene Zugangswege dichtgemacht: der Setup-Hotspot bekommt WPA2,
 //         der Telnet-Port verliert das Reboot-Kommando. Das sind Massnahme 1
 //         und Kleinpunkt K1 aus dem Massnahmenplan zur Codedurchsicht vom
@@ -549,4 +601,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.8.1";
+static const char* heishamon_version = "3.8.2";
