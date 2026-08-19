@@ -26,15 +26,26 @@ Vorgeschlagene Bündelung:
 | Version | Inhalt | Art | Stand |
 | --- | --- | --- | --- |
 | 3.8.1 | Maßnahme 1 + K1 (Zugangswege, kein Protokoll-/Topic-Einfluss) | Fix | **erledigt 2026-08-18** — umgesetzt, am Gerät abgenommen, auf beiden Stufen ausgerollt |
-| offen | Maßnahme 2 (retained `Online`) | Fix | offen — lohnt erst mit einem echten Broker |
-| 3.9.0 | Maßnahme 3 (Tabellenerweiterung + Testausbau) | Umbau | offen, Weg A/B noch zu wählen |
-| — | Kleinpunkte K2–K4: erst Entscheidung, dann ggf. eigene Version | Entscheid | offen |
+| 3.8.2 | Maßnahme 2 (retained `Online`) + K3 (Publish-Wiederholung) | Fix | **erledigt 2026-08-19** — gebaut und getestet, Abnahme am Gerät steht aus |
+| 3.9.0 | Maßnahme 3 (Weg B + `nullptr`-Abschluss) + Testausbau | Umbau | **erledigt 2026-08-19** — gebaut und getestet, Abnahme am Gerät steht aus |
+| — | K2 (Beobachtungsauftrag), K4 (bekannte Grenze) | Entscheid | **entschieden 2026-08-19** — keine Codeänderung |
+| — | CI-Trigger nur noch `main` | Aufräumen | **erledigt 2026-08-19** |
 
 Abweichung von der ursprünglich vorgeschlagenen Bündelung: In 3.8.1 sind
 Maßnahme 1 und K1 zusammengefasst, weil beide denselben Punkt betreffen — einen
 Zugang, der ohne Anmeldung ans Gerät führt. Maßnahme 2 blieb draußen, damit die
 Version genau eine Sache belegt und der Nachweis für das Retain-Flag nicht auf
 einen Broker warten muss, den es hier noch nicht gibt.
+
+In 3.8.2 sind dann Maßnahme 2 und K3 zusammengefasst — aus demselben Grund wie
+bei 3.8.1: Es ist derselbe Fehler in zwei Ausprägungen, ein neu verbundener
+Abonnent bekommt vom Broker einen Zustand, den das Gerät längst überholt hat.
+Der Nachweis am Broker ist dabei bewusst vom Fix entkoppelt (siehe Maßnahme 2).
+
+**Entscheidungsrunde am 2026-08-19.** Die offenen Punkte wurden einzeln
+durchgegangen und entschieden: Maßnahme 2 und Maßnahme 3 umsetzen, K3 entgegen
+dem ursprünglichen Vorschlag ebenfalls umsetzen, K2 und K4 ohne Codeänderung
+schließen. Was jeweils entschieden wurde, steht beim Punkt.
 
 ---
 
@@ -86,9 +97,10 @@ nachschlagbar. Im Repository steht es bewusst nirgends — es liegt allein in
 
 ---
 
-## Maßnahme 2 — LWT „Online" mit Retain-Flag publizieren
+## Maßnahme 2 — LWT „Online" mit Retain-Flag publizieren — ERLEDIGT (3.8.2)
 
 **Priorität: mittel (wird hoch, sobald ein echter Broker kommt). Aufwand: eine Zeile.**
+Umgesetzt am 2026-08-19, siehe Changelog `src/version.h` 3.8.2.
 
 **Problem:** `mqtt_reconnect()` in `src/HeishaMon.cpp` publiziert `Online`
 ohne Retain-Flag, während das Will `Offline` retained hinterlegt ist. Auf
@@ -107,11 +119,21 @@ Testgerät verbinden lassen, danach mit einem **neuen** Abonnenten
 `<prefix>/info/LWT` abonnieren → es muss retained `Online` kommen; Testgerät
 stromlos machen → nach Ablauf des Keepalive retained `Offline`.
 
+**Entscheidung 2026-08-19: Fix jetzt, Broker-Nachweis später.** Der Aufwand
+liegt nicht im Fix, sondern im Nachweis — und der braucht einen Broker, der
+Retain überhaupt zeigt. Ihn abzuwarten hätte bedeutet, einen bekannten Fehler
+stehen zu lassen, bis niemand mehr an diesen Plan denkt. Umgesetzt ist der Fix
+deshalb sofort, belegt über Build und Codeinspektion (alle zehn Envs, vier
+Hosttests grün); **der oben beschriebene Broker-Test steht aus und gehört in
+die Vorbereitung des mosquitto-Umzugs**, wo ohnehin ein mosquitto läuft. Auch
+in der README unter „MQTT-Schnittstelle" vermerkt, damit er dort auffällt.
+
 ---
 
-## Maßnahme 3 — `desc[]`-Zugriff nach oben begrenzen
+## Maßnahme 3 — `desc[]`-Zugriff nach oben begrenzen — ERLEDIGT (3.9.0)
 
 **Priorität: mittel. Aufwand: Tabellenerweiterung + Testausbau (halber Tag).**
+Umgesetzt am 2026-08-19, siehe Changelog `src/version.h` 3.9.0.
 
 **Problem:** `handleTableRefresh()` in `src/webfunctions.cpp` fängt beim
 Klartext-Nachschlag nur **negative** Indizes ab. Der Kommentar in
@@ -156,9 +178,47 @@ MQTT-Werte bleiben identisch.
 * RAM/Flash-Delta je Env in den Changelog (ESP8266 im Blick behalten:
   const-Tabellen liegen dort im RAM).
 
+**Entscheidung 2026-08-19: Weg B, plus `nullptr`-Abschluss.** Beim Nachzählen
+war der Befund kleiner als hier angenommen: Es gibt nur 13 Klartext-Listen, und
+die 2-Bit-Dekodierer liefern nach ihrem `-1` höchstens Index **2**, nicht 3.
+Offen waren damit acht Listen (sechs brauchten einen Eintrag mehr,
+`Powerfulmode`/`Quietmode` je drei); `HolidayState`, `OpModeDesc` und die beiden
+Byte-110-Listen waren schon lang genug. Damit sind Weg A und B nicht mehr
+gleichwertig: acht geänderte Zeilen gegen 90 angefasste Tabellenzeilen plus
+Padding-Risiko im struct. Weg A wurde verworfen.
+
+**Abweichung von Weg B, wie er hier steht:** Zusätzlich endet jetzt *jede*
+Liste mit `nullptr`, und der Nachschlag läuft über die neue Funktion
+`desc_text()` in `src/decode.h`, die bis zum gesuchten Index hochzählt statt
+direkt zuzugreifen. Grund: Der oben genannte Nachteil von Weg B — „die
+Zusicherung steht nicht im Code" — wäre sonst geblieben, und der Test braucht
+die Listenlänge, die das struct nicht kennt. Der Abschluss löst beides. Er
+macht die Grenze im Code wirksam (ein künftiger Dekodierer mit größerem Index
+zeigt eine leere Zelle, statt das Gerät neu zu starten) und erlaubt dem
+Hosttest, die Länge jeder Liste selbst zu bestimmen — ohne eine zweite Liste,
+die hinter der ersten zurückbleiben kann. `desc_text()` steht als
+`inline`-Funktion im Header, damit Firmware und Hosttest dieselbe Regel
+benutzen; die Nachbildung der Anzeigelogik in `byte110_test.cpp` entfällt.
+
+**Nachweis — erbracht am 2026-08-19, ohne Hardware:**
+
+* `byte110_test` Fall 6 (neu): alle 90 Zeilen, alle 256 Rohwerte durch den
+  echten Dekodierer; 22 Klartext-Zeilen geprüft, höchster Index je Zeile gegen
+  die Listenlänge, jeder gedeckte Index liefert einen Text. Alle 90 Listen sind
+  mit `nullptr` abgeschlossen.
+* Gegenprobe wie gefordert: `OffOn` und `Quietmode` testweise auf die alte
+  Länge gekürzt → Fall 6 schlägt an („Rohwert 0x03 ergibt Index 2, Liste hat
+  2"), Rückgabewert 1; nach dem Rückbau wieder grün. Zusätzlich prüft der Test
+  die Regel an einer bewusst zu kurzen Liste direkt.
+* `test/decode_vergleich.py --basis v3.8.2`: 68040 Zeilen, IDENTISCH — 90
+  Topics, Nummer, Name, Wert und Einheit gleich.
+* Alle zehn Envs gebaut: ESP32 RAM +160 B / Flash +188 B, ESP8266 RAM +152 B /
+  Flash +184 B (38 zusätzliche Zeiger à 4 Byte; auf dem ESP8266 56,1 % statt
+  55,9 % RAM).
+
 ---
 
-## Kleinpunkte — erst entscheiden, dann umsetzen
+## Kleinpunkte — alle vier entschieden (K1 in 3.8.1, K3 in 3.8.2, K2/K4 ohne Codeänderung)
 
 **K1 — Telnet (Port 23) ohne Auth, `R` löst Reboot aus. — ERLEDIGT (3.8.1),
 Weg (b).** Der Web-`/reboot` verlangt Login, Telnet nicht — inkonsequent.
@@ -176,26 +236,78 @@ Gegenprobe auf der seriellen Konsole: keine Bootmeldung im Testfenster.
 Ersatzweg geprüft: `/reboot` ohne Login → HTTP 401, mit Login → HTTP 200, Gerät
 startet neu und kommt mit gespeicherter Konfiguration wieder hoch.
 
-**K2 — `SUBSCRIBE_GRACE` (5 s) ist lastabhängig.** Braucht der
-ioBroker-Replay nach dem SUBACK einmal länger als 5 s (großer Objektbaum,
-Systemlast), laufen alte Sollwerte wieder durch — der gemessene
-55-Grad-Fall. Kein Codefehler; die Bilanzmeldung im MQTT-Log ist das
-Frühwarnsignal. Maßnahme: keine Codeänderung, aber beim nächsten
-ioBroker-Update einmal bewusst aufs Log schauen, ob die Bilanzmeldung
-nach dem Reconnect **vor** den ersten echten Kommandos kommt.
+**K2 — `SUBSCRIBE_GRACE` (5 s) ist lastabhängig. — ENTSCHIEDEN (2026-08-19),
+keine Codeänderung.** Braucht der ioBroker-Replay nach dem SUBACK einmal länger
+als 5 s (großer Objektbaum, Systemlast), laufen alte Sollwerte wieder durch —
+der gemessene 55-Grad-Fall. Kein Codefehler; die Bilanzmeldung im MQTT-Log ist
+das Frühwarnsignal.
 
-**K3 — State-Publish-Rückgabewert unbeachtet** (`publish_heatpump_data`).
-Schlägt ein Publish fehl, gilt der Wert trotzdem als gesendet und kommt erst
-mit der nächsten Änderung oder dem 5-min-Vollupdate wieder. Das Vollupdate
-deckelt den Schaden auf 5 min — bewusst so lassen ist vertretbar.
-Entscheid dokumentieren, keine Änderung vorgeschlagen.
+Begründung des Entscheids: Der Wert darf weder zu groß noch zu klein sein — ein
+längeres Fenster schluckt echte Kommandos, ein kürzeres lässt den Schwall
+durch — und seine richtige Größe hängt an der Last einer anderen Maschine.
+Durch Verschieben wird er nicht besser. Eine echte Lösung müsste das Verwerfen
+am Inhalt festmachen (Sequenznummer oder Zeitstempel im Payload) statt an der
+Zeit; das ist ein Protokollumbau auf beiden Seiten für ein Problem, das einmal
+aufgetreten und über die Bilanzmeldung sichtbar ist.
 
-**K4 — `write_mqtt_log` gegen den PubSubClient-Puffer.** `log_msg` fasst
-256 Bytes, der Paketpuffer aber auch nur 256 inklusive Topic und Header —
-Meldungen über ~225 Zeichen würden still verworfen. Aktuell erreicht keine
-Meldung die Grenze. Billigste Absicherung, falls gewünscht: Rückgabewert von
-`publish()` prüfen und im Telnet-Log vermerken. Sonst: als bekannte Grenze
-hier dokumentiert lassen.
+**Beobachtungsauftrag — steht jetzt in der README** („Der Broker spielt beim
+Verbinden alles wieder ein", als Wartungshinweis): Nach jedem ioBroker-Update
+einen Reconnect über Telnet mitschneiden und prüfen, ob die Bilanzzeile **vor**
+den ersten echten Kommandos kommt und die verworfenen Topics noch alle in
+derselben Sekunde wie das SUBACK eintreffen. Er steht dort statt nur hier,
+damit er beim Warten der Anlage gefunden wird und nicht in einem
+Durchsichtsprotokoll versauert.
+
+**K3 — State-Publish-Rückgabewert unbeachtet** (`publish_heatpump_data`). —
+**UMGESETZT (3.8.2), entgegen dem Vorschlag hier.** Schlägt ein Publish fehl,
+galt der Wert trotzdem als gesendet und kam erst mit der nächsten Änderung oder
+dem 5-min-Vollupdate wieder.
+
+Warum doch angefasst: Die Begründung „das Vollupdate deckelt den Schaden auf
+5 min" trägt für einen einzelnen verlorenen Publish, nicht für den praktisch
+relevanten Fall. Bei einer MQTT-Unterbrechung läuft die Schleife weiter und
+schreibt den Vergleichspuffer fort; nach dem Reconnect gilt jeder
+zwischenzeitlich geänderte Wert als gesendet, und beim Broker steht bis zu
+5 min lang der alte — retained, also mit dem Anschein von Gültigkeit. Das ist
+derselbe Konsument und dasselbe Muster wie bei Maßnahme 2, deshalb dieselbe
+Version. Der Fix ist eine Marke, die sich merkt, dass etwas liegenblieb; der
+nächste Durchlauf (5 s) schickt die Tabelle erneut. Die `<PUB>`-Logzeile bleibt
+an die echte Wertänderung geknüpft, sonst füllt eine laufende Wiederholung das
+Log alle 5 s.
+
+**K4 — `write_mqtt_log` gegen den PubSubClient-Puffer. — ENTSCHIEDEN
+(2026-08-19), keine Umsetzung.** `log_msg` fasst 256 Bytes, der Paketpuffer aber
+auch nur 256 inklusive Topic und Header — Meldungen über ~225 Zeichen würden
+still verworfen. Die Grenze ist nicht fest, sondern hängt am MQTT-Prefix.
+
+Begründung des Entscheids: Aktuell erreicht keine Meldung die Grenze, betroffen
+ist ausschließlich der Log-Pfad, nicht der Steuer- oder State-Pfad — es ginge um
+verlorene Diagnose, nicht um verlorene Regelung. Als bekannte Grenze hier
+dokumentiert. Falls der Punkt später doch angefasst wird, ist die sinnvollste
+Variante, den Rückgabewert von `publish()` zu prüfen und bei Misserfolg auf
+Telnet auszuweichen — das deckt nebenbei den häufigeren Fall ab, dass bei
+getrennter MQTT-Verbindung jede Logmeldung ersatzlos verlorengeht.
+`setBufferSize(512)` ist ausdrücklich **nicht** die Empfehlung: 256 Byte mehr
+Heap dauerhaft, auf dem ESP8266 spürbar.
+
+---
+
+## Zusatzpunkt — CI läuft nur noch für `main` (2026-08-19)
+
+Nicht aus der Codedurchsicht, aber in derselben Runde entschieden und
+umgesetzt. `.github/workflows/main.yml` stand auf `on: [push, pull_request]`,
+lief also bei jedem Push auf jeden Branch; der `pull_request`-Trigger dagegen
+praktisch nie, weil hier lokal gemergt wird.
+
+Jetzt: `push` nur auf `main`, dazu `workflow_dispatch`, damit ein Branch bei
+Bedarf trotzdem gezielt durch die CI geschickt werden kann, ohne die Datei zu
+ändern.
+
+Bewusst in Kauf genommen: Das Signal kommt nach dem Merge. Vertretbar, weil die
+Projektkonvention ohnehin verlangt, vor dem Merge alle zehn Envs lokal zu bauen
+und die Hosttests laufen zu lassen — die CI ist damit Rückversicherung für
+`main`, nicht Erstprüfung. Kostenargument gibt es keins: Für ein öffentliches
+Repository sind Actions-Minuten frei; der Gewinn ist weniger Lauf-Rauschen.
 
 ---
 
