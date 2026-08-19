@@ -3,6 +3,12 @@
 Der Notbetrieb soll ohne ioBroker, ohne Node-RED und ohne MQTT-Broker
 auslösbar sein — mit einem Browser, von einem Menschen aus der Familie.
 
+**Anspruch:** Der Notbetrieb muss nicht alles halten, was der Normalbetrieb
+kann. Er soll verhindern, dass das Haus auskühlt, und Zeit verschaffen, in Ruhe
+nach einer Lösung zu suchen. Er ist **einstufig** — Stufe 1 heizt, Stufe 2
+macht Warmwasser; ein Kaskadenbetrieb ohne übergeordnete Steuerung würde nicht
+lange gutgehen (Owner-Entscheidung 2026-08-19).
+
 **Stand dieser Datei:** 2026-08-19, Firmware 3.11.0 auf beiden Stufen.
 Angefangen als Entwurf; Abschnitt 5 sammelt die offenen Fragen.
 
@@ -35,12 +41,12 @@ ist der Weg, der im letzten Fall noch übrig bleibt.
 Nicht nur umschalten. Damit die Wärmepumpe danach sinnvoll heizt, braucht es
 mehrere Schritte in der richtigen Reihenfolge:
 
-1. **Betriebsart auf Kurve** — SET35, ggf. SET36.
+1. **Betriebsart auf Kurve** — SET35 (nur Heizen, siehe Frage 1).
 2. **Kurvenwerte wiederherstellen.** Das Umschalten setzt die Kurve auf die
    Panasonic-Werksvorgaben zurück (am 2026-08-19 gemessen: Heizkurve 55 °C bei
    −5 °C und 35 °C bei +15 °C). Das ist keine Fußbodenheizungskurve — mit
-   diesen Werten liefe die Anlage falsch. SET28–SET30 für die Heizkurve,
-   SET32–SET34 für die Kühlkurve.
+   diesen Werten liefe die Anlage falsch. SET28–SET30 für die Heizkurve; die
+   Kühlkurve entfällt im Notbetrieb (Frage 1).
 3. **Oberen Kurvenpunkt setzen** — SET5, weil TargetHigh und die
    Vorlauf-Solltemperatur sich in der Wärmepumpe eine Speicherstelle teilen
    (SET27 ≡ SET5, belegt 2026-08-10).
@@ -113,23 +119,50 @@ Alexanders Vorschlag, die Kurven einzeln initialisierbar zu machen, passt gut
 zu Baustein A und ist auch im Normalbetrieb nützlich (z. B. nach einem
 versehentlichen Umschalten am Bedienterminal). Denkbare Aufteilung:
 
-Knopf | Wirkung
-:--- | :---
-**Notbetrieb ein** | Betriebsart auf Kurve + Kurvenwerte + Sollwert, in einem Zug
-**Notbetrieb aus** | zurück auf Direktvorgabe
-Heizkurve setzen | nur SET28–SET30 + SET5 aus `/notbetrieb.json`
-Kühlkurve setzen | nur SET32–SET34 aus `/notbetrieb.json`
+Knopf | Rolle | Wirkung
+:--- | :--- | :---
+**Notbetrieb ein** | Heizen | SET35 auf Kurve + Kurvenwerte + Sollwert + einschalten
+**Notbetrieb ein** | Warmwasser | SET9 auf DHW + SET11 + einschalten
+**Notbetrieb aus** | beide | zurück auf Direktvorgabe bzw. den vorherigen Modus
+Heizkurve setzen | Heizen | nur SET28–SET30 + SET5 aus `/notbetrieb.json`
+Kühlkurve setzen | — | im Normalbetrieb nützlich, für den Notbetrieb nicht nötig
 
 ## 5. Was zu klären ist
 
 Diese Fragen bestimmen den Umfang. Ich kann sie nicht aus dem Code beantworten.
 
-**1. Beide Kaskadenstufen oder nur eine?**
-Jede Stufe hat ihren eigenen HeishaMon mit eigener Weboberfläche — der
-Notbetrieb wäre also zweimal zu schalten, an 192.168.2.120 und 192.168.2.122.
-Soll im Notbetrieb überhaupt die zweite Stufe mitlaufen, oder reicht Stufe 1?
-Wenn beide: Wie verhindert man, dass sie gegeneinander takten, ohne die
-Kaskadenlogik, die es dann ja nicht mehr gibt?
+**1. Beide Kaskadenstufen oder nur eine? — ENTSCHIEDEN am 2026-08-19.**
+
+> **Der Notbetrieb ist einstufig: Stufe 1 heizt, Stufe 2 macht Warmwasser.**
+> Ein Kaskadenbetrieb ohne übergeordnete Steuerung würde nicht lange gutgehen.
+>
+> **Der Notbetrieb muss nicht alles halten, was der Normalbetrieb kann.**
+> Hauptziel ist, dass das Haus nicht auskühlt und in Ruhe nach einer Lösung
+> gesucht werden kann. (Owner-Entscheidung)
+
+Das vereinfacht das Vorhaben an drei Stellen erheblich:
+
+* **Die Kühlseite entfällt.** SET36 `CoolingMode` und die Kühlkurve
+  (SET32–SET34) spielen im Notbetrieb keine Rolle. Byte 28 wird nur über
+  SET35 angefasst — der Fall, der am 2026-08-19 in Lauf 3 gemessen wurde.
+  Damit erübrigt sich auch der kombinierte Schaltvorgang (Rohwert `0x05`).
+* **Kein Taktproblem.** Die beiden Stufen konkurrieren nicht, weil sie
+  verschiedene Aufgaben haben.
+* **Die Rollen sind verschieden, und damit auch die Knöpfe.**
+
+Rolle | Gerät | was der Notbetrieb dort tut
+:--- | :--- | :---
+**Heizen** | H1 / WP1, 192.168.2.120 | SET35 auf Kurve, Heizkurve (SET28–SET30) und Sollwert (SET5) setzen, Anlage einschalten
+**Warmwasser** | H2 / WP2, 192.168.2.122 | SET9 `OperationMode` auf 3 (DHW only), SET11 `DHWTemp` setzen, Anlage einschalten
+
+Die Warmwasserseite braucht **gar keine Kurve** — der Knopf dort ist deutlich
+einfacher als auf Stufe 1.
+
+**1a. Wie erfährt die Firmware ihre Rolle?** Beide Stufen laufen denselben
+Quelltext. Die Stufen-Unterschiede stecken heute als Build-Flags in
+`platformio.ini` (MQTT-Prefix, Hostname). Für den Notbetrieb wäre stattdessen
+ein Feld in `/notbetrieb.json` denkbar — dann ließe sich die Rolle ohne OTA
+ändern, was bei einem Gerätetausch hilft. Was ist dir lieber?
 
 **2. Knopf oder automatischer Rückfall — oder beides?**
 Wenn die Firmware die Kurve ohnehin kennt, könnte sie selbst umschalten, sobald
@@ -150,9 +183,10 @@ Drei Möglichkeiten:
 **4. Was ist mit dem Ein-/Ausschalten der Anlage?**
 Heute steht die Kaskade im Standby (`Heatpump_State` 0) und wird von Node-RED
 freigegeben. Fällt die Steuerung im Standby aus, nützt die Kurve nichts —
-die Anlage läuft ja gar nicht. Muss der Notbetriebs-Knopf also auch SET1
-`Heatpump` auf 1 setzen? Und was ist mit SET9 `OperationMode` — steht der im
-Notfall auf Heizen, oder muss er mitgesetzt werden?
+die Anlage läuft ja gar nicht. Der Knopf muss also vermutlich auch SET1
+`Heatpump` auf 1 setzen; auf der Warmwasser-Rolle zusätzlich SET9
+`OperationMode` auf 3. Bestätigst du das, und gibt es Bedingungen, unter denen
+NICHT eingeschaltet werden darf?
 
 **5. Zugang, wenn das WLAN weg ist.**
 Bei WLAN-Ausfall startet der Watchdog das Gerät nach 5 min neu, `autoConnect`
