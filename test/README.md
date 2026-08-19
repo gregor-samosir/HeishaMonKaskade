@@ -28,6 +28,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
+| `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
@@ -74,6 +75,7 @@ Ersatzheader kopiert werden muss (Begruendung im Skriptkopf).
 
 ```bash
 c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
+c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test byte28_test.cpp && /tmp/byte28_test
 c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
 c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindow_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
@@ -459,6 +461,94 @@ Eine Unschaerfe bleibt: Die Kuehl-X-Achse spannt 15 .. 30 auf, waehrend fuer
 vermutlich nur den weiteren der beiden Punkte - die Klemm-Messung sagte 20.
 Kein Widerspruch, aber auch kein Beweis; ein Schreibversuch mit 15 auf SET33
 wuerde es klaeren. Bisher nicht gemessen, weil es fuer den Betrieb egal ist.
+
+## Betriebsart Kurve/Direkt schalten (Byte 28, 2026-08-19, WP1)
+
+Bis 3.10.0 war der Notbetrieb halb automatisiert: Die Kurvenwerte werden
+laufend gespiegelt (`kurven_sync.py`), aber das Umschalten von Direkt- auf
+Kurvenbetrieb musste ein Mensch am Bedienterminal machen. Offen war die eine
+Frage, ob die WP Byte 28 im Kommandotelegramm ueberhaupt annimmt - das
+Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
+
+**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage im Heizbetrieb
+(`Heatpump_State` 0, `Compressor_Freq` 0, `Operating_Mode_State` 0 = "Heat"),
+Firmware 3.11.0. Geschaltet wurde damit die Kuehlseite, also NICHT der gerade
+aktive Kreis - genau die risikoarme Konstellation, die der Messplan wollte:
+
+```
+./test/byte_monitor.py 192.168.2.120 28 --dauer 60     # im Hintergrund
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/CoolingMode=0
+```
+
+Im selben Mitschnitt, 11 Telegramme, Flanke zwischen dem fuenften und sechsten:
+
+```
+Telegramm 1-5:   Byte 28 = 0x0A    5+6=10  7+8=10
+Telegramm 6-11:  Byte 28 = 0x06    5+6=01  7+8=10
+```
+
+Bits 5+6 (Kuehlen) sprangen von `10` auf `01`, Bits 7+8 (Heizen) blieben
+stehen. **Die Bitmaske greift also bitgenau** - genau das war die zweite offene
+Frage. `set/CoolingMode 1` stellte `0x0A` wieder her.
+
+### Was das Umschalten sonst noch anrichtet
+
+Erwartet war der Kurven-Reset auf die Panasonic-Werksvorgaben (Beobachtung vom
+2026-08-11 am Bedienterminal, weiter unten). Ueberraschend war TOP27:
+
+| Wert | vorher | nach `CoolingMode 0` | nach `CoolingMode 1` |
+| --- | ---: | ---: | ---: |
+| TOP81 `Cooling_Mode` | 1 | **0** | 1 |
+| TOP76 `Heating_Mode` | 1 | 1 | 1 |
+| TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** |
+| TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | **10** |
+| TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** |
+| TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35** |
+
+15/10 ist die Werks-Kuehlkurve, 35 der Werkswert der *Heiz*kurve bei +15 C.
+**Die Heizseite wurde nie geschaltet** - TOP76 stand durchgehend auf Direkt -
+und der Heiz-Sollwert wanderte trotzdem mit. Das Protokollfeld ist sauber
+getrennt, die Wirkung im Geraet ist es nicht.
+
+**Eine Deutung ist damit NICHT belegt.** Die Anlage stand im Heizbetrieb; der
+Sollwert, der mitwanderte, war also der des AKTIVEN Betriebsmodus. Ob die WP
+beim Betriebsartwechsel immer beide Kreise anfasst oder nur den aktiven, laesst
+sich aus diesem einen Lauf nicht sagen. Ein Wiederholungslauf im Kuehlbetrieb
+wuerde es trennen:
+
+| Deutung | Vorhersage fuer `CoolingMode 0` im Kuehlbetrieb |
+| --- | --- |
+| immer beide Kreise | TOP27 wandert wieder mit |
+| nur der aktive Kreis | TOP27 bleibt stehen, dafuer traefe es TOP28 |
+
+Der Lauf ist bewusst nicht gemacht: Er aendert keine Entscheidung. Unter beiden
+Deutungen sind nach dem Schalten Kurve UND Sollwerte beider Kreise
+nachzuziehen. Er waere zu holen, falls die Kaskadensteuerung spaeter im
+Kuehlbetrieb umschalten soll und der Aufwand des Nachziehens ins Gewicht faellt.
+
+TOP74/TOP75 blieben unveraendert, weil sie hier schon auf den Werksvorgaben
+standen (30 und 20) - sie konnten nichts zeigen.
+
+### Aufraeumen danach ist Pflicht, nicht Kosmetik
+
+```
+./test/kurven_sync.py --prefix panasonic_heat_pump --dry-run   # erst schauen
+./test/kurven_sync.py --prefix panasonic_heat_pump
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump/set/Z1HeatRequestTemperature=20 \
+    panasonic_heat_pump/set/Z1CoolRequestTemperature=20
+```
+
+**Auf den 5-min-Re-Assert der Kaskadensteuerung ist kein Verlass.** Bei
+stehender Anlage kam er nicht: Der letzte Sollwert aus Node-RED lag um 16:13:59
+vor dem Umschalten (16:14:49), danach sieben Minuten nichts. Die Sollwerte
+mussten von Hand zurueckgestellt werden. Erst danach stand der Ausgangszustand
+wieder vollstaendig - alle 12 Werte und beide Betriebsarten.
+
+**Die Heizseite (SET35) ist nicht gemessen.** Sie wuerde die Heizkurve auf
+55 C bei -5 C und 35 C bei +15 C zuruecksetzen; die Wiederherstellung ueber
+`kurven_sync.py` deckt davon TargetLow und beide Aussentemperatur-Punkte ab,
+TargetHigh kommt ueber den Sollwert (SET5).
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

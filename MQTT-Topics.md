@@ -396,6 +396,22 @@ SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the upper
 SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the lower outside temperature | 5 - 20
 SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
+SET35 | HeatingMode | 28 | Heating operation mode | 0=compensation curve, 1=direct
+SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=direct
+
+> ⚠️ **SET35/SET36 are not harmlessly reversible.** Switching a circuit to the
+> compensation curve resets that curve to the Panasonic factory defaults, and
+> switching back does *not* restore it. Measured on 2026-08-19 it also dragged
+> the setpoint of the *other* circuit along, although that circuit was never
+> switched (the unit was in heating mode at the time — whether it always
+> touches both circuits or only the active one is untested). After using either
+> command, re-apply curve **and** setpoints of both circuits. Details and the measured table: footnote 6 in
+> [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md).
+>
+> *Deutsch: Ein Wechsel auf Kurvenbetrieb setzt die Kurve auf die
+> Panasonic-Werksvorgaben zurück; das Zurückschalten stellt sie nicht wieder
+> her, und der Sollwert des anderen Kreises wandert mit. Danach Kurve und
+> Sollwerte beider Kreise nachziehen.*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 

@@ -1,5 +1,72 @@
 #pragma once
 // Changelog:
+// 3.11.0 - Zwei neue Set-Kommandos: SET35 HeatingMode und SET36 CoolingMode
+//         (Byte 28, je 0 = Kompensationskurve, 1 = Direktvorgabe). Damit ist
+//         die Betriebsart erstmals fernschaltbar; bisher ging das nur am
+//         Bedienterminal. Reine Schreibseite - an den 92 State-Topics und am
+//         Dekodierpfad aendert sich nichts.
+//
+//         WARUM. Der Notbetrieb war bis hierher nur halb automatisiert: Faellt
+//         die Node-RED-Kaskadensteuerung aus, soll die Waermepumpe auf ihrer
+//         eigenen Heizkurve weiterlaufen. Die Kurvenwerte werden dafuer schon
+//         laufend gespiegelt (SET27-SET34, test/kurven_sync.py) - aber die
+//         Umschaltung selbst musste ein Mensch machen. Genau dieser Handgriff
+//         blieb liegen, wenn niemand im Haus ist.
+//
+//         MASKEN SIND HIER PFLICHT. Byte 28 traegt beide Betriebsarten in zwei
+//         Bitfeldern (Bits 7+8 Heizen, Bits 5+6 Kuehlen). Ohne bitgenaue Maske
+//         schaltet ein Kuehl-Kommando die Heizung mit um - genau die
+//         Fehlerklasse, die 3.1.0 beseitigt hat. Deshalb 0x03 und 0x0C.
+//
+//         NEBENWIRKUNG, DIE BLEIBT. Ein Wechsel von Direkt auf Kurve setzt die
+//         vier Kurvenpunkte des betroffenen Kreises auf die Panasonic-Werks-
+//         vorgaben zurueck; das Zurueckschalten stellt sie NICHT wieder her,
+//         und der Direktsollwert uebernimmt dabei den unteren Kurvenpunkt. Das
+//         ist eine Eigenschaft der Waermepumpe, nicht der Firmware - wer
+//         schaltet, muss die Kurve danach aus dem ioBroker nachziehen.
+//
+//         AM GERAET GEMESSEN, NICHT ABGELEITET. Am 2026-08-19 an Stufe 1 bei
+//         stehender Anlage im Heizbetrieb (Heatpump_State 0, Compressor_Freq 0,
+//         Operating_Mode_State 0 = "Heat"). Die offene
+//         Frage war, ob die Waermepumpe Byte 28 im Kommandotelegramm ueberhaupt
+//         annimmt - das Original-Projekt hat kein Kommando dafuer, es gab also
+//         keine Fremderfahrung. Sie nimmt es an: set/CoolingMode 0 liess Byte 28
+//         im laufenden Mitschnitt von 0x0A auf 0x06 wandern (byte_monitor.py,
+//         11 Telegramme, Flanke zwischen dem fuenften und sechsten). Bits 5+6
+//         gingen von b10 auf b01, Bits 7+8 blieben auf b10 stehen - die Maske
+//         greift bitgenau. TOP81 meldete 0, TOP76 unveraendert 1.
+//         set/CoolingMode 1 stellte 0x0A und TOP81 = 1 wieder her.
+//
+//         EIN BEFUND WAR NEU. Erwartet war der Kurven-Reset (TOP72/TOP73 auf
+//         die Werks-Kuehlkurve 15/10, TOP28 im Kurvenbetrieb 0). Nicht erwartet
+//         war, dass dasselbe Kommando den HEIZ-Sollwert mitzieht: TOP27 sprang
+//         von 20 auf 35 - den Werkswert der HEIZkurve bei +15 C -, obwohl TOP76
+//         durchgehend auf Direkt stand und die Heizseite nie geschaltet wurde.
+//         Die Anlage stand dabei im Heizbetrieb (Operating_Mode_State 0 =
+//         "Heat", Kompressor aus). Ob die Waermepumpe beim Betriebsartwechsel
+//         IMMER beide Kreise anfasst oder nur den gerade aktiven, ist damit
+//         NICHT entschieden - ein Lauf im Kuehlbetrieb wuerde das trennen. Fuer
+//         die Praxis macht es keinen Unterschied: unter beiden Deutungen sind
+//         nach dem Schalten Kurve und Sollwerte beider Kreise nachzuziehen. Der
+//         Ausgangszustand wurde danach vollstaendig wiederhergestellt (Kurve
+//         ueber kurven_sync.py, Sollwerte von Hand - der 5-min-Re-Assert der
+//         Kaskadensteuerung kam bei stehender Anlage nicht). Tabellen und
+//         Rohdaten in test/README.md und SET-TOP-Zuordnung.md Fussnote 6.
+//
+//         OHNE GERAET ABGESICHERT. test/byte28_test.cpp legt die Merge-Logik aus
+//         commands.cpp und die beiden Dekodierer aus decode.cpp nebeneinander:
+//         30 Zusicherungen ueber alle vier Kombinationen, die vier Rohwerte aus
+//         ProtocolByteDecrypt.md und den Nachbarschutz, samt Gegenprobe, dass
+//         dieselbe Operation ohne Maske Heating_Mode auf -1 zerstoeren wuerde.
+//         decode_vergleich.py gegen v3.10.0: 69552 Zeilen identisch, alle 92
+//         Topics in Nummer, Name, Wert und Einheit gleich. decode_hosttest.sh
+//         unveraendert gruen. Alle 10 Envs gebaut. Groessen ggue. 3.10.0:
+//         ESP32 RAM +0 B/Flash +68 B, ESP8266 RAM +64 B/Flash +64 B.
+//
+//         ABNAHME NACH DEM OTA. tablesnap.py vor und nach dem Flashen: nur
+//         laufende Messwerte abweichend (Aussentemperatur 25 -> 26 C, Vorlauf
+//         und Ruecklauf +0,25 bis +0,75 K), keine strukturelle Abweichung.
+//
 // 3.10.0 - Zwei neue State-Topics: TOP103 Pump_Duty_Max und TOP104
 //         Water_Pump_Mode. Damit haben alle Set-Kommandos, fuer die es
 //         ueberhaupt ein Antwortbyte gibt, eine Rueckmeldung. Reine Leseseite -
@@ -711,4 +778,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.10.0";
+static const char* heishamon_version = "3.11.0";

@@ -1,5 +1,29 @@
 # Vorhaben: Betriebsart Kurve ↔ Direkt als Set-Kommando (Byte 28)
 
+> ## ✅ ERLEDIGT am 2026-08-19 mit Firmware 3.11.0 — Kühlseite
+>
+> **Die Wärmepumpe nimmt Byte 28 an.** Das war die einzige echte Unbekannte
+> (Abschnitt 3), und sie ist beantwortet: `set/CoolingMode 0` ließ Byte 28 im
+> laufenden Mitschnitt von `0x0A` auf `0x06` wandern, TOP81 ging auf 0, TOP76
+> blieb stehen. Die Bitmaske greift bitgenau. SET35 `HeatingMode` und SET36
+> `CoolingMode` sind eingebaut, Stufe 1 läuft damit.
+>
+> **Ein Befund war neu und steht so nicht unten:** Das Kühl-Kommando zog den
+> **Heiz**-Sollwert mit (TOP27 von 20 auf 35), obwohl die Heizseite nie
+> geschaltet wurde. Abschnitt 5 unten unterschätzt die Nebenwirkung also. Die
+> Anlage stand dabei im Heizbetrieb — ob die Wärmepumpe immer beide Kreise
+> anfasst oder nur den aktiven, ist offen und praktisch gleichgültig.
+>
+> Der Ausgangszustand aus Abschnitt 6 wurde vollständig wiederhergestellt.
+>
+> **Offen bleiben zwei Punkte:** Schritt 6 (Heizseite, SET35) ist nicht
+> gemessen, und Stufe 2 läuft noch auf 3.10.0.
+>
+> Ergebnisse und Rohdaten: `test/README.md` (Abschnitt „Betriebsart
+> Kurve/Direkt schalten"), `SET-TOP-Zuordnung.md` Fußnote ⁶, Changelog in
+> `src/version.h`. Der Text unten ist der Planungsstand von vorher und bleibt
+> als Beleg stehen, wie die Frage vorbereitet wurde.
+
 Übergabe für eine eigene Session. Ziel sind zwei neue Set-Kommandos, mit denen
 sich die Wärmepumpe zwischen **Kompensationskurve** und **Direktvorgabe**
 umschalten lässt — heute geht das nur am Bedienterminal.
