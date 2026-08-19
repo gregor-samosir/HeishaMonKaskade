@@ -204,6 +204,24 @@ der Abfragezyklus lief im 6-Sekunden-Raster ununterbrochen weiter (…:09, :15,
 :21, :27, :33, :39, :45). Ohne diese Reihenfolge hätten 32 Callbacks am Stück
 den Zyklus zerhackt.
 
+> **Wartungshinweis — nach jedem ioBroker-Update einmal ins Log schauen.**
+> Die 5 Sekunden sind eine Wette gegen die Antwortzeit des Adapters, kein
+> Beweis: Braucht der Replay nach dem SUBACK einmal länger — größerer
+> Objektbaum, Systemlast, langsamer Datenträger — laufen alte Sollwerte wieder
+> durch, und das ist genau der 55-Grad-Fall von oben. Ein größeres Fenster ist
+> keine Lösung, es würde echte Kommandos schlucken.
+>
+> Das Frühwarnsignal steht im Log: Die Bilanzzeile („N wiedereingespielte
+> Set-Kommandos nach dem Verbinden verworfen") muss **vor** den ersten echten
+> Kommandos kommen. Nach einem ioBroker-Update deshalb einmal einen Reconnect
+> mitschneiden (Telnet, Port 23) und die Reihenfolge prüfen. Kommen die
+> verworfenen Topics nicht mehr alle in derselben Sekunde wie das SUBACK,
+> schrumpft die Reserve — dann ist `SUBSCRIBE_GRACE` in `src/HeishaMon.h` neu
+> zu bewerten.
+>
+> Als Kleinpunkt K2 der Codedurchsicht vom 2026-08-18 bewusst ohne
+> Codeänderung entschieden.
+
 ### Nur echte Antworttelegramme werden ausgewertet (3.6.0)
 
 Der einzige gefundene Weg, auf dem **falsche Messwerte** in die
@@ -558,6 +576,20 @@ Zwei Hinweise aus der Praxis:
   Abonnenten aus seiner eigenen Objektdatenbank. Ein Löschbefehl setzt den
   State dann nur auf `null` — wirklich weg ist das Topic erst, wenn das Objekt
   im ioBroker-Admin gelöscht wird.
+* **`LWT` ist seit 3.8.2 in beide Richtungen retained.** Vorher lag nur das
+  Will `Offline` retained beim Broker, `Online` ging ohne das Flag raus — auf
+  einem echten Broker blieb damit nach jedem Reconnect `Offline` der
+  gespeicherte Wert, und wer sich später verbindet (Node-RED-Neustart,
+  Kaskaden-Wächter), hielt eine laufende Stufe für tot. Der ioBroker-Adapter
+  verdeckt das, weil er aus seiner State-DB bedient; beim Umzug auf einen
+  mosquitto wäre es aufgeschlagen. **Der Nachweis am echten Broker steht noch
+  aus** und gehört in die Umzugsvorbereitung: neuer Abonnent auf `<präfix>/LWT`
+  muss retained `Online` bekommen, nach dem Stromlosmachen retained `Offline`.
+* **Ein fehlgeschlagenes State-Publish wird seit 3.8.2 wiederholt.** Bis dahin
+  galt ein Wert auch dann als gesendet, wenn `publish()` fehlschlug. Nach einer
+  MQTT-Unterbrechung stand beim Broker deshalb bis zu fünf Minuten lang der
+  alte Wert — retained, also mit dem Anschein von Gültigkeit. Jetzt schickt der
+  nächste Durchlauf (5 s) die Tabelle erneut.
 
 ## Diagnose- und Nachweiswerkzeuge
 
