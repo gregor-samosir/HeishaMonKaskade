@@ -20,8 +20,15 @@ writes blind. Tables are language-neutral; the notes are German.*
 
 **Stand:** 2026-08-19, Firmware 3.9.0. Quelle sind ausschließlich die beiden
 Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
-und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Ändert sich dort
-eine Zeile, ist diese Datei nachzuziehen.
+und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
+sind nicht von Hand gepflegt, sondern von
+[`test/set_top_zuordnung.py`](test/set_top_zuordnung.py) erzeugt; nach jeder
+Änderung an einer der beiden Code-Tabellen läuft das Skript erneut und die
+Ausgabe wird gegen diese Datei gehalten:
+
+```bash
+./test/set_top_zuordnung.py --pruefen
+```
 
 ## Wie die Zuordnung entstanden ist
 
@@ -88,11 +95,10 @@ SET34 | `Z1CoolCurveOutsideHighTemp` | 89 | ganz | TOP74 | `Z1_Cool_Curve_Outsid
 Bei den Kurven kreuzen sich `High` und `Low` zwischen SET- und TOP-Nummer
 (SET29 `OutsideLow` → TOP32, SET30 `OutsideHigh` → TOP31). Das ist kein Fehler
 in dieser Tabelle: Die Nummern stammen aus dem Original-Projekt und stehen dort
-in anderer Reihenfolge als die Bytes. Die Byte-Spalte ist maßgeblich, und die
-Bedeutung von `High`/`Low` ist in
-[`MQTT-Topics.md`](MQTT-Topics.md#zone-1-heiz--und-kühlkurve-set27--set34--deutsche-fassung)
-ausführlich beschrieben — die Zuordnung war dort schon einmal falsch
-dokumentiert.
+in anderer Reihenfolge als die Bytes — die Byte-Spalte ist maßgeblich. Die
+Bedeutung von `High`/`Low` ist geklärt und an beiden Anlagen zurückgelesen
+sowie am Bedienterminal gegengeprüft (2026-08-11); sie steht ausführlich in
+[`MQTT-Topics.md`](MQTT-Topics.md#zone-1-heiz--und-kühlkurve-set27--set34--deutsche-fassung).
 
 ### ¹ Byte 7 — QuietMode und PowerfulMode teilen sich das Byte
 
@@ -154,8 +160,8 @@ SET | Kommando | Byte | Bits | Lage
 :--- | :--- | ---: | :--- | :---
 SET12 | `ForceDefrost` | 8 | 7 | Byte 8 ist im Antworttelegramm unbelegt — kein Rücklesen möglich
 SET13 | `ForceSterilization` | 8 | 6 | dito
-SET14 | `WaterPump` | 4 | 3+4 | **Bits bekannt und dekodierbar — Lücke, siehe Abschnitt 4**
-SET15 | `WaterPumpSpeed` | 45 | ganz | **Byte bekannt und dekodierbar — Lücke, siehe Abschnitt 4**
+SET14 | `WaterPump` | 4 | 3+4 | Bits auf der Schreibseite bekannt, Antwortbyte unbelegt — **erst messen**, Abschnitt 4
+SET15 | `WaterPumpSpeed` | 45 | ganz | Byte beschrieben und dekodierbar — **Lücke, direkt schließbar**, Abschnitt 4
 
 Für die beiden Force-Kommandos gibt es keinen Rückgabewert, wohl aber einen
 **Wirkungsnachweis**: Läuft die angestoßene Routine, meldet das ein
@@ -239,33 +245,83 @@ TOP49, TOP50, TOP51, TOP52, TOP53, TOP54, TOP55, TOP56, TOP62, TOP63, TOP64,
 TOP65, TOP66, TOP67, TOP90, TOP91, TOP92 — Namen und Einheiten in
 [`MQTT-Topics.md`](MQTT-Topics.md).
 
-Zwei davon grenzen an Abschnitt 2: TOP65 `Pump_Speed` (Byte 171) und TOP92
-`Pump_Duty` (Byte 172) sind die **Ist**-Werte der Pumpe. Sie sind nicht das
-Rücklesen von SET15 `WaterPumpSpeed`, das eine Obergrenze setzt.
+Zwei davon grenzen an Abschnitt 2: TOP65 `Pump_Speed` (Byte 171, Drehzahl) und
+TOP92 `Pump_Duty` (Byte 172, Modulationsgrad) sind die **Ist**-Werte der Pumpe.
+Keiner von beiden ist das Rücklesen von SET15 — das setzt auf Byte 45 die
+Obergrenze, bis zu der moduliert werden darf, also die Grenze zu TOP92. Der
+Kommandoname `WaterPumpSpeed` führt hier in die Irre, siehe Abschnitt 4.
 
 ## 4. Was sich schließen ließe
 
 Nach Aufwand und Risiko geordnet. Die ersten beiden ändern nur die Leseseite —
-sie fassen die Wärmepumpe nicht an und können an ihr nichts kaputt machen.
+an die Wärmepumpe wird nichts geschrieben, es kann dort also nichts kaputtgehen.
+Erst der dritte Punkt fasst eine laufende Anlage an.
 
-**1. Rücklesen für SET14 und SET15 (je eine Zeile in `decode.cpp`).**
-Beide Felder sind in `ProtocolByteDecrypt.md` beschrieben und die Kodierung
-deckt sich exakt mit dem, was `commands.cpp` schreibt — bei SET14 bis auf den
-Rohwert nachgerechnet (`0x65` = Pumpe an, `0x75` = Entlüften, `0x56` = Auto).
-Damit hätten alle 32 Set-Kommandos, für die es überhaupt ein Antwortbyte gibt,
-eine Rückmeldung:
+**1. Rücklesen für SET15 — `Pump_Duty_Max` auf Byte 45 (eine Zeile in
+`decode.cpp`).**
 
 ```c
-{103,  4, "Water_Pump_Mode",  getBit3and4, nullptr, WaterPumpMode},  // Auto/On/Air purge
-{104, 45, "Max_Pump_Speed",   getIntMinus1, nullptr, RotationsPerMin},
+{103, 45, "Pump_Duty_Max", getIntMinus1, nullptr, Duty},
 ```
 
-Dazu die Klartextliste `WaterPumpMode[] = {"Auto", "On", "Air purge", nullptr}`
-— sie deckt den Indexbereich `-1..2` des Dekodierers vollständig ab, wie es
-seit 3.9.0 für alle Listen gilt — und `NUMBEROFTOPICS` von 90 auf 92. Kein
-Eingriff in den Schreibpfad, keine Messung an der Anlage nötig.
+Dazu `NUMBEROFTOPICS` von 90 auf 91. Kein Eingriff in den Schreibpfad, keine
+Messung an der Anlage nötig — die Klartextliste `Duty` gibt es schon (TOP92).
 
-**2. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
+**Der Wert ist ein Duty, keine Drehzahl.** Das Kommando heißt zwar
+`WaterPumpSpeed` und die Referenz nennt Byte 45 „Maximum set pump speed", aber
+gemeint ist die Obergrenze, bis zu der die Pumpe modulieren darf:
+
+* Die Referenz führt auf Byte 29 die Regelart der Pumpe mit den beiden
+  Zuständen *deltaT* und ***Max. Duty*** — es gibt also einen Max-Duty-Parameter,
+  und Byte 45 ist der einzige Kandidat dafür.
+* Byte 45 wird mit `X−1` umgerechnet, genau wie TOP92 `Pump_Duty` (Byte 172).
+  Die Ist-Drehzahl TOP65 (Byte 171) rechnet dagegen `(X−1)×50`.
+* Der Wertebereich 65–254 ist ein Duty-Bereich. Die Kaskadensteuerung schreibt
+  hier 100 (Stufe 1) und 125 (Stufe 2) — als Drehzahl in 1/min wäre das sinnlos.
+
+Die **Ist**-Werte der Pumpe stehen bereits in TOP65 `Pump_Speed` (Drehzahl) und
+TOP92 `Pump_Duty` (Modulationsgrad). `Pump_Duty_Max` wäre die Obergrenze zu
+TOP92, nicht dessen Ersatz.
+
+> **Fußangel bei Byte 45.** In `ProtocolByteDecrypt.md` trägt diese Zeile in
+> der ersten Spalte die Nummer **TOP95** — das ist die Topic-Nummer des
+> Original-Projekts, nicht die Byte-Position. Byte 95 ist in dieser Firmware
+> TOP79 `Heat_To_Cool_Temp`, nachgeprüft am 2026-08-19 an beiden Stufen: TOP79
+> meldet 20 °C und TOP80 15 °C, ein Umschaltpaar mit 5 K Hysterese. Läge der
+> Max-Duty dort, müsste TOP79 die geschriebenen 100 bzw. 125 zeigen — tut es
+> nicht, und beide Stufen melden trotz unterschiedlicher Duty-Konfiguration
+> denselben Wert.
+
+Ob der Kommandoname `WaterPumpSpeed` auf `MaxPumpDuty` geändert werden soll,
+ist eine Entscheidung über die Kompatibilität der Topic-Namen und steht hier
+bewusst nicht. Die Kaskadensteuerung schreibt heute auf den alten Namen.
+
+**2. Rücklesen für SET14 — erst messen, dann implementieren.**
+Anders als bei SET15 ist hier offen, ob das Antwortbyte das Feld überhaupt
+führt. Belegt ist nur die Kodierung auf der Schreibseite: Die Rohwerte der
+Referenz zu Byte 4 (`0x56` = Auto, `0x65` = Pumpe an, `0x75` = Entlüften)
+ergeben in den Bits 3+4 genau die Folge `b01`/`b10`/`b11`, die `commands.cpp`
+mit `(n+1)×16` erzeugt. Ein Rücklese-Topic wäre `getBit3and4` auf Byte 4 mit
+der Klartextliste `{"Auto", "On", "Air purge", nullptr}` — sie deckt den
+Indexbereich `−1..2` des Dekodierers vollständig ab, wie es seit 3.9.0 für alle
+Listen gilt.
+
+Was fehlt, ist der Nachweis, dass die Wärmepumpe diese Bits im Antworttelegramm
+auch belegt. **Beide offenen Fragen — Byte 4 und Byte 45 — klärt ein einziger
+passiver Mitschnitt**, denn beide Bytes stehen im selben Telegramm:
+
+* Hexlog einschalten (Telnet, Taste `H`), ein Telegramm mitschneiden, wieder
+  ausschalten. Kein Schreibvorgang, die Anlage wird nicht angefasst.
+* Byte 45 muss `101` (Stufe 1, geschrieben wird 100) bzw. `126` (Stufe 2, 125)
+  zeigen. Trifft das zu, sind Byte-Position **und** Umrechnung `X−1` belegt.
+* Byte 4 Bits 3+4 müssen im Normalbetrieb `b01` (Auto) zeigen. Das belegt einen
+  von drei Zuständen; `On` und `Air purge` gibt es nur im Servicemenü und sie
+  bleiben unbelegt — so wie TOP102 `External_SW_State`, dessen zweiter Zustand
+  an dieser Anlage ebenfalls nicht herstellbar ist.
+* Zu beachten: Die Bytewerte im Mitschnitt sind **hexadezimal**; dezimal
+  gelesen ergeben sie Unsinn. `101` erscheint als `65`, `126` als `7e`.
+
+**3. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
 Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
 jemand ans Bedienterminal und von Direkt- auf Kurvenbetrieb umschalten — die
 Kurvenwerte werden dafür schon vorgehalten (SET27–SET34). Mit einem Set-Kommando
@@ -282,7 +338,7 @@ Vorher zu klären, in dieser Reihenfolge:
 * Ein Fehlversuch verstellt eine laufende Anlage. Nur bei stehender Anlage
   testen und den Ausgangswert vorher notieren.
 
-**3. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
+**4. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
 dieser Werte ist eine Zeile in `setCommands[]`; die Arbeit steckt nicht im
 Code, sondern im Ausmessen des zulässigen Bereichs. Wie das geht und warum es
 nötig ist, steht in [`MQTT-Topics.md`](MQTT-Topics.md) — von den 21 Werten, die
@@ -327,10 +383,13 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
 * **`ProtocolByteDecrypt.md` ist Referenz des Original-Projekts.** Die dortigen
   TOP-Nummern gehören zu jenem Projekt und stimmen mit den Nummern dieser
   Firmware **nicht** überein; benutzt wurden von dort ausschließlich die
-  Byte-Positionen und Bit-Bedeutungen. Bei den SG-Ready-Kapazitäten
-  widerspricht die Referenz dieser Firmware sogar: Sie führt Byte 71 als
-  *Heating* und Byte 72 als *DHW*, `decode.cpp` und `commands.cpp` halten es
-  umgekehrt. Für diese Tabelle ist das folgenlos — SET23 und TOP94 zeigen beide
-  auf Byte 71, das Paar stimmt also unabhängig davon, welche Beschriftung die
-  richtige ist. Wer die Kapazitäten tatsächlich nutzt, sollte sie einmal
-  gegeneinander verstellen und am Terminal nachsehen.
+  Byte-Positionen und Bit-Bedeutungen. Wer dort nachschlägt, darf die Zahl in
+  der ersten Spalte nicht für eine Byte-Position halten — Byte 45 trägt dort
+  die Nummer TOP95, und Byte 95 ist in dieser Firmware etwas ganz anderes
+  (siehe die Fußangel in Abschnitt 4).
+* **SG Ready ist an dieser Anlage ausgetestet und arbeitet wie gewollt.** Die
+  Referenz führt Byte 71 als *Heating* und Byte 72 als *DHW*, `decode.cpp` und
+  `commands.cpp` halten es umgekehrt — maßgeblich ist die Firmware, die
+  Abweichung in der Referenz ist damit für dieses Projekt erledigt. Für die
+  Zuordnung war sie ohnehin folgenlos: SET23 und TOP94 zeigen beide auf
+  Byte 71, das Paar stimmt unabhängig von der Beschriftung.

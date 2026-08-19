@@ -39,6 +39,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `frame_diff.py` | Rohtelegramme eines Mitschnitts ueber alle 203 Bytes vergleichen, angereichert aus `ProtocolByteDecrypt.md` | nein |
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `tablesnap.py` | Momentaufnahme der Topic-Tabelle ueber `/tablerefresh`, zeilenweise diffbar - fuer die Abnahme nach dem Flashen | Produktivgeraet (nur lesend) |
+| `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
@@ -224,6 +225,40 @@ Zwei Hinweise: Nach dem Neustart braucht das Geraet ein paar Abfragezyklen, bis
 die Tabelle wieder gefuellt ist - erst schnappen, wenn keine Zeile mehr leer
 oder `unused` ist. Und die Baseline gehoert unmittelbar vor den Flash gezogen,
 sonst wandern in der Zwischenzeit Messwerte und der Diff wird unuebersichtlich.
+
+## SET-TOP-Zuordnung (set_top_zuordnung.py, 3.9.0)
+
+Erzeugt die Tabellen in `SET-TOP-Zuordnung.md` - welches State-Topic liest ein
+Set-Kommando zurueck, und wo gibt es keins. Liest nur den Quelltext, kein
+Geraeteeingriff:
+
+```
+./set_top_zuordnung.py --pruefen     # Zusammenfassung
+./set_top_zuordnung.py               # alle Tabellen als Markdown
+```
+
+Zugeordnet wird ueber **Byte-Position und Bitmaske, nie ueber Namen**. Die
+tatsaechlich beschriebene Maske eines Kommandos entsteht aus seinem
+Wertebereich: fuer jeden erlaubten Wert das Protokollbyte bilden, alle
+gesetzten Bits verodern. Ohne diesen Schritt landet `QuietMode` beim falschen
+Topic - seine Tabellenmaske ist `0xFF`, belegt sind aber nur die Bits 3-5, und
+Byte 7 traegt drei Topics.
+
+Zwei Dinge, die dabei herauskommen und ohne die Rechnung nicht auffallen:
+`PowerfulMode` schreibt Quiet-Stufe und Quiet-Zeitprogramm mit auf Off (seine
+Werte `0x49`-`0x4C` setzen deren Bits immer mit), und nach `set/OperationMode 2`
+meldet TOP4 nie den geschriebenen Wert zurueck, sondern 2 **oder** 7 - die WP
+legt die Richtung selbst fest.
+
+Nach jeder Aenderung an `setCommands[]` oder `stateTopics[]` laufen lassen und
+die Ausgabe gegen die Doku halten.
+
+**Fallstrick beim Nachschlagen in `ProtocolByteDecrypt.md`:** Die Zahl in der
+ersten Spalte ist die Topic-Nummer des *Original*-Projekts, keine
+Byte-Position. Byte 45 (max. Pumpen-Duty) traegt dort die Nummer TOP95 - und
+Byte 95 ist in dieser Firmware TOP79 `Heat_To_Cool_Temp`. Am 2026-08-19 an
+beiden Stufen gegengeprueft: TOP79 meldet 20 Grad, TOP80 15 Grad, waehrend auf
+SET15 die Werte 100 (Stufe 1) und 125 (Stufe 2) geschrieben werden.
 
 ## Verhaeltnis zu `pio test`
 
