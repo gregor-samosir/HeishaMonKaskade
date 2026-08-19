@@ -26,8 +26,8 @@ Vorgeschlagene Bündelung:
 | Version | Inhalt | Art | Stand |
 | --- | --- | --- | --- |
 | 3.8.1 | Maßnahme 1 + K1 (Zugangswege, kein Protokoll-/Topic-Einfluss) | Fix | **erledigt 2026-08-18** — umgesetzt, am Gerät abgenommen, auf beiden Stufen ausgerollt |
-| 3.8.2 | Maßnahme 2 (retained `Online`) + K3 (Publish-Wiederholung) | Fix | **erledigt 2026-08-19** — gebaut und getestet, Abnahme am Gerät steht aus |
-| 3.9.0 | Maßnahme 3 (Weg B + `nullptr`-Abschluss) + Testausbau | Umbau | **erledigt 2026-08-19** — gebaut und getestet, Abnahme am Gerät steht aus |
+| 3.8.2 | Maßnahme 2 (retained `Online`) + K3 (Publish-Wiederholung) | Fix | **erledigt 2026-08-19** — in 3.9.0 enthalten, nicht einzeln ausgerollt |
+| 3.9.0 | Maßnahme 3 (Weg B + `nullptr`-Abschluss) + Testausbau | Umbau | **erledigt 2026-08-19** — am Gerät abgenommen, auf beiden Stufen ausgerollt |
 | — | K2 (Beobachtungsauftrag), K4 (bekannte Grenze) | Entscheid | **entschieden 2026-08-19** — keine Codeänderung |
 | — | CI-Trigger nur noch `main` | Aufräumen | **erledigt 2026-08-19** |
 
@@ -308,6 +308,45 @@ Projektkonvention ohnehin verlangt, vor dem Merge alle zehn Envs lokal zu bauen
 und die Hosttests laufen zu lassen — die CI ist damit Rückversicherung für
 `main`, nicht Erstprüfung. Kostenargument gibt es keins: Für ein öffentliches
 Repository sind Actions-Minuten frei; der Gewinn ist weniger Lauf-Rauschen.
+
+---
+
+## Rollout 3.9.0 — erledigt (2026-08-19)
+
+**Direkt auf 3.9.0, ohne 3.8.2 als Zwischenschritt.** Ein eigener 3.8.2-Rollout
+hätte keinen zusätzlichen Nachweis gebracht: Das Retain-Verhalten zeigt der
+ioBroker-Adapter nicht, und die Publish-Wiederholung wird erst bei einer
+MQTT-Unterbrechung sichtbar. Die `/tablerefresh`-Abnahme deckt genau das ab,
+was 3.9.0 an der Anzeige ändert. 3.8.2 ist trotzdem als Binärstand abgelegt,
+damit ein Rückfall um eine Stufe möglich bleibt.
+
+| Stufe | Gerät | OTA | Ergebnis |
+| --- | --- | --- | --- |
+| 1 | 192.168.2.120 | 09:28 | 90 Zeilen **identisch**, keine einzige Abweichung |
+| 2 | 192.168.2.122 | 09:29 | 90 Zeilen, **eine** Abweichung: `Eva_Outlet_Temp` 21 → 22 °C (laufender Messwert) |
+
+Beide Geräte meldeten sich rund sieben Sekunden nach dem Upload mit 3.9.0
+zurück, `info/LWT` stand unmittelbar danach wieder auf `Online`, die
+State-Topics liefen im 5-Sekunden-Takt weiter. Stufe 2 lief während des OTA im
+Warmwasserbetrieb (`Heatpump_State` On, `Operating_Mode_State` DHW) und lief
+danach unverändert weiter.
+
+Die 22 von Maßnahme 3 betroffenen Zeilen wurden zusätzlich einzeln angesehen —
+alle zeigen ihren erwarteten Klartext (`Off`, `Disabled`, `Blocked`, `Direct`,
+`DHW` …), keine leere Zelle und kein `unknown`. Letzteres ist der Normalfall:
+`unknown` erscheint nur bei einem Rohwert, den die Wärmepumpe bisher nie
+geliefert hat — genau dem Wert, der vorher zum Absturz geführt hätte.
+
+Stabilitätskontrolle rund vier Minuten nach dem Flash: beide Geräte weiter auf
+3.9.0, `info/LWT` unverändert seit dem Neustart (kein zwischenzeitlicher
+Reconnect, also kein Watchdog-Zyklus), und das 5-Minuten-Vollupdate hat auf
+Stufe 1 um 09:33:20 alle State-Topics erneut geschrieben. Dass die
+Zeitstempel dazwischen stehen bleiben, ist kein Befund, sondern das erwartete
+Verhalten: Publiziert wird nur bei Wertänderung oder mit dem Vollupdate.
+
+Für die Abnahme entstand [`test/tablesnap.py`](test/tablesnap.py) (holt
+`/tablerefresh` und gibt `TOP<n>|Name|Wert|Klartext` aus), damit der Vergleich
+ein `diff` ist statt Zeilenvergleich per Auge.
 
 ---
 

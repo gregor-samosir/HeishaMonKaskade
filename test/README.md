@@ -38,6 +38,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `decode_vergleich.py` | Dekodierpfad zweier Codestaende gegeneinander laufen lassen, auf dem Mac | nein |
 | `frame_diff.py` | Rohtelegramme eines Mitschnitts ueber alle 203 Bytes vergleichen, angereichert aus `ProtocolByteDecrypt.md` | nein |
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
+| `tablesnap.py` | Momentaufnahme der Topic-Tabelle ueber `/tablerefresh`, zeilenweise diffbar - fuer die Abnahme nach dem Flashen | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
@@ -196,6 +197,33 @@ beginnt und ein Include in Anfuehrungszeichen immer zuerst im Verzeichnis der
 einbindenden Datei sucht: aus `src/` heraus gewinnt der echte Header und zieht
 LittleFS, WiFi und den Rest der Arduino-Welt nach. `decode_hosttest.sh` kopiert
 die Uebersetzungseinheit deshalb neben die Ersatzheader aus `stubs/`.
+
+## Abnahme nach dem Flashen (tablesnap.py, 3.9.0)
+
+Die Projektkonvention nach jedem OTA: Baseline der Topic-Tabelle vor dem Flash
+ziehen, nach dem Flash noch einmal, und beide zeilenweise halten. Bis 3.9.0 ging
+das per Augenschein ueber die Weboberflaeche - bei 90 Zeilen je Stufe ist das
+muehsam und uebersieht leicht etwas.
+
+`tablesnap.py` holt `/tablerefresh` und gibt je Zeile `TOP<n>|Name|Wert|Klartext`
+aus. Damit ist die Abnahme ein `diff`:
+
+```
+./tablesnap.py 192.168.2.120 > vorher.txt
+pio run -e heishamon_esp32_h1_ota -t upload
+./tablesnap.py 192.168.2.120 > nachher.txt
+diff vorher.txt nachher.txt
+```
+
+Was uebrig bleibt, ist entweder ein laufender Messwert oder ein Befund. Reines
+GET, kein Eingriff ins Geraet. Beim Rollout von 3.9.0 am 2026-08-19 blieb Stufe 1
+vollstaendig ohne Abweichung, Stufe 2 mit einer einzigen (`Eva_Outlet_Temp`
+21 -> 22 Grad).
+
+Zwei Hinweise: Nach dem Neustart braucht das Geraet ein paar Abfragezyklen, bis
+die Tabelle wieder gefuellt ist - erst schnappen, wenn keine Zeile mehr leer
+oder `unused` ist. Und die Baseline gehoert unmittelbar vor den Flash gezogen,
+sonst wandern in der Zwischenzeit Messwerte und der Diff wird unuebersichtlich.
 
 ## Verhaeltnis zu `pio test`
 
