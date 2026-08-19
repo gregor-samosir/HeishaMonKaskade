@@ -470,7 +470,7 @@ Kurvenbetrieb musste ein Mensch am Bedienterminal machen. Offen war die eine
 Frage, ob die WP Byte 28 im Kommandotelegramm ueberhaupt annimmt - das
 Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
 
-**Sie nimmt es an.** Drei Laeufe an Stufe 1, alle bei stehender Anlage
+**Sie nimmt es an.** Vier Laeufe an Stufe 1, alle bei stehender Anlage
 (`Heatpump_State` 0, `Compressor_Freq` 0), Firmware 3.11.0:
 
 ```
@@ -483,16 +483,47 @@ Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
 | 1 | Heizen | `CoolingMode 0` | `0x0A` -> `0x06` | **10 -> 01** | 10 -> 10 |
 | 2 | Kuehlen | `CoolingMode 0` | `0x0A` -> `0x06` | **10 -> 01** | 10 -> 10 |
 | 3 | Heizen | `HeatingMode 0` | `0x0A` -> `0x09` | 10 -> 10 | **10 -> 01** |
+| 4 | Heizen | **beide** `0` | `0x0A` -> `0x05` | **10 -> 01** | **10 -> 01** |
 
-Jedes Mal wanderte das Byte im SELBEN Mitschnitt, jedes Mal blieb das
-Nachbarfeld stehen. **Die Bitmaske greift also in beide Richtungen bitgenau** -
-das war neben der Annahmefrage der zweite Punkt, der zu klaeren war. Das
-Zurueckschalten stellte in allen drei Laeufen `0x0A` her.
+Jedes Mal wanderte das Byte im SELBEN Mitschnitt. In den Laeufen 1-3 blieb das
+jeweilige Nachbarfeld stehen - **die Bitmaske greift also in beide Richtungen
+bitgenau**, das war neben der Annahmefrage der zweite Punkt, der zu klaeren
+war. Das Zurueckschalten stellte in allen vier Laeufen `0x0A` her, in Lauf 4
+ebenfalls mit beiden Kommandos zusammen (`0x05` -> `0x0A`).
 
-Damit sind drei der vier Rohwerte aus `ProtocolByteDecrypt.md` am Geraet
-erzeugt. Der vierte (`0x05`, beide Kreise auf Kurve) braucht beide Kommandos im
-selben 500-ms-Sammelfenster und ist nicht gemessen; auf dem Host deckt ihn
-`byte28_test.cpp` ab.
+**Damit sind alle vier Rohwerte aus `ProtocolByteDecrypt.md` am Geraet
+erzeugt.**
+
+### Lauf 4: beide Kommandos im selben Sammelfenster
+
+Das ist der Fall, den der Notbetrieb tatsaechlich fahren wuerde, und er war der
+letzte ungemessene. Die Kaskadensteuerung sendet beide Kommandos aus derselben
+Flow-Ausfuehrung; sie landen damit im selben 500-ms-Fenster (`COMMANDTIMER`,
+verlaengerbar bis `COMMAND_WINDOW_MAX` 2000 ms) und werden zu EINEM Telegramm
+zusammengefasst, in dem beide Bitfelder gleichzeitig einen Wechsel verlangen.
+In den Laeufen 1-3 stand das jeweils andere Feld auf `00` = "keine Aenderung" -
+diesen Fall hatte die WP also nie gesehen.
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump/set/HeatingMode=0 \
+    panasonic_heat_pump/set/CoolingMode=0
+```
+
+`mqtt_pub.py` ist genau dafuer gebaut: mehrere Topics ueber EINE Verbindung
+dicht hintereinander (hier 20 ms Abstand).
+
+**Die WP nimmt beide Felder an.** TOP76 und TOP81 gingen zusammen auf 0. Die
+Firmware-Seite war ohnehin belegt - `byte28_test.cpp` baut `0x05` aus denselben
+zwei Merge-Aufrufen, und die Masken `0x03` und `0x0C` sind disjunkt, so dass
+die Konfliktwarnung in `commands.cpp` nicht anschlaegt. Offen war allein, was
+die WP mit einem doppelten Wechsel macht.
+
+**Fuer das Notbetriebskonzept heisst das:** Umschalten geht in einem Rutsch,
+die Kommandos muessen nicht zeitlich getrennt werden. TOP76/TOP81 sollten
+trotzdem zurueckgelesen und bei Bedarf nachgelegt werden - in einer
+Ausfallsituation ist "gesendet" nicht dasselbe wie "steht", und das Ruecklesen
+kostet nichts.
 
 ### Was das Umschalten sonst noch anrichtet
 
@@ -500,23 +531,29 @@ Erwartet war der Kurven-Reset auf die Panasonic-Werksvorgaben (Beobachtung vom
 2026-08-11 am Bedienterminal, weiter unten). Ueberraschend war, dass es den
 jeweils NICHT geschalteten Kreis mittrifft:
 
-| Wert | vorher | nach `CoolingMode 0` | nach `HeatingMode 0` |
-| --- | ---: | ---: | ---: |
-| TOP76 `Heating_Mode` | 1 | 1 | **0** |
-| TOP81 `Cooling_Mode` | 1 | **0** | 1 |
-| TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **0** |
-| TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** |
-| TOP29 `Z1_Heat_Curve_Target_High_Temp` | 20 | **35** | **55** |
-| TOP30 `Z1_Heat_Curve_Target_Low_Temp` | 34 | 34 | **35** |
-| TOP32 `Z1_Heat_Curve_Outside_Low_Temp` | -10 | -10 | **-5** |
-| TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** |
-| TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | 20 |
+| Wert | vorher | `CoolingMode 0` | `HeatingMode 0` | **beide 0** |
+| --- | ---: | ---: | ---: | ---: |
+| TOP76 `Heating_Mode` | 1 | 1 | **0** | **0** |
+| TOP81 `Cooling_Mode` | 1 | **0** | 1 | **0** |
+| TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **0** | **0** |
+| TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** | **0** |
+| TOP29 `Z1_Heat_Curve_Target_High_Temp` | 20 | **35** | **55** | **55** |
+| TOP30 `Z1_Heat_Curve_Target_Low_Temp` | 34 | 34 | **35** | **35** |
+| TOP32 `Z1_Heat_Curve_Outside_Low_Temp` | -10 | -10 | **-5** | **-5** |
+| TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** | **15** |
+| TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | 20 | **10** |
 
-Die zwei Spalten sind spiegelbildlich, und beide Werkskurven stehen darin:
-**Heizkurve 55 C bei -5 C und 35 C bei +15 C**, **Kuehlkurve 15 C bei 20 C und
-10 C bei 30 C**. Lauf 3 belegt die Heizkurve vollstaendig inklusive des
-Aussenpunkts (TOP32 auf -5); beim Kuehl-Lauf konnten TOP74/TOP75 nichts zeigen,
-weil sie schon auf den Werksvorgaben standen.
+Die mittleren beiden Spalten sind spiegelbildlich, die letzte zeigt beide
+Werkskurven in einer einzigen Momentaufnahme: **Heizkurve 55 C bei -5 C und
+35 C bei +15 C**, **Kuehlkurve 15 C bei 20 C und 10 C bei 30 C**. Lauf 3 belegt
+die Heizkurve vollstaendig inklusive des Aussenpunkts (TOP32 auf -5); beim
+reinen Kuehl-Lauf konnten TOP74/TOP75 nichts zeigen, weil sie schon auf den
+Werksvorgaben standen.
+
+**Der Roundtrip-Verlust ist damit auch ueber den Kommandopfad belegt:** Nach dem
+Zurueckschalten in Lauf 4 standen TOP27 auf 35 und TOP28 auf 10 - die Sollwerte
+hatten die unteren Kurvenpunkte uebernommen. Genau die Beobachtung vom
+2026-08-11 am Bedienterminal, diesmal fuer beide Kreise gleichzeitig.
 
 **Der nicht geschaltete Kreis wird mitverstellt:** bei `CoolingMode 0` sprang
 der HEIZ-Sollwert TOP27 auf 35, bei `HeatingMode 0` der KUEHL-Sollwert TOP28
@@ -545,8 +582,8 @@ selbst zurueck:
 
 **Der 5-min-Re-Assert funktioniert.** In den Laeufen 2 und 3 war er im
 Mitschnitt zu sehen: In Lauf 2 sendete Node-RED um 16:53:59 und wieder um
-16:58:59, TOP27 ging um 16:59:06 von 35 auf 20 zurueck, ohne Zutun. In Lauf 3
-standen die vier offenen Werte binnen zweier Minuten wieder richtig. Beim
+16:58:59, TOP27 ging um 16:59:06 von 35 auf 20 zurueck, ohne Zutun. In den Laeufen
+3 und 4 standen die vier offenen Werte binnen zweier Minuten wieder richtig. Beim
 ersten Lauf blieb er aus - dort war die Anlage nur unter Strom, Kompressor und
 WP waren nicht freigegeben, es gab fuer die Kaskadensteuerung also nichts zu
 tun. Das ist eine Eigenschaft dieses Anlagenzustands, kein Mangel des
@@ -559,8 +596,10 @@ zuruecksetzen:
     panasonic_heat_pump/set/Z1CoolRequestTemperature=20
 ```
 
-Nach allen drei Laeufen stand der Ausgangszustand wieder vollstaendig - alle 15
-Werte, beide Betriebsarten und der Betriebsmodus.
+In Lauf 4 holte der Re-Assert die Sollwerte binnen zweier Minuten zurueck und
+damit auch die beiden TargetHigh-Werte, die sich mit ihnen eine Speicherstelle
+teilen. Nach allen vier Laeufen stand der Ausgangszustand wieder vollstaendig -
+alle 15 Werte, beide Betriebsarten und der Betriebsmodus.
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

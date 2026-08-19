@@ -13,9 +13,11 @@
 > 1 | Heizen | `CoolingMode 0` | `0x0A` → `0x06` | TOP81 → 0, TOP76 blieb 1
 > 2 | Kühlen | `CoolingMode 0` | `0x0A` → `0x06` | wie Lauf 1
 > 3 | Heizen | `HeatingMode 0` | `0x0A` → `0x09` | TOP76 → 0, TOP81 blieb 1
+> 4 | Heizen | **beide** `0` | `0x0A` → `0x05` | TOP76 **und** TOP81 → 0
 >
 > Die Bitmaske greift damit in beide Richtungen bitgenau. Schritt 6 des
-> Messplans ist mit Lauf 3 erledigt.
+> Messplans ist mit Lauf 3 erledigt; **alle vier Rohwerte aus
+> `ProtocolByteDecrypt.md` sind am Gerät erzeugt worden.**
 >
 > **Zwei Befunde stehen so nicht unten:**
 > 1. Das Umschalten trifft immer **beide** Kreise, nicht nur den geschalteten —
@@ -28,9 +30,12 @@
 > Der Ausgangszustand aus Abschnitt 6 wurde nach jedem Lauf vollständig
 > wiederhergestellt.
 >
-> **Ungemessen bleibt allein der Rohwert `0x05`** (beide Kreise auf Kurve, also
-> beide Kommandos im selben 500-ms-Sammelfenster). Auf dem Host deckt ihn
-> `test/byte28_test.cpp` ab.
+> **Lauf 4 beantwortet die für den Notbetrieb entscheidende Frage:** Beide
+> Kommandos aus derselben Flow-Ausführung landen im selben 500-ms-Sammelfenster
+> und werden zu einem Telegramm, in dem beide Bitfelder gleichzeitig wechseln
+> wollen. Die Wärmepumpe nimmt beide an — der Notbetrieb kann in einem Rutsch
+> schalten. TOP76/TOP81 sollten trotzdem zurückgelesen und bei Bedarf nachgelegt
+> werden.
 >
 > Ergebnisse und Rohdaten: `test/README.md` (Abschnitt „Betriebsart
 > Kurve/Direkt schalten"), `SET-TOP-Zuordnung.md` Fußnote ⁶, Changelog in

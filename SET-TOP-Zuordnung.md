@@ -202,7 +202,7 @@ Bitmasken `0x03` und `0x0C` sind hier keine Kosmetik — ohne sie schaltete ein
 Kühl-Kommando die Heizung mit um.
 
 **Beide Kommandos sind am 2026-08-19 an Stufe 1 bei stehender Anlage gemessen**,
-in drei Läufen. Byte 28 wanderte jedes Mal im laufenden Mitschnitt, und die
+in vier Läufen. Byte 28 wanderte jedes Mal im laufenden Mitschnitt, und die
 Maske griff jedes Mal bitgenau:
 
 Lauf | Betriebsmodus | Kommando | Byte 28 | TOP76 `Heating_Mode` | TOP81 `Cooling_Mode`
@@ -210,34 +210,53 @@ Lauf | Betriebsmodus | Kommando | Byte 28 | TOP76 `Heating_Mode` | TOP81 `Coolin
 1 | Heizen | `CoolingMode 0` | `0x0A` → `0x06` | 1 → **1** | 1 → **0**
 2 | Kühlen | `CoolingMode 0` | `0x0A` → `0x06` | 1 → **1** | 1 → **0**
 3 | Heizen | `HeatingMode 0` | `0x0A` → `0x09` | 1 → **0** | 1 → **1**
+4 | Heizen | **beide** `0` | `0x0A` → `0x05` | 1 → **0** | 1 → **0**
 
-Damit sind drei der vier Rohwerte aus `ProtocolByteDecrypt.md` am Gerät erzeugt
-worden — `0x0A`, `0x06` und `0x09`. Der vierte (`0x05`, beide Kreise auf Kurve)
-setzte einen Lauf mit beiden Kommandos im selben Sammelfenster voraus und ist
-nicht gemessen. Das Zurückschalten stellte in allen drei Läufen `0x0A` her.
+**Damit sind alle vier Rohwerte aus `ProtocolByteDecrypt.md` am Gerät erzeugt**
+— `0x0A`, `0x06`, `0x09` und `0x05`. Das Zurückschalten stellte in allen vier
+Läufen `0x0A` her, in Lauf 4 ebenfalls mit beiden Kommandos zusammen.
+
+**Lauf 4 beantwortet die für den Notbetrieb entscheidende Frage.** Die
+Kaskadensteuerung würde beide Kommandos aus derselben Flow-Ausführung senden;
+sie landen damit im selben 500-ms-Sammelfenster der Firmware und werden zu
+*einem* Telegramm zusammengefasst, in dem beide Bitfelder gleichzeitig einen
+Wechsel verlangen. Diesen Fall hatte die Wärmepumpe bis dahin nie gesehen — in
+den Läufen 1–3 stand das jeweils andere Feld auf `00` = „keine Änderung".
+**Sie nimmt beide an:** TOP76 und TOP81 gingen zusammen auf 0. Der Notbetrieb
+kann in einem Rutsch schalten und muss die Kommandos nicht zeitlich trennen.
+
+Trotzdem gehört ins Notbetriebskonzept, dass TOP76/TOP81 **zurückgelesen und
+bei Bedarf nachgelegt** werden. In einer Ausfallsituation ist „gesendet" nicht
+dasselbe wie „steht", und das Rücklesen kostet nichts.
 
 ⚠️ **Das Umschalten ist nicht folgenlos umkehrbar.** Der Wechsel auf
 Kurvenbetrieb setzt die Kurve auf die Panasonic-Werksvorgaben zurück, und das
 Zurückschalten stellt sie *nicht* wieder her. Gemessen wurde dabei mehr, als zu
 erwarten war:
 
-Wert | vorher | nach `CoolingMode 0` | nach `HeatingMode 0`
-:--- | ---: | ---: | ---:
-TOP76 `Heating_Mode` | 1 | 1 | **0**
-TOP81 `Cooling_Mode` | 1 | **0** | 1
-TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **0**
-TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10**
-TOP29 `Z1_Heat_Curve_Target_High_Temp` | 20 | **35** | **55**
-TOP30 `Z1_Heat_Curve_Target_Low_Temp` | 34 | 34 | **35**
-TOP32 `Z1_Heat_Curve_Outside_Low_Temp` | −10 | −10 | **−5**
-TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10**
-TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | 20
+Wert | vorher | `CoolingMode 0` | `HeatingMode 0` | **beide 0**
+:--- | ---: | ---: | ---: | ---:
+TOP76 `Heating_Mode` | 1 | 1 | **0** | **0**
+TOP81 `Cooling_Mode` | 1 | **0** | 1 | **0**
+TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **0** | **0**
+TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** | **0**
+TOP29 `Z1_Heat_Curve_Target_High_Temp` | 20 | **35** | **55** | **55**
+TOP30 `Z1_Heat_Curve_Target_Low_Temp` | 34 | 34 | **35** | **35**
+TOP32 `Z1_Heat_Curve_Outside_Low_Temp` | −10 | −10 | **−5** | **−5**
+TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** | **15**
+TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | 20 | **10**
 
-Die beiden Spalten sind spiegelbildlich, und beide Werkskurven sind darin
-wiederzufinden: **Heizkurve 55 °C bei −5 °C und 35 °C bei +15 °C**, **Kühlkurve
-15 °C bei 20 °C und 10 °C bei 30 °C**. Lauf 3 belegt die Heizkurve vollständig
-inklusive des Außenpunkts (TOP32 auf −5) — beim Kühl-Lauf konnten TOP74/TOP75
-nichts zeigen, weil sie schon auf den Werksvorgaben standen.
+Die mittleren beiden Spalten sind spiegelbildlich, und die letzte zeigt beide
+Werkskurven in einer einzigen Momentaufnahme: **Heizkurve 55 °C bei −5 °C und
+35 °C bei +15 °C**, **Kühlkurve 15 °C bei 20 °C und 10 °C bei 30 °C**. Lauf 3
+belegt die Heizkurve vollständig inklusive des Außenpunkts (TOP32 auf −5) —
+beim reinen Kühl-Lauf konnten TOP74/TOP75 nichts zeigen, weil sie schon auf den
+Werksvorgaben standen.
+
+**Der Roundtrip-Verlust ist damit auch über den Kommandopfad belegt:** Nach dem
+Zurückschalten in Lauf 4 standen TOP27 auf 35 und TOP28 auf 10 — die Sollwerte
+hatten die unteren Kurvenpunkte übernommen. Das ist genau die Beobachtung vom
+2026-08-11 am Bedienterminal, diesmal für beide Kreise gleichzeitig.
 
 **Der jeweils NICHT geschaltete Kreis wird mitverstellt.** Bei `CoolingMode 0`
 sprang der Heiz-Sollwert TOP27 auf 35, bei `HeatingMode 0` der Kühl-Sollwert
@@ -378,7 +397,7 @@ Rückmeldung.
 1 = Direkt. Damit ist der Notbetrieb vollständig fernschaltbar — bis hierher
 musste beim Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
 
-Am 2026-08-19 an Stufe 1 bei stehender Anlage in drei Läufen gemessen, Ablauf
+Am 2026-08-19 an Stufe 1 bei stehender Anlage in vier Läufen gemessen, Ablauf
 und Rohdaten in [`test/README.md`](test/README.md):
 
 * **Die Wärmepumpe nimmt Byte 28 an.** `set/CoolingMode 0` ließ Byte 28 im
@@ -391,6 +410,9 @@ und Rohdaten in [`test/README.md`](test/README.md):
   TOP81 = 1 wieder her.
 * **SET35 verhält sich spiegelbildlich** — `set/HeatingMode 0` ließ Byte 28 auf
   `0x09` wandern (Bits 7+8 `10` → `01`), TOP76 ging auf 0, TOP81 blieb auf 1.
+* **Beide Kommandos zusammen werden beide angenommen** — im selben
+  Sammelfenster gesendet ergaben sie `0x05`, TOP76 und TOP81 gingen gemeinsam
+  auf 0. Der Notbetrieb kann damit in einem Rutsch umschalten.
 
 ⚠️ **Das Umschalten hat Nebenwirkungen, und eine davon war neu.** Erwartet und
 bestätigt: die Kühlkurve stand danach auf den Panasonic-Werksvorgaben
@@ -405,12 +427,9 @@ SET35 oder SET36 benutzt, muss danach die Kurve beider Kreise nachziehen; die
 Sollwerte holt sich die Kaskadensteuerung über ihren 5-Minuten-Re-Assert
 selbst zurück, sofern sie gerade aktiv regelt.
 
-**Beide Kommandos sind gemessen** — SET36 in zwei Betriebsmodi, SET35 im
-Heizbetrieb. Ungemessen bleibt allein der Fall, dass beide Kommandos im selben
-500-ms-Sammelfenster ankommen (Rohwert `0x05`, beide Kreise auf Kurve). Auf dem
-Host ist er durch `test/byte28_test.cpp` abgedeckt; am Gerät wäre er der
-Nachweis, dass die Kaskadensteuerung den Notbetrieb in einem Rutsch schalten
-kann, statt die zwei Kommandos zeitlich trennen zu müssen.
+**Alles gemessen** — SET36 in zwei Betriebsmodi, SET35 einzeln, und beide
+zusammen im selben Sammelfenster. Alle vier Rohwerte aus
+`ProtocolByteDecrypt.md` sind am Gerät erzeugt worden.
 
 Offen bleibt:
 

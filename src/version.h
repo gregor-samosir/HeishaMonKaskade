@@ -42,10 +42,11 @@
 //         von 20 auf 35 - den Werkswert der HEIZkurve bei +15 C -, obwohl TOP76
 //         durchgehend auf Direkt stand und die Heizseite nie geschaltet wurde.
 //
-//         DREI LAEUFE, BEIDE KOMMANDOS, BEIDE BETRIEBSMODI.
+//         VIER LAEUFE, BEIDE KOMMANDOS, BEIDE BETRIEBSMODI.
 //           1) Heizbetrieb, CoolingMode 0: 0x0A -> 0x06, TOP81 auf 0, TOP76 blieb
 //           2) Kuehlbetrieb, CoolingMode 0: 0x0A -> 0x06, identisch zu Lauf 1
 //           3) Heizbetrieb, HeatingMode 0: 0x0A -> 0x09, TOP76 auf 0, TOP81 blieb
+//           4) Heizbetrieb, BEIDE 0:       0x0A -> 0x05, TOP76 und TOP81 auf 0
 //         Lauf 2 klaert die Deutung des Nebenbefunds: Nach Lauf 1 war offen, ob
 //         die Waermepumpe immer beide Kreise anfasst oder nur den gerade
 //         aktiven - der mitgewanderte Sollwert war ja der des aktiven Modus. Im
@@ -56,15 +57,29 @@
 //         vollstaendig auf den Werksvorgaben, inklusive des Aussenpunkts
 //         (TOP32 auf -5) - den konnte der Kuehl-Lauf nicht zeigen, weil
 //         TOP74/TOP75 dort schon auf Werk standen.
-//         Damit sind drei der vier Rohwerte aus ProtocolByteDecrypt.md am
-//         Geraet erzeugt (0x0A, 0x06, 0x09); der vierte (0x05, beide Kreise auf
-//         Kurve) braucht beide Kommandos im selben Sammelfenster und ist nur
-//         auf dem Host belegt. Wer SET35 oder SET36 benutzt, muss danach die
+//         LAUF 4 IST DER FALL, DEN DER NOTBETRIEB FAEHRT. Die Kaskadensteuerung
+//         sendet beide Kommandos aus derselben Flow-Ausfuehrung; sie landen im
+//         selben 500-ms-Sammelfenster und werden zu EINEM Telegramm, in dem
+//         beide Bitfelder gleichzeitig einen Wechsel verlangen. Diesen Fall
+//         hatte die WP nie gesehen - in den Laeufen 1-3 stand das andere Feld
+//         auf b00 = "keine Aenderung". Sie nimmt beide an: TOP76 und TOP81
+//         gingen zusammen auf 0, das Zurueckschalten ebenso kombiniert von 0x05
+//         auf 0x0A. Umschalten geht also in einem Rutsch, ohne die Kommandos
+//         zeitlich zu trennen. Die Firmware-Seite war ohnehin belegt -
+//         byte28_test.cpp baut 0x05 aus denselben zwei Merge-Aufrufen, und weil
+//         0x03 und 0x0C disjunkt sind, schlaegt die Konfliktwarnung nicht an.
+//
+//         Damit sind ALLE VIER Rohwerte aus ProtocolByteDecrypt.md am Geraet
+//         erzeugt: 0x0A, 0x06, 0x09 und 0x05. Lauf 4 zeigt zusaetzlich beide
+//         Werkskurven in einer Momentaufnahme und belegt den Roundtrip-Verlust
+//         ueber den Kommandopfad (nach dem Zurueckschalten standen TOP27 auf 35
+//         und TOP28 auf 10, die Sollwerte hatten die unteren Kurvenpunkte
+//         uebernommen). Wer SET35 oder SET36 benutzt, muss danach die
 //         Kurve beider Kreise nachziehen; die Sollwerte holt der 5-min-
 //         Re-Assert der Kaskadensteuerung selbst zurueck, sofern sie gerade
 //         aktiv regelt (in den Laeufen 2 und 3 im Mitschnitt gesehen).
 //
-//         Der Ausgangszustand wurde nach allen drei Laeufen vollstaendig
+//         Der Ausgangszustand wurde nach allen vier Laeufen vollstaendig
 //         wiederhergestellt (Kurve ueber kurven_sync.py). Tabellen und Rohdaten
 //         in test/README.md und SET-TOP-Zuordnung.md Fussnote 6.
 //
