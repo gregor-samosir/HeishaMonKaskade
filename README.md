@@ -555,7 +555,7 @@ keiner Zeit ein Leerwert (−128, −1) auf einem produktiven State-Topic.
 
 ## MQTT-Schnittstelle
 
-90 State-Topics und 32 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
+92 State-Topics und 32 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
 Die vollständige Referenz mit Byte-Spalte und Wertebereichen steht in
 [`MQTT-Topics.md`](MQTT-Topics.md). Welches State-Topic ein Set-Kommando
 zurückliest — und welche vier Kommandos gar keine Rückmeldung haben —, steht in

@@ -50,6 +50,13 @@ static const char *Percent[] = {"value", "&#37", nullptr};
 // vollstaendig gedeckt: b00 -> -1 -> leer, b01/b10/b11 -> 0/1/2 -> im Array.
 static const char *OffOnUnknown[] = {"Off", "On", "unknown", nullptr};
 static const char *HeatCoolActual[] = {"Heat", "Cool", "unknown", nullptr};
+// Betriebsart der Umwaelzpumpe (Byte 4, Bits 3+4). Drei Eintraege decken den
+// Indexbereich -1..2 von getBit3and4 vollstaendig ab. "Auto" und "Fix" sind am
+// 2026-08-19 an WP1 gemessen (Byte 4 wechselte 0x55 <-> 0x65, die Pumpe lief
+// dabei fix auf dem Max-Duty-Wert); "Air purge" stammt aus ProtocolByteDecrypt.md
+// und ist hier bewusst nicht nachgestellt worden - das haette an einer intakten
+// Anlage eine Entlueftungsroutine ausgeloest.
+static const char *WaterPumpMode[] = {"Auto", "Fix", "Air purge", nullptr};
 
 
 /*****************************************************************************/
@@ -168,6 +175,19 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     {100, 110, "Powerful_Mode_Active",             getBit3and4,          nullptr,                   OffOnUnknown},
     {101, 110, "Heat_Cool_SW_State",               getBit5and6,          nullptr,                   HeatCoolActual},
     {102, 110, "External_SW_State",                getBit7and8,          nullptr,                   OffOnUnknown},
+    // Die beiden Ruecklesewerte zu SET15 und SET14 (3.10.0). Beide Bytes sind am
+    // 2026-08-19 an WP1 ausgemessen worden, statt sie aus der Referenz zu
+    // uebernehmen - Wert verstellt, Rohbyte im Hexlog beobachtet, zurueckgestellt:
+    //   Byte 45: set/WaterPumpSpeed 100 -> 110 -> 100 liess das Byte 0x65 -> 0x6F
+    //     -> 0x65 wandern; Stufe 2 zeigt mit 125 entsprechend 0x7E. Es ist die
+    //     MAX-DUTY-Grenze, keine Drehzahl: bei laufender Pumpe folgte TOP92
+    //     Pump_Duty der Grenze exakt (100 -> 100, 80 -> 80, Drehzahl 2300 -> 1500).
+    //     Deshalb Pump_Duty_Max und nicht der irrefuehrende Kommandoname.
+    //   Byte 4:  set/WaterPump 0 -> 1 -> 0 liess die Bits 3+4 b01 -> b10 -> b01
+    //     wandern, die Pumpe lief dabei wirklich an (TOP65 2300 1/min, TOP1
+    //     11,95 l/min). Das Feld meldet also den wirksamen Zustand.
+    {103,  45, "Pump_Duty_Max",                    getIntMinus1,         nullptr,                   Duty},
+    {104,   4, "Water_Pump_Mode",                  getBit3and4,          nullptr,                   WaterPumpMode},
 };
 
 // Haelt NUMBEROFTOPICS (Array-Groesse von actual_data) und die Tabelle zusammen
