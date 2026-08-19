@@ -79,6 +79,11 @@ jobs:
       #                  bindet src/sendwindow.h direkt ein. Deckt als einziger
       #                  den millis()-Überlauf nach 49,7 Tagen ab - an der
       #                  Anlage wäre der nicht abzuwarten.
+      # byte28_test:     Kodierung von SET35/SET36 auf Byte 28 - legt die
+      #                  Merge-Logik aus commands.cpp und die Dekodierer aus
+      #                  decode.cpp nebeneinander. Byte 28 trägt zwei Bitfelder;
+      #                  ohne bitgenaue Maske schaltet ein Kühl-Kommando die
+      #                  Heizung mit um, und genau das prüft die Gegenprobe.
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
@@ -90,6 +95,8 @@ jobs:
           /tmp/telegramm_test
           c++ -std=c++17 -O2 -Wall -o /tmp/sendwindow_test test/sendwindow_test.cpp
           /tmp/sendwindow_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test test/byte28_test.cpp
+          /tmp/byte28_test
           ./test/decode_hosttest.sh
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
