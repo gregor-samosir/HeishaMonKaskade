@@ -166,6 +166,15 @@ static_assert(sizeof(stateTopics) / sizeof(stateTopics[0]) == NUMBEROFTOPICS,
 
 unsigned long nextalldatatime = 0;
 
+// Ein fehlgeschlagenes Publish blieb bis 3.8.1 unbemerkt: der Wert galt als
+// gesendet und kam erst mit der naechsten Aenderung oder dem 5-min-Vollupdate
+// wieder. Beim Broker stand solange der alte Wert - retained, also mit dem
+// Anschein von Gueltigkeit. Diese Marke merkt sich, dass etwas liegenblieb;
+// der naechste Durchlauf (5 s) schickt dann die ganze Tabelle erneut.
+// EINE Marke statt einer je Zeile: ein Publish scheitert praktisch nur, wenn
+// die Verbindung weg ist - dann ist ohnehin die ganze Tabelle betroffen.
+static bool republishAfterFailure = false;
+
 void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN], PubSubClient &mqtt_client)
 {
   char pub_msg[256];
@@ -180,6 +189,11 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
     write_telnet_log((char *)"Publish all topics");
   }
 
+  // Wiederholung aus dem letzten Durchlauf: die Marke wird hier abgeraeumt und
+  // unten neu gesetzt, falls es diesmal wieder nicht klappt
+  bool retryPending = republishAfterFailure;
+  republishAfterFailure = false;
+
   char top_value[MAXVALUELEN]; // stack buffer, decoders are String-free
   // index laeuft ueber die Tabellenzeilen, die TOP-Nummer kommt aus der Zeile
   for (unsigned int index = 0; index < NUMBEROFTOPICS; index++)
@@ -188,16 +202,21 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
     getTopicPayload(index, serial_data, top_value);
     bool changed = (strcmp(actual_data[index], top_value) != 0);
 
-    if (updatealltopics || changed)
+    if (updatealltopics || retryPending || changed)
     {
-      if (changed) // write only changed topics to mqtt log
+      // Nur echte Aenderungen ins Log - eine Wiederholung ist keine Aenderung
+      // und wuerde das Log sonst alle 5 s fuellen, solange MQTT weg ist
+      if (changed)
       {
         (void)snprintf(pub_msg, sizeof(pub_msg), "<PUB> TOP%u %s: %s", topic.number, topic.name, top_value);
         write_mqtt_log(pub_msg);
       }
       strlcpy(actual_data[index], top_value, MAXVALUELEN);
       (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topic.name);
-      (void)mqtt_client.publish(mqtt_topic, top_value, MQTT_RETAIN_VALUES);
+      if (!mqtt_client.publish(mqtt_topic, top_value, MQTT_RETAIN_VALUES))
+      {
+        republishAfterFailure = true; // im naechsten Durchlauf erneut versuchen
+      }
     }
   }
 }

@@ -273,7 +273,13 @@ bool mqtt_reconnect()
   write_telnet_log((char *)"Mqtt reconnect");
   if (mqtt_client.connect(wifi_hostname, mqtt_username, mqtt_password, Topics::WILL.c_str(), 1, true, "Offline"))
   {
-    mqtt_client.publish(Topics::WILL.c_str(), "Online");
+    // Retain-Flag: das Will "Offline" liegt retained beim Broker (Argument 6
+    // im connect() darueber). Ohne Retain hier bliebe nach jedem Reconnect
+    // "Offline" der letzte gespeicherte Wert - ein Abonnent, der sich spaeter
+    // verbindet (Node-RED-Neustart, Kaskaden-Waechter), haelt die Stufe dann
+    // fuer tot, obwohl sie laeuft. Beide Zustaende desselben Topics muessen
+    // retained sein, sonst ist der zuletzt gespeicherte immer der falsche.
+    (void)mqtt_client.publish(Topics::WILL.c_str(), "Online", true);
 
     // Set-Topics kommen aus setCommands[] in commands.cpp. Hier stand bis
     // 3.4.1 je Topic ein eigener subscribe-Aufruf - eine zweite Liste, die
