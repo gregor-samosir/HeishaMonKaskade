@@ -1,6 +1,18 @@
 name: CI
 
-on: [push, pull_request]
+# Nur noch main, nicht mehr jeder Branch. Die Projektkonvention verlangt
+# ohnehin, vor dem Merge alle zehn Envs lokal zu bauen und die Hosttests laufen
+# zu lassen - die CI ist damit Rueckversicherung, nicht Erstpruefung. Ihr Zweck
+# bleibt das Absichern der ESP8266-Rueckfallebene, und die steht in main.
+# workflow_dispatch bleibt, damit ein Branch bei Bedarf trotzdem gezielt durch
+# die CI geschickt werden kann, ohne diese Datei anzufassen (Actions -> CI ->
+# Run workflow -> Branch waehlen).
+# pull_request ist absichtlich raus: hier wird lokal gemergt, der Trigger lief
+# praktisch nie.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
