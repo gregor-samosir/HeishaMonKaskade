@@ -414,7 +414,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
-| [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — Kühlseite erledigt in 3.11.0, Heizseite offen |
+| [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — vollständig erledigt in 3.11.0, beide Kommandos am Gerät belegt |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

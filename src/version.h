@@ -26,8 +26,7 @@
 //         schaltet, muss die Kurve danach aus dem ioBroker nachziehen.
 //
 //         AM GERAET GEMESSEN, NICHT ABGELEITET. Am 2026-08-19 an Stufe 1 bei
-//         stehender Anlage (Heatpump_State 0, Compressor_Freq 0), zuerst im
-//         Heiz- und danach im Kuehlbetrieb. Die offene
+//         stehender Anlage (Heatpump_State 0, Compressor_Freq 0). Die offene
 //         Frage war, ob die Waermepumpe Byte 28 im Kommandotelegramm ueberhaupt
 //         annimmt - das Original-Projekt hat kein Kommando dafuer, es gab also
 //         keine Fremderfahrung. Sie nimmt es an: set/CoolingMode 0 liess Byte 28
@@ -43,18 +42,29 @@
 //         von 20 auf 35 - den Werkswert der HEIZkurve bei +15 C -, obwohl TOP76
 //         durchgehend auf Direkt stand und die Heizseite nie geschaltet wurde.
 //
-//         ZWEIMAL GEMESSEN, EINMAL JE BETRIEBSMODUS. Der erste Lauf fand im
-//         Heizbetrieb statt (Operating_Mode_State 0). Damit war offen, ob die
-//         Waermepumpe immer beide Kreise anfasst oder nur den gerade aktiven -
-//         der mitgewanderte Sollwert war ja der des aktiven Modus. Ein zweiter
-//         Lauf im Kuehlbetrieb (Operating_Mode_State 1) am selben Tag hat das
-//         entschieden: TOP27 sprang WIEDER auf 35, obwohl der Heizkreis diesmal
-//         nicht der aktive war. Byte 28 wanderte identisch von 0x0A auf 0x06.
-//         Die Waermepumpe fasst beim Betriebsartwechsel also IMMER beide Kreise
-//         an, unabhaengig vom Betriebsmodus. Wer SET35 oder SET36 benutzt, muss
-//         danach Kurve und Sollwerte beider Kreise nachziehen.
+//         DREI LAEUFE, BEIDE KOMMANDOS, BEIDE BETRIEBSMODI.
+//           1) Heizbetrieb, CoolingMode 0: 0x0A -> 0x06, TOP81 auf 0, TOP76 blieb
+//           2) Kuehlbetrieb, CoolingMode 0: 0x0A -> 0x06, identisch zu Lauf 1
+//           3) Heizbetrieb, HeatingMode 0: 0x0A -> 0x09, TOP76 auf 0, TOP81 blieb
+//         Lauf 2 klaert die Deutung des Nebenbefunds: Nach Lauf 1 war offen, ob
+//         die Waermepumpe immer beide Kreise anfasst oder nur den gerade
+//         aktiven - der mitgewanderte Sollwert war ja der des aktiven Modus. Im
+//         Kuehlbetrieb sprang TOP27 WIEDER auf 35, obwohl der Heizkreis diesmal
+//         nicht der aktive war. Es sind IMMER beide Kreise.
+//         Lauf 3 belegt SET35 und ist zu Lauf 1 spiegelbildlich: der KUEHL-
+//         Sollwert TOP28 sprang auf 10, und die Heizkurve stand danach
+//         vollstaendig auf den Werksvorgaben, inklusive des Aussenpunkts
+//         (TOP32 auf -5) - den konnte der Kuehl-Lauf nicht zeigen, weil
+//         TOP74/TOP75 dort schon auf Werk standen.
+//         Damit sind drei der vier Rohwerte aus ProtocolByteDecrypt.md am
+//         Geraet erzeugt (0x0A, 0x06, 0x09); der vierte (0x05, beide Kreise auf
+//         Kurve) braucht beide Kommandos im selben Sammelfenster und ist nur
+//         auf dem Host belegt. Wer SET35 oder SET36 benutzt, muss danach die
+//         Kurve beider Kreise nachziehen; die Sollwerte holt der 5-min-
+//         Re-Assert der Kaskadensteuerung selbst zurueck, sofern sie gerade
+//         aktiv regelt (in den Laeufen 2 und 3 im Mitschnitt gesehen).
 //
-//         Der Ausgangszustand wurde nach beiden Laeufen vollstaendig
+//         Der Ausgangszustand wurde nach allen drei Laeufen vollstaendig
 //         wiederhergestellt (Kurve ueber kurven_sync.py). Tabellen und Rohdaten
 //         in test/README.md und SET-TOP-Zuordnung.md Fussnote 6.
 //

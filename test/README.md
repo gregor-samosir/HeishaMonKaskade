@@ -470,68 +470,67 @@ Kurvenbetrieb musste ein Mensch am Bedienterminal machen. Offen war die eine
 Frage, ob die WP Byte 28 im Kommandotelegramm ueberhaupt annimmt - das
 Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
 
-**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage
-(`Heatpump_State` 0, `Compressor_Freq` 0), Firmware 3.11.0. Zwei Laeufe, beide
-mit SET36 `CoolingMode`, aber in verschiedenen Betriebsmodi der Anlage - der
-zweite Lauf klaert die Deutung des Nebenbefunds, siehe unten. Der erste Lauf
-im Heizbetrieb (`Operating_Mode_State` 0):
+**Sie nimmt es an.** Drei Laeufe an Stufe 1, alle bei stehender Anlage
+(`Heatpump_State` 0, `Compressor_Freq` 0), Firmware 3.11.0:
 
 ```
 ./test/byte_monitor.py 192.168.2.120 28 --dauer 60     # im Hintergrund
 ./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/CoolingMode=0
 ```
 
-Im selben Mitschnitt, 11 Telegramme, Flanke zwischen dem fuenften und sechsten:
+| Lauf | Betriebsmodus | Kommando | Byte 28 | Bits 5+6 | Bits 7+8 |
+| ---: | --- | --- | --- | --- | --- |
+| 1 | Heizen | `CoolingMode 0` | `0x0A` -> `0x06` | **10 -> 01** | 10 -> 10 |
+| 2 | Kuehlen | `CoolingMode 0` | `0x0A` -> `0x06` | **10 -> 01** | 10 -> 10 |
+| 3 | Heizen | `HeatingMode 0` | `0x0A` -> `0x09` | 10 -> 10 | **10 -> 01** |
 
-```
-Telegramm 1-5:   Byte 28 = 0x0A    5+6=10  7+8=10
-Telegramm 6-11:  Byte 28 = 0x06    5+6=01  7+8=10
-```
+Jedes Mal wanderte das Byte im SELBEN Mitschnitt, jedes Mal blieb das
+Nachbarfeld stehen. **Die Bitmaske greift also in beide Richtungen bitgenau** -
+das war neben der Annahmefrage der zweite Punkt, der zu klaeren war. Das
+Zurueckschalten stellte in allen drei Laeufen `0x0A` her.
 
-Bits 5+6 (Kuehlen) sprangen von `10` auf `01`, Bits 7+8 (Heizen) blieben
-stehen. **Die Bitmaske greift also bitgenau** - genau das war die zweite offene
-Frage. `set/CoolingMode 1` stellte `0x0A` wieder her.
+Damit sind drei der vier Rohwerte aus `ProtocolByteDecrypt.md` am Geraet
+erzeugt. Der vierte (`0x05`, beide Kreise auf Kurve) braucht beide Kommandos im
+selben 500-ms-Sammelfenster und ist nicht gemessen; auf dem Host deckt ihn
+`byte28_test.cpp` ab.
 
 ### Was das Umschalten sonst noch anrichtet
 
 Erwartet war der Kurven-Reset auf die Panasonic-Werksvorgaben (Beobachtung vom
-2026-08-11 am Bedienterminal, weiter unten). Ueberraschend war TOP27:
+2026-08-11 am Bedienterminal, weiter unten). Ueberraschend war, dass es den
+jeweils NICHT geschalteten Kreis mittrifft:
 
-| Wert | vorher | nach `CoolingMode 0` | nach `CoolingMode 1` |
+| Wert | vorher | nach `CoolingMode 0` | nach `HeatingMode 0` |
 | --- | ---: | ---: | ---: |
+| TOP76 `Heating_Mode` | 1 | 1 | **0** |
 | TOP81 `Cooling_Mode` | 1 | **0** | 1 |
-| TOP76 `Heating_Mode` | 1 | 1 | 1 |
-| TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** |
-| TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | **10** |
+| TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **0** |
 | TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** |
-| TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35** |
+| TOP29 `Z1_Heat_Curve_Target_High_Temp` | 20 | **35** | **55** |
+| TOP30 `Z1_Heat_Curve_Target_Low_Temp` | 34 | 34 | **35** |
+| TOP32 `Z1_Heat_Curve_Outside_Low_Temp` | -10 | -10 | **-5** |
+| TOP72 `Z1_Cool_Curve_Target_High_Temp` | 20 | **15** | **10** |
+| TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | 20 |
 
-15/10 ist die Werks-Kuehlkurve, 35 der Werkswert der *Heiz*kurve bei +15 C.
-**Die Heizseite wurde nie geschaltet** - TOP76 stand durchgehend auf Direkt -
-und der Heiz-Sollwert wanderte trotzdem mit. Das Protokollfeld ist sauber
-getrennt, die Wirkung im Geraet ist es nicht.
+Die zwei Spalten sind spiegelbildlich, und beide Werkskurven stehen darin:
+**Heizkurve 55 C bei -5 C und 35 C bei +15 C**, **Kuehlkurve 15 C bei 20 C und
+10 C bei 30 C**. Lauf 3 belegt die Heizkurve vollstaendig inklusive des
+Aussenpunkts (TOP32 auf -5); beim Kuehl-Lauf konnten TOP74/TOP75 nichts zeigen,
+weil sie schon auf den Werksvorgaben standen.
 
-**Der zweite Lauf hat die Deutung entschieden.** Beim ersten Lauf stand die
-Anlage im Heizbetrieb; der Sollwert, der mitwanderte, war also der des AKTIVEN
-Betriebsmodus. Damit blieben zwei Deutungen offen:
+**Der nicht geschaltete Kreis wird mitverstellt:** bei `CoolingMode 0` sprang
+der HEIZ-Sollwert TOP27 auf 35, bei `HeatingMode 0` der KUEHL-Sollwert TOP28
+auf 10 - jeweils auf den Werkswert des anderen Kreises, obwohl dessen
+Betriebsart unveraendert auf Direkt stand.
 
-| Deutung | Vorhersage fuer `CoolingMode 0` im Kuehlbetrieb |
-| --- | --- |
-| immer beide Kreise | TOP27 wandert wieder mit |
-| nur der aktive Kreis | TOP27 bleibt stehen |
+**Der Betriebsmodus spielt dabei keine Rolle.** Nach Lauf 1 (Heizbetrieb) war
+offen, ob die WP immer beide Kreise anfasst oder nur den gerade aktiven - der
+mitgewanderte Sollwert war ja der des aktiven Modus. Lauf 2 im Kuehlbetrieb hat
+das entschieden: TOP27 sprang wieder auf 35, obwohl der Heizkreis diesmal nicht
+der aktive war. Es sind immer beide Kreise.
 
-Der Lauf im Kuehlbetrieb (`Operating_Mode_State` 1, Anlage weiter stehend) am
-selben Tag um 16:55 fiel eindeutig aus: **TOP27 sprang wieder auf 35**, obwohl
-der Heizkreis diesmal nicht der aktive war. Byte 28 wanderte identisch von
-`0x0A` auf `0x06`, Flanke zwischen dem sechsten und siebten von 11 Telegrammen.
-Alle sechs veraenderten Werte waren dieselben wie im ersten Lauf.
-
-**Die WP fasst beim Betriebsartwechsel also IMMER beide Kreise an**, unabhaengig
-vom Betriebsmodus. Das Protokollfeld ist sauber getrennt, die Wirkung im Geraet
-ist es nicht.
-
-TOP74/TOP75 blieben in beiden Laeufen unveraendert, weil sie schon auf den
-Werksvorgaben standen (30 und 20) - sie konnten nichts zeigen.
+Der Kurvenbetrieb ist an TOP27/TOP28 zu erkennen: Der Sollwert des Kreises, der
+auf Kurve steht, meldet **0**.
 
 ### Aufraeumen danach ist Pflicht, nicht Kosmetik
 
@@ -544,14 +543,15 @@ Die Kurve muss von Hand nachgezogen werden - sie ist nicht Teil des
 Sollwert-Re-Asserts. Die SOLLWERTE dagegen holt sich die Kaskadensteuerung
 selbst zurueck:
 
-**Der 5-min-Re-Assert funktioniert - anders als hier zunaechst notiert.** Im
-zweiten Lauf war er im Mitschnitt zu sehen: Node-RED sendete um 16:53:59 und
-wieder um 16:58:59, und TOP27 ging um 16:59:06 von 35 auf 20 zurueck, ohne
-Zutun. Beim ersten Lauf blieb er aus - dort war die Anlage nur unter Strom,
-Kompressor und WP waren nicht freigegeben, es gab fuer die Kaskadensteuerung
-also nichts zu tun. Das ist eine Eigenschaft dieses Anlagenzustands, kein
-Mangel des Re-Asserts. Wer in einem solchen Zustand misst, muss die Sollwerte
-selbst zuruecksetzen:
+**Der 5-min-Re-Assert funktioniert.** In den Laeufen 2 und 3 war er im
+Mitschnitt zu sehen: In Lauf 2 sendete Node-RED um 16:53:59 und wieder um
+16:58:59, TOP27 ging um 16:59:06 von 35 auf 20 zurueck, ohne Zutun. In Lauf 3
+standen die vier offenen Werte binnen zweier Minuten wieder richtig. Beim
+ersten Lauf blieb er aus - dort war die Anlage nur unter Strom, Kompressor und
+WP waren nicht freigegeben, es gab fuer die Kaskadensteuerung also nichts zu
+tun. Das ist eine Eigenschaft dieses Anlagenzustands, kein Mangel des
+Re-Asserts. Wer in einem solchen Zustand misst, muss die Sollwerte selbst
+zuruecksetzen:
 
 ```
 ./test/mqtt_pub.py --host 192.168.2.147 \
@@ -559,15 +559,8 @@ selbst zuruecksetzen:
     panasonic_heat_pump/set/Z1CoolRequestTemperature=20
 ```
 
-Nach beiden Laeufen stand der Ausgangszustand wieder vollstaendig - alle 12
-Werte und beide Betriebsarten.
-
-**Die Heizseite als KOMMANDO (SET35) ist weiterhin nicht gemessen.** Beide
-Laeufe haben SET36 geschaltet, nur der Betriebsmodus der Anlage war
-verschieden. Ein Umschalttest mit SET35 wuerde die Heizkurve auf 55 C bei -5 C
-und 35 C bei +15 C zuruecksetzen; die Wiederherstellung ueber `kurven_sync.py`
-deckt davon TargetLow und beide Aussentemperatur-Punkte ab, TargetHigh kommt
-ueber den Sollwert (SET5).
+Nach allen drei Laeufen stand der Ausgangszustand wieder vollstaendig - alle 15
+Werte, beide Betriebsarten und der Betriebsmodus.
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

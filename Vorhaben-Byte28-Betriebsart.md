@@ -1,24 +1,36 @@
 # Vorhaben: Betriebsart Kurve ↔ Direkt als Set-Kommando (Byte 28)
 
-> ## ✅ ERLEDIGT am 2026-08-19 mit Firmware 3.11.0 — Kühlseite
+> ## ✅ VOLLSTÄNDIG ERLEDIGT am 2026-08-19 mit Firmware 3.11.0
 >
 > **Die Wärmepumpe nimmt Byte 28 an.** Das war die einzige echte Unbekannte
-> (Abschnitt 3), und sie ist beantwortet: `set/CoolingMode 0` ließ Byte 28 im
-> laufenden Mitschnitt von `0x0A` auf `0x06` wandern, TOP81 ging auf 0, TOP76
-> blieb stehen. Die Bitmaske greift bitgenau. SET35 `HeatingMode` und SET36
-> `CoolingMode` sind eingebaut, Stufe 1 läuft damit.
+> (Abschnitt 3), und sie ist beantwortet. SET35 `HeatingMode` und SET36
+> `CoolingMode` sind eingebaut, beide Stufen laufen damit.
 >
-> **Ein Befund war neu und steht so nicht unten:** Das Kühl-Kommando zog den
-> **Heiz**-Sollwert mit (TOP27 von 20 auf 35), obwohl die Heizseite nie
-> geschaltet wurde. Abschnitt 5 unten unterschätzt die Nebenwirkung also. Ein
-> zweiter Lauf im Kühlbetrieb zeigte dasselbe Bild — der Betriebsmodus der
-> Anlage spielt keine Rolle, es sind immer beide Kreise betroffen.
+> Drei Läufe an Stufe 1, alle bei stehender Anlage:
 >
-> Der Ausgangszustand aus Abschnitt 6 wurde vollständig wiederhergestellt.
+> Lauf | Betriebsmodus | Kommando | Byte 28 | Rücklesen
+> ---: | :--- | :--- | :--- | :---
+> 1 | Heizen | `CoolingMode 0` | `0x0A` → `0x06` | TOP81 → 0, TOP76 blieb 1
+> 2 | Kühlen | `CoolingMode 0` | `0x0A` → `0x06` | wie Lauf 1
+> 3 | Heizen | `HeatingMode 0` | `0x0A` → `0x09` | TOP76 → 0, TOP81 blieb 1
 >
-> **Offen bleibt ein Punkt:** Schritt 6 (SET35 `HeatingMode`) ist nicht
-> gemessen — beide Läufe haben SET36 geschaltet. Stufe 2 läuft seit 16:33
-> ebenfalls auf 3.11.0.
+> Die Bitmaske greift damit in beide Richtungen bitgenau. Schritt 6 des
+> Messplans ist mit Lauf 3 erledigt.
+>
+> **Zwei Befunde stehen so nicht unten:**
+> 1. Das Umschalten trifft immer **beide** Kreise, nicht nur den geschalteten —
+>    Abschnitt 5 unterschätzt die Nebenwirkung. Lauf 2 belegt, dass der
+>    Betriebsmodus der Anlage dabei keine Rolle spielt.
+> 2. Der 5-min-Re-Assert holt die **Sollwerte** selbst zurück, sofern die
+>    Kaskadensteuerung gerade aktiv regelt. Nur die **Kurve** ist von Hand
+>    nachzuziehen. Abschnitt 5 hat das richtig vorhergesehen.
+>
+> Der Ausgangszustand aus Abschnitt 6 wurde nach jedem Lauf vollständig
+> wiederhergestellt.
+>
+> **Ungemessen bleibt allein der Rohwert `0x05`** (beide Kreise auf Kurve, also
+> beide Kommandos im selben 500-ms-Sammelfenster). Auf dem Host deckt ihn
+> `test/byte28_test.cpp` ab.
 >
 > Ergebnisse und Rohdaten: `test/README.md` (Abschnitt „Betriebsart
 > Kurve/Direkt schalten"), `SET-TOP-Zuordnung.md` Fußnote ⁶, Changelog in

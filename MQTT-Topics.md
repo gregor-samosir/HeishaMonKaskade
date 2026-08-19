@@ -403,10 +403,10 @@ SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=dire
 > compensation curve resets that curve to the Panasonic factory defaults, and
 > switching back does *not* restore it. Measured on 2026-08-19 it also dragged
 > the setpoint of the *other* circuit along, although that circuit was never
-> switched — measured twice, once in heating and once in cooling mode, with the
-> same result, so the operating mode makes no difference. After using either
-> command, re-apply the curve of both circuits; the setpoints come back on
-> their own if a controller re-asserts them. Details and the measured table: footnote 6 in
+> switched. Measured in three runs (both commands, both operating modes) with
+> mirror-image results, so neither the command nor the operating mode makes a
+> difference. After using either command, re-apply the curve of both circuits;
+> the setpoints come back on their own if a controller re-asserts them. Details and the measured table: footnote 6 in
 > [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md).
 >
 > *Deutsch: Ein Wechsel auf Kurvenbetrieb setzt die Kurve auf die
