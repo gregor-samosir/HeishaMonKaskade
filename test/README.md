@@ -470,8 +470,10 @@ Kurvenbetrieb musste ein Mensch am Bedienterminal machen. Offen war die eine
 Frage, ob die WP Byte 28 im Kommandotelegramm ueberhaupt annimmt - das
 Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
 
-**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage
-(`Heatpump_State` 0, `Compressor_Freq` 0), Firmware 3.11.0:
+**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage im Heizbetrieb
+(`Heatpump_State` 0, `Compressor_Freq` 0, `Operating_Mode_State` 0 = "Heat"),
+Firmware 3.11.0. Geschaltet wurde damit die Kuehlseite, also NICHT der gerade
+aktive Kreis - genau die risikoarme Konstellation, die der Messplan wollte:
 
 ```
 ./test/byte_monitor.py 192.168.2.120 28 --dauer 60     # im Hintergrund
@@ -503,11 +505,26 @@ Erwartet war der Kurven-Reset auf die Panasonic-Werksvorgaben (Beobachtung vom
 | TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10** |
 | TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35** |
 
-15/10 ist die Werks-Kuehlkurve, 35 der untere Punkt der Werks-*Heiz*kurve.
+15/10 ist die Werks-Kuehlkurve, 35 der Werkswert der *Heiz*kurve bei +15 C.
 **Die Heizseite wurde nie geschaltet** - TOP76 stand durchgehend auf Direkt -
-und der Heiz-Sollwert wanderte trotzdem mit. Die WP fasst beim
-Betriebsartwechsel beide Kreise an. Das Protokollfeld ist sauber getrennt, die
-Wirkung im Geraet ist es nicht.
+und der Heiz-Sollwert wanderte trotzdem mit. Das Protokollfeld ist sauber
+getrennt, die Wirkung im Geraet ist es nicht.
+
+**Eine Deutung ist damit NICHT belegt.** Die Anlage stand im Heizbetrieb; der
+Sollwert, der mitwanderte, war also der des AKTIVEN Betriebsmodus. Ob die WP
+beim Betriebsartwechsel immer beide Kreise anfasst oder nur den aktiven, laesst
+sich aus diesem einen Lauf nicht sagen. Ein Wiederholungslauf im Kuehlbetrieb
+wuerde es trennen:
+
+| Deutung | Vorhersage fuer `CoolingMode 0` im Kuehlbetrieb |
+| --- | --- |
+| immer beide Kreise | TOP27 wandert wieder mit |
+| nur der aktive Kreis | TOP27 bleibt stehen, dafuer traefe es TOP28 |
+
+Der Lauf ist bewusst nicht gemacht: Er aendert keine Entscheidung. Unter beiden
+Deutungen sind nach dem Schalten Kurve UND Sollwerte beider Kreise
+nachzuziehen. Er waere zu holen, falls die Kaskadensteuerung spaeter im
+Kuehlbetrieb umschalten soll und der Aufwand des Nachziehens ins Gewicht faellt.
 
 TOP74/TOP75 blieben unveraendert, weil sie hier schon auf den Werksvorgaben
 standen (30 und 20) - sie konnten nichts zeigen.

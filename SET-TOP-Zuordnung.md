@@ -201,7 +201,8 @@ Kühl-Betriebsart, je `0` = Kompensationskurve, `1` = Direktvorgabe. Die
 Bitmasken `0x03` und `0x0C` sind hier keine Kosmetik — ohne sie schaltete ein
 Kühl-Kommando die Heizung mit um.
 
-**Die Kühlseite ist am 2026-08-19 an Stufe 1 bei stehender Anlage gemessen**,
+**Die Kühlseite ist am 2026-08-19 an Stufe 1 bei stehender Anlage im
+Heizbetrieb gemessen** (`Operating_Mode_State` 0 = „Heat", Kompressor aus),
 die Heizseite nicht (siehe Abschnitt 4). `set/CoolingMode 0` ließ Byte 28 im
 laufenden Mitschnitt von `0x0A` auf `0x06` wandern; TOP81 ging auf 0, TOP76
 blieb auf 1. `set/CoolingMode 1` stellte beides wieder her.
@@ -220,11 +221,22 @@ TOP73 `Z1_Cool_Curve_Target_Low_Temp` | 20 | **10** | **10**
 TOP28 `Z1_Cool_Request_Temp` | 20 | **0** | **10**
 TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35**
 
-15/10 sind die Werks-Kühlkurve, 35 der untere Punkt der Werks-*Heiz*kurve.
+15/10 sind die Werks-Kühlkurve, 35 der Werkswert der *Heiz*kurve bei +15 °C.
 **TOP27 ist der überraschende Eintrag:** Die Heizseite wurde nie geschaltet,
 TOP76 stand durchgehend auf Direkt — der Heiz-Sollwert wanderte trotzdem mit.
-Die Wärmepumpe fasst beim Betriebsartwechsel offenbar beide Kreise an. Das
-Protokollfeld ist sauber getrennt, die Wirkung im Gerät ist es nicht.
+Das Protokollfeld ist sauber getrennt, die Wirkung im Gerät ist es nicht.
+
+**Was daraus NICHT folgt.** Die Anlage stand während der Messung im
+Heizbetrieb. Der Sollwert, der mitwanderte, war damit der des *aktiven*
+Betriebsmodus. Zwei Deutungen bleiben offen:
+
+* Die Wärmepumpe fasst beim Betriebsartwechsel **immer beide Kreise** an.
+* Sie fasst **den gerade aktiven Kreis** an, hier zufällig den Heizkreis.
+
+Ein Lauf im Kühlbetrieb würde das trennen. Er ist bewusst nicht gemacht
+worden, weil er keine Entscheidung ändert: Unter beiden Deutungen lautet die
+Handlungsanweisung gleich — nach dem Schalten Kurve und Sollwerte **beider**
+Kreise nachziehen.
 
 Die Außentemperatur-Stützpunkte TOP74/TOP75 blieben unverändert — sie standen
 hier schon auf den Werksvorgaben (30 und 20) und konnten deshalb nichts zeigen.
@@ -362,11 +374,12 @@ bestätigt: die Kühlkurve stand danach auf den Panasonic-Werksvorgaben
 (TOP72/TOP73 auf 15/10), und TOP28 `Z1_Cool_Request_Temp` meldete im
 Kurvenbetrieb 0. **Nicht erwartet:** dasselbe Kommando zog auch den
 **Heiz**-Sollwert mit — TOP27 `Z1_Heat_Request_Temp` sprang von 20 auf 35,
-obwohl TOP76 durchgehend auf Direkt stand. 35 ist der untere Punkt der
-Werks-*Heiz*kurve. Die Wärmepumpe fasst beim Betriebsartwechsel also beide
-Kreise an, nicht nur den geschalteten — das Protokollfeld ist sauber getrennt,
-die Wirkung im Gerät ist es nicht. Wer SET35 oder SET36 benutzt, muss danach
-Kurve *und* Sollwerte beider Kreise nachziehen.
+obwohl TOP76 durchgehend auf Direkt stand. 35 ist der Werkswert der
+*Heiz*kurve bei +15 °C. Das Protokollfeld ist sauber getrennt, die Wirkung im
+Gerät ist es nicht. Ob die Wärmepumpe dabei immer beide Kreise anfasst oder nur
+den gerade aktiven — die Anlage stand im Heizbetrieb —, ist offen und für die
+Praxis gleichgültig: Wer SET35 oder SET36 benutzt, muss danach Kurve *und*
+Sollwerte beider Kreise nachziehen.
 
 Offen bleibt:
 

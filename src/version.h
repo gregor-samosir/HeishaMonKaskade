@@ -26,7 +26,8 @@
 //         schaltet, muss die Kurve danach aus dem ioBroker nachziehen.
 //
 //         AM GERAET GEMESSEN, NICHT ABGELEITET. Am 2026-08-19 an Stufe 1 bei
-//         stehender Anlage (Heatpump_State 0, Compressor_Freq 0). Die offene
+//         stehender Anlage im Heizbetrieb (Heatpump_State 0, Compressor_Freq 0,
+//         Operating_Mode_State 0 = "Heat"). Die offene
 //         Frage war, ob die Waermepumpe Byte 28 im Kommandotelegramm ueberhaupt
 //         annimmt - das Original-Projekt hat kein Kommando dafuer, es gab also
 //         keine Fremderfahrung. Sie nimmt es an: set/CoolingMode 0 liess Byte 28
@@ -39,9 +40,14 @@
 //         EIN BEFUND WAR NEU. Erwartet war der Kurven-Reset (TOP72/TOP73 auf
 //         die Werks-Kuehlkurve 15/10, TOP28 im Kurvenbetrieb 0). Nicht erwartet
 //         war, dass dasselbe Kommando den HEIZ-Sollwert mitzieht: TOP27 sprang
-//         von 20 auf 35 - den unteren Punkt der Werks-HEIZkurve -, obwohl TOP76
+//         von 20 auf 35 - den Werkswert der HEIZkurve bei +15 C -, obwohl TOP76
 //         durchgehend auf Direkt stand und die Heizseite nie geschaltet wurde.
-//         Die Waermepumpe fasst beim Betriebsartwechsel beide Kreise an. Der
+//         Die Anlage stand dabei im Heizbetrieb (Operating_Mode_State 0 =
+//         "Heat", Kompressor aus). Ob die Waermepumpe beim Betriebsartwechsel
+//         IMMER beide Kreise anfasst oder nur den gerade aktiven, ist damit
+//         NICHT entschieden - ein Lauf im Kuehlbetrieb wuerde das trennen. Fuer
+//         die Praxis macht es keinen Unterschied: unter beiden Deutungen sind
+//         nach dem Schalten Kurve und Sollwerte beider Kreise nachzuziehen. Der
 //         Ausgangszustand wurde danach vollstaendig wiederhergestellt (Kurve
 //         ueber kurven_sync.py, Sollwerte von Hand - der 5-min-Re-Assert der
 //         Kaskadensteuerung kam bei stehender Anlage nicht). Tabellen und

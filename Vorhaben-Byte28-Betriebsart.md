@@ -10,8 +10,9 @@
 >
 > **Ein Befund war neu und steht so nicht unten:** Das Kühl-Kommando zog den
 > **Heiz**-Sollwert mit (TOP27 von 20 auf 35), obwohl die Heizseite nie
-> geschaltet wurde. Die Wärmepumpe fasst beim Betriebsartwechsel beide Kreise
-> an — Abschnitt 5 unten unterschätzt die Nebenwirkung also.
+> geschaltet wurde. Abschnitt 5 unten unterschätzt die Nebenwirkung also. Die
+> Anlage stand dabei im Heizbetrieb — ob die Wärmepumpe immer beide Kreise
+> anfasst oder nur den aktiven, ist offen und praktisch gleichgültig.
 >
 > Der Ausgangszustand aus Abschnitt 6 wurde vollständig wiederhergestellt.
 >
