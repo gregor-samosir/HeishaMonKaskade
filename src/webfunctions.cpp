@@ -309,10 +309,11 @@ void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUEL
     }
     else
     {
-      int value = atoi(actual_data[index]);
-      // bounds check: decoders return -1 for unknown raw values,
-      // indexing with it read out of bounds before
-      topicdesc = (value < 0) ? "" : topic.desc[value];
+      // Bereichspruefung nach BEIDEN Seiten: -1 fuer unbekannte Rohwerte nach
+      // unten, das Ende der Liste nach oben. Die Regel steht in desc_text()
+      // (decode.h), damit der Hosttest dieselbe benutzt - siehe dort, warum
+      // ein zu grosser Index das Geraet zum Absturz bringen konnte.
+      topicdesc = desc_text(topic.desc, atoi(actual_data[index]));
     }
     if (strcmp(actual_data[index], "unused") != 0)
     {

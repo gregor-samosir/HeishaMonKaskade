@@ -11,7 +11,10 @@
 //  3. Stimmen die Klartexte fuer die an WP1 belegten Zustaende?
 //  4. Bleibt die Web-Tabelle im Array, auch wenn ein Feld b11 liefert?
 //     (Das ist der Grund fuer das dritte Element "unknown" in den beiden
-//     desc-Arrays - webfunctions.cpp prueft nur nach unten.)
+//     desc-Arrays.)
+//  5. Dasselbe fuer die GANZE Tabelle (Fall 6, seit 3.9.0): jede Zeile, alle
+//     256 Rohwerte, der Index muss in seiner Liste liegen. Dazu die
+//     Gegenprobe, dass eine zu kurze Liste auffaellt.
 //
 // Bauen und ausfuehren:
 //   c++ -std=c++17 -O2 -Wall -I test/stubs -I src -o /tmp/byte110_test \
@@ -62,12 +65,37 @@ static int wert_bei(int zeile, uint8_t byte110)
   return atoi(out);
 }
 
-// Nachbildung der Anzeigelogik aus webfunctions.cpp (Zeile 288): negative
-// Indizes werden abgefangen, nach oben gibt es keine Grenze. Genau deshalb
-// muessen die desc-Arrays jeden moeglichen Index abdecken.
+// Die Anzeigelogik ist KEINE Nachbildung mehr: desc_text() aus decode.h ist
+// dieselbe Funktion, die webfunctions.cpp benutzt. Bis 3.8.2 stand hier ein
+// Nachbau, der nur nach unten prueft - genau wie die Firmware damals.
 static const char *anzeigetext(const StateTopic &topic, int wert)
 {
-  return (wert < 0) ? "" : topic.desc[wert];
+  return desc_text(topic.desc, wert);
+}
+
+// Laenge einer desc-Liste ueber ihren nullptr-Abschluss bestimmen. Ohne
+// Abschluss liefe das Zaehlen ins Leere, deshalb der Deckel: -1 heisst
+// "kein Abschluss innerhalb von DESC_MAX_ENTRIES gefunden" und ist ein Fehler.
+static int laenge_von(const char *const *desc)
+{
+  if (desc == nullptr)
+    return -1;
+  for (int i = 0; i < DESC_MAX_ENTRIES; i++)
+    if (desc[i] == nullptr)
+      return i;
+  return -1;
+}
+
+// Ein Telegramm mit einem Rohwert auf dem Quellbyte EINER BELIEBIGEN Zeile
+// dekodieren (wert_bei() weiter oben kann nur Byte 110).
+static int wert_der_zeile(unsigned int zeile, uint8_t roh)
+{
+  uint8_t telegramm[256];
+  memset(telegramm, 0, sizeof telegramm);
+  telegramm[stateTopics[zeile].pos] = roh;
+  char out[MAXVALUELEN];
+  getTopicPayload(zeile, telegramm, out);
+  return atoi(out);
 }
 
 // Die vier Topics samt der Bitgruppe, die sie laut ProtocolByteDecrypt.md
@@ -243,6 +271,91 @@ int main()
     pruefe(ohne_dekodierer == 0, text);
     snprintf(text, sizeof text, "jede Zeile hat Name und Einheit (%d Ausreisser)", ohne_desc);
     pruefe(ohne_desc == 0, text);
+  }
+
+  printf("\n== Fall 6: kein Anzeigeindex verlaesst seine Liste (ganze Tabelle) ==\n");
+  // Fall 4 prueft das fuer die vier Byte-110-Zeilen. Hier gilt dieselbe Frage
+  // fuer JEDE Zeile der Tabelle: alle 256 Rohwerte durch den ECHTEN Dekodierer
+  // schicken und verlangen, dass der entstehende Index in seiner Liste liegt.
+  // Bis 3.8.2 war das fuer die meisten Zeilen NICHT erfuellt - ein Rohwert b11
+  // ergab Index 2 in einer zweielementigen Liste.
+  {
+    int ohne_abschluss = 0, ausserhalb = 0, ohne_text = 0, klartextzeilen = 0;
+    for (unsigned int i = 0; i < NUMBEROFTOPICS; i++)
+    {
+      const StateTopic &t = stateTopics[i];
+      int laenge = laenge_von(t.desc);
+      if (laenge < 1)
+      {
+        snprintf(text, sizeof text, "%-24s desc-Liste ohne nullptr-Abschluss", t.name);
+        pruefe(false, text);
+        ohne_abschluss++;
+        continue;
+      }
+      // Einheiten-Zeilen ({"value", "&deg;C"}) werden nicht ueber den Wert
+      // indiziert - die Weboberflaeche nimmt dort immer desc[1]
+      if (strcmp(t.desc[0], "value") == 0)
+        continue;
+      klartextzeilen++;
+
+      int hoechster = -1;
+      for (int roh = 0; roh < 256; roh++)
+      {
+        int wert = wert_der_zeile(i, (uint8_t)roh);
+        if (wert > hoechster)
+          hoechster = wert;
+        if (wert >= laenge)
+        {
+          snprintf(text, sizeof text, "%-24s Rohwert 0x%02X ergibt Index %d, Liste hat %d",
+                   t.name, roh, wert, laenge);
+          pruefe(false, text);
+          ausserhalb++;
+          break;
+        }
+        // Ein gedeckter Index muss auch wirklich einen Text liefern -
+        // "unknown" zaehlt, eine leere Zelle waere eine Luecke
+        if (wert >= 0 && anzeigetext(t, wert)[0] == '\0')
+        {
+          snprintf(text, sizeof text, "%-24s Index %d liefert keinen Text", t.name, wert);
+          pruefe(false, text);
+          ohne_text++;
+          break;
+        }
+      }
+      snprintf(text, sizeof text, "%-24s hoechster Index %d, Liste %d Eintraege",
+               t.name, hoechster, laenge);
+      pruefe(hoechster < laenge, text);
+    }
+    snprintf(text, sizeof text, "alle %u Zeilen mit nullptr abgeschlossen (%d ohne)",
+             NUMBEROFTOPICS, ohne_abschluss);
+    pruefe(ohne_abschluss == 0, text);
+    snprintf(text, sizeof text, "%d Klartext-Zeilen geprueft, keine ausserhalb ihrer Liste (%d)",
+             klartextzeilen, ausserhalb);
+    pruefe(ausserhalb == 0, text);
+    snprintf(text, sizeof text, "kein gedeckter Index ohne Text (%d)", ohne_text);
+    pruefe(ohne_text == 0, text);
+  }
+
+  printf("\n== Gegenprobe: eine zu kurze Liste faellt auf ==\n");
+  // Der Plan verlangt sie ausdruecklich: mit einem bewusst zu kurzen Array
+  // muss der Test brechen. Statt eine echte Liste zu kuerzen (das wuerde die
+  // Firmware veraendern) wird hier eine zu kurze Liste gebaut und gezeigt,
+  // dass beide Haelften der Zusicherung greifen - der Nachschlag liest nicht
+  // hinaus, und die Pruefung aus Fall 6 wuerde sie verwerfen.
+  {
+    static const char *zuKurz[] = {"Off", "On", nullptr}; // ein 2-Bit-Feld braucht drei
+    pruefe(laenge_von(zuKurz) == 2, "Laenge der zu kurzen Liste wird als 2 erkannt");
+    pruefe(strcmp(desc_text(zuKurz, 1), "On") == 0, "gueltiger Index liefert weiter seinen Text");
+    pruefe(strcmp(desc_text(zuKurz, 2), "") == 0, "Index 2 (b11) liefert leer statt Fremdspeicher");
+    pruefe(strcmp(desc_text(zuKurz, 99), "") == 0, "Index weit hinter dem Ende liefert leer");
+    pruefe(strcmp(desc_text(zuKurz, -1), "") == 0, "negativer Index liefert weiter leer");
+    // Genau diese Bedingung prueft Fall 6 fuer jede Zeile: hoechster < laenge.
+    // Mit einem 2-Bit-Dekodierer (hoechster Index 2) und dieser Liste ist sie
+    // verletzt - der Test wuerde also anschlagen.
+    pruefe(!(2 < laenge_von(zuKurz)), "Fall 6 wuerde diese Liste an einem 2-Bit-Feld verwerfen");
+    static const char *ohneAbschluss = nullptr;
+    pruefe(laenge_von(&ohneAbschluss) == 0, "eine leere Liste hat Laenge 0");
+    pruefe(strcmp(desc_text(nullptr, 0), "") == 0, "desc == nullptr liefert leer, kein Absturz");
   }
 
   printf("\n%s (%d Fehler)\n", fehler == 0 ? "ALLE ZUSICHERUNGEN ERFUELLT" : "FEHLGESCHLAGEN", fehler);

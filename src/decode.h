@@ -11,6 +11,49 @@ constexpr unsigned int NUMBEROFTOPICS = 90;
 
 #define MAXVALUELEN 16 // longest payload value incl. terminator (e.g. "No error", "-123.75")
 
+// Obergrenze fuer die Laenge einer desc-Liste. Nur der Hosttest braucht sie:
+// er zaehlt bis zum nullptr und muss abbrechen koennen, falls jemand eine neue
+// Liste ohne Abschluss anlegt - sonst liefe er ueber das Array hinaus.
+constexpr int DESC_MAX_ENTRIES = 32;
+
+/*****************************************************************************/
+/* Klartext einer Tabellenzeile fuer die Weboberflaeche nachschlagen         */
+/*                                                                           */
+/* Der dekodierte Wert IST der Index in desc[] - und er kann groesser sein    */
+/* als die Liste: die 2-Bit-Felder liefern bis 2, die 3-Bit-Felder bis 6.     */
+/* Geprueft wurde bis 3.8.2 nur nach unten (-1 fuer unbekannt); ein zu        */
+/* grosser Index las einen wilden Zeiger, den %s dann formatierte - Absturz   */
+/* an der laufenden Anlage, sobald ein Browser die Seite offen hat. Dass die  */
+/* Waermepumpe Rohwerte ausserhalb des bisher Beobachteten liefert, hat       */
+/* dieses Projekt schon mehrfach erlebt (Byte 110, Kurvengrenzen).            */
+/*                                                                           */
+/* Die Obergrenze steht deshalb in der Liste selbst: jede desc-Liste endet    */
+/* mit nullptr, und hier wird bis zum gesuchten Index hochgezaehlt statt      */
+/* direkt zuzugreifen. Das kann per Konstruktion nicht hinauslesen, auch      */
+/* wenn spaeter ein Dekodierer einen groesseren Index liefert - dann bleibt   */
+/* die Zelle leer, statt dass das Geraet neu startet. Die Listen sind hoechs- */
+/* tens neun Eintraege lang, die Schleife faellt neben dem Seitenaufbau nicht */
+/* ins Gewicht.                                                              */
+/*                                                                           */
+/* Steht als inline-Funktion im Header, damit Firmware und Hosttest dieselbe  */
+/* Regel benutzen und nicht auseinanderlaufen koennen (test/byte110_test.cpp).*/
+/*****************************************************************************/
+inline const char *desc_text(const char *const *desc, int value)
+{
+  if (desc == nullptr || value < 0)
+  {
+    return "";
+  }
+  for (int i = 0; i < value; i++)
+  {
+    if (desc[i] == nullptr) // Index liegt hinter dem Ende der Liste
+    {
+      return "";
+    }
+  }
+  return (desc[value] == nullptr) ? "" : desc[value];
+}
+
 struct StateTopic;
 
 // Dekodierer-Signaturen:
