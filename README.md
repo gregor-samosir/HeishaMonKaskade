@@ -414,6 +414,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
+| [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Geplant: Kurve ↔ Direkt als Set-Kommando, damit der Notbetrieb fernschaltbar wird |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

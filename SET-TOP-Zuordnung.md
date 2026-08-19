@@ -300,6 +300,8 @@ hat jedes Set-Kommando, für das es überhaupt ein Antwortbyte gibt, eine
 Rückmeldung. Offen bleibt:
 
 **1. `Heating_Mode` / `Cooling_Mode` als Set-Kommando (Byte 28).**
+Eigenes Vorhaben mit Messplan, Bitkodierung und den Fallstricken:
+[`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md).
 Der größte praktische Gewinn. Heute muss beim Ausfall der Kaskadensteuerung
 jemand ans Bedienterminal und von Direkt- auf Kurvenbetrieb umschalten — die
 Kurvenwerte werden dafür schon vorgehalten (SET27–SET34). Mit einem Set-Kommando
