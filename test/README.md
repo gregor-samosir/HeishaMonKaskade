@@ -470,10 +470,11 @@ Kurvenbetrieb musste ein Mensch am Bedienterminal machen. Offen war die eine
 Frage, ob die WP Byte 28 im Kommandotelegramm ueberhaupt annimmt - das
 Original-Projekt hat dafuer kein Kommando, es gab also keine Fremderfahrung.
 
-**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage im Heizbetrieb
-(`Heatpump_State` 0, `Compressor_Freq` 0, `Operating_Mode_State` 0 = "Heat"),
-Firmware 3.11.0. Geschaltet wurde damit die Kuehlseite, also NICHT der gerade
-aktive Kreis - genau die risikoarme Konstellation, die der Messplan wollte:
+**Sie nimmt es an.** Gemessen an Stufe 1 bei stehender Anlage
+(`Heatpump_State` 0, `Compressor_Freq` 0), Firmware 3.11.0. Zwei Laeufe, beide
+mit SET36 `CoolingMode`, aber in verschiedenen Betriebsmodi der Anlage - der
+zweite Lauf klaert die Deutung des Nebenbefunds, siehe unten. Der erste Lauf
+im Heizbetrieb (`Operating_Mode_State` 0):
 
 ```
 ./test/byte_monitor.py 192.168.2.120 28 --dauer 60     # im Hintergrund
@@ -510,45 +511,63 @@ Erwartet war der Kurven-Reset auf die Panasonic-Werksvorgaben (Beobachtung vom
 und der Heiz-Sollwert wanderte trotzdem mit. Das Protokollfeld ist sauber
 getrennt, die Wirkung im Geraet ist es nicht.
 
-**Eine Deutung ist damit NICHT belegt.** Die Anlage stand im Heizbetrieb; der
-Sollwert, der mitwanderte, war also der des AKTIVEN Betriebsmodus. Ob die WP
-beim Betriebsartwechsel immer beide Kreise anfasst oder nur den aktiven, laesst
-sich aus diesem einen Lauf nicht sagen. Ein Wiederholungslauf im Kuehlbetrieb
-wuerde es trennen:
+**Der zweite Lauf hat die Deutung entschieden.** Beim ersten Lauf stand die
+Anlage im Heizbetrieb; der Sollwert, der mitwanderte, war also der des AKTIVEN
+Betriebsmodus. Damit blieben zwei Deutungen offen:
 
 | Deutung | Vorhersage fuer `CoolingMode 0` im Kuehlbetrieb |
 | --- | --- |
 | immer beide Kreise | TOP27 wandert wieder mit |
-| nur der aktive Kreis | TOP27 bleibt stehen, dafuer traefe es TOP28 |
+| nur der aktive Kreis | TOP27 bleibt stehen |
 
-Der Lauf ist bewusst nicht gemacht: Er aendert keine Entscheidung. Unter beiden
-Deutungen sind nach dem Schalten Kurve UND Sollwerte beider Kreise
-nachzuziehen. Er waere zu holen, falls die Kaskadensteuerung spaeter im
-Kuehlbetrieb umschalten soll und der Aufwand des Nachziehens ins Gewicht faellt.
+Der Lauf im Kuehlbetrieb (`Operating_Mode_State` 1, Anlage weiter stehend) am
+selben Tag um 16:55 fiel eindeutig aus: **TOP27 sprang wieder auf 35**, obwohl
+der Heizkreis diesmal nicht der aktive war. Byte 28 wanderte identisch von
+`0x0A` auf `0x06`, Flanke zwischen dem sechsten und siebten von 11 Telegrammen.
+Alle sechs veraenderten Werte waren dieselben wie im ersten Lauf.
 
-TOP74/TOP75 blieben unveraendert, weil sie hier schon auf den Werksvorgaben
-standen (30 und 20) - sie konnten nichts zeigen.
+**Die WP fasst beim Betriebsartwechsel also IMMER beide Kreise an**, unabhaengig
+vom Betriebsmodus. Das Protokollfeld ist sauber getrennt, die Wirkung im Geraet
+ist es nicht.
+
+TOP74/TOP75 blieben in beiden Laeufen unveraendert, weil sie schon auf den
+Werksvorgaben standen (30 und 20) - sie konnten nichts zeigen.
 
 ### Aufraeumen danach ist Pflicht, nicht Kosmetik
 
 ```
 ./test/kurven_sync.py --prefix panasonic_heat_pump --dry-run   # erst schauen
 ./test/kurven_sync.py --prefix panasonic_heat_pump
+```
+
+Die Kurve muss von Hand nachgezogen werden - sie ist nicht Teil des
+Sollwert-Re-Asserts. Die SOLLWERTE dagegen holt sich die Kaskadensteuerung
+selbst zurueck:
+
+**Der 5-min-Re-Assert funktioniert - anders als hier zunaechst notiert.** Im
+zweiten Lauf war er im Mitschnitt zu sehen: Node-RED sendete um 16:53:59 und
+wieder um 16:58:59, und TOP27 ging um 16:59:06 von 35 auf 20 zurueck, ohne
+Zutun. Beim ersten Lauf blieb er aus - dort war die Anlage nur unter Strom,
+Kompressor und WP waren nicht freigegeben, es gab fuer die Kaskadensteuerung
+also nichts zu tun. Das ist eine Eigenschaft dieses Anlagenzustands, kein
+Mangel des Re-Asserts. Wer in einem solchen Zustand misst, muss die Sollwerte
+selbst zuruecksetzen:
+
+```
 ./test/mqtt_pub.py --host 192.168.2.147 \
     panasonic_heat_pump/set/Z1HeatRequestTemperature=20 \
     panasonic_heat_pump/set/Z1CoolRequestTemperature=20
 ```
 
-**Auf den 5-min-Re-Assert der Kaskadensteuerung ist kein Verlass.** Bei
-stehender Anlage kam er nicht: Der letzte Sollwert aus Node-RED lag um 16:13:59
-vor dem Umschalten (16:14:49), danach sieben Minuten nichts. Die Sollwerte
-mussten von Hand zurueckgestellt werden. Erst danach stand der Ausgangszustand
-wieder vollstaendig - alle 12 Werte und beide Betriebsarten.
+Nach beiden Laeufen stand der Ausgangszustand wieder vollstaendig - alle 12
+Werte und beide Betriebsarten.
 
-**Die Heizseite (SET35) ist nicht gemessen.** Sie wuerde die Heizkurve auf
-55 C bei -5 C und 35 C bei +15 C zuruecksetzen; die Wiederherstellung ueber
-`kurven_sync.py` deckt davon TargetLow und beide Aussentemperatur-Punkte ab,
-TargetHigh kommt ueber den Sollwert (SET5).
+**Die Heizseite als KOMMANDO (SET35) ist weiterhin nicht gemessen.** Beide
+Laeufe haben SET36 geschaltet, nur der Betriebsmodus der Anlage war
+verschieden. Ein Umschalttest mit SET35 wuerde die Heizkurve auf 55 C bei -5 C
+und 35 C bei +15 C zuruecksetzen; die Wiederherstellung ueber `kurven_sync.py`
+deckt davon TargetLow und beide Aussentemperatur-Punkte ab, TargetHigh kommt
+ueber den Sollwert (SET5).
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

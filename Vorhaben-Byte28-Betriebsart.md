@@ -10,14 +10,15 @@
 >
 > **Ein Befund war neu und steht so nicht unten:** Das Kühl-Kommando zog den
 > **Heiz**-Sollwert mit (TOP27 von 20 auf 35), obwohl die Heizseite nie
-> geschaltet wurde. Abschnitt 5 unten unterschätzt die Nebenwirkung also. Die
-> Anlage stand dabei im Heizbetrieb — ob die Wärmepumpe immer beide Kreise
-> anfasst oder nur den aktiven, ist offen und praktisch gleichgültig.
+> geschaltet wurde. Abschnitt 5 unten unterschätzt die Nebenwirkung also. Ein
+> zweiter Lauf im Kühlbetrieb zeigte dasselbe Bild — der Betriebsmodus der
+> Anlage spielt keine Rolle, es sind immer beide Kreise betroffen.
 >
 > Der Ausgangszustand aus Abschnitt 6 wurde vollständig wiederhergestellt.
 >
-> **Offen bleiben zwei Punkte:** Schritt 6 (Heizseite, SET35) ist nicht
-> gemessen, und Stufe 2 läuft noch auf 3.10.0.
+> **Offen bleibt ein Punkt:** Schritt 6 (SET35 `HeatingMode`) ist nicht
+> gemessen — beide Läufe haben SET36 geschaltet. Stufe 2 läuft seit 16:33
+> ebenfalls auf 3.11.0.
 >
 > Ergebnisse und Rohdaten: `test/README.md` (Abschnitt „Betriebsart
 > Kurve/Direkt schalten"), `SET-TOP-Zuordnung.md` Fußnote ⁶, Changelog in

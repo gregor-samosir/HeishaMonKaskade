@@ -201,9 +201,8 @@ Kühl-Betriebsart, je `0` = Kompensationskurve, `1` = Direktvorgabe. Die
 Bitmasken `0x03` und `0x0C` sind hier keine Kosmetik — ohne sie schaltete ein
 Kühl-Kommando die Heizung mit um.
 
-**Die Kühlseite ist am 2026-08-19 an Stufe 1 bei stehender Anlage im
-Heizbetrieb gemessen** (`Operating_Mode_State` 0 = „Heat", Kompressor aus),
-die Heizseite nicht (siehe Abschnitt 4). `set/CoolingMode 0` ließ Byte 28 im
+**SET36 ist am 2026-08-19 an Stufe 1 bei stehender Anlage zweimal gemessen** —
+einmal im Heiz-, einmal im Kühlbetrieb. SET35 ist nicht gemessen (Abschnitt 4). `set/CoolingMode 0` ließ Byte 28 im
 laufenden Mitschnitt von `0x0A` auf `0x06` wandern; TOP81 ging auf 0, TOP76
 blieb auf 1. `set/CoolingMode 1` stellte beides wieder her.
 
@@ -226,26 +225,27 @@ TOP27 `Z1_Heat_Request_Temp` | 20 | **35** | **35**
 TOP76 stand durchgehend auf Direkt — der Heiz-Sollwert wanderte trotzdem mit.
 Das Protokollfeld ist sauber getrennt, die Wirkung im Gerät ist es nicht.
 
-**Was daraus NICHT folgt.** Die Anlage stand während der Messung im
-Heizbetrieb. Der Sollwert, der mitwanderte, war damit der des *aktiven*
-Betriebsmodus. Zwei Deutungen bleiben offen:
-
-* Die Wärmepumpe fasst beim Betriebsartwechsel **immer beide Kreise** an.
-* Sie fasst **den gerade aktiven Kreis** an, hier zufällig den Heizkreis.
-
-Ein Lauf im Kühlbetrieb würde das trennen. Er ist bewusst nicht gemacht
-worden, weil er keine Entscheidung ändert: Unter beiden Deutungen lautet die
-Handlungsanweisung gleich — nach dem Schalten Kurve und Sollwerte **beider**
-Kreise nachziehen.
+**Der Betriebsmodus spielt keine Rolle.** Beim ersten Lauf stand die Anlage im
+Heizbetrieb — der mitgewanderte Sollwert war damit der des *aktiven* Modus, und
+es blieb offen, ob die Wärmepumpe immer beide Kreise anfasst oder nur den
+aktiven. Ein zweiter Lauf im **Kühlbetrieb** (`Operating_Mode_State` 1) hat das
+entschieden: TOP27 sprang wieder auf 35, obwohl der Heizkreis diesmal nicht der
+aktive war, und Byte 28 wanderte identisch von `0x0A` auf `0x06`. **Die
+Wärmepumpe fasst beim Betriebsartwechsel immer beide Kreise an.**
 
 Die Außentemperatur-Stützpunkte TOP74/TOP75 blieben unverändert — sie standen
 hier schon auf den Werksvorgaben (30 und 20) und konnten deshalb nichts zeigen.
 
-**Folge für jeden, der SET35 oder SET36 benutzt:** danach Kurve *und* Sollwerte
-**beider** Kreise nachziehen — [`test/kurven_sync.py`](test/kurven_sync.py) für
-die Kurve, SET5/SET6 für die Sollwerte. Der 5-Minuten-Re-Assert der
-Kaskadensteuerung genügt nicht: Bei stehender Anlage kam er im Test nicht, die
-Sollwerte mussten von Hand zurückgestellt werden.
+**Folge für jeden, der SET35 oder SET36 benutzt:** danach die Kurve **beider**
+Kreise nachziehen — [`test/kurven_sync.py`](test/kurven_sync.py). Die Kurve ist
+nicht Teil des Sollwert-Re-Asserts und kommt von allein nicht zurück.
+
+Die **Sollwerte** dagegen holt die Kaskadensteuerung selbst zurück: Im zweiten
+Lauf war der 5-Minuten-Re-Assert im Mitschnitt zu sehen (Node-RED sendete
+16:53:59 und 16:58:59, TOP27 ging 16:59:06 von 35 auf 20). Im ersten Lauf blieb
+er aus — dort war die Anlage nur unter Strom, Kompressor und Wärmepumpe waren
+nicht freigegeben, es gab für die Steuerung also nichts zu tun. **Wer in einem
+solchen Zustand misst, muss die Sollwerte über SET5/SET6 selbst zurückstellen.**
 
 ## 2. Set-Kommandos ohne Rückmeldung (2)
 
@@ -376,10 +376,11 @@ Kurvenbetrieb 0. **Nicht erwartet:** dasselbe Kommando zog auch den
 **Heiz**-Sollwert mit — TOP27 `Z1_Heat_Request_Temp` sprang von 20 auf 35,
 obwohl TOP76 durchgehend auf Direkt stand. 35 ist der Werkswert der
 *Heiz*kurve bei +15 °C. Das Protokollfeld ist sauber getrennt, die Wirkung im
-Gerät ist es nicht. Ob die Wärmepumpe dabei immer beide Kreise anfasst oder nur
-den gerade aktiven — die Anlage stand im Heizbetrieb —, ist offen und für die
-Praxis gleichgültig: Wer SET35 oder SET36 benutzt, muss danach Kurve *und*
-Sollwerte beider Kreise nachziehen.
+Gerät ist es nicht. Ein zweiter Lauf im Kühlbetrieb zeigte dasselbe Bild — die
+Wärmepumpe fasst also immer beide Kreise an, unabhängig vom Betriebsmodus. Wer
+SET35 oder SET36 benutzt, muss danach die Kurve beider Kreise nachziehen; die
+Sollwerte holt sich die Kaskadensteuerung über ihren 5-Minuten-Re-Assert
+selbst zurück, sofern sie gerade aktiv regelt.
 
 Offen bleibt:
 

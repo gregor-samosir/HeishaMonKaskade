@@ -26,8 +26,8 @@
 //         schaltet, muss die Kurve danach aus dem ioBroker nachziehen.
 //
 //         AM GERAET GEMESSEN, NICHT ABGELEITET. Am 2026-08-19 an Stufe 1 bei
-//         stehender Anlage im Heizbetrieb (Heatpump_State 0, Compressor_Freq 0,
-//         Operating_Mode_State 0 = "Heat"). Die offene
+//         stehender Anlage (Heatpump_State 0, Compressor_Freq 0), zuerst im
+//         Heiz- und danach im Kuehlbetrieb. Die offene
 //         Frage war, ob die Waermepumpe Byte 28 im Kommandotelegramm ueberhaupt
 //         annimmt - das Original-Projekt hat kein Kommando dafuer, es gab also
 //         keine Fremderfahrung. Sie nimmt es an: set/CoolingMode 0 liess Byte 28
@@ -42,16 +42,21 @@
 //         war, dass dasselbe Kommando den HEIZ-Sollwert mitzieht: TOP27 sprang
 //         von 20 auf 35 - den Werkswert der HEIZkurve bei +15 C -, obwohl TOP76
 //         durchgehend auf Direkt stand und die Heizseite nie geschaltet wurde.
-//         Die Anlage stand dabei im Heizbetrieb (Operating_Mode_State 0 =
-//         "Heat", Kompressor aus). Ob die Waermepumpe beim Betriebsartwechsel
-//         IMMER beide Kreise anfasst oder nur den gerade aktiven, ist damit
-//         NICHT entschieden - ein Lauf im Kuehlbetrieb wuerde das trennen. Fuer
-//         die Praxis macht es keinen Unterschied: unter beiden Deutungen sind
-//         nach dem Schalten Kurve und Sollwerte beider Kreise nachzuziehen. Der
-//         Ausgangszustand wurde danach vollstaendig wiederhergestellt (Kurve
-//         ueber kurven_sync.py, Sollwerte von Hand - der 5-min-Re-Assert der
-//         Kaskadensteuerung kam bei stehender Anlage nicht). Tabellen und
-//         Rohdaten in test/README.md und SET-TOP-Zuordnung.md Fussnote 6.
+//
+//         ZWEIMAL GEMESSEN, EINMAL JE BETRIEBSMODUS. Der erste Lauf fand im
+//         Heizbetrieb statt (Operating_Mode_State 0). Damit war offen, ob die
+//         Waermepumpe immer beide Kreise anfasst oder nur den gerade aktiven -
+//         der mitgewanderte Sollwert war ja der des aktiven Modus. Ein zweiter
+//         Lauf im Kuehlbetrieb (Operating_Mode_State 1) am selben Tag hat das
+//         entschieden: TOP27 sprang WIEDER auf 35, obwohl der Heizkreis diesmal
+//         nicht der aktive war. Byte 28 wanderte identisch von 0x0A auf 0x06.
+//         Die Waermepumpe fasst beim Betriebsartwechsel also IMMER beide Kreise
+//         an, unabhaengig vom Betriebsmodus. Wer SET35 oder SET36 benutzt, muss
+//         danach Kurve und Sollwerte beider Kreise nachziehen.
+//
+//         Der Ausgangszustand wurde nach beiden Laeufen vollstaendig
+//         wiederhergestellt (Kurve ueber kurven_sync.py). Tabellen und Rohdaten
+//         in test/README.md und SET-TOP-Zuordnung.md Fussnote 6.
 //
 //         OHNE GERAET ABGESICHERT. test/byte28_test.cpp legt die Merge-Logik aus
 //         commands.cpp und die beiden Dekodierer aus decode.cpp nebeneinander:
