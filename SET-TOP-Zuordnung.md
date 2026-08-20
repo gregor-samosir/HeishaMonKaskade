@@ -100,9 +100,12 @@ Bei den Kurven kreuzen sich `High` und `Low` zwischen SET- und TOP-Nummer
 (SET29 `OutsideLow` → TOP32, SET30 `OutsideHigh` → TOP31). Das ist kein Fehler
 in dieser Tabelle: Die Nummern stammen aus dem Original-Projekt und stehen dort
 in anderer Reihenfolge als die Bytes — die Byte-Spalte ist maßgeblich. Die
-Bedeutung von `High`/`Low` ist geklärt und an beiden Anlagen zurückgelesen
-sowie am Bedienterminal gegengeprüft (2026-08-11); sie steht ausführlich in
-[`MQTT-Topics.md`](MQTT-Topics.md#zone-1-heiz--und-kühlkurve-set27--set34--deutsche-fassung).
+Bedeutung von `High`/`Low` ist am 2026-08-20 an WP1 nachgemessen und steht
+ausführlich in
+[`MQTT-Topics.md`](MQTT-Topics.md#zone-1-heiz--und-kühlkurve-set27--set34--deutsche-fassung):
+**`Target_High` ist der Vorlauf bei `Outside_Low`**, also der Wert für kaltes
+Wetter. Die frühere Angabe hier — „an beiden Anlagen zurückgelesen (2026-08-11)"
+— beschrieb nur, was `kurven_sync.py` selbst hineingeschrieben hatte.
 
 ### ¹ Byte 7 — QuietMode und PowerfulMode teilen sich das Byte
 
@@ -124,11 +127,17 @@ muss es erneut senden.
 
 `Z1HeatRequestTemperature` (SET5, Byte 38) und `Z1HeatCurveTargetHighTemp`
 (SET27, Byte 75) liegen zwar auf verschiedenen Bytes, sind in der Wärmepumpe
-aber derselbe Wert — im Direktmodus die Vorlauf-Solltemperatur, im Kurvenmodus
-der obere Kurvenpunkt; für das Kühlpaar SET6/SET31 gilt dasselbe. **Das
-Rücklesen von TOP29 bzw. TOP72 belegt an einer Anlage im Direktbetrieb deshalb
-nicht, dass der Kurvenwert steht** — es zeigt den aktuellen Sollwert. Gemessen
-an WP1 am 2026-08-10, Einzelheiten in [`test/README.md`](test/README.md).
+aber derselbe Wert — **solange der Kreis auf Direktvorgabe steht**; für das
+Kühlpaar SET6/SET31 gilt dasselbe. **Das Rücklesen von TOP29 bzw. TOP72 belegt
+an einer Anlage im Direktbetrieb deshalb nicht, dass der Kurvenwert steht** — es
+zeigt den aktuellen Sollwert. Gemessen an WP1 am 2026-08-10, Einzelheiten in
+[`test/README.md`](test/README.md).
+
+**Im Kurvenbetrieb sind es getrennte Speicherstellen** (WP1, 2026-08-20): SET27
+ist dort der Kurvenpunkt, SET5 die Parallelverschiebung von −5..+5, und Werte
+außerhalb dieses Bereichs verwirft die Wärmepumpe stillschweigend. Der
+Kurvenpunkt lässt sich dort also sauber schreiben — deshalb lautet die
+Reihenfolge im Notbetrieb: erst umschalten, dann die Kurve setzen.
 
 ### ³ OperationMode — im Auto-Betrieb meldet TOP4 nie den geschriebenen Wert
 

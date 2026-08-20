@@ -9,9 +9,19 @@ Quelle: 0_userdata.0.kaskade.Konfiguration.KK_Heizkurve / KK_Kuehlkurve
 Ziel:   <prefix>/set/Z1HeatCurve* und Z1CoolCurve* (SET27-SET34)
 
 Zuordnung: 'at' = Aussentemperatur-Stuetzpunkt, 'vl' = Vorlauf an diesem Punkt.
-Hi/Lo beziehen sich bei beiden Kurven auf die AUSSENtemperatur, genau wie bei
-Panasonics Outside_High/Outside_Low - deshalb geht atHi -> OutsideHigh und
-vlHi -> TargetHigh.
+Im Konfigurationsbaum beziehen sich Hi/Lo IMMER auf die Aussentemperatur, bei
+Panasonic dagegen nur die Outside_*-Felder - die Target_*-Felder benennen die
+VORLAUFtemperatur. Beide Paare sind deshalb ueber Kreuz zugeordnet:
+
+  atLo -> OutsideLow     vlLo (Vorlauf bei Kaelte) -> TargetHIGH
+  atHi -> OutsideHigh    vlHi (Vorlauf bei Waerme) -> TargetLOW
+
+Bis zum 2026-08-20 stand es hier andersherum, und die Kurve wurde entsprechend
+verdreht gespiegelt. Belegt an WP1: bei 26-28 C aussen, also weit oberhalb
+OutsideHigh, folgte Main_Target_Temp (TOP7) dem TargetLow - auch mit
+vertauschten Werten (34/26 -> 26, 26/34 -> 34). Einzelheiten in
+test/README.md, Abschnitt "Kurvenbetrieb: was die WP annimmt und was sie
+verwirft".
 
 Nicht uebertragen werden KK_HK_vlMin/vlMax/Para: Das sind Begrenzungen der
 Node-RED-Berechnung, die Panasonic-Kurve kennt keine Entsprechung dazu.
@@ -37,9 +47,8 @@ KONFIG = "0_userdata.0.kaskade.Konfiguration"
 # ACHTUNG - TargetHigh wird bewusst NICHT uebertragen:
 #
 # Z1HeatCurveTargetHighTemp (SET27, Byte 75) und Z1HeatRequestTemperature
-# (SET5, Byte 38) sind in der Waermepumpe DERSELBE Wert - im Direktmodus die
-# Vorlauf-Solltemperatur, im Kurvenmodus der obere Kurvenpunkt. Am 2026-08-10
-# an WP1 in beide Richtungen belegt:
+# (SET5, Byte 38) sind in der Waermepumpe DERSELBE Wert, SOLANGE DER KREIS AUF
+# DIREKTVORGABE STEHT. Am 2026-08-10 an WP1 in beide Richtungen belegt:
 #   RequestTemp=20 gesendet          -> CurveTargetHigh sprang auf 20
 #   beide zusammen (20 und 26)       -> BEIDE standen danach auf 26
 # Fuer Z1CoolCurveTargetHighTemp / Z1CoolRequestTemperature gilt dasselbe.
@@ -50,19 +59,28 @@ KONFIG = "0_userdata.0.kaskade.Konfiguration"
 # Anlage. Beim ersten Lauf am 2026-08-10 wurde so der Kuehl-Sollwert fuer
 # einige Minuten von 20 auf 19 gezogen.
 #
+# IM KURVENBETRIEB IST ES EINE EIGENE SPEICHERSTELLE (2026-08-20 gemessen):
+# dort ist der Benutzerwert die Parallelverschiebung (-5..+5), und TargetHigh
+# laesst sich sauber schreiben. Genau deshalb ist die Reihenfolge des
+# Notbetriebs "erst umschalten, dann Kurve schreiben" - siehe
+# Vorhaben-Notbetrieb-Weboberflaeche.md, Abschnitt 2.
+#
 # Die Kurve besteht fuer dieses Werkzeug daher aus TargetLow und den beiden
-# Aussentemperatur-Stuetzpunkten. Zum oberen Punkt siehe NOTBETRIEB-Hinweis
-# in test/README.md.
+# Aussentemperatur-Stuetzpunkten. DER FEHLENDE WERT IST DER VORLAUF BEI KAELTE
+# (KK_HK_vlLo) - also ausgerechnet der, auf den es im Notbetrieb ankommt. Wer
+# heute von Hand am Bedienterminal auf Kurve umschaltet, muss ihn dort
+# nachtragen; sonst bleibt die Panasonic-Werksvorgabe von 55 C stehen.
 
 # (Konfig-Gruppe, Konfig-Schluessel) -> (Set-Topic, state-Topic, min, max)
 MAPPING = [
-    ("KK_Heizkurve", "KK_HK_vlLo", "Z1HeatCurveTargetLowTemp",
+    # vlHi = Vorlauf bei HOHER Aussentemperatur -> Panasonics TargetLOW.
+    ("KK_Heizkurve", "KK_HK_vlHi", "Z1HeatCurveTargetLowTemp",
      "Z1_Heat_Curve_Target_Low_Temp", 20, 55),
     ("KK_Heizkurve", "KK_HK_atLo", "Z1HeatCurveOutsideLowTemp",
      "Z1_Heat_Curve_Outside_Low_Temp", -15, 15),
     ("KK_Heizkurve", "KK_HK_atHi", "Z1HeatCurveOutsideHighTemp",
      "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
-    ("KK_Kühlkurve", "KK_HK_vlLo", "Z1CoolCurveTargetLowTemp",
+    ("KK_Kühlkurve", "KK_HK_vlHi", "Z1CoolCurveTargetLowTemp",
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_atLo", "Z1CoolCurveOutsideLowTemp",
      "Z1_Cool_Curve_Outside_Low_Temp", 20, 30),
@@ -98,9 +116,13 @@ def main():
     args = ap.parse_args()
     prefixe = args.prefix or ["panasonic_heat_pump", "panasonic_heat_pump2"]
 
-    # Konfiguration lesen
+    # Konfiguration lesen. KK_HK_vlLo steht nicht im MAPPING (TargetHigh wird
+    # nicht gespiegelt), wird aber mitgelesen, damit der Schlusshinweis den
+    # nachzutragenden Wert beziffern kann statt nur auf ihn zu verweisen.
     ids = [f"{KONFIG}.{g}.{k}" for g, k, *_ in MAPPING]
+    ids.append(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
     konf = hole(args.iobroker, ids)
+    vorlauf_kalt = konf.get(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
 
     plan = []
     fehler = False
@@ -167,11 +189,17 @@ def main():
     print("\n" + "-" * 60)
     print("Alle Kurvenwerte uebernommen." if gesamt_ok
           else "ACHTUNG: mindestens ein Wert weicht ab - Log der WP pruefen.")
-    print("\nHinweis: Der obere Kurvenpunkt (TargetHigh) wird bewusst nicht")
-    print("uebertragen - er teilt sich mit der Vorlauf-Solltemperatur eine")
-    print("Speicherstelle in der WP und traegt daher immer den zuletzt")
-    print("gesendeten Direktwert. Beim Umschalten auf Kurvenbetrieb ist er")
-    print("am Bedienterminal zu pruefen.")
+    # Der fehlende vierte Wert wird beziffert, nicht nur benannt - wer im
+    # Notfall vor dem Bedienterminal steht, braucht die Zahl, nicht den Hinweis.
+    kalt = f"{vorlauf_kalt} C" if vorlauf_kalt is not None else "KK_HK_vlLo"
+    print("\nHinweis: TargetHigh - der Vorlauf bei KAELTE - wird bewusst nicht")
+    print("uebertragen. Im Direktbetrieb teilt er sich mit der Vorlauf-")
+    print("Solltemperatur eine Speicherstelle und traegt daher immer den")
+    print("zuletzt gesendeten Direktwert.")
+    print(f"Nach dem Umschalten auf Kurvenbetrieb ist er auf {kalt} zu setzen -")
+    print("am Bedienterminal oder per set/Z1HeatCurveTargetHighTemp, das geht")
+    print("im Kurvenbetrieb sauber durch. Sonst bleibt die Panasonic-")
+    print("Werksvorgabe von 55 C stehen, und die Anlage heizt viel zu heiss.")
     return 0 if gesamt_ok else 1
 
 

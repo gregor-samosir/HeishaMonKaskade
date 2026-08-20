@@ -3,10 +3,11 @@
 
 ACHTUNG: Zwei der acht Werte (Z1HeatCurveTargetHighTemp,
 Z1CoolCurveTargetHighTemp) teilen sich in der WP eine Speicherstelle mit der
-aktiven Vorlauf-Solltemperatur (Z1Heat/Z1CoolRequestTemperature). Weil dieses
-Werkzeug ausschliesslich die Ist-Werte zurueckschreibt, aendert es trotzdem
-nichts - aber mit anderen Werten waere es ein Eingriff in den laufenden
-Betrieb.
+aktiven Vorlauf-Solltemperatur (Z1Heat/Z1CoolRequestTemperature) - solange der
+jeweilige Kreis auf Direktvorgabe steht; im Kurvenbetrieb sind es getrennte
+Speicherstellen (2026-08-20 gemessen). Weil dieses Werkzeug ausschliesslich die
+Ist-Werte zurueckschreibt, aendert es trotzdem nichts - aber mit anderen Werten
+waere es ein Eingriff in den laufenden Betrieb.
 
 Sicherheitsprinzip: Das Werkzeug erfindet keine Werte. Es liest die aktuell in
 der Waermepumpe hinterlegten Kurvenwerte aus den state-Topics und schreibt

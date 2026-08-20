@@ -14,9 +14,9 @@ Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
 **Stand dieser Datei:** 2026-08-20, Firmware 3.11.0 auf beiden Stufen.
 Alle Grundsatzfragen sind entschieden (Abschnitt 5), **alle drei Messungen sind
-beantwortet** (Abschnitt 6). Gebaut werden kann — mit einer Vorbedingung: Der
-Messlauf zu M1 hat einen Fehler in der Kurvenspiegelung aufgedeckt, der vor dem
-Notbetrieb behoben sein muss (Abschnitt 6a).
+beantwortet** (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
+der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind korrigiert
+(Abschnitt 6a). **Damit kann gebaut werden.**
 
 ---
 
@@ -435,22 +435,38 @@ mitgeführt wird. **Der Notbetrieb würde sie aktivieren** — und läuft er, wi
 vorgesehen, an einem kalten Tag an, fährt die Wärmepumpe genau dann nach dem
 falschen Stützpunkt. Das ist der Fall, für den das ganze Vorhaben gebaut wird.
 
-**Zu tun, bevor gebaut wird:**
+**Erledigt am 2026-08-20:**
 
-1. Paarung in [`MQTT-Topics.md`](MQTT-Topics.md) korrigieren — Heizkurve
-   (Zeilen 70–73), Kühlkurve (108–111), SET-Tabelle (391–398).
-2. `MAPPING` und den Kopfkommentar in `kurven_sync.py` richtigstellen: `vlHi`
-   (Vorlauf bei hoher Außentemperatur) gehört nach `TargetLow`, `vlLo` nach
-   `TargetHigh`.
-3. Damit ändert sich die Rolle von `TargetHigh`: Er ist nicht mehr nur der
-   Wert, der sich mit dem Sollwert eine Speicherstelle teilt, sondern der
-   **tragende** Punkt der Notbetriebskurve — der Vorlauf bei Kälte. Er muss
-   über den Notbetriebskanal aus Abschnitt 3 kommen; das ist dort schon so
-   vorgesehen.
-4. Die Kühlkurve ist nach derselben Systematik zu drehen. Belegt ist sie nicht
-   — die Werkskurve (15 °C bei 20 °C, 10 °C bei 30 °C) zeigt dieselbe Ordnung,
-   gemessen wurde nur die Heizseite. Für den Notbetrieb ohne Belang
-   (Entscheidung 1), für `kurven_sync.py` schon.
+1. Paarung in [`MQTT-Topics.md`](MQTT-Topics.md) korrigiert — Heizkurve,
+   Kühlkurve, SET-Tabelle und beide Prosafassungen. Ebenso
+   [`README.md`](README.md), Fußnote ² in
+   [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) und die Kopfkommentare von
+   `kurven_test.py` und `kurven_grenzen.py`.
+2. `MAPPING` und Kopfkommentar in [`kurven_sync.py`](test/kurven_sync.py)
+   gedreht: `vlHi` (Vorlauf bei hoher Außentemperatur) geht nach `TargetLow`.
+   Die Kühlkurve folgt derselben Systematik; dort sind beide Werte 20, es
+   ändert sich also nur der Code, nicht was gesendet wird. Belegt ist nur die
+   Heizseite.
+3. Der Schlusshinweis des Werkzeugs **beziffert** jetzt den fehlenden Wert
+   (`KK_HK_vlLo`, derzeit 34 °C) statt nur auf ihn zu verweisen. Wer im Notfall
+   vor dem Bedienterminal steht, braucht die Zahl.
+
+**Die ioBroker-Seite ist geprüft und richtig** (Owner-Auskunft 2026-08-20): Die
+Kurvenberechnung in `ioBroker.javascript` liefert für Heiz- wie Kühlkurve
+plausible Werte. Der Fehler saß allein in der Abbildung auf die
+Panasonic-Felder.
+
+**Was daraus für den Notbetrieb folgt.** `TargetHigh` ist nicht mehr nur der
+Wert, der sich im Direktbetrieb mit dem Sollwert eine Speicherstelle teilt — er
+ist der **tragende** Punkt der Notbetriebskurve, der Vorlauf bei Kälte. Er muss
+über den Notbetriebskanal aus Abschnitt 3 kommen; dort ist er schon vorgesehen.
+
+**Offen bleibt der Weg über das Bedienterminal.** Solange 3.12.0 nicht läuft,
+ist der Notbetrieb der manuelle: umschalten, dann `TargetHigh` von Hand auf
+34 °C setzen. Ohne diesen Schritt bleibt die Werksvorgabe von 55 °C stehen —
+bei −5 °C Außentemperatur wären das rund 51 °C Vorlauf statt der ausgelegten
+32 °C, jenseits der Estrichgrenze. Das gehört mit dieser Zahl in die
+Offline-Anleitung (Abschnitt 9).
 
 **M3 — an H2. BEANTWORTET 2026-08-20.** Ursprüngliche Frage: Läuft Warmwasser
 bei KNX-erzwungenem Kühlen mit `OperationMode` (SET9) = 3, oder braucht es die 5
@@ -534,7 +550,10 @@ unkritisch, aber hier nicht getrennt gemessen.
 * [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`.
 * Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
   KNX-Taster für die Kompressorfreigabe, und der Hinweis, dass im Kurvenbetrieb
-  „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt.
+  „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt. **Dazu der obere
+  Kurvenpunkt mit seiner Zahl:** nach dem Umschalten auf Kurve ist
+  `TargetHigh` auf 34 °C zu setzen, sonst bleibt die Werksvorgabe 55 °C stehen
+  (Abschnitt 6a).
 * `NOTBETRIEB.md` im Node-RED-Projekt — samt der Rückkehr-Zeile im Re-Assert und
   der Bedingung dazu (Entscheidung 6).
 * **Zu korrigieren, M1 liegt seit 2026-08-20 vor:** Die Gleichsetzung von

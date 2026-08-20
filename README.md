@@ -313,17 +313,26 @@ Anlagenkonfiguration zufällig exakt diesen einen nutzt.
 ### Heiz- und Kühlkurve als Set-Kommandos (3.2.0)
 
 SET27 – SET34 schreiben die Zone-1-Kurven (Bytes 75-78 und 86-89). Zweck ist
-der **Notbetrieb**: Fällt die Node-RED-Steuerung aus, wird am Bedienterminal von
-Direkt- auf Kurvenbetrieb umgeschaltet, und die Anlage läuft mit denselben
-Werten weiter. Dafür spiegelt [`test/kurven_sync.py`](test/kurven_sync.py) die
-im ioBroker gepflegten Kurven in beide Wärmepumpen.
+der **Notbetrieb**: Fällt die Node-RED-Steuerung aus, wird von Direkt- auf
+Kurvenbetrieb umgeschaltet, und die Anlage läuft auf ihrer eigenen Kurve
+weiter. Dafür spiegelt [`test/kurven_sync.py`](test/kurven_sync.py) die im
+ioBroker gepflegten Kurven in beide Wärmepumpen.
+
+**Die Feldnamen sind über Kreuz zugeordnet**, und in dieser Dokumentation stand
+es bis zum 2026-08-20 falsch: `Target_High` ist der Vorlauf bei
+`Outside_Low` — also der Wert für **kaltes** Wetter, `Target_Low` der für
+warmes. Die Werkskurve zeigt es: 55 °C bei −5 °C und 35 °C bei +15 °C. Am
+Gerät nachgemessen, Einzelheiten in [`MQTT-Topics.md`](MQTT-Topics.md).
 
 Eine Falle steckt darin, die man kennen sollte: `Z1HeatCurveTargetHighTemp`
 (SET27) und `Z1HeatRequestTemperature` (SET5) sind in der Wärmepumpe
-**derselbe Wert** — im Direktmodus die Vorlauf-Solltemperatur, im Kurvenmodus
-der obere Kurvenpunkt. Den oberen Kurvenpunkt zu setzen greift also in den
-laufenden Betrieb ein, und im Direktbetrieb ist er nicht haltbar. Der komplette
-Nachweis steht in [`test/README.md`](test/README.md).
+**derselbe Wert — solange der Kreis auf Direktvorgabe steht**. Ihn dort zu
+setzen greift in den laufenden Betrieb ein und hält nicht. Im Kurvenbetrieb
+sind es getrennte Speicherstellen, der Benutzerwert ist dann die
+Parallelverschiebung (±5 K). Deshalb spiegelt `kurven_sync.py` drei der vier
+Heizkurvenwerte, und der vierte — ausgerechnet der Vorlauf bei Kälte — ist
+nach dem Umschalten von Hand nachzutragen. Der komplette Nachweis steht in
+[`test/README.md`](test/README.md).
 
 ### Eine Codebasis für ESP8266 und ESP32-S3 (3.0.0)
 
