@@ -764,9 +764,25 @@ Nach dem Flashen kann `mqtt_server` leer sein - dann bleibt das LWT auf
 curl -u admin:heisha "http://192.168.2.197/settings?mqtt_server=192.168.2.147"
 ```
 
-Das Telnet-Log gab bei diesem Lauf nichts her (Verbindung stand, aber es kamen
-keine Zeilen). Der Weg ueber `info/log` und `mqtt_sub.py` ist ohnehin der
-belastbarere, weil er den Zeitverlauf mitliefert.
+### Das Telnet-Log zeigt die Einzelwerte
+
+Jeder angenommene Wert steht dort, auch wenn er nicht ins MQTT-Log geht:
+
+```text
+[2026-08-20 15:59:32] <DBG> Notbetrieb gemerkt: Z1HeatCurveTargetLowTemp = 27
+```
+
+Dafuer ist **kein** `L` noetig: `L` schaltet nur um, wohin `write_mqtt_log()`
+schreibt (MQTT oder Telnet), waehrend `write_telnet_log()` ohnehin auf Telnet
+geht. Was man braucht, ist eine stehende Verbindung zum Zeitpunkt des
+Ereignisses - ein erster Versuch dieses Laufs lief ins Leere, weil die
+Verbindung unmittelbar vor einem Reboot aufgebaut und danach nicht sauber neu
+hergestellt wurde. Wer ueber einen Neustart hinweg mitlesen will, muss
+wiederverbinden; ein Lebenszeichen holt man mit `R` (antwortet nur mit Text und
+aendert nichts).
+
+Fuer Ablaeufe ueber einen Neustart hinweg ist `info/log` mit `mqtt_sub.py`
+trotzdem der bequemere Weg, weil der Broker die Zeilen puffert.
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 
