@@ -18,9 +18,9 @@ Anlage** — Etappe 5 ist gefahren und grün: gesperrt im Kühlbetrieb, GRÜN na
 Abschnitt 10). Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei
 Messungen beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen
 Fehler in der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind
-korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. Offen
-sind Etappe 6 (Lauf mit abgeschaltetem Broker) und Etappe 7 (Doku, Release
-3.12.0).
+korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. **Auch Etappe 6 ist gefahren:** Der Knopf schaltet mit
+abgeschaltetem Broker, die Firmware übersteht den Ausfall und holt sich in 52 s
+von allein zurück. Offen ist nur noch Etappe 7 (Doku, Release 3.12.0).
 
 ---
 
@@ -810,6 +810,34 @@ unkritisch, aber hier nicht getrennt gemessen.
   zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
   fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
 
+**Folgethema, nicht Teil dieses Vorhabens — niemand merkt den Ausfall.**
+Owner-Beobachtung 2026-08-21, mitten in Etappe 6: Während der Broker weg war,
+heizte die Wärmepumpe einfach weiter, mit dem zuletzt gesetzten Sollwert. Kein
+Alarm, kein Hinweis, nichts. Der Ausfall wirkt sich erst mit Verzögerung aus —
+im Sommer über Tage, im Januar über Stunden, wenn der Sollwert der fallenden
+Außentemperatur nicht mehr nachgeführt wird.
+
+Damit steht der Knopf auf einem stillen Fundament: Er funktioniert, aber jemand
+muss auf die Idee kommen, ihn zu suchen. Nachgesehen und bestätigt: **Die
+Weboberfläche der Bridge zeigt nirgends an, dass die Verbindung zur Hausteuerung
+weg ist** — Startseite, Topic-Tabelle, sonst nichts. Selbst wer gezielt
+nachschaut, sieht es nicht. Die Firmware weiß es (der Reconnect läuft im Backoff
+ins Leere), sie sagt es nur niemandem, außer im MQTT-Log — und das geht in genau
+dieser Lage per Definition ins Leere.
+
+Die naheliegende Form wäre klein: eine Zeile auf der Startseite und auf der
+Notbetriebsseite, „Hausteuerung: seit 14 Minuten nicht erreichbar", aus dem, was
+die Firmware ohnehin kennt. Mit einer Karenz von einigen Minuten, damit ein
+WLAN-Wackler keinen Fehlalarm auslöst. Wer dann die Seite öffnet, weiß sofort,
+ob er den Knopf braucht.
+
+**Kleinigkeit, aber dieselbe Richtung — Rot heißt auf der Seite zweierlei.** Der
+Knopf ist rot eingefärbt („drück mich"), das Ergebnisfeld ROT bedeutet „hat
+nicht geklappt". Am 2026-08-21 hat das prompt zu einer Verwechslung geführt. Für
+eine Seite, deren ganze Rückmeldung aus einer Ampel besteht, ist das die falsche
+Farbsprache; der Knopf sollte blau werden. Zwei Zeichen im Quelltext, noch nicht
+entschieden.
+
 **Folgethema, nicht Teil dieses Vorhabens — die Karenzzeit genauer fassen.**
 `SUBSCRIBE_GRACE` wirft heute für ein Zeitfenster *alles* weg, was nach dem
 Verbinden hereinkommt, also auch echte Kommandos. Seit dem Retain-Befund
@@ -825,7 +853,7 @@ erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau de
 
 ---
 
-## 10. Stand der Umsetzung — 2026-08-21, Etappe 5 erledigt
+## 10. Stand der Umsetzung — 2026-08-21, Etappen 5 und 6 erledigt
 
 **Alles committet, Branch `notbetrieb-web`.**
 Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
@@ -844,6 +872,7 @@ Etappe | Inhalt | Commit
 5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
 5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
 5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | `a6fdafd`
+6 | **Etappe 6: GRÜN ohne Broker, Rückkehr nach 52 s** | dieser Commit
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
@@ -877,10 +906,8 @@ sobald die Firmware dort läuft.
 
 1. **Etappe 5 — ERLEDIGT am 2026-08-21. Beide Läufe gefahren, beide grün.**
    Einzelheiten im Protokoll unten.
-2. **Etappe 6 — Wiederholung mit abgeschaltetem MQTT-Broker.** Der eigentliche
-   Nachweis. Ungemessen ist bis heute, ob die Firmware ohne erreichbaren Broker
-   sauber weiterläuft (die Reconnect-Logik hat einen Backoff, aber gemessen ist
-   das nicht).
+2. **Etappe 6 — ERLEDIGT am 2026-08-21.** Der Knopf schaltet ohne Broker, die
+   Firmware übersteht den Ausfall, und nach GRÜN kommt Wärme. Protokoll unten.
 3. **Etappe 7 — Rückkehr prüfen, Doku, Release 3.12.0.** Die Nacharbeiten
    stehen in Abschnitt 9. Dazu gehört auch `NOTBETRIEB.md` §7 im Nachbarprojekt:
    Es beschreibt noch den Handweg am Bedienterminal statt den Knopf (dort als
@@ -984,6 +1011,71 @@ Sollwert bereits vor — die Kaskadensteuerung war dem KNX-Wechsel von selbst
 gefolgt, TOP4 stand schon auf 0. Ob die Wärmepumpe *unser* Kommando angenommen
 hat oder der Wert ohnehin stand, ist aus diesem Lauf nicht zu trennen. Die
 Beweislast tragen die Schritte 2–7, die alle nachweislich anders standen.
+
+### Etappe 6 — der Lauf ohne Broker, 2026-08-21 nachts
+
+**Der eigentliche Nachweis, und er ist erbracht.** Aufbau: KNX auf Heizen,
+Kompressor freigegeben, die Anlage lief bereits im Direktbetrieb mit 26 Hz — die
+realistischere Lage als Etappe 5, denn wenn der ioBroker ausfällt, läuft die
+Anlage meistens. Abgeschaltet wurde die Adapterinstanz `mqtt.0` (Variante A: der
+ioBroker selbst lief weiter, damit die simple-api als Vergleichsquelle erhalten
+blieb).
+
+**Erst der Beweis, dass der Broker wirklich weg war.** Ein Porttest auf 1883
+taugt dafür nicht — ein Docker-Port-Mapping nimmt die TCP-Verbindung auch dann
+an, wenn dahinter niemand horcht; genau darauf bin ich zuerst hereingefallen.
+Tragfähig sind drei andere Belege: `system.adapter.mqtt.0.alive` = false ab
+01:39:06, die Werte im ioBroker eingefroren (Vorlauf 25,5 vom Stand 01:36:00),
+und dieselben Werte am Gerät weiterlaufend (Kompressor 27 → 26, Rücklauf 23,75
+statt der 23,5 im ioBroker).
+
+Nachweis | Ergebnis
+:--- | :---
+Firmware läuft ohne Broker weiter | 2 min Beobachtung, durchgehend HTTP 200, Abfragezyklus zur Wärmepumpe unbeirrt
+Kurvenwerte überleben im RAM | `fehlend = 0` nach vier Minuten ohne Broker
+Der Knopf schaltet ohne MQTT | **GRÜN nach 58 s**, `TargetHigh` 26 → **34**
+Nach GRÜN kommt Wärme | Kompressor **26 → 33 Hz**
+Oberfläche unter Last bedienbar | Browser des Owners und Messskript gleichzeitig, ohne Stocken
+
+**Die 34 ist hier der endgültige Beleg.** Der Broker war seit vier Minuten tot,
+der ioBroker fror bei 01:38:48 ein — der Wert lag im RAM der Bridge, seit dem
+Neustart um 00:54, und ging von dort in die Wärmepumpe. Es gab keine Leitung, aus
+der er sonst hätte kommen können.
+
+**Und der Satz „Was GRÜN nicht heißt: dass die Anlage heizt" ist eingelöst.** Bei
+Etappe 5 blieb der Kompressor auf 0 Hz, weil die KNX-Freigabe fehlte; hier ging
+er auf 33 Hz. Damit ist zum ersten Mal die ganze Kette gezeigt: Knopf → Kurve →
+Wärme.
+
+**Der Rückweg nach dem Wiedereinschalten:**
+
+```
+01:47:23  mqtt.0 wieder gestartet
+01:48:15  H1 meldet sich von allein wieder an, LWT Online   (52 s Backoff)
+01:48:54  Re-Assert holt zurück: Heating_Mode 0 -> 1        (39 s später)
+01:53:40  Re-Assert korrigiert den Sollwert 35 -> 26
+```
+
+Die 52 Sekunden sind der zweite ungemessene Punkt aus Abschnitt 7: Die
+Reconnect-Logik übersteht einen achtminütigen Ausfall und holt sich von allein
+zurück, in der erwarteten Größenordnung des Backoff-Deckels von 60 s.
+
+**Ein Fehler beim Messen, der hierher gehört.** Der erste Wächter las
+`Heating_Mode` aus dem **ioBroker** und meldete eine Rückkehr, die nicht
+stattgefunden hatte: Der Datenpunkt stand seit dem Broker-Stopp eingefroren auf
+dem Wert von *vor* dem Notbetrieb und sah dabei aus wie ein aktueller Wert. Am
+Gerät stand `Heating_Mode` unverändert auf 0. Daraus die Regel: **Im Ausfallfall
+ist der ioBroker keine gültige Messquelle** — dann zählt nur, was die Bridge
+selbst über `/tablerefresh` herausgibt. Das gilt für jede künftige Messung an
+diesem Vorhaben.
+
+**Aufgeräumt.** Sollwerte durch den Re-Assert, Kurvenpunkte durch
+`kurven_sync.py`; die Endkontrolle gegen die Baseline von 01:31 zeigt **keinen
+abweichenden Konfigurationswert**, nur 15 laufende Messwerte. Nachwirkung des
+Laufs: `Heat_Energy_Production` stand danach bei 2400 W statt 200 W, weil der
+Sollwert nach dem Werks-Reset knapp fünf Minuten auf 35 °C stand — das läuft von
+allein aus. Nach dem Zurückschalten auf Kühlen (Modus Nur-DHW) steht H1 wieder
+exakt auf dem Stand von 00:52, vor dem ersten Lauf des Abends.
 
 ### Zustand der Geräte
 
