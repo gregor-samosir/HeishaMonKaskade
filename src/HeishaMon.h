@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 #include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 #include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
+#include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
 
 // platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
 // (official HeishaMon board), differences are isolated here
@@ -113,3 +114,16 @@ extern bool setDataPending;
 
 // query timer, needs restart from mqtt_callback if a command was rejected
 extern Ticker Send_Pana_Mainquery_Timer;
+
+// Notbetrieb (notbetrieb.cpp). Die Regeln stehen arduino-frei in notbetrieb.h,
+// hier nur die Anbindung ans Geraet.
+void notbetrieb_init(void);
+bool notbetrieb_subscribe(PubSubClient &);
+// true, wenn das Topic in den Notbetriebszweig gehoerte - dann ist die
+// Nachricht abschliessend behandelt und laeuft NICHT weiter in den Set-Pfad
+bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg);
+
+// Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
+extern const NotbetriebRolle notbetriebRolle;
+extern NotbetriebSpeicher notbetriebWerte;
+extern NotbetriebLauf notbetriebLauf;

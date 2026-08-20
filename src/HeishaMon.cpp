@@ -286,6 +286,12 @@ bool mqtt_reconnect()
     // stillschweigend hinter der Tabelle zurueckbleiben konnte.
     (void)subscribe_set_topics(mqtt_client);
 
+    // Der Notbetriebszweig wird ebenfalls abonniert. Auf DIESEN Schwall ist
+    // die Firmware angewiesen: Der Adapter spielt jedem neuen Abonnenten die
+    // gespeicherten Werte ein, und nur so sind die Kurvenwerte nach einem
+    // Neustart binnen Sekunden wieder da, ohne dass Node-RED etwas tun muss.
+    (void)notbetrieb_subscribe(mqtt_client);
+
     // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
     // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
     setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
@@ -306,7 +312,30 @@ bool mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-  // Karenzzeit nach dem Abonnieren, VOR allem anderen: Der ioBroker-Adapter
+  // Payload zuerst kopieren - beide Zweige darunter brauchen ihn als
+  // nullterminierten String, und der Notbetriebszweig kommt VOR der
+  // Karenzpruefung dran.
+  char msg[length + 1];
+  for (unsigned int i = 0; i < length; i++)
+  {
+    msg[i] = (char)payload[i];
+  }
+  msg[length] = '\0';
+
+  // Der Notbetriebszweig wird VOR der Karenzpruefung behandelt, und das sind
+  // die entscheidenden Zeilen dieses Vorhabens: Die Wiedereinspielung des
+  // Brokers ist hier kein Problem, sondern der Mechanismus. Nur weil diese
+  // Werte den Schwall passieren duerfen, sind sie nach jedem Neustart und
+  // jedem Reconnect binnen Sekunden wieder da. Die Gefahr, die zur Karenzzeit
+  // gefuehrt hat, kann hier nicht auftreten - sie gehen nie ungefragt an die
+  // Waermepumpe. Wird diese Ausnahme vergessen, funktioniert der Knopf im
+  // Labor und nach jedem Neustart nicht mehr (Hosttest: notbetrieb_test.cpp).
+  if (notbetrieb_mqtt_annehmen(topic, msg))
+  {
+    return; // abschliessend behandelt, kein Set-Kommando, kein Timer angefasst
+  }
+
+  // Karenzzeit nach dem Abonnieren: Der ioBroker-Adapter
   // schickt einem neuen Abonnenten den gespeicherten Wert jedes Set-Topics.
   // Am 2026-08-13 gemessen, was das an der Anlage anrichtet: ein Kurvenwert
   // vom 10.08. setzte nach jedem Neustart den Vorlauf-Sollwert auf 55 Grad,
@@ -327,12 +356,6 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
 
   Send_Pana_Mainquery_Timer.stop();
   write_telnet_log((char *)"Callback from mqtt");
-  char msg[length + 1];
-  for (unsigned int i = 0; i < length; i++)
-  {
-    msg[i] = (char)payload[i];
-  }
-  msg[length] = '\0';
 
   // on error no command was registered: restart the query cycle,
   // otherwise no timer is running anymore and polling stops forever
@@ -776,6 +799,9 @@ void setup()
 {
   getFreeMemory();
   setupSerial();
+
+  // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
+  notbetrieb_init();
 
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
 

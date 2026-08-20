@@ -19,3 +19,4 @@ const std::string Topics::STATE = mqttPrefix + s + "state";
 const std::string Topics::SET = mqttPrefix + s + "set";
 const std::string Topics::LOG = infTopicPrefix + s + "log";
 const std::string Topics::WILL = infTopicPrefix + s + "LWT";
+const std::string Topics::NOTBETRIEB = mqttPrefix + s + "notbetrieb";

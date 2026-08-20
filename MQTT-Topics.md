@@ -604,3 +604,43 @@ stammen also nicht von dort. Andere Kurvenparameter können ähnliche
 undokumentierte Grenzen haben, die sich erst zeigen, wenn ein Wert gegen den
 Rand gefahren wird – `test/kurven_grenzen.py` misst sie aus. **Nach jeder
 Kurvenänderung die state-Topics zurücklesen und vergleichen.**
+
+## Notbetrieb Topics (`<prefix>/notbetrieb/`, new in 3.12.0)
+
+A branch of its own, next to `set/`. What arrives here is **remembered, not
+executed**: the firmware keeps the values in RAM and only sends them to the
+heatpump when someone presses the emergency button on its web interface.
+
+Why this exists: the MQTT broker *is* the ioBroker adapter. If ioBroker goes
+down, the firmware loses both the sender of a command and the transport itself
+— so it has to know the heating curve *beforehand*. Background and the full
+reasoning: `Vorhaben-Notbetrieb-Weboberflaeche.md`.
+
+Stage | Topic | Source in ioBroker | Range
+:--- | :--- | :--- | :---
+1 (heat) | `notbetrieb/Z1HeatCurveTargetHighTemp` | `KK_Heizkurve.KK_HK_vlLo` | 20 - 55
+1 (heat) | `notbetrieb/Z1HeatCurveTargetLowTemp` | `KK_Heizkurve.KK_HK_vlHi` | 20 - 55
+1 (heat) | `notbetrieb/Z1HeatCurveOutsideLowTemp` | `KK_Heizkurve.KK_HK_atLo` | -15 - 15
+1 (heat) | `notbetrieb/Z1HeatCurveOutsideHighTemp` | `KK_Heizkurve.KK_HK_atHi` | -15 - 15
+2 (DHW) | `notbetrieb/DHWTemp` | `KK_Warmwasser.DHW_Target_Temp` | 40 - 75
+
+The names are identical to the matching set commands on purpose: the ranges are
+looked up in `setCommands[]` (`set_command_range()`), so there is exactly one
+place where they are defined. **Values outside the range are discarded, not
+clamped** — a silently corrected curve point would go unnoticed in an emergency.
+
+Note the crossover in the source column: `vlLo` (flow at the *low* outside
+temperature) feeds `TargetHigh`. See the curve section above.
+
+Each stage only subscribes to the topics of its own role, chosen by a build
+flag (`NOTBETRIEB_ROLLE_WASSER`, otherwise heating). Stage 2 does not listen for
+curve values at all.
+
+**These topics deliberately bypass the subscribe grace period** that
+`mqtt_callback()` applies to everything else. For `set/` topics the broker's
+replay of stored values after a reconnect is a hazard (measured 2026-08-13: a
+day-old curve value pushed the flow setpoint to 55 °C on every restart). For
+this branch the very same replay is the mechanism: it is what puts the curve
+values back within seconds after a restart, without Node-RED having to do
+anything. The hazard cannot apply here, because these values never reach the
+heatpump unasked.
