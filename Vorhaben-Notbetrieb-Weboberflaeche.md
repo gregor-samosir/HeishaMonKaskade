@@ -749,7 +749,7 @@ erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau de
 
 ---
 
-## 10. Stand der Umsetzung — Stand 2026-08-20, abends
+## 10. Stand der Umsetzung — Pause am 2026-08-20, 21:45
 
 **Alles committet, Branch `notbetrieb-web`.**
 Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
@@ -832,18 +832,37 @@ sobald die Firmware dort läuft.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | 3.11.0, **unverändert**, Direktbetrieb, Kurve 34/26 bei −10/+15; `set/Heatpump` = 0, die Anlage steht |
-H2 (192.168.2.122) | 3.11.0, **unverändert** |
-Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware dieses Branches, Rolle Heizen |
+H1 (192.168.2.120) | **Firmware dieses Branches** (zweimal per OTA, zuletzt mit dem CSS-Fix). Versionsanzeige weiter 3.11.0 — die Nummer wird erst in Etappe 7 gesetzt. Anlage steht, Direktbetrieb, Betriebsart Cool, `/notbetrieb/status` = `3;1;7;0` (das ROT des Laufs von 21:31, bleibt bis zum nächsten Versuch stehen) |
+H2 (192.168.2.122) | 3.11.0, **unverändert** — der Warmwasser-Knopf ist dort noch nicht drauf |
+Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen |
+
+Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
+läuft normal weiter (zuletzt 21:41:24). Nichts ist aufzuräumen.
 
 Die Testwerte unter dem Prefix `panasonic_heat_pump_test` bleiben im ioBroker —
 sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
 
 ### Wiedereinstieg prüfen
 
+**Der nächste Schritt ist eine Messung, kein Umbau.** Erst muss feststehen,
+welche der beiden Hypothesen aus Abschnitt 2 zutrifft — sie führen zu
+verschiedenen Lösungen. Der einfachere Weg ist (b): `Heatpump` = 1 senden, auf
+`Heatpump_State` = 1 warten, dann `OperationMode` = 0 wiederholen und TOP4/TOP101
+40 s beobachten; danach `Heatpump` = 0 zum Aufräumen, statt auf den Re-Assert zu
+warten. Kostet rund eine Minute Kühlbetrieb an WP1.
+
+Eine Kleinigkeit für dieselbe Runde: Nach einem ROT bleibt die Anzeige stehen,
+bis jemand erneut drückt. Wer die Seite am nächsten Tag öffnet, sieht das ROT
+von gestern, ohne dass jemand etwas getan hätte. Ein Neustart löscht es (RAM).
+Ob das so bleiben soll, ist noch nicht entschieden.
+
 ```bash
 git switch notbetrieb-web
 c++ -std=c++17 -O2 -Wall -o /tmp/nb_test test/notbetrieb_test.cpp && /tmp/nb_test
+python3 test/css_klassen_test.py
+
+# Testlauf an der Anlage immer im Ruhefenster des Re-Assert:
+cd ~/nodered-flows && ./testfenster.py --warte 240 --wache 200
 
 # Liegen die Notbetriebswerte im Broker? (Knopf bleibt sonst gesperrt)
 curl -s "http://192.168.2.147:8087/getBulk/\
