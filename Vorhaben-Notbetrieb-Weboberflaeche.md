@@ -12,14 +12,15 @@ macht Warmwasser.
 Ist auch das WLAN weg, liegt ein Stromausfall vor — dafür wird hier keine
 Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
-**Stand dieser Datei:** 2026-08-21, Firmware 3.11.0 auf beiden Stufen.
-Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei Messungen sind
-beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
-der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind korrigiert
-(Abschnitt 6a). **Gebaut ist beides: der Knopf in der Firmware und die
-Node-RED-Seite, die ihn versorgt** (Abschnitt 10), seit dem 2026-08-21 samt der
-Sperre über die Betriebsart (Abschnitt 2). Was fehlt, ist der Nachweis an der
-Anlage — Etappe 5.
+**Stand dieser Datei:** 2026-08-21 nachts. **Der Knopf funktioniert an der
+Anlage** — Etappe 5 ist gefahren und grün: gesperrt im Kühlbetrieb, GRÜN nach
+57 s im Heizbetrieb, Rückkehr durch den Re-Assert von allein (Protokoll in
+Abschnitt 10). Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei
+Messungen beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen
+Fehler in der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind
+korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. Offen
+sind Etappe 6 (Lauf mit abgeschaltetem Broker) und Etappe 7 (Doku, Release
+3.12.0).
 
 ---
 
@@ -778,6 +779,22 @@ unkritisch, aber hier nicht getrennt gemessen.
   Kurvenpunkt mit seiner Zahl:** nach dem Umschalten auf Kurve ist
   `TargetHigh` auf 34 °C zu setzen, sonst bleibt die Werksvorgabe 55 °C stehen
   (Abschnitt 6a).
+
+  **Und die Reihenfolge ist dabei zwingend (Owner-Befund 2026-08-21):** Das
+  Kurvenmenü am Bedienpanel ist **nur bei ausgeschalteter Wärmepumpe
+  erreichbar**. Der Handweg lautet also: Anlage aus → auf Kurve umschalten und
+  `TargetHigh` setzen → einschalten. Wer zuerst einschaltet, kommt an die Kurve
+  nicht mehr heran, ohne die Anlage wieder auszuschalten.
+
+  Für den Knopf ist das ohne Folgen — er schaltet die Anlage als **letzten**
+  Schritt ein, aus einem anderen Grund (Abschnitt 2), und trifft damit dieselbe
+  Reihenfolge. Es kostet aber das **Kurvenfoto**: Nach einem GRÜN-Lauf läuft die
+  Anlage, das Menü bleibt zu. Das Foto braucht deshalb einen eigenen Termin —
+  Kurvenbetrieb herstellen, dann den **Wartungsmodus** einschalten (der schaltet
+  beide Stufen aus und legt den Re-Assert still, hier also genau richtig),
+  fotografieren, Wartungsmodus wieder aus. Für einen Lauf, der die Anlage
+  einschalten soll, bleibt er das falsche Werkzeug
+  ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
 * `NOTBETRIEB.md` im Node-RED-Projekt — samt der Rückkehr-Zeile im Re-Assert und
   der Bedingung dazu (Entscheidung 6).
 * **Zu korrigieren, M1 liegt seit 2026-08-20 vor:** Die Gleichsetzung von
@@ -808,7 +825,7 @@ erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau de
 
 ---
 
-## 10. Stand der Umsetzung — 2026-08-21
+## 10. Stand der Umsetzung — 2026-08-21, Etappe 5 erledigt
 
 **Alles committet, Branch `notbetrieb-web`.**
 Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
@@ -826,6 +843,7 @@ Etappe | Inhalt | Commit
 4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
 5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
 5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
+5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | dieser Commit
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
@@ -857,49 +875,8 @@ sobald die Firmware dort läuft.
 
 ### Was noch fehlt
 
-1. **Etappe 5 — erster Lauf gefahren, Ergebnis ROT; die Ursache ist behoben.**
-   Am 2026-08-20 um 21:31:34 im Ruhefenster gedrückt, ROT nach 20,7 s in
-   Schritt 1 (`OperationMode`). Die Wärmepumpe verwirft das Kommando, weil der
-   KNX-Schalter auf Kühlen stand — Einzelheiten in Abschnitt 2. **Der Automat
-   selbst hat sich dabei bewährt:** Abbruch im ersten Schritt, kein
-   Weitermachen, kein falsches GRÜN — und alle neun beobachteten TOPs standen
-   hinterher exakt wie vorher. Seit dem 2026-08-21 ist der Knopf in dieser Lage
-   gesperrt und sagt es im Klartext.
-
-   **Damit zerfällt Etappe 5 in zwei Läufe**, die verschiedene Ausgangszustände
-   brauchen:
-
-   * **Der Sperr-Nachweis** — Ausgangszustand **Kühlen**. Er schickt kein
-     einziges Kommando an die Wärmepumpe: Firmware auf H1, Seite öffnen, der
-     Knopf muss weg sein und der Grund dastehen. Kein Ruhefenster nötig, weil
-     nichts geschaltet wird.
-   * **Der GRÜN-Lauf** — Ausgangszustand **Heizen** am KNX-Schalter. Erst dann
-     nimmt die Anlage `OperationMode` = 0 überhaupt an. Zum ersten Mal wird
-     GRÜN erwartet.
-
-   Voraussetzung für beide: Die Firmware dieses Branches muss erst auf H1, dort
-   läuft der Release-Stand 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit
-   404).
-   **Für den GRÜN-Lauf zu beachten:** Er gehört in ein Ruhefenster des
-   Re-Assert, sonst
-   holt der die Anlage mitten im Versuch zurück (Abschnitt 7). Der Weg dorthin
-   ist `~/nodered-flows/testfenster.py`, nicht der Wartungsmodus — der schaltet
-   auf seiner AN-Flanke beide Wärmepumpen aus und ist damit für einen Lauf, der
-   die Anlage einschalten soll, das falsche Werkzeug
-   ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
-
-   ```bash
-   cd ~/nodered-flows && ./testfenster.py --warte 240 --wache 200
-   ```
-
-   Wachzeit nie größer als die verlangte Ruhe wählen — sonst fällt der nächste
-   Re-Assert zwangsläufig in die Wache und der Lauf gilt als gestört.
-   Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die Anlage im
-   Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist der Moment
-   für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als Beispiel —
-   das zeigt allerdings die *Werks*kurve).
-   Aufräumen heißt jetzt: Wartung aus — den Rest macht der Re-Assert von allein,
-   und genau das ist der Nachweis für Testplan-Punkt 6.
+1. **Etappe 5 — ERLEDIGT am 2026-08-21. Beide Läufe gefahren, beide grün.**
+   Einzelheiten im Protokoll unten.
 2. **Etappe 6 — Wiederholung mit abgeschaltetem MQTT-Broker.** Der eigentliche
    Nachweis. Ungemessen ist bis heute, ob die Firmware ohne erreichbaren Broker
    sauber weiterläuft (die Reconnect-Logik hat einen Backoff, aber gemessen ist
@@ -909,11 +886,110 @@ sobald die Firmware dort läuft.
    Es beschreibt noch den Handweg am Bedienterminal statt den Knopf (dort als
    TODO 1.6 eingetragen).
 
+### Etappe 5 — das Protokoll vom 2026-08-21
+
+Zwei Läufe an H1, nacheinander, mit einer Pause dazwischen, in der der Owner den
+KNX-Schalter umgelegt hat. Firmware dieses Branches per OTA auf H1 (ESP32-S3,
+Env `heishamon_esp32_h1_ota`); die Abnahme gegen die Baseline von 00:52 zeigte
+**keine einzige Abweichung** in 92 Zeilen.
+
+**Lauf A — der Sperr-Nachweis, Anlage auf Kühlen.** Kein Kommando ging an die
+Wärmepumpe.
+
+* `/notbetrieb/status` = `0;1;7;0;2` — bereit, **alle vier Kurvenwerte binnen
+  Sekunden nach dem Neustart wieder da** (Broker-Wiedereinspielung, `fehlend`
+  = 0), gesperrt wegen der Betriebsart.
+* Die Seite trägt den Knopf mit `display:none` und zeigt stattdessen den
+  Klartext.
+* **Der POST auf `/notbetrieb/start` wurde abgewiesen** (303, „nicht bereit"),
+  Log: `Notbetrieb abgelehnt: die Anlage steht nicht auf Heizen (TOP101)`.
+  TOP4, TOP101 und TOP0 standen 30 s später unverändert — die Sperre wirkt
+  serverseitig, nicht nur in der Oberfläche.
+
+**Die Pause — das Entsperren geschieht von selbst.** Sekundengenau
+mitgeschrieben, in beide Richtungen:
+
+Zeit | Status | Auslöser
+:--- | :--- | :---
+00:59:08 | `0;1;7;0;2` | KNX steht auf Kühlen
+**00:59:10** | `0;1;7;0;0` | KNX auf Heizen — **frei ohne Neuladen**
+**01:14:52** | `2;8;7;0;2` | KNX zurück auf Kühlen — **wieder gesperrt**
+**01:17:39** | `0;1;7;0;2` | 15 min nach GRÜN — **Anzeige verfallen**
+
+Die letzte Zeile ist der Nachweis für den Anzeigeverfall: GRÜN fiel um 01:02:38,
+die Anzeige stand um 01:17:34 noch und war um 01:17:39 weg — bei einer Abtastung
+alle 5 s ist das der berechnete Zeitpunkt 01:17:38. Der Knopf stand danach
+wieder da, nur eben gesperrt, weil die Anlage inzwischen auf Kühlen steht.
+
+**Lauf B — der GRÜN-Lauf, Anlage auf Heizen.** Im Ruhefenster (`testfenster.py
+--warte 240`, Fenster 4:43 min ab 01:01:26), bewacht mit `--wache 200`.
+
+```
+01:01:41  +0s   Schritt 1 von 7      01:02:13  +32s  Schritt 5
+01:01:49  +8s   Schritt 2            01:02:22  +41s  Schritt 6
+01:01:57  +16s  Schritt 3            01:02:30  +49s  Schritt 7
+01:02:05  +24s  Schritt 4            01:02:38  +57s  GRUEN
+```
+
+**GRÜN nach 57 s.** Jeder Schritt genau 8 s — das ist die Mindestwartezeit, nicht
+die Antwortzeit der Wärmepumpe. Sie hat also jeden Schritt schon innerhalb
+dieser acht Sekunden zurückgemeldet; die 56 s aus dem Entwurf sind damit auf die
+Sekunde bestätigt.
+
+TOP | vor dem Lauf | nach dem Lauf
+:--- | ---: | ---:
+`Heating_Mode` (76) | 1 = Direkt | **0 = Comp. Curve**
+`Z1_Heat_Curve_Target_High_Temp` (29) | **20** | **34**
+`Z1_Heat_Curve_Target_Low_Temp` (30) | 26 | 26
+`Z1_Heat_Curve_Outside_Low_Temp` (32) | −10 | −10
+`Z1_Heat_Curve_Outside_High_Temp` (31) | 15 | 15
+`Heatpump_State` (0) | 0 = aus | **1 = An**
+`Main_Target_Temp` (7) | 20 | **26**
+
+**Die 34 ist der tragende Beleg.** Diesen Wert schreibt sonst niemand:
+`kurven_sync.py` lässt ihn im Direktbetrieb bewusst aus, und vor dem Lauf stand
+dort eine 20. Er kann nur aus dem RAM der Firmware gekommen sein — über den
+Notbetriebskanal aus Abschnitt 3, der damit end-to-end belegt ist.
+
+**Die Wache bestätigt den Lauf: SAUBER.** In 3:20 min hat niemand die
+Betriebsart, eine Kurve oder Ein/Aus angefasst; die beiden einzigen
+Schreibvorgänge waren `QuietMode` an beiden Stufen, vom Werkzeug selbst als
+unkritisch eingestuft. Das Umschalten kam also vom Knopf, nicht von der
+Kaskadensteuerung.
+
+**Ein Zusatzbefund, der nicht gesucht war:** `Main_Target_Temp` stand im
+Kurvenbetrieb auf **26 °C bei 15 °C Außentemperatur** — genau der Punkt, den die
+am 2026-08-20 korrigierte Kurvenpaarung vorhersagt (TargetLow gilt am oberen
+Außenpunkt). Abschnitt 6a ist damit an der laufenden Anlage im Kurvenbetrieb
+bestätigt, nicht nur aus der Werkskurve abgeleitet.
+
+**Der Rückweg trägt — Testplan-Punkt 6 ist belegt.** Neun Sekunden nach dem
+Re-Assert um 01:06:24 war die Anlage von allein zurück:
+
+```
+01:06:28  Heating_Mode=0  Heatpump_State=1
+01:06:33  Heating_Mode=1  Heatpump_State=0
+```
+
+**Der Werks-Reset beim Zurückschalten, ein drittes Mal reproduziert.** TOP27,
+TOP29, TOP30 und TOP42 sprangen auf 35, TOP32 auf −5, TOP28 und TOP72 auf 10 —
+genau das Muster aus M2. Die Sollwerte holte der nächste Re-Assert um 01:11:24
+von allein zurück (01:11:35: Heat/Cool/Water wieder je 20), die Kurvenpunkte
+stellte `kurven_sync.py` wieder her. **Endkontrolle:** von 92 Zeilen wichen
+zuletzt nur noch die beiden Betriebsart-Zeilen (KNX stand noch auf Heizen) und
+drei laufende Messwerte ab. Kein Rest.
+
+**Was Lauf B nicht belegt:** Schritt 1 (`OperationMode` = 0) fand seinen
+Sollwert bereits vor — die Kaskadensteuerung war dem KNX-Wechsel von selbst
+gefolgt, TOP4 stand schon auf 0. Ob die Wärmepumpe *unser* Kommando angenommen
+hat oder der Wert ohnehin stand, ist aus diesem Lauf nicht zu trennen. Die
+Beweislast tragen die Schritte 2–7, die alle nachweislich anders standen.
+
 ### Zustand der Geräte
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **Release-Stand v3.11.0**, am 2026-08-20 abends zurückgeflasht — der Knopf liegt auf keinem Produktivgerät. Anlage steht, Direktbetrieb, Betriebsart Cool |
+H1 (192.168.2.120) | **Firmware dieses Branches**, per OTA am 2026-08-21 um 00:54 (Env `heishamon_esp32_h1_ota`). Versionsanzeige weiter 3.11.0 — die Nummer wird erst in Etappe 7 gesetzt. Abnahme gegen die Baseline ohne Abweichung. Anlage steht, Direktbetrieb, Betriebsart Cool. Rückfall: `heishamon_esp32_h1_ota_v3.11.0.bin` in `~/HeishaMon-Rollback/` |
 H2 (192.168.2.122) | 3.11.0, **unverändert** — der Warmwasser-Knopf ist dort noch nicht drauf |
 Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
 
