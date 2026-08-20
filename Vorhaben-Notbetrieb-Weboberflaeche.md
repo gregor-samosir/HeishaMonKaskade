@@ -643,9 +643,25 @@ unkritisch, aber hier nicht getrennt gemessen.
   höchstens noch gut vier Minuten für Kurvenfoto und Kontrolle. Schlimmer ist
   der Treffer *während* des Laufs: Fällt der Re-Assert zwischen Schritt 1 und
   Schritt 7, steht die Betriebsart wieder auf Direktbetrieb, während der Automat
-  noch Kurvenpunkte schreibt. **Deshalb wird jeder Lauf an Stufe 1 mit gesetztem
-  Wartungsschalter gefahren** — der sperrt den Kanal, und das Abschalten der
-  Wartung ist danach zugleich der Nachweis für Testplan-Punkt 6.
+  noch Kurvenpunkte schreibt.
+
+  **Der Weg dagegen ist ein Ruhefenster, kein Schalter** (2026-08-20). Der
+  naheliegende Gedanke — den Verteiler für die Dauer des Versuchs stilllegen —
+  ist geprüft und verworfen: Der Wartungsmodus der Kaskade schaltet auf seiner
+  AN-Flanke zuerst beide Wärmepumpen aus. Für einen Lauf, der die Anlage
+  *einschalten* soll, ist das das Gegenteil dessen, was gebraucht wird.
+  Einzelheiten in [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md).
+
+  Stattdessen `~/nodered-flows/testfenster.py`: Es liest den Takt aus den
+  Zeitstempeln der set-Datenpunkte (jeder Deploy verschiebt ihn), wartet mit
+  `--warte` auf den Beginn eines ausreichend langen Fensters und bewacht den
+  Lauf mit `--wache`; Exit-Code 2, wenn jemand dazwischenschreibt. **Wachzeit
+  nie größer als die verlangte Ruhe wählen** — `--warte 120 --wache 240` ist ein
+  Widerspruch und meldet zwangsläufig GESTÖRT. Für den Heizen-Lauf samt Foto
+  passt `--warte 240 --wache 200`.
+
+  Zurück kommt die Anlage von allein: Der nächste Re-Assert holt sie in den
+  Direktbetrieb, und das ist zugleich der Nachweis für Testplan-Punkt 6.
 
 ## 8. Testplan
 
@@ -752,14 +768,19 @@ sobald die Firmware dort läuft.
    GRÜN erwartet. Voraussetzung: Die Firmware dieses Branches muss erst auf H1,
    dort läuft noch 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit 404,
    am 2026-08-20 nachgesehen).
-   **Neu zu beachten:** Der Wartungsschalter gehört vor dem Lauf gesetzt, sonst
-   holt der Re-Assert die Anlage mitten im Versuch zurück (Abschnitt 7).
-   **Er wirkt heute nicht** — am 2026-08-20 lief der Zyklus um 20:21:24 trotz
-   gesetzter Wartung vollständig durch (sieben Topics). Das ist im Nachbarprojekt
-   zu klären, [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md).
-   Bis dahin bleibt der Behelf: Der Takt liegt auf `:01:24`, `:06:24`, `:11:24`
-   — direkt nach einem Zyklus gestartet, bleiben nach den 56 s noch gut drei
-   Minuten fürs Foto.
+   **Neu zu beachten:** Der Lauf gehört in ein Ruhefenster des Re-Assert, sonst
+   holt der die Anlage mitten im Versuch zurück (Abschnitt 7). Der Weg dorthin
+   ist `~/nodered-flows/testfenster.py`, nicht der Wartungsmodus — der schaltet
+   auf seiner AN-Flanke beide Wärmepumpen aus und ist damit für einen Lauf, der
+   die Anlage einschalten soll, das falsche Werkzeug
+   ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
+
+   ```bash
+   cd ~/nodered-flows && ./testfenster.py --warte 240 --wache 200
+   ```
+
+   Wachzeit nie größer als die verlangte Ruhe wählen — sonst fällt der nächste
+   Re-Assert zwangsläufig in die Wache und der Lauf gilt als gestört.
    Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die Anlage im
    Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist der Moment
    für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als Beispiel —

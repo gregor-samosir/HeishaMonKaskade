@@ -1,5 +1,51 @@
 # Auftrag: Die Wartung muss den Re-Assert wirklich stilllegen — und von außen sichtbar sein
 
+> **Beantwortet am 2026-08-20 — und zwar anders, als dieser Auftrag annimmt.**
+> Die Sperre war nicht defekt. **Sie war nie eingeschaltet.**
+>
+> Zwei Spuren, die eine Wartungsflanke zwingend hinterlässt, fehlten beide:
+> `KK_Heizmodus_Mode` und `KK_Kühlmodus_Mode` standen unberührt seit 09:50 bzw.
+> 09:51 (seit V6.2 werden beide auf jeder Flanke auf 0 geschrieben), und die
+> Log-Meldung `WARTUNG AN` fehlte — die wird unabhängig vom LOGGING-Schalter
+> geschrieben. Ursache ist der Bedienweg: Der Schalter ist ein Inject-Node im
+> Node-RED-Editor und nur dort auslösbar. Genau deshalb ist von außen auch
+> nicht feststellbar, ob er steht.
+>
+> **Und für diesen Zweck wäre er ohnehin falsch gewesen.** Seine AN-Flanke
+> sendet zuerst den kompletten Modus-0-Satz — beide Wärmepumpen AUS — und setzt
+> die Modus-DPs auf 0. Für einen Lauf, bei dem die Wärmepumpe *eingeschaltet* in
+> den Kurvenbetrieb gehen soll, ist das das Gegenteil dessen, was gebraucht
+> wird. Die Wartung ist zum Herunterfahren gedacht, nicht zum Schweigen.
+>
+> Zur Frage nach dem zweiten Absender: keiner. GUI- und Sandbox-Instanz
+> schreiben überhaupt nicht auf `set`; der `QuietMode` um 20:18:24 kam aus der
+> Wächter-Logik, eigenes Modul, eigener Takt.
+>
+> **Alle drei Forderungen unter „Zu bauen" sind damit gegenstandslos** (kein
+> Eingriff am Wartungsschalter, kein Spiegelobjekt, keine zweite Sperre —
+> Owner-Entscheid 2026-08-20). An ihre Stelle tritt ein Werkzeug, das den Sender
+> nicht stilllegt, sondern das Fenster trifft: **`~/nodered-flows/testfenster.py`
+> V1.0.0**. Es liest den Takt aus den Zeitstempeln, statt ihn anzunehmen — jeder
+> Deploy verschiebt ihn —, erkennt einen Tick daran, dass alle 13
+> Verteiler-Kanäle in derselben Sekunde liegen, blockiert mit `--warte` bis zum
+> Beginn eines ausreichend langen Fensters und beobachtet mit `--wache` alle 68
+> set-Datenpunkte beider Stufen; Exit-Code 2 bei Störung. Drei Läufe an der
+> echten Anlage belegen das Verhalten. `QuietMode` gilt dabei bewusst als
+> unkritisch (eigener Takt, setzt allein die Leiselauf-Stufe) — ein Signal, das
+> immer rot ist, liest bald niemand mehr; alles andere zählt als kritisch, auch
+> Unbekanntes und ausdrücklich `ForceDHW`. Dauerhaft dokumentiert in
+> `NOTBETRIEB.md` §9.
+>
+> **Was dieser Auftrag falsch gemacht hat:** Er hat aus *keine Wirkung* auf
+> *defekt* geschlossen, ohne zu prüfen, ob der Schalter überhaupt an war. Die
+> Frage „hat er gestanden?" war von hier aus nicht beantwortbar — richtig wäre
+> gewesen, genau das zu fragen, statt eine Ursache anzunehmen. Die zwei
+> Nachweisspuren stehen jetzt in `NOTBETRIEB.md` §9, damit die Frage beim
+> nächsten Mal in zwei Minuten geklärt ist.
+>
+> Der Text unterhalb bleibt unverändert stehen — als Beleg dafür, wie der
+> Befund entstanden ist.
+
 *Zum Kopieren in eine Session im Projekt `nodered-flows` gedacht; setzt dort
 keinen Vorkontext voraus. Gegenstück im Firmware-Repo: `HeishaMonKaskade`,
 [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md)
