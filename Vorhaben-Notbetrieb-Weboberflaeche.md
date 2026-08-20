@@ -260,8 +260,17 @@ Bedienung am Panel nach der Offline-Anleitung.
 bedeutet, wäre das wertlose Signal. Die Firmware hält die Rücklesewerte ohnehin
 in `actual_data[]`; jeder Schritt wird gegen sein TOP geprüft (Spalte 3 in den
 Tabellen in Abschnitt 2). Zeitbudget: Die Wärmepumpe übernimmt in 2–8 s
-(KNX-Messung 2026-08-16), der Abfragezyklus liegt bei rund 6 s — Schritt-Timeout
-20 s, Gesamtfenster 60 s, bis dahin zeigt die Seite „läuft…".
+(KNX-Messung 2026-08-16), der Abfragezyklus liegt bei rund 6 s — **Schritt-Timeout
+20 s**, bis dahin zeigt die Seite „läuft…". Ein vollständiger Heizen-Lauf mit
+realistischen 6-s-Antworten braucht 36 s (im Hosttest gemessen).
+
+**Der Gesamtdeckel ist abgeleitet, nicht frei gewählt** (Umsetzung 2026-08-20):
+Schrittzahl × Schritt-Timeout, also 120 s für Heizen und 60 s für Warmwasser.
+Der ursprüngliche Entwurf nannte pauschal 60 s — das wäre bei sechs Schritten
+inkonsistent gewesen: Schon zwei Schritte im Timeout hätten den Deckel gerissen,
+und ob ein Lauf ROT wird, hinge davon ab, welche der beiden Regeln zufällig
+zuerst greift. So bleibt der Deckel das, was er sein soll: ein Notausgang, falls
+der Automat hängt, nicht der normale Weg zu ROT.
 
 **Was GRÜN nicht heißt:** dass die Anlage heizt. Die KNX-Freigabe des
 Kompressors ist im Antworttelegramm nicht sichtbar — am 2026-08-15/16 byteweise
