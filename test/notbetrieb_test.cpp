@@ -155,7 +155,7 @@ static void test_grenzen()
   int wert = 0;
   NotbetriebLauf lauf;
   notbetrieb_lauf_leeren(&lauf);
-  lauf.schritt = 1; // Schritt 1 traegt TargetHigh
+  lauf.schritt = 2; // Index 2 traegt TargetHigh (seit die Betriebsart vorn steht)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "Wert liegt vor");
   pruefe_zahl(wert, 55, "nach abgelehnter 56 steht weiterhin 55");
 
@@ -229,26 +229,39 @@ static void test_schrittfolge()
 {
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 6, "Heizen hat sechs Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 7, "Heizen hat sieben Schritte");
   pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 3, "Wasser hat drei Schritte");
 
-  // Die Reihenfolge traegt: erst umschalten, dann die Kurve. Andersherum
-  // schreibt der Werks-Reset des Moduswechsels sie sofort wieder ueber.
+  // Die Reihenfolge traegt dreifach: erst die Betriebsart (sonst schaltet der
+  // Knopf eine Anlage ein, die auf Kuehlen steht), dann der Moduswechsel, dann
+  // die Kurve - andersherum schreibt der Werks-Reset des Moduswechsels sie
+  // sofort wieder ueber.
   const NotbetriebSchritt *s0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0);
-  pruefe_text(s0->set_name, "HeatingMode", "Heizen Schritt 1 schaltet die Betriebsart");
-  pruefe_zahl(s0->fester_wert, 0, "HeatingMode auf 0 = Kurve");
-  pruefe_zahl(s0->top, 76, "rueckgelesen an TOP76");
+  pruefe_text(s0->set_name, "OperationMode", "Heizen Schritt 1 setzt die Betriebsart");
+  pruefe_zahl(s0->fester_wert, 0, "OperationMode auf 0 = Heat only");
+  pruefe_zahl(s0->top, 4, "rueckgelesen an TOP4");
 
   const NotbetriebSchritt *s1 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1);
-  pruefe_text(s1->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 2 ist der Vorlauf bei Kaelte");
-  pruefe_zahl(s1->top, 29, "rueckgelesen an TOP29");
+  pruefe_text(s1->set_name, "HeatingMode", "Heizen Schritt 2 schaltet auf Kurve");
+  pruefe_zahl(s1->fester_wert, 0, "HeatingMode auf 0 = Kurve");
+  pruefe_zahl(s1->top, 76, "rueckgelesen an TOP76");
 
-  const NotbetriebSchritt *s5 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 5);
-  pruefe_text(s5->set_name, "Heatpump", "Heizen Schritt 6 schaltet die Anlage ein");
-  pruefe_zahl(s5->fester_wert, 1, "Heatpump auf 1");
-  pruefe_zahl(s5->top, 0, "rueckgelesen an TOP0");
+  const NotbetriebSchritt *s2 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2);
+  pruefe_text(s2->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 3 ist der Vorlauf bei Kaelte");
+  pruefe_zahl(s2->top, 29, "rueckgelesen an TOP29");
 
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 6) == 0, "hinter dem letzten Schritt ist Schluss");
+  // Die Betriebsart muss VOR der Kurve stehen: Ob ein Moduswechsel die
+  // Kurvenpunkte anfasst, ist nicht gemessen - hinter ihr waere es ein Risiko.
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0)->set_name[0] == 'O' &&
+             notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2)->wert_index == 0,
+         "Betriebsart steht vor dem ersten gehaltenen Wert");
+
+  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 6);
+  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 7 schaltet die Anlage ein");
+  pruefe_zahl(s6->fester_wert, 1, "Heatpump auf 1");
+  pruefe_zahl(s6->top, 0, "rueckgelesen an TOP0");
+
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7) == 0, "hinter dem letzten Schritt ist Schluss");
 
   // Wasser: OperationMode 3 traegt auch im KNX-Kuehlbetrieb (M3, 2026-08-20)
   const NotbetriebSchritt *w0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 0);
@@ -358,7 +371,7 @@ static void test_automat()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
               "Heizen mit 6-s-Antworten wird GRUEN");
-  pruefe(dauer <= 55000u, "realistischer Heizen-Lauf bleibt unter 55 s");
+  pruefe(dauer <= 65000u, "realistischer Heizen-Lauf bleibt unter 65 s");
   printf("       (gemessene Laufdauer: %u ms)\n", dauer);
 
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
@@ -431,7 +444,7 @@ static void test_automat()
 
   // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN),
-              (int)(6u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 6 x Schritt-Timeout");
+              (int)(7u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 7 x Schritt-Timeout");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
               (int)(3u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 3 x Schritt-Timeout");
 }
@@ -460,8 +473,8 @@ static void test_mindestwarte()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
               "Lauf mit Sofortbestaetigung wird GRUEN");
-  const uint32_t mindestens = 6u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-  pruefe(dauer >= mindestens, "aber nicht schneller als 6 x Mindestwarte");
+  const uint32_t mindestens = 7u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 7 x Mindestwarte");
   printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
 
   // Gegenprobe Wasser: drei Schritte
@@ -517,10 +530,14 @@ static void test_schritt_wert()
   // fester Wert braucht keinen Speicher
   lauf.schritt = 0;
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "fester Wert immer verfuegbar");
-  pruefe_zahl(wert, 0, "HeatingMode 0");
+  pruefe_zahl(wert, 0, "OperationMode 0 = Heat only");
+
+  lauf.schritt = 1;
+  pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "auch Schritt 2 ist fest");
+  pruefe_zahl(wert, 0, "HeatingMode 0 = Kurve");
 
   // gehaltener Wert fehlt noch
-  lauf.schritt = 1;
+  lauf.schritt = 2;
   pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
          "fehlender gehaltener Wert wird gemeldet");
 
@@ -532,7 +549,7 @@ static void test_schritt_wert()
   // negative Werte muessen durchkommen
   notbetrieb_speicher_leeren(&sp);
   pruefe(annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10), "OutsideLow gesetzt");
-  lauf.schritt = 3;
+  lauf.schritt = 4; // Index 4 traegt OutsideLow (seit die Betriebsart vorn steht)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "negativer Wert verfuegbar");
   pruefe_zahl(wert, -10, "OutsideLow -10 kommt unveraendert durch");
 

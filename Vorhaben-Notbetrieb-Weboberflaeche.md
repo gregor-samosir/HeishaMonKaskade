@@ -57,18 +57,40 @@ umsonst.
 
 Schritt | Kommando | Rückgelesen an
 :--- | :--- | :---
-1. Betriebsart auf Kurve | `HeatingMode` (SET35) = 0 | `Heating_Mode` (TOP76) = 0
-2. Vorlauf bei kalt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
-3. Vorlauf bei warm | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
-4. Untere Außentemperatur | `Z1HeatCurveOutsideLowTemp` (SET29) | `Z1_Heat_Curve_Outside_Low_Temp` (TOP32)
-5. Obere Außentemperatur | `Z1HeatCurveOutsideHighTemp` (SET30) | `Z1_Heat_Curve_Outside_High_Temp` (TOP31)
-6. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
+1. Betriebsart auf Heizen | `OperationMode` (SET9) = 0 (Heat only) | `Operating_Mode_State` (TOP4) = 0
+2. Betriebsart auf Kurve | `HeatingMode` (SET35) = 0 | `Heating_Mode` (TOP76) = 0
+3. Vorlauf bei kalt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
+4. Vorlauf bei warm | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
+5. Untere Außentemperatur | `Z1HeatCurveOutsideLowTemp` (SET29) | `Z1_Heat_Curve_Outside_Low_Temp` (TOP32)
+6. Obere Außentemperatur | `Z1HeatCurveOutsideHighTemp` (SET30) | `Z1_Heat_Curve_Outside_High_Temp` (TOP31)
+7. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
 
-Die Schritte 2–5 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
+Die Schritte 3–6 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
 Werte in einem Sammelfenster gesendet, alle vier binnen 15 s zurückgelesen. Zu
-Schritt 2 und 3 siehe Abschnitt 6a — **`TargetHigh` gehört zur *unteren*
+Schritt 3 und 4 siehe Abschnitt 6a — **`TargetHigh` gehört zur *unteren*
 Außentemperatur**, ist also der Vorlauf bei Kälte. Bis zum 2026-08-20 stand das
 in der Doku falsch herum.
+
+### Schritt 1 kam am 2026-08-20 dazu — sonst kühlt der Notbetrieb
+
+Die Folge fasste die Betriebsart ursprünglich nicht an. Der Ist-Zustand von H1
+an diesem Abend zeigt, warum das nicht trägt: `Operating_Mode_State` (TOP4)
+stand auf **1 = Cool only**. Die Kaskadensteuerung führt die Betriebsart selbst
+über `set/OperationMode` — im 5-min-Re-Assert nachgesehen — und stellt sie im
+Sommer auf Kühlen. Fällt der ioBroker in so einem Moment aus, bleibt genau
+dieser Zustand stehen: Der Knopf hätte alle sechs Schritte bestätigt, GRÜN
+gemeldet und eine Anlage eingeschaltet, die kühlt. Für einen Knopf, dessen
+einziger Zweck es ist, das Auskühlen zu verhindern, ist das der schlechteste
+denkbare Fehler — und er trifft gerade die Übergangszeit, in der ein Ausfall
+ebenso wahrscheinlich ist wie im Januar.
+
+Die Warmwasserseite macht es seit jeher richtig (`OperationMode` = 3); die
+Heizenseite zog nach. Der Schritt steht **vor** dem Moduswechsel: Ob ein
+Wechsel der Betriebsart die Kurvenpunkte ebenfalls anfasst, ist nicht gemessen
+— an erster Stelle kann er keinen bereits geschriebenen Wert mehr zerstören.
+
+Preis: ein Schritt mehr, rund 8 s längere Laufzeit, Gesamtdeckel 140 statt
+120 s.
 
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
@@ -273,7 +295,7 @@ vier Prüfungen und überschreibt zusätzlich jedes andere Feld, das in einem
 gerade offenen Sammelfenster steht.
 
 **Die Schritte laufen einzeln, nicht in einem Sammelfenster.** Ein Webhandler,
-der sechs Kommandos hintereinander absetzt, packt sie alle in ein Telegramm
+der sieben Kommandos hintereinander absetzt, packt sie alle in ein Telegramm
 (Deckel 2 s, [`sendwindow.h`](src/sendwindow.h)) — dann konkurriert das
 Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und welcher gewinnt, ist
 unbekannt. Der Notbetrieb wird deshalb ein kleiner Zustandsautomat, der aus
@@ -292,24 +314,27 @@ in `actual_data[]`; jeder Schritt wird gegen sein TOP geprüft (Spalte 3 in den
 Tabellen in Abschnitt 2). Zeitbudget: Die Wärmepumpe übernimmt in 2–8 s
 (KNX-Messung 2026-08-16), der Abfragezyklus liegt bei rund 6 s — **Schritt-Timeout
 20 s**, bis dahin zeigt die Seite „läuft…". Ein vollständiger Heizen-Lauf mit
-realistischen 6-s-Antworten braucht 36 s (im Hosttest gemessen).
+realistischen 6-s-Antworten braucht 42 s (im Hosttest gemessen; sieben Schritte,
+seit die Betriebsart mitgeschaltet wird).
 
 **Der Gesamtdeckel ist abgeleitet, nicht frei gewählt** (Umsetzung 2026-08-20):
-Schrittzahl × Schritt-Timeout, also 120 s für Heizen und 60 s für Warmwasser.
+Schrittzahl × Schritt-Timeout, also 140 s für Heizen und 60 s für Warmwasser.
 Der ursprüngliche Entwurf nannte pauschal 60 s — das wäre bei sechs Schritten
 inkonsistent gewesen: Schon zwei Schritte im Timeout hätten den Deckel gerissen,
 und ob ein Lauf ROT wird, hinge davon ab, welche der beiden Regeln zufällig
 zuerst greift. So bleibt der Deckel das, was er sein soll: ein Notausgang, falls
-der Automat hängt, nicht der normale Weg zu ROT.
+der Automat hängt, nicht der normale Weg zu ROT. (Die 120 s des ersten
+Entwurfs wurden zu 140 s, als die Betriebsart als siebter Schritt dazukam — die
+Regel blieb dieselbe, nur die Schrittzahl änderte sich.)
 
 **Eine Regel kam beim Bauen dazu: die Mindestwartezeit.** Ein Schritt gilt
 frühestens 8 s nach seinem Kommando als bestätigt. Ohne das könnte ein
 *veralteter* Rücklesewert einen Schritt sofort abhaken — und der gefährliche
 Fall steckt in der Schrittfolge selbst: Das Umschalten setzt die Kurvenpunkte
-auf die Werksvorgaben zurück. Trüge `actual_data` beim zweiten Schritt noch den
+auf die Werksvorgaben zurück. Trüge `actual_data` beim Kurvenschritt noch den
 Kurvenwert von vorher, gälte er als erledigt, und der Werks-Reset überschriebe
 ihn danach. GRÜN, und die Anlage führe die Werkskurve. Der Preis: Ein
-Heizen-Lauf dauert rund 48 statt 36 s.
+Heizen-Lauf dauert rund 56 statt 42 s.
 
 **Und eine Falle, die am Prüfstand sichtbar wurde:** `actual_data[]` wird über
 den **Zeilenindex** adressiert, nicht über die TOP-Nummer — die Nummerierung hat
@@ -614,10 +639,10 @@ unkritisch, aber hier nicht getrennt gemessen.
 * **Der Rückweg ist seit dem 2026-08-20 scharf und trifft die Testläufe.**
   Läuft die Kaskadensteuerung, holt der 5-min-Re-Assert die Anlage mit
   `set/HeatingMode` = 1 aus dem Notbetrieb zurück — im Ernstfall gewollt, im
-  Versuch aber ein Rennen: Der Knopf-Lauf braucht rund 48 s, danach bleiben
+  Versuch aber ein Rennen: Der Knopf-Lauf braucht rund 56 s, danach bleiben
   höchstens noch gut vier Minuten für Kurvenfoto und Kontrolle. Schlimmer ist
   der Treffer *während* des Laufs: Fällt der Re-Assert zwischen Schritt 1 und
-  Schritt 6, steht die Betriebsart wieder auf Direktbetrieb, während der Automat
+  Schritt 7, steht die Betriebsart wieder auf Direktbetrieb, während der Automat
   noch Kurvenpunkte schreibt. **Deshalb wird jeder Lauf an Stufe 1 mit gesetztem
   Wartungsschalter gefahren** — der sperrt den Kanal, und das Abschalten der
   Wartung ist danach zugleich der Nachweis für Testplan-Punkt 6.
@@ -701,7 +726,7 @@ Etappe | Inhalt | Commit
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
-Zweck. Alle zehn Envs bauen, der Hosttest steht bei 113 Zusicherungen.
+Zweck. Alle zehn Envs bauen, der Hosttest steht bei 119 Zusicherungen.
 
 **Etappe 4 ist seit dem 2026-08-20 fertig** (Einzelheiten im Nachbarprojekt
 `nodered-flows`, [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md)

@@ -40,7 +40,8 @@ enum NotbetriebRolle
 /*                                                                           */
 /* Die Waermepumpe uebernimmt ein Kommando in 2-8 s (KNX-Messung 2026-08-16),*/
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
-/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf braucht real etwa 36 s.    */
+/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf braucht real etwa 42 s     */
+/* (sieben Schritte, seit die Betriebsart mitgeschaltet wird).               */
 /*                                                                           */
 /* Der Gesamtdeckel ist ABGELEITET (Schrittzahl * Schritt-Timeout) und nicht */
 /* frei gewaehlt. Ein kleinerer Deckel wuerde einen Lauf abbrechen, den die  */
@@ -64,8 +65,10 @@ enum NotbetriebRolle
 /* -5 C.                                                                      */
 /*                                                                            */
 /* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
-/* Reserve ab. Damit dauert ein Heizen-Lauf rund 48 statt 36 s - das ist der  */
-/* Preis dafuer, dass GRUEN wirklich "zurueckgelesen" heisst.                 */
+/* Reserve ab. Damit dauert ein Heizen-Lauf rund 56 statt 42 s - das ist der  */
+/* Preis dafuer, dass GRUEN wirklich "zurueckgelesen" heisst. Der             */
+/* Gesamtdeckel folgt der Schrittzahl und liegt damit bei 140 s (Heizen)      */
+/* bzw. 60 s (Wasser).                                                        */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -124,10 +127,24 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* Dass die vier Kurvenpunkte im Kurvenbetrieb ueberhaupt angenommen werden, */
 /* ist am 2026-08-20 an WP1 belegt (M1a) - auch der obere Punkt, den         */
 /* kurven_sync.py im Direktbetrieb bewusst auslaesst.                        */
+/*                                                                           */
+/* DIE BETRIEBSART STEHT VORN (seit 2026-08-20). Ohne sie schaltet der Knopf */
+/* eine Anlage ein, die auf Kuehlen steht: Am 2026-08-20 stand H1 auf        */
+/* Operating_Mode_State = 1 (Cool only), weil die Kaskadensteuerung die      */
+/* Betriebsart selbst per set/OperationMode fuehrt und im Sommer auf Kuehlen */
+/* stellt. Faellt der ioBroker in so einem Moment aus, bleibt dieser Zustand */
+/* stehen - der Notbetrieb haette GRUEN gemeldet und gekuehlt. Die           */
+/* Warmwasser-Folge unten macht es seit jeher richtig (OperationMode = 3);   */
+/* die Heizen-Folge zog nach.                                                */
+/*                                                                           */
+/* Sie steht VOR dem Moduswechsel und damit vor der Kurve: Ob ein Wechsel    */
+/* der Betriebsart die Kurvenpunkte ebenfalls anfasst, ist nicht gemessen -  */
+/* an dieser Stelle kann er keinen geschriebenen Wert mehr zerstoeren.       */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
-    {"HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0}, // erst umschalten
-    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},        // dann die Kurve
+    {"OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only, zuerst
+    {"HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
+    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve
     {"Z1HeatCurveTargetLowTemp", 30, 1, 0},
     {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},
     {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},

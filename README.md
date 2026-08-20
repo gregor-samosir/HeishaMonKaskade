@@ -270,8 +270,8 @@ Protokollbyte in verschiedenen Bitgruppen:
 Wird das Byte als Ganzes geschrieben, fallen die fremden Felder auf
 `0 = keine Änderung`. Trafen zwei Kommandos im selben 500-ms-Sammelfenster ein,
 löschte das zweite das erste aus — **still**, das Log quittierte beide.
-Ausgerechnet der 5-Minuten-Re-Assert der Kaskade (sechs Kommandos pro Gerät auf
-einmal) trifft diesen Fall zuverlässig.
+Ausgerechnet der 5-Minuten-Re-Assert der Kaskade (mehrere Kommandos pro Gerät
+auf einmal) trifft diesen Fall zuverlässig.
 
 Belegt am Prüfstand und an der laufenden Anlage:
 
