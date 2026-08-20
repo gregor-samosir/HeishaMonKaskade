@@ -84,6 +84,14 @@ jobs:
       #                  decode.cpp nebeneinander. Byte 28 trägt zwei Bitfelder;
       #                  ohne bitgenaue Maske schaltet ein Kühl-Kommando die
       #                  Heizung mit um, und genau das prüft die Gegenprobe.
+      # notbetrieb_test: Regeln des Notbetriebs aus 3.12.0 - Vollständigkeit
+      #                  der gehaltenen Werte, Bereichsgrenzen (verwerfen statt
+      #                  klemmen), die Karenzzeit-Ausnahme für den
+      #                  notbetrieb-Zweig und der Zustandsautomat samt
+      #                  millis()-Überlauf. Die Karenz-Ausnahme ist der Grund,
+      #                  warum dieser Test in der CI steht: wird sie vergessen,
+      #                  funktioniert der Knopf im Labor und nach jedem Neustart
+      #                  nicht mehr - auffallen würde das erst im Ernstfall.
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
@@ -97,6 +105,8 @@ jobs:
           /tmp/sendwindow_test
           c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test test/byte28_test.cpp
           /tmp/byte28_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
+          /tmp/notbetrieb_test
           ./test/decode_hosttest.sh
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
