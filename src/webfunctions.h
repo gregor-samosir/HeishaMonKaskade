@@ -15,3 +15,9 @@ void handleRoot(WebServerClass *httpServer);
 void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUELEN]);
 void handleReboot(WebServerClass *httpServer);
 void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password);
+
+// Notbetrieb (Baustein B). Die Seite mit dem einen Knopf, der POST-Handler
+// dahinter und die Statusroute, die die Seite alle zwei Sekunden abfragt.
+void handleNotbetrieb(WebServerClass *httpServer);
+void handleNotbetriebStart(WebServerClass *httpServer);
+void handleNotbetriebStatus(WebServerClass *httpServer);

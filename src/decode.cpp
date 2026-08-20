@@ -480,3 +480,25 @@ void getErrorInfo(const StateTopic *, uint8_t *serial_data, char *out)
     break;
   }
 }
+
+/*****************************************************************************/
+/* Tabellenindex zu einer TOP-Nummer                                         */
+/*                                                                           */
+/* stateTopics[] ist nach Zeilen indiziert, nicht nach TOP-Nummern - die      */
+/* Nummerierung hat Luecken (Zone 2 ist in 3.4.0 entfallen) und reicht bis    */
+/* 104 bei 92 Zeilen. Wer actual_data[] mit einer TOP-Nummer adressiert, liest*/
+/* die falsche Zeile oder faellt aus dem Array. Lineare Suche: Sie laeuft im  */
+/* Notbetrieb hoechstens sechs Mal je Tick ueber 92 Zeilen und faellt neben   */
+/* dem 5-s-Abfragezyklus nicht ins Gewicht.                                   */
+/*****************************************************************************/
+int state_topic_index(unsigned int top_number)
+{
+  for (unsigned int i = 0; i < NUMBEROFTOPICS; i++)
+  {
+    if (stateTopics[i].number == top_number)
+    {
+      return (int)i;
+    }
+  }
+  return -1;
+}

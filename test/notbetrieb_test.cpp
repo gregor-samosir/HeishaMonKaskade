@@ -342,16 +342,23 @@ static void test_automat()
               "ohne Rueckmeldung wird gewartet");
   pruefe_zahl(lauf.zustand, NOTBETRIEB_LAEUFT, "immer noch LAEUFT");
 
-  // Rueckmeldung -> naechster Schritt
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 6000, true), NOTBETRIEB_SENDEN,
-              "Rueckmeldung stoesst den naechsten Schritt an");
+  // Eine Rueckmeldung VOR der Mindestwarte zaehlt noch nicht - sie koennte vom
+  // Zustand vor dem Kommando stammen
+  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000 + 5000, true), NOTBETRIEB_TU_NICHTS,
+              "Rueckmeldung nach 5 s zaehlt noch nicht");
+  pruefe_zahl(lauf.schritt, 0, "Schrittzaehler bleibt auf 0");
+
+  // nach der Mindestwarte zaehlt sie
+  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN,
+                              1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true),
+              NOTBETRIEB_SENDEN, "Rueckmeldung nach der Mindestwarte stoesst den naechsten Schritt an");
   pruefe_zahl(lauf.schritt, 1, "Schrittzaehler auf 1");
 
   // Ein realistischer Lauf: die WP antwortet nach 6 s (Abfragezyklus)
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
               "Heizen mit 6-s-Antworten wird GRUEN");
-  pruefe(dauer <= 40000u, "realistischer Heizen-Lauf bleibt unter 40 s");
+  pruefe(dauer <= 55000u, "realistischer Heizen-Lauf bleibt unter 55 s");
   printf("       (gemessene Laufdauer: %u ms)\n", dauer);
 
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
@@ -387,11 +394,11 @@ static void test_automat()
   NotbetriebLauf mitte;
   notbetrieb_lauf_leeren(&mitte);
   (void)notbetrieb_start(&mitte, 1000);
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 2000, true); // Schritt 1 ok
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 3000, true); // Schritt 2 ok
+  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 10000, true); // Schritt 1 ok
+  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 19000, true); // Schritt 2 ok
   pruefe_zahl(mitte.schritt, 2, "steht bei Schritt 3");
   a = NOTBETRIEB_TU_NICHTS;
-  t = 3000;
+  t = 19000;
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
@@ -407,6 +414,7 @@ static void test_automat()
   (void)notbetrieb_start(&knapp, 1000);
   pruefe_zahl(notbetrieb_tick(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true),
               NOTBETRIEB_SENDEN, "Rueckmeldung im Timeout-Moment zaehlt noch");
+  // (liegt hinter der Mindestwarte, sonst waere sie gar nicht gezaehlt worden)
   pruefe_zahl(knapp.zustand, NOTBETRIEB_LAEUFT, "kein ROT im selben Tick");
 
   // Ein Tick auf einem fertigen Lauf darf nichts mehr tun
@@ -435,6 +443,37 @@ static void test_automat()
 /* der Zeitpunkte statt der Differenz wuerde hier sofort ROT liefern, obwohl */
 /* jeder Schritt puenktlich zurueckkam.                                      */
 /*****************************************************************************/
+/*****************************************************************************/
+/* 5a. Die Mindestwartezeit                                                   */
+/*                                                                            */
+/* Der gefaehrliche Fall aus der Praxis: Das Umschalten auf Kurvenbetrieb     */
+/* setzt die Kurvenpunkte auf die Werksvorgaben zurueck. Traegt actual_data   */
+/* beim naechsten Schritt noch den alten Wert, gilt der Schritt sofort als    */
+/* erledigt - und der Werks-Reset ueberschreibt ihn danach.                   */
+/*****************************************************************************/
+static void test_mindestwarte()
+{
+  printf("\n== Mindestwartezeit vor der Bestaetigung ==\n");
+
+  // Eine WP, die "sofort" bestaetigt (veralteter Rueckgabewert), darf den Lauf
+  // nicht schneller machen als die Mindestwarte je Schritt erlaubt
+  uint32_t dauer = 0;
+  pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
+              "Lauf mit Sofortbestaetigung wird GRUEN");
+  const uint32_t mindestens = 6u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 6 x Mindestwarte");
+  printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
+
+  // Gegenprobe Wasser: drei Schritte
+  (void)lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 0, &dauer);
+  pruefe(dauer >= 3u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
+         "Wasser ebenso, mit drei Schritten");
+
+  // Die Regel muss in sich stimmig bleiben, sonst endet jeder Lauf in ROT
+  pruefe(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
+         "Mindestwarte liegt unter dem Schritt-Timeout");
+}
+
 static void test_ueberlauf()
 {
   printf("\n== millis()-Ueberlauf ==\n");
@@ -503,6 +542,37 @@ static void test_schritt_wert()
          "kein Wert hinter dem letzten Schritt");
 }
 
+/*****************************************************************************/
+/* 8. Ruecklesen - die Falle mit dem leeren actual_data                       */
+/*****************************************************************************/
+static void test_ruecklesen()
+{
+  printf("\n== Ruecklesen eines Schritts ==\n");
+
+  pruefe(notbetrieb_rueckgelesen("0", 0), "\"0\" bestaetigt 0");
+  pruefe(notbetrieb_rueckgelesen("34", 34), "\"34\" bestaetigt 34");
+  pruefe(notbetrieb_rueckgelesen("-10", -10), "\"-10\" bestaetigt -10");
+  pruefe(!notbetrieb_rueckgelesen("35", 34), "\"35\" bestaetigt NICHT 34");
+
+  // DIE entscheidende Zusicherung: Ein TOP, das noch nie empfangen wurde,
+  // steht als leerer String da. atoi("") waere 0 - und der erste Schritt der
+  // Heizen-Folge hat den Sollwert 0. Ohne diese Pruefung meldete der Knopf
+  // GRUEN, ohne dass die Waermepumpe je geantwortet haette.
+  pruefe(!notbetrieb_rueckgelesen("", 0), "LEERER Wert bestaetigt die 0 NICHT");
+  pruefe(!notbetrieb_rueckgelesen(0, 0), "Nullzeiger bestaetigt die 0 NICHT");
+  pruefe(!notbetrieb_rueckgelesen("   ", 0), "nur Leerzeichen bestaetigen die 0 NICHT");
+
+  // Was keine saubere ganze Zahl ist, zaehlt nicht
+  pruefe(!notbetrieb_rueckgelesen("1.5", 1), "\"1.5\" bestaetigt 1 NICHT");
+  pruefe(!notbetrieb_rueckgelesen("2 Hz", 2), "\"2 Hz\" bestaetigt 2 NICHT");
+  pruefe(!notbetrieb_rueckgelesen("Off", 0), "\"Off\" bestaetigt 0 NICHT");
+  pruefe(!notbetrieb_rueckgelesen("--5", -5), "\"--5\" bestaetigt -5 NICHT");
+
+  // Leerzeichen drumherum sind in Ordnung - der Dekodierpfad kann sie liefern
+  pruefe(notbetrieb_rueckgelesen(" 26 ", 26), "\" 26 \" bestaetigt 26");
+  pruefe(notbetrieb_rueckgelesen("15\n", 15), "abschliessender Zeilenumbruch stoert nicht");
+}
+
 int main()
 {
   printf("Hosttest Notbetrieb (src/notbetrieb.h)\n");
@@ -511,8 +581,10 @@ int main()
   test_karenz_ausnahme();
   test_schrittfolge();
   test_automat();
+  test_mindestwarte();
   test_ueberlauf();
   test_schritt_wert();
+  test_ruecklesen();
 
   printf("\n%s (%d Fehler)\n", fehler == 0 ? "ALLE PRUEFUNGEN BESTANDEN" : "FEHLGESCHLAGEN", fehler);
   return fehler == 0 ? 0 : 1;

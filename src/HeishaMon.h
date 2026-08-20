@@ -4,6 +4,7 @@
 #include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 #include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
 #include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
+#include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
 // platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
 // (official HeishaMon board), differences are isolated here
@@ -122,6 +123,9 @@ bool notbetrieb_subscribe(PubSubClient &);
 // true, wenn das Topic in den Notbetriebszweig gehoerte - dann ist die
 // Nachricht abschliessend behandelt und laeuft NICHT weiter in den Set-Pfad
 bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg);
+void notbetrieb_loop(char actual[][MAXVALUELEN]); // Tick aus loop()
+bool notbetrieb_starten(void);                    // vom Webhandler
+void notbetrieb_status(char *out, size_t len);     // Zustand;Schritt;Schritte;fehlend
 
 // Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
 extern const NotbetriebRolle notbetriebRolle;

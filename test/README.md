@@ -784,6 +784,63 @@ aendert nichts).
 Fuer Ablaeufe ueber einen Neustart hinweg ist `info/log` mit `mqtt_sub.py`
 trotzdem der bequemere Weg, weil der Broker die Zeilen puffert.
 
+## Der Knopf am Pruefstand (2026-08-20, Bausteine B-D)
+
+Der Pruefstand hat keine Waermepumpe - und genau deshalb laeuft dort der
+FEHLERpfad, den man an der echten Anlage nicht provozieren will.
+
+```
+curl -u admin:heisha http://192.168.2.197/notbetrieb            # Seite
+curl -u admin:heisha -X POST http://192.168.2.197/notbetrieb/start
+curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend
+```
+
+**Ablauf, wie er sein soll:**
+
+```text
+POST -> HTTP 303 (Umleitung; ein Neuladen wiederholt die Anzeige, nicht das Kommando)
+NOTBETRIEB ausgeloest ueber die Weboberflaeche
+Notbetrieb Schritt 1/6: HeatingMode = 0
+<SUB> SET35 HeatingMode: 0            <- regulaerer Pfad ueber build_heatpump_command()
+Status 1;1;6;0  (LAEUFT, Schritt 1 von 6)  ... 20 s lang
+Notbetrieb ROT: Schritt 1/6 (HeatingMode) kam nicht zurueck
+Status 3;1;6;0  (ROT)
+```
+
+**Der entscheidende Befund ist, was NICHT passiert ist.** Am Pruefstand
+antwortet keine Waermepumpe, `actual_data` fuer TOP76 ist also leer - und der
+Sollwert des ersten Schritts ist 0. Mit einem naiven `atoi(actual_data[...])`
+waere die Folge sofort durchgerauscht und haette GRUEN gemeldet, ohne dass
+irgendetwas geschehen waere. `notbetrieb_rueckgelesen()` faengt genau das ab
+(Hosttest: "LEERER Wert bestaetigt die 0 NICHT").
+
+### Der gesperrte Knopf
+
+Einen Wert ungueltig machen und neu starten - dann fehlt er:
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=99
+curl -u admin:heisha http://192.168.2.197/reboot
+```
+
+| Pruefung | Ergebnis |
+| --- | --- |
+| Status | `0;1;6;4` - Bit 2 der fehlend-Maske, also Wert Nr. 3 |
+| Seite | "Nicht bereit", nennt `Z1HeatCurveOutsideLowTemp` beim Namen |
+| POST trotzdem | HTTP 303, aber **kein Lauf** - Status bleibt `0` |
+
+Der Knopf ist also nicht nur ausgeblendet, sondern der Ausloeser selbst
+verweigert. Ein zusammengebasteltes POST von aussen startet nichts.
+
+### Anmeldung
+
+| Route | Ohne Anmeldung |
+| --- | --- |
+| `/notbetrieb` | HTTP 401 |
+| `/notbetrieb/start` | HTTP 401 |
+| `/notbetrieb/status` | HTTP 200 - gibt nur "Schritt 3 von 6" heraus und aendert nichts |
+
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 
 Wer an `decode.cpp` umbaut, will wissen, ob sich die AUSGABE veraendert hat -

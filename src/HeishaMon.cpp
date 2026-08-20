@@ -207,6 +207,25 @@ void setupHttp()
       return httpServer.requestAuthentication();
     }
     handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
+  // Notbetrieb: Seite und Ausloeser verlangen Login wie /reboot und /settings.
+  // Die Statusroute nicht - sie gibt nur "Schritt 3 von 6" heraus und wird
+  // alle zwei Sekunden abgefragt.
+  httpServer.on("/notbetrieb", []()
+                {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleNotbetrieb(&httpServer); });
+  httpServer.on("/notbetrieb/start", HTTP_POST, []()
+                {
+    if (!httpServer.authenticate(update_username, ota_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleNotbetriebStart(&httpServer); });
+  httpServer.on("/notbetrieb/status", []()
+                { handleNotbetriebStatus(&httpServer); });
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
@@ -840,6 +859,13 @@ void loop()
 
   handle_telnetstream();
   check_wifi();
+
+  // Notbetrieb: senden -> zuruecklesen -> naechster Schritt. Laeuft kein
+  // Schaltvorgang, kehrt der Aufruf sofort zurueck. Er steht VOR der
+  // MQTT-Wiederverbindung, weil der Notbetrieb genau dann gebraucht wird,
+  // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
+  // haengen, der ohnehin nur scheitern kann.
+  notbetrieb_loop(actual_data);
 
   if (!mqtt_client.connected())
   {

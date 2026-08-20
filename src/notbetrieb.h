@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 /*****************************************************************************/
 /* Notbetrieb: Werte halten, Schrittfolge fahren                             */
@@ -49,6 +50,24 @@ enum NotbetriebRolle
 /* nicht der normale Weg zu ROT.                                             */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_TIMEOUT_MS 20000u
+
+/*****************************************************************************/
+/* Mindestwartezeit, bevor eine Rueckmeldung als Bestaetigung zaehlt          */
+/*                                                                           */
+/* Ohne sie kann ein VERALTETER Rueckgabewert einen Schritt bestaetigen, der  */
+/* gerade erst abgesetzt wurde. Der gefaehrliche Fall steht in der            */
+/* Schrittfolge selbst: Das Umschalten auf Kurvenbetrieb setzt die vier       */
+/* Kurvenpunkte auf die Panasonic-Werksvorgaben zurueck. Traegt actual_data   */
+/* im Moment von Schritt 2 noch den Kurvenwert von vorher, gilt der Schritt   */
+/* sofort als erledigt - und der Werks-Reset ueberschreibt ihn danach. Der    */
+/* Knopf meldete GRUEN, und die Anlage fuehre die Werkskurve mit 55 C bei     */
+/* -5 C.                                                                      */
+/*                                                                            */
+/* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
+/* Reserve ab. Damit dauert ein Heizen-Lauf rund 48 statt 36 s - das ist der  */
+/* Preis dafuer, dass GRUEN wirklich "zurueckgelesen" heisst.                 */
+/*****************************************************************************/
+#define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
 /*****************************************************************************/
 /* Ein Schritt der Folge                                                     */
@@ -332,6 +351,16 @@ inline uint32_t notbetrieb_gesamtdeckel_ms(NotbetriebRolle rolle)
 }
 
 /*****************************************************************************/
+/* Ist die Zeitregel in sich stimmig?                                         */
+/*                                                                            */
+/* Waere die Mindestwarte nicht kleiner als das Schritt-Timeout, koennte kein */
+/* Schritt je bestaetigt werden - jeder Lauf endete in ROT. Das faellt hier   */
+/* beim Uebersetzen auf, nicht erst an der Anlage.                            */
+/*****************************************************************************/
+static_assert(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
+              "Mindestwarte muss kleiner als das Schritt-Timeout sein");
+
+/*****************************************************************************/
 /* Lauf starten                                                              */
 /*                                                                           */
 /* Laeuft schon einer, passiert nichts - ein zweiter Klick darf die Folge    */
@@ -376,8 +405,11 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     if (!lauf || lauf->zustand != NOTBETRIEB_LAEUFT)
         return NOTBETRIEB_TU_NICHTS;
 
-    // Schritt geschafft?
-    if (schritt_bestaetigt)
+    // Schritt geschafft? Erst nach der Mindestwartezeit - vorher koennte die
+    // Rueckmeldung noch vom Zustand VOR dem Kommando stammen (siehe
+    // NOTBETRIEB_SCHRITT_MINDESTWARTE_MS oben).
+    if (schritt_bestaetigt &&
+        (uint32_t)(jetzt - lauf->schritt_start) >= NOTBETRIEB_SCHRITT_MINDESTWARTE_MS)
     {
         lauf->schritt++;
         if (lauf->schritt >= notbetrieb_schritt_anzahl(rolle))
@@ -406,6 +438,48 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     }
 
     return NOTBETRIEB_TU_NICHTS;
+}
+
+/*****************************************************************************/
+/* Ist ein Schritt zurueckgelesen?                                           */
+/*                                                                           */
+/* Die Firmware haelt die Rueckmeldungen der Waermepumpe als TEXT in          */
+/* actual_data[]. Der naive Vergleich waere atoi(text) == soll - und der      */
+/* hat eine Falle, die genau das Signal zerstoert, auf das es hier ankommt:   */
+/* atoi("") liefert 0. Ein TOP, das noch nie empfangen wurde, wuerde damit    */
+/* jeden Schritt mit dem Sollwert 0 sofort bestaetigen - und der erste        */
+/* Schritt der Heizen-Folge ist HeatingMode = 0. Der Knopf wuerde GRUEN       */
+/* melden, ohne dass die Waermepumpe je geantwortet hat.                      */
+/*                                                                           */
+/* Deshalb: leerer Text gilt NICHT als Bestaetigung, und was keine saubere    */
+/* ganze Zahl ist, auch nicht. Fuehrende und nachlaufende Leerzeichen sind    */
+/* erlaubt, sonst nichts.                                                    */
+/*****************************************************************************/
+inline bool notbetrieb_rueckgelesen(const char *ist_text, int soll)
+{
+    if (!ist_text || ist_text[0] == '\0')
+        return false;
+
+    // fuehrende Leerzeichen ueberspringen, danach muss eine Zahl kommen
+    const char *p = ist_text;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (*p == '\0')
+        return false;
+
+    char *ende = 0;
+    const long wert = strtol(p, &ende, 10);
+    if (ende == p)
+        return false; // gar keine Ziffer gefunden
+
+    // nachlaufend sind nur Leerzeichen erlaubt - "1.5" oder "2 Hz" sind keine
+    // Bestaetigung fuer 1 bzw. 2
+    while (*ende == ' ' || *ende == '\t' || *ende == '\r' || *ende == '\n')
+        ende++;
+    if (*ende != '\0')
+        return false;
+
+    return wert == (long)soll;
 }
 
 /*****************************************************************************/

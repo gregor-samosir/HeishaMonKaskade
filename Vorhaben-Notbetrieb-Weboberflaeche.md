@@ -227,7 +227,7 @@ Neustart standen ohne jedes Zutun binnen Sekunden wieder alle vier Werte —
 Karenz-Ausnahme wirkt also genau so getrennt, wie sie soll. Einzelheiten und
 die Ablehnungspfade in [`test/README.md`](test/README.md).
 
-**B — Endpunkt und Seite.**
+**B — Endpunkt und Seite. Steht seit 2026-08-20.**
 `/notbetrieb` mit demselben Auth-Muster wie `/reboot` und `/settings`
 ([`HeishaMon.cpp:196-226`](src/HeishaMon.cpp#L196-L226)), ein Sidebar-Eintrag
 mehr in `sidebar[]`.
@@ -246,7 +246,7 @@ ein Stringvergleich auf den Stufennamen ist ein eigenes Flag in denselben
 Abschnitten, etwa `NOTBETRIEB_ROLLE_HEIZEN` bzw. `NOTBETRIEB_ROLLE_WASSER`.
 Kein neues Konfigurationsfeld, kein Rollenfeld irgendwo auf dem Gerät.
 
-**C — Die Schrittfolge ausführen, ohne einen zweiten Merge-Pfad zu bauen.**
+**C — Die Schrittfolge ausführen, ohne einen zweiten Merge-Pfad zu bauen. Steht seit 2026-08-20.**
 
 Die Kommandos gehen durch `build_heatpump_command()` — **unverändert**. Der
 Handler baut nur den Topic-String:
@@ -270,7 +270,7 @@ unbekannt. Der Notbetrieb wird deshalb ein kleiner Zustandsautomat, der aus
 `loop()` getickt wird: senden → zurücklesen → nächster Schritt. Der
 HTTP-Handler stößt ihn nur an und antwortet sofort.
 
-**D — GRÜN oder ROT, sonst nichts.**
+**D — GRÜN oder ROT, sonst nichts. Steht seit 2026-08-20.**
 
 Keine Zustandstabelle, keine Erklärseite. In dieser Lage hilft eine
 Fehlerbeschreibung niemandem: Entweder es wird GRÜN, oder es gilt Plan B — die
@@ -291,6 +291,25 @@ inkonsistent gewesen: Schon zwei Schritte im Timeout hätten den Deckel gerissen
 und ob ein Lauf ROT wird, hinge davon ab, welche der beiden Regeln zufällig
 zuerst greift. So bleibt der Deckel das, was er sein soll: ein Notausgang, falls
 der Automat hängt, nicht der normale Weg zu ROT.
+
+**Eine Regel kam beim Bauen dazu: die Mindestwartezeit.** Ein Schritt gilt
+frühestens 8 s nach seinem Kommando als bestätigt. Ohne das könnte ein
+*veralteter* Rücklesewert einen Schritt sofort abhaken — und der gefährliche
+Fall steckt in der Schrittfolge selbst: Das Umschalten setzt die Kurvenpunkte
+auf die Werksvorgaben zurück. Trüge `actual_data` beim zweiten Schritt noch den
+Kurvenwert von vorher, gälte er als erledigt, und der Werks-Reset überschriebe
+ihn danach. GRÜN, und die Anlage führe die Werkskurve. Der Preis: Ein
+Heizen-Lauf dauert rund 48 statt 36 s.
+
+**Und eine Falle, die am Prüfstand sichtbar wurde:** `actual_data[]` wird über
+den **Zeilenindex** adressiert, nicht über die TOP-Nummer — die Nummerierung hat
+Lücken und reicht bis 104 bei 92 Zeilen. Dafür gibt es jetzt
+`state_topic_index()` in `decode.cpp`. Dazu kommt, dass ein noch nie
+empfangenes TOP als leerer Text dasteht: `atoi("")` ist 0, und der erste Schritt
+der Heizen-Folge hat den Sollwert 0. Ein naiver Vergleich hätte GRÜN gemeldet,
+ohne dass die Wärmepumpe je geantwortet hätte. Beides ist im Hosttest
+abgesichert und am Prüfstand belegt (dort läuft der Fehlerpfad, weil keine
+Wärmepumpe antwortet).
 
 **Was GRÜN nicht heißt:** dass die Anlage heizt. Die KNX-Freigabe des
 Kompressors ist im Antworttelegramm nicht sichtbar — am 2026-08-15/16 byteweise
