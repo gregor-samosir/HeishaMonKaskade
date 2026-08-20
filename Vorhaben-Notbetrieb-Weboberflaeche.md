@@ -68,6 +68,10 @@ Schritt | Kommando | Rückgelesen an
 2. Speichertemperatur | `DHWTemp` (SET11) | `DHW_Target_Temp` (TOP9)
 3. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
 
+Schritt 1 trägt auch dann, wenn die Anlage vom KNX-Aktor auf Kühlen steht —
+also im Sommerfall, für den der Notbetrieb an Stufe 2 überhaupt gedacht ist
+(gemessen 2026-08-20, M3 in Abschnitt 6).
+
 Die Warmwasserseite braucht **keine Kurve** — der Knopf dort ist deutlich
 einfacher. Alle Kommandos gehen über `setCommands[]` und damit über denselben
 geprüften Pfad, den heute schon MQTT benutzt.
@@ -321,11 +325,43 @@ c. Was macht ein hereinschneidender Re-Assert `set/Z1HeatRequestTemperature 20`
 **M2 — an H1, ~10 min.** Ist wiederholtes `set/HeatingMode 1` im laufenden
 Direktbetrieb folgenlos? Trägt den Rückkehrweg aus Entscheidung 6.
 
-**M3 — an H2, ~20 min.** Läuft Warmwasser bei KNX-erzwungenem Kühlen mit
-`OperationMode` (SET9) = 3, oder braucht es die 5 (Cool+DHW)? Der KNX-Eingang
-schaltet die Richtung an der Wärmepumpe und zieht `Operating_Mode_State` (TOP4)
-mit (gemessen 2026-08-16) — ob er den Warmwasserbetrieb unterdrückt, ist offen.
-Bestimmt, was der Knopf auf Stufe 2 sendet. Jetzt im August messbar.
+**M3 — an H2. BEANTWORTET 2026-08-20.** Ursprüngliche Frage: Läuft Warmwasser
+bei KNX-erzwungenem Kühlen mit `OperationMode` (SET9) = 3, oder braucht es die 5
+(Cool+DHW)?
+
+**Antwort: SET9 = 3 genügt.** Die 5 wird nicht gebraucht — der Knopf auf Stufe 2
+sendet die 3, wie in der Schrittfolge in Abschnitt 2 vorgesehen. Der KNX-Eingang
+unterdrückt den Warmwasserbetrieb nicht.
+
+Aufbau: Die Kaskade wurde aus der Haussteuerung über den KNX-Aktor auf Kühlen
+geschaltet (`WP2_Heat-Cool` = true), H2 anschließend auf reinen Warmwasserbetrieb
+gestellt — genau SET9 = 3. H2 meldete dabei durchgehend `Heat_Cool_SW_State`
+(TOP101) = 1, stand also wirklich im Kühlzweig. Gemessen wurde per Mitschnitt der
+ioBroker-States im 2-s-Takt.
+
+Ergebnis: `ThreeWay_Valve_State` (TOP20) drehte um 09:54:41 von Raum auf DHW, der
+Kompressor lief um 09:57:50 an (`Compressor_Freq` TOP8: 18 → 59 Hz), `Pump_Flow`
+(TOP1) ging von 14,45 auf 10,2 l/min in den Speicherkreis. H1 blieb durchgehend
+bei 0 Hz.
+
+`Operating_Mode_State` (TOP4) blieb dabei auf 3 und wurde von der KNX-Richtung
+**nicht** mitgezogen — im selben Lauf ging TOP4 an H1, das SET9 = 1 bekam, auf 1.
+Das bestätigt die Semantik aus `MQTT-Topics.md`: TOP4 zeigt den zuletzt
+kommandierten Modus, die tatsächliche Richtung steht in TOP101. Die Annahme im
+ursprünglichen Fragetext („der KNX-Eingang … zieht TOP4 mit") galt für die
+08-16-Messung, weil die Steuerung dort ihr eigenes `set/OperationMode`
+nachschickte; ohne diesen Nachschub bleibt TOP4 stehen.
+
+Der Ladezyklus wurde mit `ForceDHW` (SET10) angestoßen, weil der Speicher mit
+38 °C die Starthysterese von Soll − 12 K (48 → 36 °C) noch nicht unterschritten
+hatte. Das verfälscht das Ergebnis nicht: Der Boost lief nur von 09:54:33 bis
+09:55:03, der Kompressor startete **2:47 min nach seinem Ende**. Die Ladung im
+Kühlzweig ist also kein per Zwang gehaltener Sonderzustand.
+
+**Nicht abgedeckt:** Der Lauf fand mit erreichbarem Broker und laufendem
+Node-RED statt, dessen 5-Minuten-Re-Assert SET9 = 3 nachhielt. Im Notbetrieb wird
+der Wert einmalig gesendet — nach der belegten Semantik „letzter Wert gilt"
+unkritisch, aber hier nicht getrennt gemessen.
 
 ## 7. Risiken und Fallen
 
@@ -348,7 +384,8 @@ Bestimmt, was der Knopf auf Stufe 2 sendet. Jetzt im August messbar.
 ## 8. Testplan
 
 0. Rettungsanker (Tag), Branch, Ausgangszustand über `/tablerefresh` sichern.
-1. **M1–M3 messen** (Abschnitt 6) — erst danach steht die Schrittfolge fest.
+1. **M1 und M2 messen** (Abschnitt 6; M3 ist seit 2026-08-20 beantwortet) —
+   erst danach steht die Schrittfolge fest.
 2. Hosttest für die prüfbaren Regeln, arduino-frei wie
    [`sendwindow.h`](src/sendwindow.h): Vollständigkeit der Werte,
    Bereichsgrenzen, Schrittfolge und Abbruch, Karenzzeit-Ausnahme.
