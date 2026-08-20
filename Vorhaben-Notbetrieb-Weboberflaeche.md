@@ -659,7 +659,7 @@ Etappe | Inhalt | Commit
 
 Die Bausteine A–D sind damit vollständig gebaut und am Prüfstand geprüft — dort
 läuft mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war
-der Zweck. Alle zehn Envs bauen, der Hosttest steht bei 96 Zusicherungen.
+der Zweck. Alle zehn Envs bauen, der Hosttest steht bei 113 Zusicherungen.
 
 ### Was noch fehlt
 
