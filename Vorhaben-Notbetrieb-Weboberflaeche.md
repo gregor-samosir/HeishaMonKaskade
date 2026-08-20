@@ -12,11 +12,13 @@ macht Warmwasser.
 Ist auch das WLAN weg, liegt ein Stromausfall vor — dafür wird hier keine
 Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
-**Stand dieser Datei:** 2026-08-20, Firmware 3.11.0 auf beiden Stufen.
-Alle Grundsatzfragen sind entschieden (Abschnitt 5), **alle drei Messungen sind
-beantwortet** (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
+**Stand dieser Datei:** 2026-08-20 abends, Firmware 3.11.0 auf beiden Stufen.
+Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei Messungen sind
+beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
 der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind korrigiert
-(Abschnitt 6a). **Damit kann gebaut werden.**
+(Abschnitt 6a). **Gebaut ist beides: der Knopf in der Firmware und die
+Node-RED-Seite, die ihn versorgt** (Abschnitt 10). Was fehlt, ist der Nachweis
+an der Anlage — Etappe 5.
 
 ---
 
@@ -202,9 +204,17 @@ an `panasonic_heat_pump_test/notbetrieb/*` gesendet, dann mit
 [`test/mqtt_sub.py`](test/mqtt_sub.py) neu verbunden — alle vier kamen von
 allein, ohne dass jemand publizierte. Der Subscriber macht dabei genau das, was
 die Firmware nach einem Neustart tut, deshalb brauchte der Nachweis kein Gerät.
-Und wie beim `set`-Zweig kommt die Wiedereinspielung mit **retain=0**: über das
-Retain-Bit wäre sie nicht von einem echten Kommando zu unterscheiden, die
-Trennung läuft allein über den Topic-Zweig.
+Die Wiedereinspielung kommt mit **retain=0** — der Schluss daraus, sie sei
+damit nicht von einem echten Kommando zu unterscheiden, war jedoch **falsch und
+ist am 2026-08-20 richtiggestellt**: Ein Live-Publish des Adapters trägt
+**retain=1**, die Wiedereinspielung beim Subscribe **retain=0**. Belegt im
+Adaptercode des ioBroker-MQTT-Adapters (`MQTTServer.js:162` gegen `:331`) und am
+`notbetrieb`-Zweig gemessen — es hängt am **Codepfad**, nicht am Topic-Zweig.
+
+Für den Notbetriebskanal ändert das nichts: Die Trennung läuft hier über den
+eigenen Zweig und braucht das Bit nicht. Es eröffnet aber einen präziseren Weg
+für die Karenzzeit im `set`-Zweig, der heute pauschal alles wegwirft — als
+Folgethema in Abschnitt 9 notiert.
 
 ### Fehlen Werte, bleibt der Knopf gesperrt
 
@@ -363,6 +373,14 @@ nachführt.
 
 Eine Firmware-Lösung ist verworfen: Ihr Notbetriebs-Zustand läge im RAM, nach
 einem Neustart wüsste sie nichts mehr davon und würde nie zurückschalten.
+
+**Gebaut am 2026-08-20** (Hauptmodus-Verteiler V6.5, neuer Ausgang 15): Der
+5-min-Re-Assert sendet `set/HeatingMode` = 1 mit, sobald ein Herzschlag vorliegt
+(`KK_HeatTarget_long`/`KK_CoolTarget_long`, Fenster 5 min); ohne Puls unterbleibt
+die Zeile. Der Wartungsschalter sperrt den Kanal wie die übrigen zwölf. Am
+Produktivsystem nachgesehen (2026-08-20 19:56): `mqtt.0.panasonic_heat_pump.set.HeatingMode`
+= 1, Zeitstempel keine zwei Minuten alt. **Der Rückweg ist damit scharf** — mit
+Folgen für jeden Testlauf, siehe Abschnitt 7.
 
 **7. Kein Knopf „Notbetrieb aus".** (2026-08-20) Für „zurück auf Direktvorgabe"
 gibt es kein Szenario, das Node-RED nicht besser löst — und im einzigen Fall,
@@ -593,6 +611,16 @@ unkritisch, aber hier nicht getrennt gemessen.
   Passwörter und die Schritt-für-Schritt-Anleitung stehen offline bereit.
 * **Ein Neustart ohne Broker sperrt den Knopf.** Bewusst in Kauf genommen
   (Abschnitt 3), aber die Seite muss es sagen statt stumm ROT zu zeigen.
+* **Der Rückweg ist seit dem 2026-08-20 scharf und trifft die Testläufe.**
+  Läuft die Kaskadensteuerung, holt der 5-min-Re-Assert die Anlage mit
+  `set/HeatingMode` = 1 aus dem Notbetrieb zurück — im Ernstfall gewollt, im
+  Versuch aber ein Rennen: Der Knopf-Lauf braucht rund 48 s, danach bleiben
+  höchstens noch gut vier Minuten für Kurvenfoto und Kontrolle. Schlimmer ist
+  der Treffer *während* des Laufs: Fällt der Re-Assert zwischen Schritt 1 und
+  Schritt 6, steht die Betriebsart wieder auf Direktbetrieb, während der Automat
+  noch Kurvenpunkte schreibt. **Deshalb wird jeder Lauf an Stufe 1 mit gesetztem
+  Wartungsschalter gefahren** — der sperrt den Kanal, und das Abschalten der
+  Wartung ist danach zugleich der Nachweis für Testplan-Punkt 6.
 
 ## 8. Testplan
 
@@ -639,11 +667,24 @@ unkritisch, aber hier nicht getrennt gemessen.
   zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
   fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
 
+**Folgethema, nicht Teil dieses Vorhabens — die Karenzzeit genauer fassen.**
+`SUBSCRIBE_GRACE` wirft heute für ein Zeitfenster *alles* weg, was nach dem
+Verbinden hereinkommt, also auch echte Kommandos. Seit dem Retain-Befund
+(Abschnitt 3) gibt es einen präziseren Hebel: Die Wiedereinspielung des
+ioBroker-Adapters trägt `retain=0`, ein Live-Publish `retain=1`. Ein Filter auf
+das Bit träfe genau die Wiedereinspielung statt eines Zeitraums.
+
+Nicht ohne eigene Messung umbauen: Belegt ist das bislang am `notbetrieb`-Zweig;
+für den `set`-Zweig ist es aus dem Adaptercode abgeleitet, aber nicht
+nachgemessen. Und der Callback der Firmware müsste das Retain-Flag überhaupt
+erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau den
+55-°C-Vorlauf zurück, wegen dem die Karenzzeit entstanden ist.
+
 ---
 
-## 10. Stand der Umsetzung — Pause am 2026-08-20
+## 10. Stand der Umsetzung — Stand 2026-08-20, abends
 
-**Alles committet, Arbeitsverzeichnis sauber, Branch `notbetrieb-web`.**
+**Alles committet, Branch `notbetrieb-web`.**
 Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
 
 ### Was steht
@@ -656,46 +697,79 @@ Etappe | Inhalt | Commit
 2 | Nachweis Wiedereinspielung am Broker | `39417e9`
 2 | Nachweis am Prüfstand: übersteht den Neustart | `e5f654b`
 3 | Bausteine B, C und D: der Knopf | `17b7621`
+4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
 
-Die Bausteine A–D sind damit vollständig gebaut und am Prüfstand geprüft — dort
-läuft mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war
-der Zweck. Alle zehn Envs bauen, der Hosttest steht bei 113 Zusicherungen.
+Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
+mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
+Zweck. Alle zehn Envs bauen, der Hosttest steht bei 113 Zusicherungen.
+
+**Etappe 4 ist seit dem 2026-08-20 fertig** (Einzelheiten im Nachbarprojekt
+`nodered-flows`, [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md)
+trägt den Erledigt-Vermerk):
+
+* *Notbetriebswerte-Sender V1.0* speist die vier Kurvenpunkte an H1 und den
+  DHW-Soll an H2, bei Änderung und beim Flow-Start; Werte außerhalb der
+  Firmware-Bereiche werden geloggt statt gesendet.
+* *Hauptmodus-Verteiler V6.5*, Ausgang 15: `set/HeatingMode` = 1 im
+  5-min-Re-Assert, an den Herzschlag gebunden — der Rückweg aus Entscheidung 6.
+* Die Abnahme umfasst auch die Gegenprobe, dass repoweit nichts an
+  `set/Z1HeatCurveTargetHighTemp` schreibt.
+
+**Von hier aus nachgesehen (2026-08-20 19:58, über die simple-api):** Alle fünf
+Werte liegen im Broker — `panasonic_heat_pump/notbetrieb/` mit 34 / 26 / −10 /
+15 und `panasonic_heat_pump2/notbetrieb/DHWTemp` = 48. Die Kreuzzuordnung stimmt
+(`TargetHigh` = 34 am kalten Punkt). Der Knopf an H1 wäre damit freigegeben,
+sobald die Firmware dort läuft.
 
 ### Was noch fehlt
 
-1. **Die Node-RED-Seite** — [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md).
-   Ohne sie bekommt H1 im Produktivbetrieb keine Werte, der Knopf bliebe dort
-   gesperrt. **Das ist die Voraussetzung für alles Weitere.**
-2. **Etappe 5 — Lauf an Stufe 1 bei stehender Anlage.** Zum ersten Mal wird
-   GRÜN erwartet. Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die
-   Anlage im Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist
-   der Moment für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als
-   Beispiel — das zeigt allerdings die *Werks*kurve).
-   Danach aufräumen: `HeatingMode 1`, Sollwerte zurück, `kurven_sync.py`.
-3. **Etappe 6 — Wiederholung mit abgeschaltetem MQTT-Broker.** Der eigentliche
+1. **Etappe 5 — Lauf an Stufe 1 bei stehender Anlage.** Zum ersten Mal wird
+   GRÜN erwartet. Voraussetzung: Die Firmware dieses Branches muss erst auf H1,
+   dort läuft noch 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit 404,
+   am 2026-08-20 nachgesehen).
+   **Neu zu beachten:** Der Wartungsschalter gehört vor dem Lauf gesetzt, sonst
+   holt der Re-Assert die Anlage mitten im Versuch zurück (Abschnitt 7).
+   Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die Anlage im
+   Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist der Moment
+   für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als Beispiel —
+   das zeigt allerdings die *Werks*kurve).
+   Aufräumen heißt jetzt: Wartung aus — den Rest macht der Re-Assert von allein,
+   und genau das ist der Nachweis für Testplan-Punkt 6.
+2. **Etappe 6 — Wiederholung mit abgeschaltetem MQTT-Broker.** Der eigentliche
    Nachweis. Ungemessen ist bis heute, ob die Firmware ohne erreichbaren Broker
    sauber weiterläuft (die Reconnect-Logik hat einen Backoff, aber gemessen ist
    das nicht).
-4. **Etappe 7 — Rückkehr prüfen, Doku, Release 3.12.0.** Die Nacharbeiten
-   stehen in Abschnitt 9.
+3. **Etappe 7 — Rückkehr prüfen, Doku, Release 3.12.0.** Die Nacharbeiten
+   stehen in Abschnitt 9. Dazu gehört auch `NOTBETRIEB.md` §7 im Nachbarprojekt:
+   Es beschreibt noch den Handweg am Bedienterminal statt den Knopf (dort als
+   TODO 1.6 eingetragen).
 
 ### Zustand der Geräte
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | 3.11.0, **unverändert**, Direktbetrieb, Kurve 34/26 bei −10/+15 |
+H1 (192.168.2.120) | 3.11.0, **unverändert**, Direktbetrieb, Kurve 34/26 bei −10/+15; `set/Heatpump` = 0, die Anlage steht |
 H2 (192.168.2.122) | 3.11.0, **unverändert** |
-Prüfstand (192.168.2.197) | Firmware dieses Branches, Rolle Heizen, alle vier Testwerte gesetzt (`/notbetrieb/status` liefert `0;1;6;0`) |
+Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware dieses Branches, Rolle Heizen |
 
-Die Testwerte liegen unter dem Prefix `panasonic_heat_pump_test` im ioBroker und
-bleiben dort — sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
+Die Testwerte unter dem Prefix `panasonic_heat_pump_test` bleiben im ioBroker —
+sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
 
 ### Wiedereinstieg prüfen
 
 ```bash
 git switch notbetrieb-web
 c++ -std=c++17 -O2 -Wall -o /tmp/nb_test test/notbetrieb_test.cpp && /tmp/nb_test
-curl http://192.168.2.197/notbetrieb/status        # erwartet: 0;1;6;0
+
+# Liegen die Notbetriebswerte im Broker? (Knopf bleibt sonst gesperrt)
+curl -s "http://192.168.2.147:8087/getBulk/\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveTargetHighTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveTargetLowTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideLowTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideHighTemp,\
+mqtt.0.panasonic_heat_pump2.notbetrieb.DHWTemp"
+
+curl http://192.168.2.197/notbetrieb/status   # nur wenn der Prüfstand Strom hat
 ```
 
 **Die Versionsnummer steht bewusst noch auf 3.11.0.** Eine Firmware mit Knopf,
