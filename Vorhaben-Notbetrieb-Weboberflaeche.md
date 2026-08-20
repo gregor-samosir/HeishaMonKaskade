@@ -450,6 +450,28 @@ falschen Stützpunkt. Das ist der Fall, für den das ganze Vorhaben gebaut wird.
 3. Der Schlusshinweis des Werkzeugs **beziffert** jetzt den fehlenden Wert
    (`KK_HK_vlLo`, derzeit 34 °C) statt nur auf ihn zu verweisen. Wer im Notfall
    vor dem Bedienterminal steht, braucht die Zahl.
+4. **Der korrigierte Sync ist um 15:01 auf beiden Stufen gelaufen.** Der
+   `tablesnap`-Diff vorher/nachher zeigt an H1 wie an H2 genau eine Änderung:
+   `Z1_Heat_Curve_Target_Low_Temp` (TOP30) von 34 auf 26. Kein Sollwert, kein
+   Modus, kein Kühlwert hat sich bewegt — wie erwartet, denn im Direktbetrieb
+   liest die Wärmepumpe dieses Feld nicht.
+
+**Warum der Sync den laufenden Betrieb nicht berührt.** Es sind zwei getrennte
+Wege: Die Regelung läuft über `KKheizkurve.js` (liest den
+Konfigurationsbaum, rechnet `KK_HeatTarget`) und weiter über Node-RED als
+`set/Z1HeatRequestTemperature` — im Direktbetrieb der einzige Wert, den die
+Wärmepumpe befolgt. `kurven_sync.py` liest denselben Konfigurationsbaum **nur**
+und schreibt ausschließlich die Kurvenfelder der Wärmepumpe, die erst bei
+`Heating_Mode` = 0 wirksam werden. Es schreibt keinen einzigen
+ioBroker-Datenpunkt, die Rechengrundlage bleibt also unverändert. Am 2026-08-20
+in beide Richtungen belegt: im Kurvenbetrieb zog eine Änderung von `TargetLow`
+den `Main_Target_Temp` mit (35 → 26), im Direktbetrieb blieb er unberührt
+(TargetLow 35 → 34, `Main_Target_Temp` blieb 20).
+
+Gegengeprüft wurde außerdem der Code aller 44 ioBroker-Skripte (Vollpull über
+`js-pull.sh`): keines enthält `Z1HeatCurve`, `Z1CoolCurve`, `HeatingMode` oder
+`CoolingMode`, und der `WP_Befehls_Waechter` prüft sieben Kanäle, von denen
+keiner ein Kurvenfeld ist.
 
 **Die ioBroker-Seite ist geprüft und richtig** (Owner-Auskunft 2026-08-20): Die
 Kurvenberechnung in `ioBroker.javascript` liefert für Heiz- wie Kühlkurve
