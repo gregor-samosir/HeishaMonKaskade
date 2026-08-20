@@ -46,6 +46,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
+| `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
 
 ## Pruefstand aufsetzen
@@ -673,6 +674,38 @@ Gespiegelt wird dadurch `KK_HK_vlLo` (Vorlauf bei niedriger Aussentemperatur)
 in das Feld fuer warmes Wetter. Ohne Wirkung, solange die Anlage im
 Direktbetrieb laeuft - aber der Notbetrieb aktiviert genau diese Kurve. Die
 Korrektur ist im Vorhaben Notbetrieb, Abschnitt 6a, als Vorbedingung notiert.
+
+## Der Notbetriebszweig wird wiedereingespielt (2026-08-20, Broker)
+
+Der Notbetrieb ruht darauf, dass der ioBroker-MQTT-Adapter einem NEUEN
+Abonnenten die gespeicherten Werte einspielt - nur so hat die Firmware ihre
+Kurvenwerte nach einem Neustart binnen Sekunden wieder. Fuer den `set`-Zweig ist
+das belegt (2026-08-13, und dort ist es die Gefahr, gegen die SUBSCRIBE_GRACE
+gebaut wurde). Offen war, ob der Adapter das auch fuer einen Zweig tut, den er
+vorher nie gesehen hat.
+
+**Er tut es.** Nachgewiesen ohne Geraet, weil `mqtt_sub.py` genau das macht, was
+die Firmware nach einem Neustart tut - verbinden, abonnieren, zuhoeren:
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetHighTemp=34 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetLowTemp=26 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=-10 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideHighTemp=15
+
+./test/mqtt_sub.py --host 192.168.2.147 'panasonic_heat_pump_test/notbetrieb/#'
+```
+
+Die zweite Verbindung bekam alle vier Werte, ohne dass jemand publizierte - und
+zwar mit **retain=0**, genau wie beim `set`-Zweig. Ueber das Retain-Bit ist
+diese Wiedereinspielung also auch hier nicht von einem echten Kommando zu
+unterscheiden; die Trennung laeuft allein ueber den Topic-Zweig.
+
+Gelaufen ist das gegen das Test-Prefix `panasonic_heat_pump_test`, auf das kein
+Geraet hoert. Der produktive Zweig blieb leer (Gegenprobe ueber die
+simple-api: 0 Objekte unter `mqtt.0.panasonic_heat_pump.notbetrieb*`). Die vier
+Testobjekte bleiben im ioBroker stehen - sie stoeren nichts und sind der Beleg.
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

@@ -192,6 +192,19 @@ gehen nie ungefragt an die Wärmepumpe.
 **Also: Der Zweig `<prefix>/notbetrieb/` wird vor der Karenzprüfung behandelt.**
 Fünf Zeilen in `mqtt_callback()`, und sie sind der Unterschied zwischen einem
 Knopf, der nach jedem Neustart funktioniert, und einem, der es nicht tut.
+Umgesetzt am 2026-08-20 (Etappe 2), abgesichert durch
+[`test/notbetrieb_test.cpp`](test/notbetrieb_test.cpp).
+
+**Der Mechanismus ist am Broker nachgemessen (2026-08-20).** Belegt war die
+Wiedereinspielung bisher nur für den `set`-Zweig; ob der Adapter das auch für
+einen Zweig tut, den er nie zuvor gesehen hat, war offen. Er tut es: Vier Werte
+an `panasonic_heat_pump_test/notbetrieb/*` gesendet, dann mit
+[`test/mqtt_sub.py`](test/mqtt_sub.py) neu verbunden — alle vier kamen von
+allein, ohne dass jemand publizierte. Der Subscriber macht dabei genau das, was
+die Firmware nach einem Neustart tut, deshalb brauchte der Nachweis kein Gerät.
+Und wie beim `set`-Zweig kommt die Wiedereinspielung mit **retain=0**: über das
+Retain-Bit wäre sie nicht von einem echten Kommando zu unterscheiden, die
+Trennung läuft allein über den Topic-Zweig.
 
 ### Fehlen Werte, bleibt der Knopf gesperrt
 
