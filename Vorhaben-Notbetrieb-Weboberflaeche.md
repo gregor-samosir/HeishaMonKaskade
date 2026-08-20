@@ -213,12 +213,19 @@ der Seite. Lieber gar nicht schalten als auf die Werkskurve.
 
 ## 4. Die Umsetzung — vier Bausteine
 
-**A — Notbetriebswerte annehmen und halten.**
+**A — Notbetriebswerte annehmen und halten. Steht seit 2026-08-20.**
 Neue Pfadwurzel `Topics::NOTBETRIEB` in [`Topics.h`](src/Topics.h)/[`Topics.cpp`](src/Topics.cpp),
 eine kleine Tabelle mit Name und Bereichsgrenzen (dieselben Grenzen wie in
 `setCommands[]`), Abonnement analog `subscribe_set_topics()`, Annahme vor der
 Karenzprüfung. Gehalten wird in wenigen Bytes RAM plus einem
 Vollständigkeits-Flag.
+
+*Am Prüfstand belegt (192.168.2.197, D1 mini ohne Wärmepumpe):* Nach einem
+Neustart standen ohne jedes Zutun binnen Sekunden wieder alle vier Werte —
+`Notbetrieb einsatzbereit: alle 4 Werte liegen vor`, und im selben Moment
+`34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen`. Die
+Karenz-Ausnahme wirkt also genau so getrennt, wie sie soll. Einzelheiten und
+die Ablehnungspfade in [`test/README.md`](test/README.md).
 
 **B — Endpunkt und Seite.**
 `/notbetrieb` mit demselben Auth-Muster wie `/reboot` und `/settings`

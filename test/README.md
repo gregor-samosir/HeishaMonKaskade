@@ -707,6 +707,67 @@ Geraet hoert. Der produktive Zweig blieb leer (Gegenprobe ueber die
 simple-api: 0 Objekte unter `mqtt.0.panasonic_heat_pump.notbetrieb*`). Die vier
 Testobjekte bleiben im ioBroker stehen - sie stoeren nichts und sind der Beleg.
 
+## Der Notbetrieb ueberlebt den Neustart (2026-08-20, Pruefstand)
+
+Am Pruefstand 192.168.2.197 (D1 mini, keine Waermepumpe, Prefix
+`panasonic_heat_pump_test`, Rolle Heizen mangels Rollen-Flag). Der Ablauf ist
+genau der, auf den sich der Notbetrieb verlaesst: Werte hinterlegen, Geraet neu
+starten, und danach sendet **niemand** mehr etwas.
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetHighTemp=34 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetLowTemp=26 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=-10 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideHighTemp=15
+
+./test/mqtt_sub.py --host 192.168.2.147 --dauer 60 \
+    panasonic_heat_pump_test/info/log panasonic_heat_pump_test/info/LWT
+curl -u admin:heisha http://192.168.2.197/reboot
+```
+
+Was nach dem Neustart von allein im Log stand:
+
+```text
+Notbetrieb: Rolle Heizen, 4 Werte erwartet
+Notbetrieb einsatzbereit: alle 4 Werte liegen vor
+34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+**Die dritte Zeile ist die entscheidende.** Im selben Moment, in dem die
+Karenzzeit 34 wiedereingespielte SET-Kommandos wegwirft, kommen die vier
+Notbetriebswerte durch - weil sie vor der Karenzpruefung behandelt werden. Genau
+diese Ausnahme ist der Unterschied zwischen einem Knopf, der nach jedem Neustart
+funktioniert, und einem, der es nicht tut.
+
+### Die Ablehnungspfade, ebenfalls am Geraet
+
+| Gesendet | Im MQTT-Log |
+| --- | --- |
+| `Z1HeatCurveTargetHighTemp=34` | nichts (der Einzelwert laeuft nur ins Telnet-Log) |
+| `Z1HeatCurveTargetHighTemp=99` | `abgelehnt (erlaubt 20..55)` |
+| `Z1HeatCurveTargetLowTemp=abc` | `ist keine Zahl (abc) - verworfen` |
+| `notbetrieb/Quatsch=5` | nichts - das Topic wird gar nicht abonniert |
+
+Die letzte Zeile ist kein Mangel, sondern der Beleg fuer die
+Abonnement-Entscheidung: Die Firmware abonniert nur die Namen ihrer Rolle, kein
+`notbetrieb/#`. Ein Tippfehler im Node-RED-Flow erreicht das Geraet also gar
+nicht erst - er faellt beim Abgleich der Topics auf, nicht erst beim Druck auf
+den Knopf.
+
+### Falls der Pruefstand frisch geflasht ist
+
+Nach dem Flashen kann `mqtt_server` leer sein - dann bleibt das LWT auf
+`Offline` und nichts von alldem passiert:
+
+```
+curl -u admin:heisha "http://192.168.2.197/settings?mqtt_server=192.168.2.147"
+```
+
+Das Telnet-Log gab bei diesem Lauf nichts her (Verbindung stand, aber es kamen
+keine Zeilen). Der Weg ueber `info/log` und `mqtt_sub.py` ist ohnehin der
+belastbarere, weil er den Zeitverlauf mitliefert.
+
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 
 Wer an `decode.cpp` umbaut, will wissen, ob sich die AUSGABE veraendert hat -

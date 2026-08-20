@@ -115,6 +115,12 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
   }
 
   // Grenzen aus setCommands[] - eine Quelle, siehe set_command_range()
+  //
+  // Am Geraet ist dieser Zweig nicht erreichbar, solange die Tabellen stimmen:
+  // Abonniert werden nur Namen aus NOTBETRIEB_WERTE_*, und die stehen alle in
+  // setCommands[]. Er greift, wenn dort jemand einen Namen eintraegt, den es
+  // als Set-Kommando nicht gibt - ein Fehler bei der Weiterentwicklung, der
+  // sonst erst beim Druck auf den Knopf auffiele.
   int min_wert = 0, max_wert = 0;
   if (!set_command_range(name, &min_wert, &max_wert))
   {
@@ -123,6 +129,11 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
     write_mqtt_log(log_line);
     return true;
   }
+
+  // War der Satz vor dieser Nachricht schon vollstaendig? Der Uebergang ist
+  // das meldenswerte Ereignis, nicht der Zustand - sonst stuende die Meldung
+  // nach jedem Reconnect mehrfach im Log.
+  const bool vorher_vollstaendig = notbetrieb_vollstaendig(&notbetriebWerte, notbetriebRolle);
 
   // Ausserhalb der Grenzen wird VERWORFEN, nicht geklemmt: ein still
   // zurechtgebogener Kurvenpunkt faellt im Notfall niemandem auf.
@@ -136,11 +147,21 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
     return true;
   }
 
-  // Der Normalfall laeuft nur ins Telnet-Log: Nach jedem Reconnect spielt der
-  // Broker alle Werte erneut ein, das MQTT-Log soll davon nicht volllaufen.
-  (void)snprintf(log_line, sizeof(log_line), "Notbetrieb gemerkt: %.32s = %ld%s",
-                 name, wert,
-                 notbetrieb_vollstaendig(&notbetriebWerte, notbetriebRolle) ? " (vollstaendig)" : "");
+  // Der einzelne Wert laeuft nur ins Telnet-Log: Nach jedem Reconnect spielt
+  // der Broker alle Werte erneut ein, das MQTT-Log soll davon nicht volllaufen.
+  (void)snprintf(log_line, sizeof(log_line), "Notbetrieb gemerkt: %.32s = %ld", name, wert);
   write_telnet_log(log_line);
+
+  // Dass der Satz JETZT vollstaendig ist, gehoert dagegen ins MQTT-Log: Es ist
+  // das Ereignis, das den Knopf scharf macht, es tritt selten auf, und wer
+  // wissen will, ob der Notbetrieb einsatzbereit waere, findet es dort - ohne
+  // sich per Telnet auf das Geraet zu legen.
+  if (!vorher_vollstaendig && notbetrieb_vollstaendig(&notbetriebWerte, notbetriebRolle))
+  {
+    (void)snprintf(log_line, sizeof(log_line),
+                   "Notbetrieb einsatzbereit: alle %u Werte liegen vor",
+                   notbetrieb_wert_anzahl(notbetriebRolle));
+    write_mqtt_log(log_line);
+  }
   return true;
 }
