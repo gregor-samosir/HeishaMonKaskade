@@ -106,7 +106,14 @@ Gegenmessung unmittelbar danach trennt Firmware und Wärmepumpe sauber:
   der zuletzt kommandierte — ebenfalls Cool. Dasselbe stillschweigende
   Verwerfen wie bei `Z1HeatRequestTemperature` im Kurvenbetrieb (M1c).
 
-Zwei Erklärungen stehen offen und sind **noch nicht getrennt**:
+**Beantwortet noch am selben Abend durch den Owner:** Der externe Schalter
+(KNX) gibt den Modus vor — **steht die Anlage auf Kühlen, nimmt sie nur
+Kühlmodi an.** Damit ist Hypothese (a) unten die richtige, die Messung zu (b)
+erübrigt sich, und der Notbetrieb Heizen ist im Kühlbetrieb über MQTT
+grundsätzlich nicht schaltbar. Folge für den Bau: Der Knopf gehört gesperrt,
+solange `Heat_Cool_SW_State` (TOP101) auf Cool steht, mit Klartext auf der
+Seite und dem KNX-Taster in der Offline-Anleitung. Die Tabelle bleibt als Beleg
+stehen, wie der Befund entstanden ist:
 
 Hypothese | Prüfung | Folge, falls sie zutrifft
 :--- | :--- | :---
