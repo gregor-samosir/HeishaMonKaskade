@@ -32,6 +32,45 @@ NotbetriebSpeicher notbetriebWerte;
 NotbetriebLauf notbetriebLauf;
 
 /*****************************************************************************/
+/* Der zwischengespeicherte Sperrgrund                                       */
+/*                                                                           */
+/* Er haengt an TOP101 und damit an actual_data[] - das haben die Webhandler  */
+/* nicht zur Hand, sie bekommen nur den httpServer. Statt actual_data durch   */
+/* drei Handler und zwei Routen zu reichen, rechnet ihn notbetrieb_loop()     */
+/* einmal je Durchlauf aus. loop() laeuft im Millisekundentakt; der Wert ist  */
+/* also praktisch immer aktuell.                                              */
+/*                                                                           */
+/* Startwert ist BEWUSST "gesperrt": Zwischen dem Booten und dem ersten       */
+/* Durchlauf darf der Knopf nicht offenstehen. Zu diesem Zeitpunkt hat weder  */
+/* der Broker Werte geliefert noch die Waermepumpe geantwortet.               */
+/*****************************************************************************/
+static NotbetriebSperre notbetriebSperre = NOTBETRIEB_SPERRE_WERTE;
+
+NotbetriebSperre notbetrieb_sperre(void)
+{
+  return notbetriebSperre;
+}
+
+/*****************************************************************************/
+/* Der Rohtext von TOP101 (Heat_Cool_SW_State) aus actual_data[]             */
+/*                                                                           */
+/* Leerer Text heisst "nie empfangen" und gilt als NICHT Heizen - siehe die   */
+/* Freigaberegel in notbetrieb.h. Der Umweg ueber state_topic_index() ist     */
+/* Pflicht: actual_data[] wird ueber den ZEILENINDEX adressiert, nicht ueber  */
+/* die TOP-Nummer.                                                            */
+/*****************************************************************************/
+static int heizKuehlIndex = -1; // einmal in notbetrieb_init() nachgeschlagen
+
+static const char *heiz_kuehl_text(char actual[][MAXVALUELEN])
+{
+  // Der Zeilenindex steht fest, sobald die Firmware laeuft. Ihn hier jedes Mal
+  // neu zu suchen hiesse, bei JEDEM Durchlauf von loop() linear ueber 92 Zeilen
+  // zu gehen - der Sperrgrund wird ja nicht mehr nur waehrend eines Laufs
+  // gebraucht, sondern staendig.
+  return (heizKuehlIndex >= 0) ? actual[heizKuehlIndex] : "";
+}
+
+/*****************************************************************************/
 /* Beim Start einmal leeren                                                  */
 /*                                                                           */
 /* Ohne das stuenden nach dem Boot die Bitmuster im RAM, die der Reset dort   */
@@ -58,6 +97,15 @@ void notbetrieb_init(void)
                      s->top, s->set_name);
       Serial.println(log_line); // MQTT laeuft in setup() noch nicht
     }
+  }
+
+  // Dasselbe fuer die Freigabebedingung: Faende TOP101 seine Zeile nicht, waere
+  // der Knopf der Rolle Heizen dauerhaft gesperrt, ohne dass irgendwo stuende,
+  // warum. Fuer Warmwasser spielt TOP101 keine Rolle (M3).
+  heizKuehlIndex = state_topic_index(NOTBETRIEB_TOP_HEIZ_KUEHL);
+  if (notbetriebRolle != NOTBETRIEB_WASSER && heizKuehlIndex < 0)
+  {
+    Serial.println("FEHLER Notbetrieb: TOP101 (Heat_Cool_SW_State) fehlt in stateTopics[]");
   }
 }
 
@@ -231,13 +279,29 @@ static bool notbetrieb_schritt_absetzen(void)
 /*****************************************************************************/
 void notbetrieb_loop(char actual[][MAXVALUELEN])
 {
+  // Der Rohtext von TOP101 traegt beides: die Freigabe vor dem Start und den
+  // Abbruch mitten im Lauf.
+  const char *richtung = heiz_kuehl_text(actual);
+
+  // Der Sperrgrund wird JEDEN Durchlauf neu bestimmt, auch waehrend ein Lauf
+  // unterwegs ist - die Seite fragt ihn alle zwei Sekunden ab und gibt den
+  // Knopf von selbst frei, sobald der KNX-Schalter auf Heizen steht. Ohne das
+  // muesste jemand die Seite neu laden und wuesste nicht, wann.
+  notbetriebSperre = notbetrieb_sperrgrund(notbetriebRolle, &notbetriebWerte, richtung);
+
+  // Ein Ergebnis von gestern ist keine Auskunft mehr: GRUEN und ROT fallen
+  // nach 15 Minuten auf BEREIT zurueck, der Knopf steht dann wieder da.
+  if (notbetrieb_verfall_pruefen(&notbetriebLauf, millis()))
+    write_telnet_log((char *)"Notbetrieb: Anzeige zurueckgesetzt (15 min)");
+
   if (notbetriebLauf.zustand != NOTBETRIEB_LAEUFT)
     return;
 
   const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
   if (!s)
   {
-    notbetriebLauf.zustand = NOTBETRIEB_ROT; // kann nur ein Tabellenfehler sein
+    // kann nur ein Tabellenfehler sein
+    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
     return;
   }
 
@@ -246,7 +310,7 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   int soll = 0;
   if (!notbetrieb_schritt_wert(&notbetriebLauf, notbetriebRolle, &notbetriebWerte, &soll))
   {
-    notbetriebLauf.zustand = NOTBETRIEB_ROT;
+    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
     write_mqtt_log((char *)"Notbetrieb abgebrochen: ein Wert fehlt");
     return;
   }
@@ -263,18 +327,30 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   const bool bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;
 
   char log_line[160];
-  switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt))
+  switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt, richtung))
   {
   case NOTBETRIEB_SENDEN:
     if (!notbetrieb_schritt_absetzen())
     {
-      notbetriebLauf.zustand = NOTBETRIEB_ROT;
+      notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
       write_mqtt_log((char *)"Notbetrieb abgebrochen: Kommando abgelehnt");
     }
     break;
 
   case NOTBETRIEB_FERTIG:
     write_mqtt_log((char *)"Notbetrieb GRUEN: alle Schritte zurueckgelesen");
+    break;
+
+  // Der KNX-Schalter ist waehrend des Laufs auf Kuehlen gegangen (oder stand
+  // nie auf Heizen). Eigene Meldung, weil der Grund ein voellig anderer ist
+  // als ein ausbleibender Ruecklesewert - und weil nur hier der Weg zurueck
+  // ueber den Schalter fuehrt, nicht ueber die Firmware.
+  case NOTBETRIEB_ABBRUCH_KUEHLEN:
+    (void)snprintf(log_line, sizeof(log_line),
+                       "Notbetrieb ROT: Anlage meldet Kuehlbetrieb (TOP101), Abbruch in Schritt %u/%u",
+                       (unsigned)(notbetriebLauf.schritt + 1),
+                       notbetrieb_schritt_anzahl(notbetriebRolle));
+    write_mqtt_log(log_line);
     break;
 
   case NOTBETRIEB_ABBRUCH:
@@ -295,11 +371,22 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
 /*                                                                           */
 /* Der HTTP-Handler stoesst nur an und antwortet sofort; das erste Kommando  */
 /* geht hier raus, alles Weitere macht der Tick aus loop().                  */
+/*                                                                           */
+/* Die Sperre wird HIER geprueft und nicht nur beim Aufbau der Seite: Ein    */
+/* POST auf /notbetrieb/start laesst sich auch ohne die Seite absetzen, und  */
+/* zwischen dem Aufbau der Seite und dem Klick koennen Minuten liegen. Eine  */
+/* Oberflaeche, die nur den Knopf versteckt, ist keine Sperre.                */
 /*****************************************************************************/
 bool notbetrieb_starten(void)
 {
-  if (!notbetrieb_vollstaendig(&notbetriebWerte, notbetriebRolle))
+  const NotbetriebSperre sperre = notbetrieb_sperre();
+  if (sperre != NOTBETRIEB_FREI)
+  {
+    write_mqtt_log(sperre == NOTBETRIEB_SPERRE_HEIZBETRIEB
+                       ? (char *)"Notbetrieb abgelehnt: die Anlage steht nicht auf Heizen (TOP101)"
+                       : (char *)"Notbetrieb abgelehnt: es fehlen Werte");
     return false;
+  }
   if (notbetriebLauf.zustand == NOTBETRIEB_LAEUFT)
     return false;
 
@@ -309,7 +396,7 @@ bool notbetrieb_starten(void)
   write_mqtt_log((char *)"NOTBETRIEB ausgeloest ueber die Weboberflaeche");
   if (!notbetrieb_schritt_absetzen())
   {
-    notbetriebLauf.zustand = NOTBETRIEB_ROT;
+    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
     write_mqtt_log((char *)"Notbetrieb abgebrochen: erstes Kommando abgelehnt");
     return false;
   }
@@ -317,11 +404,17 @@ bool notbetrieb_starten(void)
 }
 
 /*****************************************************************************/
-/* Kurzstatus fuer die Statusroute: Zustand;Schritt;Schritte;fehlend         */
+/* Kurzstatus fuer die Statusroute: Zustand;Schritt;Schritte;fehlend;Sperre  */
 /*                                                                           */
 /* Bewusst maschinenlesbar und kurz - die Seite fragt ihn alle zwei Sekunden */
 /* ab und macht daraus Klartext. Je kuerzer die Antwort, desto weniger       */
 /* Arbeit fuer einen ESP8266, der nebenher die Waermepumpe abfragt.          */
+/*                                                                           */
+/* Das fuenfte Feld ist der Sperrgrund. Mit ihm gibt die Seite den Knopf von */
+/* selbst frei, sobald der KNX-Schalter auf Heizen steht - ohne dass jemand  */
+/* neu laden muss. Das ist keine Bequemlichkeit: TOP101 folgt dem Schalter   */
+/* erst nach bis zu 7,7 s (gemessen 2026-08-16). Wer sofort neu laedt, saehe */
+/* noch einmal "nur im Modus Heizen" und hielte den Schalter fuer kaputt.    */
 /*****************************************************************************/
 void notbetrieb_status(char *out, size_t len)
 {
@@ -337,9 +430,10 @@ void notbetrieb_status(char *out, size_t len)
       fehlend |= (1u << i);
   }
 
-  (void)snprintf(out, len, "%u;%u;%u;%u",
+  (void)snprintf(out, len, "%u;%u;%u;%u;%u",
                    (unsigned)notbetriebLauf.zustand,
                    (unsigned)(notbetriebLauf.schritt + 1),
                    notbetrieb_schritt_anzahl(notbetriebRolle),
-                   fehlend);
+                   fehlend,
+                   (unsigned)notbetriebSperre);
 }

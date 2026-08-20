@@ -305,9 +305,12 @@ static void test_schrittfolge()
 /*****************************************************************************/
 
 // Ein vollstaendiger Lauf, bei dem jeder Schritt nach 'antwortzeit' ms
-// zurueckgelesen wird. Rueckgabe: Zustand am Ende.
+// zurueckgelesen wird. 'richtung' ist der Rohtext von TOP101, den die Anlage
+// waehrend des Laufs meldet - "0" heisst Heizen und laesst den Lauf gewaehren.
+// Rueckgabe: Zustand am Ende.
 static uint8_t lauf_durchspielen(NotbetriebRolle rolle, uint32_t start,
-                                 uint32_t antwortzeit, uint32_t *dauer_out)
+                                 uint32_t antwortzeit, uint32_t *dauer_out,
+                                 const char *richtung = "0")
 {
   NotbetriebLauf lauf;
   notbetrieb_lauf_leeren(&lauf);
@@ -322,10 +325,10 @@ static uint8_t lauf_durchspielen(NotbetriebRolle rolle, uint32_t start,
     jetzt += 1000; // die Firmware tickt aus loop(), hier 1 s je Runde
     seit_schritt += 1000;
     bool bestaetigt = (seit_schritt >= antwortzeit);
-    NotbetriebAktion a = notbetrieb_tick(&lauf, rolle, jetzt, bestaetigt);
+    NotbetriebAktion a = notbetrieb_tick(&lauf, rolle, jetzt, bestaetigt, richtung);
     if (a == NOTBETRIEB_SENDEN)
       seit_schritt = 0;
-    if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH)
+    if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH || a == NOTBETRIEB_ABBRUCH_KUEHLEN)
       break;
   }
   if (dauer_out)
@@ -351,19 +354,19 @@ static void test_automat()
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler unveraendert");
 
   // Warten ohne Rueckmeldung: nichts passiert, solange das Timeout laeuft
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 5000, false), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 5000, false, "0"), NOTBETRIEB_TU_NICHTS,
               "ohne Rueckmeldung wird gewartet");
   pruefe_zahl(lauf.zustand, NOTBETRIEB_LAEUFT, "immer noch LAEUFT");
 
   // Eine Rueckmeldung VOR der Mindestwarte zaehlt noch nicht - sie koennte vom
   // Zustand vor dem Kommando stammen
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000 + 5000, true), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000 + 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Rueckmeldung nach 5 s zaehlt noch nicht");
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler bleibt auf 0");
 
   // nach der Mindestwarte zaehlt sie
   pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN,
-                              1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true),
+                              1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "0"),
               NOTBETRIEB_SENDEN, "Rueckmeldung nach der Mindestwarte stoesst den naechsten Schritt an");
   pruefe_zahl(lauf.schritt, 1, "Schrittzaehler auf 1");
 
@@ -392,7 +395,7 @@ static void test_automat()
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false);
+    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "ohne Rueckmeldung wird es ROT");
   pruefe_zahl((int)(t - 1000), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -407,15 +410,15 @@ static void test_automat()
   NotbetriebLauf mitte;
   notbetrieb_lauf_leeren(&mitte);
   (void)notbetrieb_start(&mitte, 1000);
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 10000, true); // Schritt 1 ok
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 19000, true); // Schritt 2 ok
+  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 10000, true, "0"); // Schritt 1 ok
+  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 19000, true, "0"); // Schritt 2 ok
   pruefe_zahl(mitte.schritt, 2, "steht bei Schritt 3");
   a = NOTBETRIEB_TU_NICHTS;
   t = 19000;
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, t, false);
+    a = notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(mitte.zustand, NOTBETRIEB_ROT, "Abbruch mitten in der Folge wird ROT");
   pruefe_zahl(mitte.schritt, 2, "der Zaehler bleibt stehen, es wird nicht weitergemacht");
@@ -425,7 +428,7 @@ static void test_automat()
   NotbetriebLauf knapp;
   notbetrieb_lauf_leeren(&knapp);
   (void)notbetrieb_start(&knapp, 1000);
-  pruefe_zahl(notbetrieb_tick(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true),
+  pruefe_zahl(notbetrieb_tick(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true, "0"),
               NOTBETRIEB_SENDEN, "Rueckmeldung im Timeout-Moment zaehlt noch");
   // (liegt hinter der Mindestwarte, sonst waere sie gar nicht gezaehlt worden)
   pruefe_zahl(knapp.zustand, NOTBETRIEB_LAEUFT, "kein ROT im selben Tick");
@@ -434,11 +437,11 @@ static void test_automat()
   NotbetriebLauf fertig;
   notbetrieb_lauf_leeren(&fertig);
   fertig.zustand = NOTBETRIEB_GRUEN;
-  pruefe_zahl(notbetrieb_tick(&fertig, NOTBETRIEB_HEIZEN, 5000, true), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(notbetrieb_tick(&fertig, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Tick auf GRUEN tut nichts");
 
   // Nullzeiger duerfen nicht abstuerzen
-  pruefe_zahl(notbetrieb_tick(0, NOTBETRIEB_HEIZEN, 5000, true), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(notbetrieb_tick(0, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Tick mit Nullzeiger abgefangen");
   pruefe_zahl(notbetrieb_start(0, 5000), NOTBETRIEB_TU_NICHTS, "Start mit Nullzeiger abgefangen");
 
@@ -507,7 +510,7 @@ static void test_ueberlauf()
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false);
+    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "Timeout greift auch ueber den Ueberlauf");
   pruefe_zahl((int)(uint32_t)(t - kurz_vor_ende), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -590,6 +593,183 @@ static void test_ruecklesen()
   pruefe(notbetrieb_rueckgelesen("15\n", 15), "abschliessender Zeilenumbruch stoert nicht");
 }
 
+/*****************************************************************************/
+/* 9. Die Freigabe ueber die Betriebsart (TOP101)                            */
+/*                                                                           */
+/* Der Befund vom 2026-08-20: Der externe KNX-Schalter gibt die Richtung vor.*/
+/* Steht die Anlage auf Kuehlen, verwirft sie jeden Heizmodus stillschweigend*/
+/* - der erste Lauf an H1 endete deshalb nach 20 s in einem ROT ohne         */
+/* Erklaerung. Seit dem 2026-08-21 ist der Knopf in dieser Lage gesperrt.     */
+/*                                                                           */
+/* Owner-Entscheidung: ALLES ausser einer sauber gelesenen 0 ist "nicht      */
+/* Heizen". Das prueft dieser Abschnitt Fall fuer Fall.                       */
+/*****************************************************************************/
+static void test_freigabe()
+{
+  printf("\n== Freigabe ueber die Betriebsart (TOP101) ==\n");
+
+  // Ein vollstaendiger Wertesatz, damit die Werte-Sperre nicht dazwischenfunkt
+  NotbetriebSpeicher voll;
+  notbetrieb_speicher_leeren(&voll);
+  pruefe(annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34) &&
+             annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 26) &&
+             annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10) &&
+             annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15),
+         "Wertesatz Heizen vollstaendig");
+
+  // Die eine Freigabe
+  pruefe(notbetrieb_heizbetrieb_belegt("0"), "TOP101 = 0 (Heizen) gibt frei");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "0"), NOTBETRIEB_FREI,
+              "und damit ist der Knopf frei");
+
+  // Alle vier Sperrfaelle
+  pruefe(!notbetrieb_heizbetrieb_belegt("1"), "TOP101 = 1 (Kuehlen) sperrt");
+  pruefe(!notbetrieb_heizbetrieb_belegt("2"), "TOP101 = 2 (unknown) sperrt");
+  pruefe(!notbetrieb_heizbetrieb_belegt("-1"), "TOP101 = -1 (Feld leer) sperrt");
+  pruefe(!notbetrieb_heizbetrieb_belegt(""), "nie empfangenes TOP101 sperrt");
+  pruefe(!notbetrieb_heizbetrieb_belegt(0), "Nullzeiger sperrt");
+  // Der Klartext aus der Weboberflaeche darf nicht als Freigabe durchgehen -
+  // actual_data traegt die Zahl, die Klartexte entstehen erst beim Anzeigen
+  pruefe(!notbetrieb_heizbetrieb_belegt("Heat"), "\"Heat\" als Text gibt NICHT frei");
+
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "1"), NOTBETRIEB_SPERRE_HEIZBETRIEB,
+              "Kuehlbetrieb sperrt den Knopf");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, ""), NOTBETRIEB_SPERRE_HEIZBETRIEB,
+              "keine Rueckmeldung sperrt den Knopf");
+
+  // Warmwasser ist NICHT betroffen: OperationMode 3 traegt auch im
+  // Kuehlbetrieb - genau der Sommerfall, fuer den Stufe 2 gebaut ist (M3)
+  NotbetriebSpeicher wasser;
+  notbetrieb_speicher_leeren(&wasser);
+  pruefe(annehmen(&wasser, NOTBETRIEB_WASSER, "DHWTemp", 48), "DHWTemp gesetzt");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "1"), NOTBETRIEB_FREI,
+              "Warmwasser bleibt im Kuehlbetrieb frei");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, ""), NOTBETRIEB_FREI,
+              "Warmwasser braucht TOP101 gar nicht");
+
+  // Fehlende Werte schlagen durch, auch wenn die Betriebsart stimmt
+  NotbetriebSpeicher halb;
+  notbetrieb_speicher_leeren(&halb);
+  pruefe(annehmen(&halb, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34), "nur ein Wert da");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "0"), NOTBETRIEB_SPERRE_WERTE,
+              "fehlende Werte sperren trotz Heizbetrieb");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "1"), NOTBETRIEB_SPERRE_WERTE,
+              "und sie werden zuerst gemeldet, wenn beides fehlt");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, 0, "0"), NOTBETRIEB_SPERRE_WERTE,
+              "Nullzeiger auf den Speicher sperrt");
+
+  /***************************************************************************/
+  /* Der Abbruch mitten im Lauf                                              */
+  /*                                                                         */
+  /* Hier gilt die andere Regel: NUR eine klare 1 bricht ab. Ein Aussetzer   */
+  /* duerfte einen sauber laufenden Vorgang nicht zerreissen und die Anlage  */
+  /* halb geschaltet stehen lassen.                                          */
+  /***************************************************************************/
+  printf("\n== Abbruch bei Kuehlbetrieb waehrend des Laufs ==\n");
+
+  pruefe(notbetrieb_kuehlbetrieb_gemeldet(NOTBETRIEB_HEIZEN, "1"), "klare 1 bricht ab");
+  pruefe(!notbetrieb_kuehlbetrieb_gemeldet(NOTBETRIEB_HEIZEN, ""), "ein Aussetzer bricht NICHT ab");
+  pruefe(!notbetrieb_kuehlbetrieb_gemeldet(NOTBETRIEB_HEIZEN, "2"), "\"unknown\" bricht NICHT ab");
+  pruefe(!notbetrieb_kuehlbetrieb_gemeldet(NOTBETRIEB_WASSER, "1"), "Warmwasser bricht nie ab");
+
+  // Ein Lauf, der von Anfang an gegen eine kuehlende Anlage laeuft
+  uint32_t dauer = 0;
+  pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer, "1"), NOTBETRIEB_ROT,
+              "Lauf gegen Kuehlbetrieb wird ROT");
+  pruefe(dauer <= 2000u, "und zwar sofort, nicht erst nach dem Schritt-Timeout");
+
+  // Ein Aussetzer waehrend des Laufs darf nichts anrichten
+  pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer, ""), NOTBETRIEB_GRUEN,
+              "ohne TOP101-Aussage laeuft der Vorgang durch");
+
+  // Der KNX-Schalter geht mitten im Lauf auf Kuehlen: Der Zaehler bleibt
+  // stehen, wo es passiert ist, und es wird NICHT bis zum Einschalten weiter-
+  // gemacht - sonst liefe die Anlage am Ende kuehlend.
+  NotbetriebLauf um;
+  notbetrieb_lauf_leeren(&um);
+  (void)notbetrieb_start(&um, 1000);
+  uint32_t t = 1000;
+  uint32_t seit_schritt = 0;
+  NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+  for (unsigned i = 0; i < 200; i++)
+  {
+    t += 1000;
+    seit_schritt += 1000;
+    // ab Schritt 4 meldet die Anlage Kuehlen
+    const char *richtung = (um.schritt >= 3) ? "1" : "0";
+    a = notbetrieb_tick(&um, NOTBETRIEB_HEIZEN, t, seit_schritt >= 9000, richtung);
+    if (a == NOTBETRIEB_SENDEN)
+      seit_schritt = 0;
+    if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH || a == NOTBETRIEB_ABBRUCH_KUEHLEN)
+      break;
+  }
+  pruefe_zahl(a, NOTBETRIEB_ABBRUCH_KUEHLEN, "Umschalten mitten im Lauf meldet den Kuehl-Abbruch");
+  pruefe_zahl(um.zustand, NOTBETRIEB_ROT, "und der Lauf ist ROT");
+  pruefe_zahl(um.schritt, 3, "der Zaehler bleibt stehen, wo es passiert ist");
+}
+
+/*****************************************************************************/
+/* 10. Der Anzeigeverfall                                                    */
+/*                                                                           */
+/* GRUEN und ROT blieben bis zum 2026-08-21 stehen, bis jemand erneut        */
+/* drueckte - wer die Seite am naechsten Tag oeffnete, sah ein Ergebnis von  */
+/* gestern und musste raten, ob gerade etwas schiefgeht.                     */
+/*****************************************************************************/
+static void test_anzeigeverfall()
+{
+  printf("\n== Anzeigeverfall nach 15 Minuten ==\n");
+
+  const uint32_t start = 100000u;
+
+  // ROT verfaellt - aber nicht zu frueh
+  NotbetriebLauf rot;
+  notbetrieb_lauf_leeren(&rot);
+  notbetrieb_abschluss(&rot, NOTBETRIEB_ROT, start);
+  pruefe_zahl((int)rot.ende, (int)start, "der Abschluss haelt den Zeitpunkt fest");
+  pruefe(!notbetrieb_verfall_pruefen(&rot, start + NOTBETRIEB_ANZEIGE_VERFALL_MS - 1),
+         "kurz vor 15 min steht das ROT noch");
+  pruefe_zahl(rot.zustand, NOTBETRIEB_ROT, "und ist unveraendert ROT");
+  pruefe(notbetrieb_verfall_pruefen(&rot, start + NOTBETRIEB_ANZEIGE_VERFALL_MS),
+         "nach 15 min faellt es weg");
+  pruefe_zahl(rot.zustand, NOTBETRIEB_BEREIT, "der Knopf steht wieder da");
+  pruefe(!notbetrieb_verfall_pruefen(&rot, start + 2 * NOTBETRIEB_ANZEIGE_VERFALL_MS),
+         "und meldet den Verfall nur einmal");
+
+  // GRUEN ebenso
+  NotbetriebLauf gruen;
+  notbetrieb_lauf_leeren(&gruen);
+  notbetrieb_abschluss(&gruen, NOTBETRIEB_GRUEN, start);
+  pruefe(notbetrieb_verfall_pruefen(&gruen, start + NOTBETRIEB_ANZEIGE_VERFALL_MS),
+         "auch GRUEN verfaellt");
+
+  // Ein LAUFENDER Vorgang wird nie angefasst - dafuer ist der Gesamtdeckel da
+  NotbetriebLauf laeuft;
+  notbetrieb_lauf_leeren(&laeuft);
+  (void)notbetrieb_start(&laeuft, start);
+  pruefe(!notbetrieb_verfall_pruefen(&laeuft, start + 2 * NOTBETRIEB_ANZEIGE_VERFALL_MS),
+         "ein laufender Vorgang verfaellt nicht");
+  pruefe_zahl(laeuft.zustand, NOTBETRIEB_LAEUFT, "er laeuft weiter");
+
+  // Ein neuer Lauf loescht den Zeitstempel des alten Ergebnisses - sonst
+  // koennte ein 16 Minuten altes ROT den frischen Lauf sofort abraeumen
+  NotbetriebLauf neu;
+  notbetrieb_lauf_leeren(&neu);
+  notbetrieb_abschluss(&neu, NOTBETRIEB_ROT, start);
+  (void)notbetrieb_start(&neu, start + NOTBETRIEB_ANZEIGE_VERFALL_MS - 1000);
+  pruefe_zahl((int)neu.ende, 0, "der Start loescht den alten Zeitstempel");
+
+  // Und das alles ueber den millis()-Ueberlauf hinweg
+  const uint32_t kurz_vor_ende = 0xFFFFFF00u;
+  NotbetriebLauf ueber;
+  notbetrieb_lauf_leeren(&ueber);
+  notbetrieb_abschluss(&ueber, NOTBETRIEB_ROT, kurz_vor_ende);
+  pruefe(!notbetrieb_verfall_pruefen(&ueber, (uint32_t)(kurz_vor_ende + 60000u)),
+         "eine Minute nach dem Ueberlauf steht das ROT noch");
+  pruefe(notbetrieb_verfall_pruefen(&ueber,
+                                    (uint32_t)(kurz_vor_ende + NOTBETRIEB_ANZEIGE_VERFALL_MS)),
+         "und faellt auch dort punktgenau weg");
+}
+
 int main()
 {
   printf("Hosttest Notbetrieb (src/notbetrieb.h)\n");
@@ -602,6 +782,8 @@ int main()
   test_ueberlauf();
   test_schritt_wert();
   test_ruecklesen();
+  test_freigabe();
+  test_anzeigeverfall();
 
   printf("\n%s (%d Fehler)\n", fehler == 0 ? "ALLE PRUEFUNGEN BESTANDEN" : "FEHLGESCHLAGEN", fehler);
   return fehler == 0 ? 0 : 1;

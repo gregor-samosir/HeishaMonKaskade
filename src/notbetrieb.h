@@ -73,6 +73,40 @@ enum NotbetriebRolle
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
 /*****************************************************************************/
+/* Wie lange ein Ergebnis auf der Seite stehen bleibt                        */
+/*                                                                           */
+/* GRUEN und ROT blieben bis zum 2026-08-21 stehen, bis jemand erneut         */
+/* drueckte. Wer die Seite am naechsten Tag oeffnete, sah das ROT von gestern */
+/* und musste raten, ob gerade etwas schiefgegangen ist. Nach 15 Minuten      */
+/* faellt die Anzeige deshalb auf BEREIT zurueck und der Knopf steht wieder   */
+/* da; im MQTT-Log bleibt der Lauf vollstaendig nachlesbar.                   */
+/*                                                                           */
+/* 15 Minuten sind laenger als jeder Lauf (Deckel 140 s) und kurz genug, dass */
+/* niemand ein fremdes Ergebnis fuer seines haelt.                            */
+/*****************************************************************************/
+#define NOTBETRIEB_ANZEIGE_VERFALL_MS 900000u
+
+/*****************************************************************************/
+/* Die Betriebsrichtung der Anlage - TOP101 Heat_Cool_SW_State (Byte 110)    */
+/*                                                                           */
+/* Am 2026-08-20 an H1 gemessen und vom Owner bestaetigt: Der externe         */
+/* KNX-Schalter gibt die Richtung vor. Steht die Anlage auf Kuehlen, nimmt    */
+/* sie ueber MQTT KEINEN Heizmodus an - set/OperationMode 0 ging nachweislich */
+/* durch Bereichspruefung, Maskenmerge und Telegramm, und die Waermepumpe     */
+/* verwarf es stillschweigend. Der Lauf endete nach 20 s mit ROT, ohne dass   */
+/* jemand haette sehen koennen, warum.                                        */
+/*                                                                           */
+/* Deshalb ist TOP101 die Freigabebedingung fuer die Rolle Heizen. TOP4       */
+/* (Operating_Mode_State) taugt dafuer nicht: Es zeigt den zuletzt            */
+/* KOMMANDIERTEN Modus, nicht den tatsaechlichen - im M3-Lauf blieb es auf 3, */
+/* waehrend die Anlage im Kuehlzweig stand.                                   */
+/*                                                                           */
+/* Die Rolle Warmwasser ist NICHT betroffen: OperationMode 3 (DHW only)       */
+/* traegt auch im Kuehlbetrieb, am 2026-08-20 an H2 gemessen (M3).            */
+/*****************************************************************************/
+#define NOTBETRIEB_TOP_HEIZ_KUEHL 101
+
+/*****************************************************************************/
 /* Ein Schritt der Folge                                                     */
 /*                                                                           */
 /* set_name  - Topic-Name unter <prefix>/set/, wird an Topics::SET gehaengt  */
@@ -316,6 +350,124 @@ inline const char *notbetrieb_name_aus_topic(const char *topic, const char *wurz
 }
 
 /*****************************************************************************/
+/* Ist ein Wert zurueckgelesen?                                              */
+/*                                                                           */
+/* Die Firmware haelt die Rueckmeldungen der Waermepumpe als TEXT in          */
+/* actual_data[]. Der naive Vergleich waere atoi(text) == soll - und der      */
+/* hat eine Falle, die genau das Signal zerstoert, auf das es hier ankommt:   */
+/* atoi("") liefert 0. Ein TOP, das noch nie empfangen wurde, wuerde damit    */
+/* jeden Schritt mit dem Sollwert 0 sofort bestaetigen - und der erste        */
+/* Schritt der Heizen-Folge ist OperationMode = 0. Der Knopf wuerde GRUEN     */
+/* melden, ohne dass die Waermepumpe je geantwortet hat.                      */
+/*                                                                           */
+/* Deshalb: leerer Text gilt NICHT als Bestaetigung, und was keine saubere    */
+/* ganze Zahl ist, auch nicht. Fuehrende und nachlaufende Leerzeichen sind    */
+/* erlaubt, sonst nichts.                                                    */
+/*                                                                           */
+/* Dieselbe Regel traegt seit dem 2026-08-21 auch die Freigabe unten: "TOP101 */
+/* liest sich sauber als 0" ist genau derselbe Vorgang wie "ein Schritt ist   */
+/* zurueckgelesen". Zwei Zahlenparser fuer dieselbe Frage waeren zwei Stellen,*/
+/* an denen der leere Text unterschiedlich behandelt werden koennte.          */
+/*****************************************************************************/
+inline bool notbetrieb_rueckgelesen(const char *ist_text, int soll)
+{
+    if (!ist_text || ist_text[0] == '\0')
+        return false;
+
+    // fuehrende Leerzeichen ueberspringen, danach muss eine Zahl kommen
+    const char *p = ist_text;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (*p == '\0')
+        return false;
+
+    char *ende = 0;
+    const long wert = strtol(p, &ende, 10);
+    if (ende == p)
+        return false; // gar keine Ziffer gefunden
+
+    // nachlaufend sind nur Leerzeichen erlaubt - "1.5" oder "2 Hz" sind keine
+    // Bestaetigung fuer 1 bzw. 2
+    while (*ende == ' ' || *ende == '\t' || *ende == '\r' || *ende == '\n')
+        ende++;
+    if (*ende != '\0')
+        return false;
+
+    return wert == (long)soll;
+}
+
+/*****************************************************************************/
+/* Die Freigabe: steht die Anlage nachweislich auf Heizen?                   */
+/*                                                                           */
+/* Owner-Entscheidung 2026-08-21: ALLES ausser einer sauber gelesenen 0 gilt  */
+/* als "nicht Heizen". Das deckt vier Faelle mit einer Regel ab:              */
+/*                                                                           */
+/*   "0"   Heizen          -> frei                                            */
+/*   "1"   Kuehlen         -> gesperrt (die WP nimmt keinen Heizmodus an)     */
+/*   "2"   unknown         -> gesperrt (Rohwert b11, Zustand unbekannt)       */
+/*   "-1"  Feld leer       -> gesperrt (die WP liefert keine Aussage)         */
+/*   ""    nie empfangen   -> gesperrt (keine Verbindung zur Waermepumpe)     */
+/*                                                                            */
+/* Der letzte Fall ist der Grund fuer die Strenge: Ohne Rueckmeldung der      */
+/* Waermepumpe erreicht auch kein Kommando sie, der Lauf endete nach 20 s in  */
+/* ROT. Ein Knopf, der in dieser Lage zum Druecken einlaedt, verspricht       */
+/* etwas, das er nicht halten kann - und zwar genau dann, wenn jemand darauf  */
+/* angewiesen ist. Preis: Am Pruefstand ohne Waermepumpe ist der Knopf        */
+/* dauerhaft gesperrt; der Fehlerpfad ist dort nur noch ueber den Hosttest zu */
+/* pruefen.                                                                   */
+/*****************************************************************************/
+inline bool notbetrieb_heizbetrieb_belegt(const char *heiz_kuehl_text)
+{
+    return notbetrieb_rueckgelesen(heiz_kuehl_text, 0);
+}
+
+/*****************************************************************************/
+/* Meldet die Anlage AUSDRUECKLICH Kuehlen?                                  */
+/*                                                                           */
+/* Nicht die Umkehrung der Freigabe oben: Fuer den Abbruch eines LAUFENDEN    */
+/* Vorgangs zaehlt nur die klare 1. Ein einzelner Aussetzer (leeres Feld,     */
+/* "unknown") wuerde sonst einen Lauf zerreissen, der gerade sauber laeuft -  */
+/* und ein abgebrochener Lauf laesst die Anlage im halb geschalteten Zustand  */
+/* stehen. Zum Starten ist Strenge richtig, zum Abbrechen Zurueckhaltung.     */
+/*****************************************************************************/
+inline bool notbetrieb_kuehlbetrieb_gemeldet(NotbetriebRolle rolle, const char *heiz_kuehl_text)
+{
+    if (rolle == NOTBETRIEB_WASSER)
+        return false; // Warmwasser laeuft auch im Kuehlbetrieb (M3)
+    return notbetrieb_rueckgelesen(heiz_kuehl_text, 1);
+}
+
+/*****************************************************************************/
+/* Warum ist der Knopf gesperrt?                                             */
+/*                                                                           */
+/* Eine Stelle, die diese Frage beantwortet - die Seite, die Statusroute und  */
+/* der POST-Handler lesen dieselbe Antwort. Ohne das koennte die Seite einen  */
+/* Knopf zeigen, den der Handler ablehnt, oder umgekehrt.                     */
+/*                                                                           */
+/* Reihenfolge: Fehlende Werte zuerst. Beides sind Sackgassen, aber die       */
+/* fehlenden Werte sind der tiefer liegende Mangel - wer sie behebt, steht    */
+/* danach immer noch vor der Betriebsart, waehrend umgekehrt der Umweg ueber  */
+/* den KNX-Schalter vergeblich waere.                                         */
+/*****************************************************************************/
+enum NotbetriebSperre
+{
+    NOTBETRIEB_FREI = 0,             // der Knopf darf gedrueckt werden
+    NOTBETRIEB_SPERRE_WERTE = 1,     // es fehlen gehaltene Werte
+    NOTBETRIEB_SPERRE_HEIZBETRIEB = 2 // die Anlage steht nicht auf Heizen
+};
+
+inline NotbetriebSperre notbetrieb_sperrgrund(NotbetriebRolle rolle,
+                                              const NotbetriebSpeicher *sp,
+                                              const char *heiz_kuehl_text)
+{
+    if (!notbetrieb_vollstaendig(sp, rolle))
+        return NOTBETRIEB_SPERRE_WERTE;
+    if (rolle != NOTBETRIEB_WASSER && !notbetrieb_heizbetrieb_belegt(heiz_kuehl_text))
+        return NOTBETRIEB_SPERRE_HEIZBETRIEB;
+    return NOTBETRIEB_FREI;
+}
+
+/*****************************************************************************/
 /* Der Zustandsautomat                                                       */
 /*                                                                           */
 /* Die Schritte laufen EINZELN, nicht in einem Sammelfenster. Ein Webhandler,*/
@@ -335,10 +487,11 @@ enum NotbetriebZustand
 
 enum NotbetriebAktion
 {
-    NOTBETRIEB_TU_NICHTS = 0, // warten, der Schritt laeuft noch
-    NOTBETRIEB_SENDEN = 1,    // aktuellen Schritt absetzen
-    NOTBETRIEB_FERTIG = 2,    // gerade GRUEN geworden
-    NOTBETRIEB_ABBRUCH = 3    // gerade ROT geworden
+    NOTBETRIEB_TU_NICHTS = 0,     // warten, der Schritt laeuft noch
+    NOTBETRIEB_SENDEN = 1,        // aktuellen Schritt absetzen
+    NOTBETRIEB_FERTIG = 2,        // gerade GRUEN geworden
+    NOTBETRIEB_ABBRUCH = 3,       // gerade ROT geworden: ein Schritt kam nicht zurueck
+    NOTBETRIEB_ABBRUCH_KUEHLEN = 4 // gerade ROT geworden: die Anlage meldet Kuehlen
 };
 
 struct NotbetriebLauf
@@ -347,6 +500,7 @@ struct NotbetriebLauf
     uint8_t schritt;
     uint32_t schritt_start;
     uint32_t lauf_start;
+    uint32_t ende; // Zeitpunkt von GRUEN/ROT, fuer den Anzeigeverfall
 };
 
 inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
@@ -357,6 +511,44 @@ inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
     lauf->schritt = 0;
     lauf->schritt_start = 0;
     lauf->lauf_start = 0;
+    lauf->ende = 0;
+}
+
+/*****************************************************************************/
+/* Einen Lauf abschliessen - GRUEN oder ROT, mit Zeitstempel                 */
+/*                                                                           */
+/* Immer ueber diese Stelle, nie durch direktes Setzen von 'zustand': Ohne    */
+/* den Zeitstempel wuesste der Anzeigeverfall unten nicht, wann das Ergebnis  */
+/* entstanden ist, und ein ROT bliebe entweder ewig stehen oder verschwaende  */
+/* sofort. Die Firmware hat mehrere Abbruchstellen (notbetrieb.cpp), deshalb  */
+/* steht das hier und nicht nur im Tick.                                      */
+/*****************************************************************************/
+inline void notbetrieb_abschluss(NotbetriebLauf *lauf, NotbetriebZustand zustand, uint32_t jetzt)
+{
+    if (!lauf)
+        return;
+    lauf->zustand = (uint8_t)zustand;
+    lauf->ende = jetzt;
+}
+
+/*****************************************************************************/
+/* Anzeigeverfall: ein Ergebnis von gestern ist keine Auskunft mehr          */
+/*                                                                           */
+/* Rueckgabe: true, wenn die Anzeige gerade auf BEREIT zurueckgefallen ist.   */
+/* Ein laufender Vorgang wird nie angefasst - der Deckel bricht ihn ab, nicht */
+/* der Verfall. Die Zeitrechnung laeuft ueber die Differenz und uebersteht    */
+/* damit den millis()-Ueberlauf nach 49,7 Tagen.                              */
+/*****************************************************************************/
+inline bool notbetrieb_verfall_pruefen(NotbetriebLauf *lauf, uint32_t jetzt)
+{
+    if (!lauf)
+        return false;
+    if (lauf->zustand != NOTBETRIEB_GRUEN && lauf->zustand != NOTBETRIEB_ROT)
+        return false;
+    if ((uint32_t)(jetzt - lauf->ende) < NOTBETRIEB_ANZEIGE_VERFALL_MS)
+        return false;
+    notbetrieb_lauf_leeren(lauf);
+    return true;
 }
 
 /*****************************************************************************/
@@ -384,9 +576,10 @@ static_assert(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS
 /* nicht mittendrin neu anstossen. Nach GRUEN oder ROT ist ein neuer Lauf    */
 /* erlaubt.                                                                  */
 /*                                                                           */
-/* Die Vollstaendigkeit der Werte wird hier NICHT geprueft: Das entscheidet  */
-/* die Seite, bevor sie den Knopf ueberhaupt anbietet. Ein Automat, der      */
-/* stumm nichts tut, waere schwerer zu deuten als ein gesperrter Knopf mit   */
+/* Die Sperrgruende (fehlende Werte, Betriebsart) werden hier NICHT geprueft:*/
+/* Das tut notbetrieb_starten() in der Firmware, bevor es hierher kommt -    */
+/* dort liegen die Rueckmeldungen der Waermepumpe. Ein Automat, der stumm    */
+/* nichts tut, waere schwerer zu deuten als ein gesperrter Knopf mit         */
 /* Klartext.                                                                 */
 /*****************************************************************************/
 inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
@@ -397,6 +590,7 @@ inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
     lauf->schritt = 0;
     lauf->schritt_start = jetzt;
     lauf->lauf_start = jetzt;
+    lauf->ende = 0; // das Ergebnis des vorigen Laufs gilt nicht mehr
     return NOTBETRIEB_SENDEN;
 }
 
@@ -412,15 +606,32 @@ inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
 /* ueberstehen. uint32_t und nicht unsigned long: auf dem Mac waere das      */
 /* 64 Bit, der Hosttest wuerde den Ueberlauf dann gegen nichts pruefen.      */
 /*                                                                           */
-/* Reihenfolge der Pruefungen: Bestaetigung vor Timeout. Trifft die          */
-/* Rueckmeldung in derselben Runde ein, in der das Timeout ablaeuft, gilt    */
-/* der Schritt als geschafft - ein knapp erreichtes Ziel ist erreicht.       */
+/* Reihenfolge der Pruefungen: Erst der Kuehl-Abbruch, dann die Bestaetigung,*/
+/* dann die Zeitgrenzen. Der Kuehl-Abbruch steht vorn, weil ein bestaetigter */
+/* Schritt in einer kuehlenden Anlage nichts wert ist - die Folge duerfte     */
+/* dann keinesfalls bis zum letzten Schritt laufen und die Anlage             */
+/* einschalten. Bestaetigung vor Timeout: Trifft die Rueckmeldung in          */
+/* derselben Runde ein, in der das Timeout ablaeuft, gilt der Schritt als     */
+/* geschafft - ein knapp erreichtes Ziel ist erreicht.                        */
+/*                                                                            */
+/* heiz_kuehl_text ist der Rohtext von TOP101 aus actual_data[]. 0 (Nullzeiger)*/
+/* heisst "keine Aussage" und bricht nichts ab.                               */
 /*****************************************************************************/
 inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle rolle,
-                                        uint32_t jetzt, bool schritt_bestaetigt)
+                                        uint32_t jetzt, bool schritt_bestaetigt,
+                                        const char *heiz_kuehl_text)
 {
     if (!lauf || lauf->zustand != NOTBETRIEB_LAEUFT)
         return NOTBETRIEB_TU_NICHTS;
+
+    // Die Anlage meldet mitten im Lauf Kuehlen - der KNX-Schalter ist umgelegt
+    // worden, oder er stand nie auf Heizen. Weiterzumachen hiesse, am Ende eine
+    // kuehlende Anlage einzuschalten; genau das soll der Knopf verhindern.
+    if (notbetrieb_kuehlbetrieb_gemeldet(rolle, heiz_kuehl_text))
+    {
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
+        return NOTBETRIEB_ABBRUCH_KUEHLEN;
+    }
 
     // Schritt geschafft? Erst nach der Mindestwartezeit - vorher koennte die
     // Rueckmeldung noch vom Zustand VOR dem Kommando stammen (siehe
@@ -431,7 +642,7 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
         lauf->schritt++;
         if (lauf->schritt >= notbetrieb_schritt_anzahl(rolle))
         {
-            lauf->zustand = NOTBETRIEB_GRUEN;
+            notbetrieb_abschluss(lauf, NOTBETRIEB_GRUEN, jetzt);
             return NOTBETRIEB_FERTIG;
         }
         lauf->schritt_start = jetzt;
@@ -441,7 +652,7 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     // Notausgang: der Automat haengt (siehe Zeitregeln oben)
     if ((uint32_t)(jetzt - lauf->lauf_start) >= notbetrieb_gesamtdeckel_ms(rolle))
     {
-        lauf->zustand = NOTBETRIEB_ROT;
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
         return NOTBETRIEB_ABBRUCH;
     }
 
@@ -450,53 +661,11 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     // nicht, sind die Kurvenwerte danach sinnlos.
     if ((uint32_t)(jetzt - lauf->schritt_start) >= NOTBETRIEB_SCHRITT_TIMEOUT_MS)
     {
-        lauf->zustand = NOTBETRIEB_ROT;
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
         return NOTBETRIEB_ABBRUCH;
     }
 
     return NOTBETRIEB_TU_NICHTS;
-}
-
-/*****************************************************************************/
-/* Ist ein Schritt zurueckgelesen?                                           */
-/*                                                                           */
-/* Die Firmware haelt die Rueckmeldungen der Waermepumpe als TEXT in          */
-/* actual_data[]. Der naive Vergleich waere atoi(text) == soll - und der      */
-/* hat eine Falle, die genau das Signal zerstoert, auf das es hier ankommt:   */
-/* atoi("") liefert 0. Ein TOP, das noch nie empfangen wurde, wuerde damit    */
-/* jeden Schritt mit dem Sollwert 0 sofort bestaetigen - und der erste        */
-/* Schritt der Heizen-Folge ist HeatingMode = 0. Der Knopf wuerde GRUEN       */
-/* melden, ohne dass die Waermepumpe je geantwortet hat.                      */
-/*                                                                           */
-/* Deshalb: leerer Text gilt NICHT als Bestaetigung, und was keine saubere    */
-/* ganze Zahl ist, auch nicht. Fuehrende und nachlaufende Leerzeichen sind    */
-/* erlaubt, sonst nichts.                                                    */
-/*****************************************************************************/
-inline bool notbetrieb_rueckgelesen(const char *ist_text, int soll)
-{
-    if (!ist_text || ist_text[0] == '\0')
-        return false;
-
-    // fuehrende Leerzeichen ueberspringen, danach muss eine Zahl kommen
-    const char *p = ist_text;
-    while (*p == ' ' || *p == '\t')
-        p++;
-    if (*p == '\0')
-        return false;
-
-    char *ende = 0;
-    const long wert = strtol(p, &ende, 10);
-    if (ende == p)
-        return false; // gar keine Ziffer gefunden
-
-    // nachlaufend sind nur Leerzeichen erlaubt - "1.5" oder "2 Hz" sind keine
-    // Bestaetigung fuer 1 bzw. 2
-    while (*ende == ' ' || *ende == '\t' || *ende == '\r' || *ende == '\n')
-        ende++;
-    if (*ende != '\0')
-        return false;
-
-    return wert == (long)soll;
 }
 
 /*****************************************************************************/

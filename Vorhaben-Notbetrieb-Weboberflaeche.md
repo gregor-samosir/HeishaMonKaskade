@@ -12,13 +12,14 @@ macht Warmwasser.
 Ist auch das WLAN weg, liegt ein Stromausfall vor — dafür wird hier keine
 Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
-**Stand dieser Datei:** 2026-08-20 abends, Firmware 3.11.0 auf beiden Stufen.
+**Stand dieser Datei:** 2026-08-21, Firmware 3.11.0 auf beiden Stufen.
 Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei Messungen sind
 beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
 der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind korrigiert
 (Abschnitt 6a). **Gebaut ist beides: der Knopf in der Firmware und die
-Node-RED-Seite, die ihn versorgt** (Abschnitt 10). Was fehlt, ist der Nachweis
-an der Anlage — Etappe 5.
+Node-RED-Seite, die ihn versorgt** (Abschnitt 10), seit dem 2026-08-21 samt der
+Sperre über die Betriebsart (Abschnitt 2). Was fehlt, ist der Nachweis an der
+Anlage — Etappe 5.
 
 ---
 
@@ -124,6 +125,49 @@ Für (b) spricht, dass die Gegenprobe an H2 (M3, `OperationMode` = 3 aus dem
 Kühlbetrieb heraus) an einer **laufenden** Stufe gemessen wurde — H2 macht
 Warmwasser und ist eingeschaltet. Für (a) spricht Entscheidung 4: Die
 Betriebsart ist die eine Freigabestufe, die nicht über MQTT läuft.
+
+### Gebaut am 2026-08-21: die Sperre
+
+Der Knopf der Rolle Heizen ist freigegeben, **solange `Heat_Cool_SW_State`
+(TOP101) sich sauber als 0 liest** — und sonst nie. Owner-Entscheidung: Alles
+andere gilt als „nicht Heizen", und zwar mit einer Regel für vier Fälle:
+
+Gelesen | bedeutet | Knopf
+:--- | :--- | :---
+`0` | Heizen | **frei**
+`1` | Kühlen | gesperrt
+`2` | unknown (Rohwert b11) | gesperrt
+`-1` | Feld leer geliefert | gesperrt
+`` (leer) | TOP101 nie empfangen | gesperrt
+
+Der letzte Fall trägt die Strenge: Ohne Rückmeldung der Wärmepumpe erreicht sie
+auch kein Kommando. Ein Knopf, der dann zum Drücken einlädt, verspricht etwas,
+das er nicht halten kann. Der Preis ist bezifferbar — **am Prüfstand ohne
+Wärmepumpe ist der Knopf dauerhaft gesperrt**, der Fehlerpfad ist dort nur noch
+über den Hosttest zu prüfen.
+
+Drei Eigenschaften, die zur Sperre gehören:
+
+* **Die Seite gibt sich von selbst frei.** Die Statusroute liefert den
+  Sperrgrund als fünftes Feld mit; die Seite fragt sie ohnehin alle zwei
+  Sekunden ab. Ein Neuladen von Hand wäre hier eine Falle: TOP101 folgt dem
+  KNX-Schalter erst nach bis zu 7,7 s (gemessen 2026-08-16) — wer sofort neu
+  lädt, sähe die Sperre ein zweites Mal und hielte den Schalter für wirkungslos.
+* **Auch mitten im Lauf wird abgebrochen**, sobald die Anlage ausdrücklich `1`
+  meldet. Sonst schaltete die Folge am Ende eine kühlende Anlage ein. Nur die
+  klare 1 bricht ab — ein einzelner Aussetzer darf einen sauber laufenden
+  Vorgang nicht zerreißen und die Anlage halb geschaltet stehen lassen.
+* **Der POST-Handler prüft dieselbe Sperre.** Eine Oberfläche, die nur den Knopf
+  versteckt, ist keine Sperre: `/notbetrieb/start` lässt sich auch ohne die
+  Seite absetzen, und zwischen Seitenaufbau und Klick können Minuten liegen.
+
+**Stufe 2 ist nicht betroffen.** `OperationMode` = 3 trägt im Kühlbetrieb (M3),
+und genau dafür ist der Warmwasserknopf gebaut.
+
+**Was die Sperre nicht kann:** TOP101 ist der zuletzt empfangene Wert. Reißt die
+serielle Verbindung zur Wärmepumpe ab, altert er stumm, und die Sperre merkt es
+nicht. Ein Lauf, der in dieser Lage gestartet wird, scheitert im ersten
+Schritt — dasselbe Ergebnis wie vorher, nur ohne den Gewinn.
 
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
@@ -378,6 +422,14 @@ der Heizen-Folge hat den Sollwert 0. Ein naiver Vergleich hätte GRÜN gemeldet,
 ohne dass die Wärmepumpe je geantwortet hätte. Beides ist im Hosttest
 abgesichert und am Prüfstand belegt (dort läuft der Fehlerpfad, weil keine
 Wärmepumpe antwortet).
+
+**Ein Ergebnis verfällt nach 15 Minuten** (2026-08-21). GRÜN und ROT blieben
+vorher stehen, bis jemand erneut drückte — wer die Seite am nächsten Tag
+öffnete, sah das ROT von gestern und musste raten, ob gerade etwas schiefgeht.
+Jetzt fällt die Anzeige nach 15 Minuten auf „bereit" zurück und der Knopf steht
+wieder da; im MQTT-Log bleibt der Lauf vollständig nachlesbar. 15 Minuten sind
+länger als jeder Lauf (Deckel 140 s) und kurz genug, dass niemand ein fremdes
+Ergebnis für seines hält.
 
 **Was GRÜN nicht heißt:** dass die Anlage heizt. Die KNX-Freigabe des
 Kompressors ist im Antworttelegramm nicht sichtbar — am 2026-08-15/16 byteweise
@@ -756,7 +808,7 @@ erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau de
 
 ---
 
-## 10. Stand der Umsetzung — Pause am 2026-08-20, 21:45
+## 10. Stand der Umsetzung — 2026-08-21
 
 **Alles committet, Branch `notbetrieb-web`.**
 Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
@@ -772,10 +824,18 @@ Etappe | Inhalt | Commit
 2 | Nachweis am Prüfstand: übersteht den Neustart | `e5f654b`
 3 | Bausteine B, C und D: der Knopf | `17b7621`
 4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
+5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
+5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `96e2d33`
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
-Zweck. Alle zehn Envs bauen, der Hosttest steht bei 119 Zusicherungen.
+Zweck. Alle zehn Envs bauen, der Hosttest steht bei 159 Zusicherungen.
+
+Mit der Sperre (Abschnitt 2, gebaut am 2026-08-21) ist der Prüfstand als
+Werkzeug für den Knopf ausgeschieden: Ohne Wärmepumpe liefert er kein TOP101,
+und ohne TOP101 bleibt der Knopf gesperrt. Die Regeln sind dafür vollständig im
+Hosttest abgebildet — Freigabe, Abbruch im Lauf und Anzeigeverfall stehen dort
+mit je einem eigenen Abschnitt.
 
 **Etappe 4 ist seit dem 2026-08-20 fertig** (Einzelheiten im Nachbarprojekt
 `nodered-flows`, [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md)
@@ -797,17 +857,31 @@ sobald die Firmware dort läuft.
 
 ### Was noch fehlt
 
-1. **Etappe 5 — erster Lauf gefahren, Ergebnis ROT.** Am 2026-08-20 um
-   21:31:34 im Ruhefenster gedrückt, ROT nach 20,7 s in Schritt 1
-   (`OperationMode`). Die Wärmepumpe verwirft das Kommando; Einzelheiten und
-   die zwei offenen Hypothesen in Abschnitt 2. **Der Automat selbst hat sich
-   dabei bewährt:** Abbruch im ersten Schritt, kein Weitermachen, kein falsches
-   GRÜN — und alle neun beobachteten TOPs standen hinterher exakt wie vorher.
-   Als nächstes ist die Ursache zu trennen, dann der Umbau, dann der Lauf
-   erneut. Zum ersten Mal wird GRÜN erwartet. Voraussetzung: Die Firmware dieses Branches muss erst auf H1,
-   dort läuft noch 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit 404,
-   am 2026-08-20 nachgesehen).
-   **Neu zu beachten:** Der Lauf gehört in ein Ruhefenster des Re-Assert, sonst
+1. **Etappe 5 — erster Lauf gefahren, Ergebnis ROT; die Ursache ist behoben.**
+   Am 2026-08-20 um 21:31:34 im Ruhefenster gedrückt, ROT nach 20,7 s in
+   Schritt 1 (`OperationMode`). Die Wärmepumpe verwirft das Kommando, weil der
+   KNX-Schalter auf Kühlen stand — Einzelheiten in Abschnitt 2. **Der Automat
+   selbst hat sich dabei bewährt:** Abbruch im ersten Schritt, kein
+   Weitermachen, kein falsches GRÜN — und alle neun beobachteten TOPs standen
+   hinterher exakt wie vorher. Seit dem 2026-08-21 ist der Knopf in dieser Lage
+   gesperrt und sagt es im Klartext.
+
+   **Damit zerfällt Etappe 5 in zwei Läufe**, die verschiedene Ausgangszustände
+   brauchen:
+
+   * **Der Sperr-Nachweis** — Ausgangszustand **Kühlen**. Er schickt kein
+     einziges Kommando an die Wärmepumpe: Firmware auf H1, Seite öffnen, der
+     Knopf muss weg sein und der Grund dastehen. Kein Ruhefenster nötig, weil
+     nichts geschaltet wird.
+   * **Der GRÜN-Lauf** — Ausgangszustand **Heizen** am KNX-Schalter. Erst dann
+     nimmt die Anlage `OperationMode` = 0 überhaupt an. Zum ersten Mal wird
+     GRÜN erwartet.
+
+   Voraussetzung für beide: Die Firmware dieses Branches muss erst auf H1, dort
+   läuft der Release-Stand 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit
+   404).
+   **Für den GRÜN-Lauf zu beachten:** Er gehört in ein Ruhefenster des
+   Re-Assert, sonst
    holt der die Anlage mitten im Versuch zurück (Abschnitt 7). Der Weg dorthin
    ist `~/nodered-flows/testfenster.py`, nicht der Wartungsmodus — der schaltet
    auf seiner AN-Flanke beide Wärmepumpen aus und ist damit für einen Lauf, der
@@ -839,29 +913,24 @@ sobald die Firmware dort läuft.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **Firmware dieses Branches** (zweimal per OTA, zuletzt mit dem CSS-Fix). Versionsanzeige weiter 3.11.0 — die Nummer wird erst in Etappe 7 gesetzt. Anlage steht, Direktbetrieb, Betriebsart Cool, `/notbetrieb/status` = `3;1;7;0` (das ROT des Laufs von 21:31, bleibt bis zum nächsten Versuch stehen) |
+H1 (192.168.2.120) | **Release-Stand v3.11.0**, am 2026-08-20 abends zurückgeflasht — der Knopf liegt auf keinem Produktivgerät. Anlage steht, Direktbetrieb, Betriebsart Cool |
 H2 (192.168.2.122) | 3.11.0, **unverändert** — der Warmwasser-Knopf ist dort noch nicht drauf |
-Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen |
+Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
-läuft normal weiter (zuletzt 21:41:24). Nichts ist aufzuräumen.
+läuft normal weiter. Nichts ist aufzuräumen.
 
 Die Testwerte unter dem Prefix `panasonic_heat_pump_test` bleiben im ioBroker —
 sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
 
 ### Wiedereinstieg prüfen
 
-**Der nächste Schritt ist eine Messung, kein Umbau.** Erst muss feststehen,
-welche der beiden Hypothesen aus Abschnitt 2 zutrifft — sie führen zu
-verschiedenen Lösungen. Der einfachere Weg ist (b): `Heatpump` = 1 senden, auf
-`Heatpump_State` = 1 warten, dann `OperationMode` = 0 wiederholen und TOP4/TOP101
-40 s beobachten; danach `Heatpump` = 0 zum Aufräumen, statt auf den Re-Assert zu
-warten. Kostet rund eine Minute Kühlbetrieb an WP1.
+**Der nächste Schritt ist Etappe 5**, in den zwei Läufen oben — erst der
+Sperr-Nachweis im Kühlbetrieb, dann der GRÜN-Lauf mit dem KNX-Schalter auf
+Heizen. Beides setzt voraus, dass die Firmware dieses Branches auf H1 liegt.
 
-Eine Kleinigkeit für dieselbe Runde: Nach einem ROT bleibt die Anzeige stehen,
-bis jemand erneut drückt. Wer die Seite am nächsten Tag öffnet, sieht das ROT
-von gestern, ohne dass jemand etwas getan hätte. Ein Neustart löscht es (RAM).
-Ob das so bleiben soll, ist noch nicht entschieden.
+Beim Sperr-Nachweis ist die Statusroute die Kurzfassung: Das fünfte Feld ist der
+Sperrgrund (0 = frei, 1 = Werte fehlen, 2 = nicht auf Heizen).
 
 ```bash
 git switch notbetrieb-web
@@ -879,7 +948,11 @@ mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideLowTemp,\
 mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideHighTemp,\
 mqtt.0.panasonic_heat_pump2.notbetrieb.DHWTemp"
 
-curl http://192.168.2.197/notbetrieb/status   # nur wenn der Prüfstand Strom hat
+# Steht die Anlage auf Heizen? 0 = Heizen, 1 = Kuehlen (alles andere sperrt)
+curl -s "http://192.168.2.147:8087/getPlainValue/mqtt.0.panasonic_heat_pump.state.Heat_Cool_SW_State"
+
+# Zustand;Schritt;Schritte;fehlend;Sperre - Sperre: 0 frei, 1 Werte, 2 Betriebsart
+curl http://192.168.2.120/notbetrieb/status
 ```
 
 **Die Versionsnummer steht bewusst noch auf 3.11.0.** Eine Firmware mit Knopf,

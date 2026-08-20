@@ -644,3 +644,28 @@ this branch the very same replay is the mechanism: it is what puts the curve
 values back within seconds after a restart, without Node-RED having to do
 anything. The hazard cannot apply here, because these values never reach the
 heatpump unasked.
+
+### The heating button is locked unless TOP101 reads 0 (new in 3.12.0)
+
+Having the values is not enough. On stage 1 the button is only released while
+`Heat_Cool_SW_State` (TOP101) reads **0 = heat**; anything else — `1` (cool),
+`2` (unknown), `-1` (empty field) or a TOP never received — keeps it locked and
+the page says so in plain words.
+
+The reason was measured on 2026-08-20 and confirmed by the owner: the external
+KNX switch dictates the direction. With the plant on cooling, `set/OperationMode
+0` passes range check, mask merge and telegram — and the heatpump discards it
+silently. The first real run at H1 ended in a red screen after 20 s with no way
+to tell why.
+
+If the plant reports cooling **during** a run, the sequence is aborted at once.
+Only an explicit `1` does that: a single gap in the readings must not tear apart
+a run that is going fine and leave the plant half switched.
+
+Stage 2 is not affected. `OperationMode` = 3 (DHW only) works in the cooling
+branch as well — measured 2026-08-20 at H2 — and that is exactly the summer case
+the DHW button is built for.
+
+Note the limit: TOP101 is the last value received. If the serial link to the
+heatpump dies, it ages silently and the lock cannot notice. A run started in
+that state fails at its first step, which is the same outcome as before.
