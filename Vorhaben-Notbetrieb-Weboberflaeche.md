@@ -754,6 +754,12 @@ sobald die Firmware dort läuft.
    am 2026-08-20 nachgesehen).
    **Neu zu beachten:** Der Wartungsschalter gehört vor dem Lauf gesetzt, sonst
    holt der Re-Assert die Anlage mitten im Versuch zurück (Abschnitt 7).
+   **Er wirkt heute nicht** — am 2026-08-20 lief der Zyklus um 20:21:24 trotz
+   gesetzter Wartung vollständig durch (sieben Topics). Das ist im Nachbarprojekt
+   zu klären, [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md).
+   Bis dahin bleibt der Behelf: Der Takt liegt auf `:01:24`, `:06:24`, `:11:24`
+   — direkt nach einem Zyklus gestartet, bleiben nach den 56 s noch gut drei
+   Minuten fürs Foto.
    Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die Anlage im
    Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist der Moment
    für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als Beispiel —
