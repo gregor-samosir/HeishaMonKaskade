@@ -64,9 +64,9 @@ Schritt | Kommando | Rückgelesen an
 
 Die Schritte 2–5 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
 Werte in einem Sammelfenster gesendet, alle vier binnen 15 s zurückgelesen. Zu
-Schritt 2 und 3 siehe die Paarungswarnung in Abschnitt 6a — **`TargetHigh`
-gehört zur *unteren* Außentemperatur**, und das steht in der Doku bislang
-falsch herum.
+Schritt 2 und 3 siehe Abschnitt 6a — **`TargetHigh` gehört zur *unteren*
+Außentemperatur**, ist also der Vorlauf bei Kälte. Bis zum 2026-08-20 stand das
+in der Doku falsch herum.
 
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
