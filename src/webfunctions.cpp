@@ -15,11 +15,19 @@ static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5
 // without internet access, previously w3.css and jquery came from CDNs
 static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
     "*{box-sizing:border-box}body{font-family:Verdana,sans-serif;margin:0}h4{margin:10px 0}"
-    ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
     ".w3-container{padding:0.01em 16px}.w3-card-4{box-shadow:0 4px 10px 0 rgba(0,0,0,.2)}"
     ".w3-card{box-shadow:0 2px 5px 0 rgba(0,0,0,.2)}.w3-center{text-align:center}.w3-left{float:left}"
     ".w3-small{font-size:12px}.w3-medium{font-size:15px}.w3-text-grey{color:#757575}"
+    ".w3-xlarge{font-size:24px}.w3-padding-large{padding:12px 24px}"
+    ".w3-panel{padding:0.01em 16px;margin:16px 0}"
     ".w3-button{border:none;padding:8px 16px;cursor:pointer;background:inherit;display:inline-block}"
+    // Farben NACH .w3-button: dessen background:inherit hat dieselbe
+    // Spezifitaet und wuerde eine vorher stehende Farbe ueberschreiben. Genau
+    // daran war der Notbetriebsknopf grau statt rot - und der Save-Knopf der
+    // Settings-Seite grau statt gruen.
+    ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
+    ".w3-red{background:#f44336;color:#fff}.w3-orange{background:#ff9800;color:#fff}"
+    ".w3-yellow{background:#ffeb3b;color:#000}"
     ".w3-sidebar{position:fixed;top:0;left:0;height:100%;width:200px;background:#fff;z-index:2;overflow:auto}"
     ".w3-bar-block .w3-bar-item{display:block;width:100%;text-align:left;text-decoration:none;color:#000;padding:8px 16px}"
     ".w3-bar-block .w3-bar-item:hover{background:#ccc}"

@@ -95,6 +95,12 @@ jobs:
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
+      # css_klassen:     Jede benutzte w3-Klasse muss im eingebetteten CSS
+      #                  definiert sein und jede Farbklasse hinter .w3-button
+      #                  stehen. Ein Compiler prüft davon nichts: Die Seite lädt
+      #                  auch mit fehlender Klasse, sie sieht nur anders aus.
+      #                  Am 2026-08-20 war der Notbetriebsknopf deshalb grauer
+      #                  Text statt rotem Knopf, ROT und "Läuft..." farblos.
       - name: Hosttests übersetzen und ausführen
         run: |
           c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
@@ -108,6 +114,7 @@ jobs:
           c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
           /tmp/notbetrieb_test
           ./test/decode_hosttest.sh
+          python3 test/css_klassen_test.py
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
       # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt
