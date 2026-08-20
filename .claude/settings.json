@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/Z1HeatRequestTemperature=20)",
+      "Bash(./test/produktiv_mitschnitt.py --esp 192.168.2.120 --warten 110)",
+      "Bash(./test/top_watch.py 192.168.2.120 7 27 28 29 30 31 32 42 72 76 81 --dauer 200 --takt 4)",
+      "Bash(./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/HeatingMode=1)",
+      "Bash(./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/Z1HeatRequestTemperature=20 panasonic_heat_pump/set/Z1CoolRequestTemperature=20)",
+      "Bash(./test/kurven_sync.py --prefix panasonic_heat_pump --dry-run)",
+      "Bash(./test/kurven_sync.py --prefix panasonic_heat_pump)",
+      "Bash(python3 -)",
+      "Bash(git commit *)",
+      "Bash(python3 -c \"import ast,sys; [ast.parse\\(open\\(f\\).read\\(\\), f\\) for f in ['test/kurven_sync.py','test/kurven_test.py','test/kurven_grenzen.py','test/top_watch.py']]\")",
+      "Bash(python3 -c ' *)",
+      "Bash(./js-pull.sh)",
+      "Bash(./test/kurven_sync.py)"
+    ]
+  }
+}

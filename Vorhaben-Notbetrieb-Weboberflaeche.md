@@ -92,6 +92,32 @@ Wechsel der Betriebsart die Kurvenpunkte ebenfalls anfasst, ist nicht gemessen
 Preis: ein Schritt mehr, rund 8 s längere Laufzeit, Gesamtdeckel 140 statt
 120 s.
 
+**Am 2026-08-20 abends an der Anlage gescheitert — und das ist der bisher
+wichtigste Befund des Vorhabens.** Der erste echte Lauf an H1 endete um 21:31:55
+mit ROT in Schritt 1, nach dem vollen Schritt-Timeout von 20 s. Die
+Gegenmessung unmittelbar danach trennt Firmware und Wärmepumpe sauber:
+
+* **Die Firmware hat gesendet.** Ein einzelnes `set/OperationMode 0` über MQTT
+  erscheint im Log der Bridge als `<SUB> SET9 OperationMode: 0` (21:33:16) — es
+  ist also durch Bereichsprüfung, Maskenmerge und Telegramm gegangen.
+* **Die Wärmepumpe hat es verworfen.** 40 s später, über sechs Abfragezyklen
+  hinweg: `Operating_Mode_State` (TOP4) unverändert 1 = Cool, und
+  `Heat_Cool_SW_State` (TOP101) — der *echte* Ist-Zustand aus Byte 110, nicht
+  der zuletzt kommandierte — ebenfalls Cool. Dasselbe stillschweigende
+  Verwerfen wie bei `Z1HeatRequestTemperature` im Kurvenbetrieb (M1c).
+
+Zwei Erklärungen stehen offen und sind **noch nicht getrennt**:
+
+Hypothese | Prüfung | Folge, falls sie zutrifft
+:--- | :--- | :---
+**(a)** Der KNX-Aktor gibt Heizen/Kühlen vor; im Kühlbetrieb nimmt die Anlage kein „Heat only" per MQTT an | Heiz/Kühl-Schalter auf Heizen stellen, `SET9` wiederholen | Der Notbetrieb Heizen ist im Kühlbetrieb **grundsätzlich nicht schaltbar**. Der Knopf gehört dann gesperrt, solange TOP101 auf Cool steht — mit Klartext, statt jemanden in ein ROT ohne Erklärung laufen zu lassen. Der KNX-Taster gehört in die Offline-Anleitung.
+**(b)** Die Anlage stand aus (`Heatpump_State` = 0) und nimmt im Aus-Zustand keine Betriebsartänderung an | `Heatpump` = 1 senden, dann `SET9` wiederholen | Ein Fehler in der **Schrittfolge**: `Heatpump` = 1 gehört dann nach vorn statt ans Ende. Der Knopf bliebe voll funktionsfähig.
+
+Für (b) spricht, dass die Gegenprobe an H2 (M3, `OperationMode` = 3 aus dem
+Kühlbetrieb heraus) an einer **laufenden** Stufe gemessen wurde — H2 macht
+Warmwasser und ist eingeschaltet. Für (a) spricht Entscheidung 4: Die
+Betriebsart ist die eine Freigabestufe, die nicht über MQTT läuft.
+
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
 Schritt | Kommando | Rückgelesen an
@@ -764,8 +790,14 @@ sobald die Firmware dort läuft.
 
 ### Was noch fehlt
 
-1. **Etappe 5 — Lauf an Stufe 1 bei stehender Anlage.** Zum ersten Mal wird
-   GRÜN erwartet. Voraussetzung: Die Firmware dieses Branches muss erst auf H1,
+1. **Etappe 5 — erster Lauf gefahren, Ergebnis ROT.** Am 2026-08-20 um
+   21:31:34 im Ruhefenster gedrückt, ROT nach 20,7 s in Schritt 1
+   (`OperationMode`). Die Wärmepumpe verwirft das Kommando; Einzelheiten und
+   die zwei offenen Hypothesen in Abschnitt 2. **Der Automat selbst hat sich
+   dabei bewährt:** Abbruch im ersten Schritt, kein Weitermachen, kein falsches
+   GRÜN — und alle neun beobachteten TOPs standen hinterher exakt wie vorher.
+   Als nächstes ist die Ursache zu trennen, dann der Umbau, dann der Lauf
+   erneut. Zum ersten Mal wird GRÜN erwartet. Voraussetzung: Die Firmware dieses Branches muss erst auf H1,
    dort läuft noch 3.11.0 ohne den Endpunkt (`/notbetrieb` antwortet mit 404,
    am 2026-08-20 nachgesehen).
    **Neu zu beachten:** Der Lauf gehört in ein Ruhefenster des Re-Assert, sonst

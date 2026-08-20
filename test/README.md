@@ -784,6 +784,65 @@ aendert nichts).
 Fuer Ablaeufe ueber einen Neustart hinweg ist `info/log` mit `mqtt_sub.py`
 trotzdem der bequemere Weg, weil der Broker die Zeilen puffert.
 
+## Der erste Lauf an der Anlage (2026-08-20, WP1) - ROT in Schritt 1
+
+Der erste Druck auf den echten Knopf, H1 mit der Firmware dieses Branches.
+Gefahren im Ruhefenster des 5-min-Re-Assert (`~/nodered-flows/testfenster.py
+--warte 240` meldete 4:35 min Ruhe), damit kein fremdes Kommando dazwischenkommt.
+
+```text
+  Ausgangslage 21:31:17 - /notbetrieb/status = 0;1;7;0
+      TOP0  Heatpump_State                 0     TOP29 Z1_Heat_Curve_Target_High  20
+      TOP4  Operating_Mode_State           1     TOP30 Z1_Heat_Curve_Target_Low   26
+      TOP7  Main_Target_Temp              20     TOP31 Z1_Heat_Curve_Outside_High 15
+      TOP27 Z1_Heat_Request_Temp          20     TOP32 Z1_Heat_Curve_Outside_Low -10
+      TOP76 Heating_Mode                   1
+
+  21:31:34  KNOPF GEDRUECKT - HTTP 200
+  21:31:34  + 0.2s  Status 1;1;7;0   laeuft, Schritt 1 von 7
+  21:31:55  +20.7s  Status 3;1;7;0   ROT, Schritt 1 von 7
+```
+
+Schritt 1 ist `OperationMode` = 0 (Heat only), rueckgelesen an TOP4. Der Wert kam
+nicht zurueck, der Automat brach nach dem vollen Schritt-Timeout ab - **ohne
+weiterzumachen**: Die vier Kurvenpunkte wurden nie geschrieben, `Heatpump` = 1
+nie gesendet, und alle neun beobachteten TOPs standen hinterher exakt wie
+vorher. Genau dafuer ist der Abbruch gebaut.
+
+### Die Gegenmessung trennt Firmware und Waermepumpe
+
+Unmittelbar danach ein einzelnes `set/OperationMode 0` ueber MQTT, ohne den
+Notbetrieb:
+
+```text
+  21:33:16  mqtt_pub.py -> panasonic_heat_pump/set/OperationMode = 0
+  21:33:16  Log der Bridge: <SUB> SET9 OperationMode: 0
+  21:33:56  TOP4   Operating_Mode_State   1  Cool     <- unveraendert
+            TOP101 Heat_Cool_SW_State     1  Cool     <- unveraendert
+```
+
+Die Firmware hat das Kommando also abgesetzt (Bereichspruefung, Merge und
+Telegramm sind durchlaufen), die **Waermepumpe hat es verworfen** - 40 s und
+damit ueber sechs Abfragezyklen lang, und zwar sowohl im kommandierten Wert
+(TOP4) als auch im echten Ist-Zustand aus Byte 110 (TOP101). Dasselbe
+stillschweigende Verwerfen wie bei `Z1HeatRequestTemperature` im Kurvenbetrieb.
+
+### Offen: zwei Hypothesen, noch nicht getrennt
+
+**(a) Der KNX-Aktor gibt Heizen/Kuehlen vor.** Im Kuehlbetrieb nimmt die Anlage
+kein "Heat only" per MQTT an. Pruefung: Heiz/Kuehl-Schalter auf Heizen stellen,
+SET9 wiederholen.
+
+**(b) Die Anlage stand aus** (`Heatpump_State` = 0) und nimmt im Aus-Zustand
+keine Betriebsartaenderung an. Pruefung: `Heatpump` = 1 senden, dann SET9
+wiederholen. Dafuer spricht, dass die Gegenprobe an H2 (`OperationMode` = 3 aus
+dem Kuehlbetrieb heraus) an einer **laufenden** Stufe gemessen wurde.
+
+Trifft (b) zu, ist es ein Fehler in der Schrittfolge - `Heatpump` = 1 gehoert
+dann nach vorn. Trifft (a) zu, ist der Notbetrieb Heizen im Kuehlbetrieb
+grundsaetzlich nicht schaltbar, und der Knopf gehoert gesperrt, solange TOP101
+auf Cool steht.
+
 ## Der Knopf am Pruefstand (2026-08-20, Bausteine B-D)
 
 Der Pruefstand hat keine Waermepumpe - und genau deshalb laeuft dort der
