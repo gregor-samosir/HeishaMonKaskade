@@ -843,7 +843,7 @@ Etappe | Inhalt | Commit
 4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
 5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
 5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
-5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | dieser Commit
+5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | `a6fdafd`
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
