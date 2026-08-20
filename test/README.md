@@ -40,6 +40,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `frame_diff.py` | Rohtelegramme eines Mitschnitts ueber alle 203 Bytes vergleichen, angereichert aus `ProtocolByteDecrypt.md` | nein |
 | `retained_loeschen.py` | Retained Messages entfallener state-Topics vom Broker raeumen (Anzeige, `--loeschen` fuer echt) | Broker |
 | `tablesnap.py` | Momentaufnahme der Topic-Tabelle ueber `/tablerefresh`, zeilenweise diffbar - fuer die Abnahme nach dem Flashen | Produktivgeraet (nur lesend) |
+| `top_watch.py` | Verlauf statt Momentaufnahme: ausgewaehlte TOPs im Takt abfragen und jede Aenderung mit Zeitstempel melden | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
@@ -601,6 +602,76 @@ damit auch die beiden TargetHigh-Werte, die sich mit ihnen eine Speicherstelle
 teilen. Nach allen vier Laeufen stand der Ausgangszustand wieder vollstaendig -
 alle 15 Werte, beide Betriebsarten und der Betriebsmodus.
 
+## Kurvenbetrieb: was die WP annimmt und was sie verwirft (2026-08-20, WP1)
+
+Der Lauf gehoert zum Vorhaben Notbetrieb (M1/M2, siehe
+`Vorhaben-Notbetrieb-Weboberflaeche.md`). Aufbau: Anlage steht
+(`Heatpump_State` 0, `Compressor_Freq` 0), Kompressor ueber KNX freigegeben,
+Richtung Kuehlen (TOP101 = 1), Aussentemperatur 28 C, Firmware 3.11.0.
+
+```
+./test/top_watch.py 192.168.2.120 7 27 29 30 --dauer 240 --takt 5   # im Hintergrund
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump/set/Z1HeatCurveTargetHighTemp=34 \
+    panasonic_heat_pump/set/Z1HeatCurveTargetLowTemp=26 \
+    panasonic_heat_pump/set/Z1HeatCurveOutsideLowTemp=-10 \
+    panasonic_heat_pump/set/Z1HeatCurveOutsideHighTemp=15
+```
+
+**Die vier Kurvenpunkte gehen im Kurvenbetrieb durch** - alle in einem
+Sammelfenster gesendet, alle binnen 15 s zurueckgelesen. Auch der obere Punkt
+(SET27), den `kurven_sync.py` bewusst auslaesst: Dessen Einschraenkung gilt nur
+im Direktbetrieb, wo er sich mit dem Sollwert eine Speicherstelle teilt.
+
+**Der Benutzerwert ist im Kurvenbetrieb die Parallelverschiebung** und eine
+EIGENE Speicherstelle - der bisherige Satz "SET5 und SET27 sind derselbe Wert"
+gilt nur im Direktbetrieb:
+
+| Gesendet | TOP27 Request | TOP7 Main_Target | TOP29 TargetHigh |
+| --- | ---: | ---: | ---: |
+| - (Kurve 34/26) | 0 | 26 | 34 |
+| `Z1HeatRequestTemperature=2` | 2 | **28** | 34 |
+| `Z1HeatRequestTemperature=4` | 4 | **30** | 34 |
+| `Z1HeatRequestTemperature=20` | 4 | 30 | 34 |
+
+**Werte ausserhalb -5..+5 verwirft die WP stillschweigend.** Die 20 steht im
+Kommandotelegramm (`produktiv_mitschnitt.py` zeigt `Z1 Heat 20 C`), sie geht
+also raus - die WP uebernimmt sie nur nicht. Zweimal einzeln reproduziert, dazu
+ein im selben Fenster mitgeschnittener echter Re-Assert der Kaskadensteuerung
+(`Heatpump aus`, `WaterPump auto`, `OperationMode`, `Z1 Heat 20 C`,
+`Z1 Cool 20 C`, `PumpSpeed 100`), der die Verschiebung ebenfalls nicht anfasste.
+Die Bereichspruefung sitzt also in der Waermepumpe; die Firmware muss sie nicht
+nachbilden.
+
+**Wiederholtes `HeatingMode 1` im Direktbetrieb ist folgenlos** (M2): 31 s
+beobachtet, keine Aenderung an TOP7/27/28/29/30/76.
+
+**Der Werks-Reset laeuft in BEIDE Richtungen und trifft die Kuehlseite mit.**
+Beim Zurueckschalten auf Direkt, 4 s nach dem Moduswechsel: TOP29 und TOP30 auf
+35, TOP32 auf -5, Sollwert TOP27 uebernahm die 35 - und TOP28/TOP42/TOP72 auf
+10, obwohl nur der Heizkreis geschaltet wurde. Der Kuehl-Sollwert stand so 90 s
+auf 10 C. Bei stehender Anlage folgenlos, im laufenden Kuehlbetrieb waere es
+ein Eingriff.
+
+### Der Nebenbefund: TargetHigh gehoert zur NIEDRIGEN Aussentemperatur
+
+Bei 28 C draussen, Kurve 34/26 und Aussenpunkten -10/+15 meldete
+`Main_Target_Temp` (TOP7) **26** - also TargetLow. Damit ist die Paarung:
+
+| Wert | gehoert zu | gilt bei |
+| --- | --- | --- |
+| `Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter |
+| `Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter |
+
+Die Werkskurve bestaetigt es: 55 C bei -5 C, 35 C bei +15 C. Eine Heizkurve
+faellt mit steigender Aussentemperatur.
+
+**`MQTT-Topics.md` und das `MAPPING` in `kurven_sync.py` haben es umgekehrt.**
+Gespiegelt wird dadurch `KK_HK_vlLo` (Vorlauf bei niedriger Aussentemperatur)
+in das Feld fuer warmes Wetter. Ohne Wirkung, solange die Anlage im
+Direktbetrieb laeuft - aber der Notbetrieb aktiviert genau diese Kurve. Die
+Korrektur ist im Vorhaben Notbetrieb, Abschnitt 6a, als Vorbedingung notiert.
+
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 
 Wer an `decode.cpp` umbaut, will wissen, ob sich die AUSGABE veraendert hat -
@@ -694,12 +765,18 @@ Ruecksetz-Kommando abgesetzt wurde. Konsequenz fuer diese Werkzeuge: EINE
 Verbindung fuer alle Publishes eines Vorgangs, Client-ID mit Prozess-ID, und
 eine Wiederherstellung wird nachgeprueft statt nur abgesetzt.
 
-## Wichtig: TargetHigh ist die Vorlauf-Solltemperatur
+## Wichtig: TargetHigh ist die Vorlauf-Solltemperatur - im DIREKTbetrieb
 
 `Z1HeatCurveTargetHighTemp` (SET27, Byte 75) und `Z1HeatRequestTemperature`
-(SET5, Byte 38) sind in der Waermepumpe **derselbe Wert** - im Direktmodus die
-Vorlauf-Solltemperatur, im Kurvenmodus der obere Kurvenpunkt. Fuer das
-Kuehl-Paar (SET31 / SET6) gilt dasselbe.
+(SET5, Byte 38) sind in der Waermepumpe **derselbe Wert** - aber nur, solange
+der Heizkreis auf Direktvorgabe steht. Fuer das Kuehl-Paar (SET31 / SET6) gilt
+dasselbe.
+
+> **Im Kurvenbetrieb nicht.** Dort sind es zwei getrennte Speicherstellen: SET27
+> ist der Kurvenpunkt, SET5 die Parallelverschiebung (-5..+5). Am 2026-08-20
+> gemessen, siehe "Kurvenbetrieb: was die WP annimmt und was sie verwirft"
+> weiter oben. Die Messung vom 2026-08-10, auf der die Gleichsetzung beruht,
+> lief ausschliesslich im Direktbetrieb.
 
 Am 2026-08-10 an WP1 in beide Richtungen belegt:
 

@@ -67,10 +67,10 @@ TOP25 | DHW_Holiday_Shift_Temp | DHW Holiday shift temperature  (-15 to +15)
 TOP26 | Defrosting_State | Defrost state (0=off, 1=on)
 TOP27 | Z1_Heat_Request_Temp | Zone 1 Heat Requested shift temp (-5 to 5) or direct heat temp (20 to max)
 TOP28 | Z1_Cool_Request_Temp | Zone 1 Cool Requested shift temp (-5 to 5) or direct cool temp (5 to 20)
-TOP29 | Z1_Heat_Curve_Target_High_Temp | Flow target at the upper outside temperature of the heating curve, paired with Outside_High (°C)
-TOP30 | Z1_Heat_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the heating curve, paired with Outside_Low (°C)
-TOP31 | Z1_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve, paired with Target_High (°C)
-TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve, paired with Target_Low (°C)
+TOP29 | Z1_Heat_Curve_Target_High_Temp | Flow target at the **lower** outside temperature of the heating curve, paired with Outside_Low (°C)
+TOP30 | Z1_Heat_Curve_Target_Low_Temp | Flow target at the **upper** outside temperature of the heating curve, paired with Outside_High (°C)
+TOP31 | Z1_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve, paired with Target_**Low** (°C)
+TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve, paired with Target_**High** (°C)
 TOP33 | Room_Thermostat_Temp | Remote control thermostat temp (°C)
 TOP36 | Z1_Water_Temp | Zone 1 Water outlet temperature (°C)
 TOP38 | Cool_Energy_Production | Thermal cooling power production (Watt)
@@ -105,10 +105,10 @@ TOP68 | Force_Heater_State | Force heater status (0=inactive, 1=active)
 TOP69 | sdC/Sterilization_State | Sterilisation State (0=inactive, 1=active)
 TOP70 | sdC/Sterilization_Temp | Sterilisation Temperature (°C)
 TOP71 | sdC/Sterilization_Max_Time | Sterilisation maximum time (minutes)
-TOP72 | Z1_Cool_Curve_Target_High_Temp | Flow target at the upper outside temperature of the cooling curve, paired with Outside_High (°C)
-TOP73 | Z1_Cool_Curve_Target_Low_Temp | Flow target at the lower outside temperature of the cooling curve, paired with Outside_Low (°C)
-TOP74 | Z1_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve, paired with Target_High (°C)
-TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve, paired with Target_Low (°C)
+TOP72 | Z1_Cool_Curve_Target_High_Temp | Flow target at the **lower** outside temperature of the cooling curve, paired with Outside_Low (°C)
+TOP73 | Z1_Cool_Curve_Target_Low_Temp | Flow target at the **upper** outside temperature of the cooling curve, paired with Outside_High (°C)
+TOP74 | Z1_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve, paired with Target_**Low** (°C)
+TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve, paired with Target_**High** (°C)
 TOP76 | Heating_Mode | Compensation / Direct mode for heat (0 = compensation curve, 1 = direct)
 TOP77 | Heating_Off_Outdoor_Temp | Above this outdoor temperature all heating is turned off(5 to 35 °C)
 TOP78 | Heater_On_Outdoor_Temp | Below this temperature the backup heater is allowed to be used by heatpump heating logic(-15 to 20 °C)
@@ -388,12 +388,12 @@ SET23 | SGReadyCapacity1DHW | 71 | SG Ready capacity 1, DHW (%) | 0 - 254
 SET24 | SGReadyCapacity2Heat | 74 | SG Ready capacity 2, heating (%) | 0 - 254
 SET25 | SGReadyCapacity2DHW | 73 | SG Ready capacity 2, DHW (%) | 0 - 254
 SET26 | DHWRoomMaxTime | 97 | DHW/room max time (steps of 30 min) | 0 - 254
-SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target at the upper outside temperature | 20 - 55
-SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target at the lower outside temperature | 20 - 55
+SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target at the **lower** outside temperature | 20 - 55
+SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target at the **upper** outside temperature | 20 - 55
 SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: lower outside temperature | -15 to 15
 SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperature | -15 to 15
-SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the upper outside temperature | 5 - 20
-SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the lower outside temperature | 5 - 20
+SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the **lower** outside temperature | 5 - 20
+SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the **upper** outside temperature | 5 - 20
 SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
 SET35 | HeatingMode | 28 | Heating operation mode | 0=compensation curve, 1=direct
@@ -438,27 +438,49 @@ SET32 Z1CoolCurveTargetLowTemp | TOP73 Z1_Cool_Curve_Target_Low_Temp
 SET33 Z1CoolCurveOutsideLowTemp | TOP75 Z1_Cool_Curve_Outside_Low_Temp
 SET34 Z1CoolCurveOutsideHighTemp | TOP74 Z1_Cool_Curve_Outside_High_Temp
 
-Careful with the naming: `High` and `Low` always refer to the **outside**
-temperature, for the heating as well as for the cooling curve. `Target_High`
-therefore belongs to `Outside_High` and `Target_Low` to `Outside_Low` - there
-is no crossing over and no difference between the two curves. What does trip
-people up is that `Target_High` is the *lower* flow temperature in both cases:
-the warmer it is outside, the less flow temperature a heating curve needs, and
-the more a cooling curve cools. A plant running the heating curve 34 &deg;C at
--10 &deg;C outside and 26 &deg;C at +15 &deg;C therefore reports:
+**Careful with the naming - and this file had it wrong until 2026-08-20.**
+`High` and `Low` do **not** both refer to the same axis. The `Outside_*` pair
+names outside temperatures, the `Target_*` pair names flow temperatures, and
+they cross over: **`Target_High` is the flow temperature at `Outside_Low`.**
+
+Value | pairs with | applies when
+:--- | :--- | :---
+`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | it is **cold**
+`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | it is **warm**
+
+A plant running the heating curve 34 &deg;C at -10 &deg;C outside and 26 &deg;C
+at +15 &deg;C therefore has to be configured as:
 
 ```text
-Z1_Heat_Curve_Target_High_Temp   26      Z1_Heat_Curve_Outside_High_Temp   15
-Z1_Heat_Curve_Target_Low_Temp    34      Z1_Heat_Curve_Outside_Low_Temp   -10
+Z1_Heat_Curve_Target_High_Temp   34      Z1_Heat_Curve_Outside_Low_Temp   -10
+Z1_Heat_Curve_Target_Low_Temp    26      Z1_Heat_Curve_Outside_High_Temp   15
 ```
 
-That pairing was read back from both plants on 2026-08-11 and is the only one
-that makes physical sense: 34 &deg;C flow belongs to -10 &deg;C outside, not to
-+15 &deg;C. Note that `Target_High` will not necessarily show the configured
-curve value while the plant runs in direct mode - it shares its memory cell
-with the flow setpoint (see the `TargetHigh` note below). Zone 2 had the same
-set of curve topics (TOP82 - TOP89); they were never verified on these plants
-and are gone since 3.4.0.
+**How it was measured (WP1, 2026-08-20, outside 26-28 &deg;C).** The referee is
+`Main_Target_Temp` (TOP7): the heatpump computes it from the curve, so it says
+which point it actually applies. Far above `Outside_High`, TOP7 followed
+`Target_Low` in both directions - including with the two values swapped, which
+rules out "TOP7 just shows the smaller of the two":
+
+```text
+TargetHigh 34, TargetLow 26   ->  TOP7 = 26
+TargetHigh 26, TargetLow 34   ->  TOP7 = 34
+```
+
+The factory curve agrees: 55 &deg;C at -5 &deg;C and 35 &deg;C at +15 &deg;C.
+A heating curve falls as it gets warmer outside; under the old reading it would
+have to rise.
+
+The earlier claim - "read back from both plants on 2026-08-11" - was a circular
+one: `kurven_sync.py` writes the cold-weather flow value into `TargetLow`, so
+reading it back there confirmed nothing but the tool's own mapping. Note also
+that `Target_High` will not show the configured curve value while the plant
+runs in direct mode - it shares its memory cell with the flow setpoint (see the
+`TargetHigh` note below). Zone 2 had the same set of curve topics (TOP82 -
+TOP89); they were never verified on these plants and are gone since 3.4.0.
+
+The cooling curve follows the same crossing (factory: 15 &deg;C at 20 &deg;C
+and 10 &deg;C at 30 &deg;C). Only the heating side was measured.
 
 These commands exist so the heatpump can keep running on its own curve if the
 external cascade control is unavailable - the values are kept in sync from
@@ -506,28 +528,50 @@ Jede Kurve wird durch zwei Punkte festgelegt. Die gesetzten Werte lassen sich
 über die zugehörigen state-Topics zurücklesen; genau dagegen sollte eine
 Steuerung prüfen (Tabelle „Set | reads back as" oben).
 
-**Vorsicht bei der Benennung:** `High` und `Low` beziehen sich immer auf die
-**Außentemperatur**, bei der Heizkurve genauso wie bei der Kühlkurve.
-`Target_High` gehört also zu `Outside_High` und `Target_Low` zu `Outside_Low` –
-es gibt keine Überkreuzung und keinen Unterschied zwischen den beiden Kurven.
-Was tatsächlich stolpern lässt: `Target_High` ist in beiden Fällen der
-*niedrigere* Vorlaufwert. Je wärmer es draußen ist, desto weniger Vorlauf
-braucht eine Heizkurve – und desto mehr kühlt eine Kühlkurve. Eine Anlage, die
-die Heizkurve mit 34 °C bei −10 °C außen und 26 °C bei +15 °C fährt, meldet
-demnach:
+**Vorsicht bei der Benennung – und in dieser Datei stand es bis zum 2026-08-20
+falsch.** `High` und `Low` beziehen sich **nicht** beide auf dieselbe Achse.
+Das `Outside_*`-Paar benennt Außentemperaturen, das `Target_*`-Paar
+Vorlauftemperaturen, und sie sind über Kreuz zugeordnet: **`Target_High` ist
+der Vorlauf bei `Outside_Low`.**
+
+Wert | gehört zu | gilt bei
+:--- | :--- | :---
+`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter
+`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter
+
+Eine Anlage, die die Heizkurve mit 34 °C bei −10 °C außen und 26 °C bei +15 °C
+fährt, muss demnach so konfiguriert sein:
 
 ```text
-Z1_Heat_Curve_Target_High_Temp   26      Z1_Heat_Curve_Outside_High_Temp   15
-Z1_Heat_Curve_Target_Low_Temp    34      Z1_Heat_Curve_Outside_Low_Temp   -10
+Z1_Heat_Curve_Target_High_Temp   34      Z1_Heat_Curve_Outside_Low_Temp   -10
+Z1_Heat_Curve_Target_Low_Temp    26      Z1_Heat_Curve_Outside_High_Temp   15
 ```
 
-Diese Zuordnung wurde am 2026-08-11 an beiden Anlagen zurückgelesen und ist die
-einzige, die physikalisch Sinn ergibt: 34 °C Vorlauf gehören zu −10 °C außen,
-nicht zu +15 °C. Zu beachten: `Target_High` zeigt im Direktbetrieb nicht
-zwingend den konfigurierten Kurvenwert – es teilt sich die Speicherstelle mit
-der Vorlauf-Solltemperatur (siehe unten). Zone 2 hatte denselben Satz
-Kurven-Topics (TOP82 – TOP89); sie waren an diesen Anlagen nie überprüfbar und
-sind seit 3.4.0 entfallen.
+**Wie das gemessen wurde (WP1, 2026-08-20, 26–28 °C außen).** Der Schiedsrichter
+ist `Main_Target_Temp` (TOP7): Den rechnet die Wärmepumpe aus der Kurve, er sagt
+also, welchen Punkt sie tatsächlich anwendet. Weit oberhalb von `Outside_High`
+folgte TOP7 in beide Richtungen dem `Target_Low` – auch mit vertauschten Werten,
+was den Einwand „TOP7 zeigt einfach den kleineren der beiden" ausschließt:
+
+```text
+TargetHigh 34, TargetLow 26   ->  TOP7 = 26
+TargetHigh 26, TargetLow 34   ->  TOP7 = 34
+```
+
+Die Werkskurve passt dazu: 55 °C bei −5 °C und 35 °C bei +15 °C. Eine Heizkurve
+fällt mit steigender Außentemperatur; nach der alten Lesart müsste sie steigen.
+
+Die frühere Begründung – „am 2026-08-11 an beiden Anlagen zurückgelesen" – war
+ein Zirkelschluss: `kurven_sync.py` schreibt den Kaltwetter-Vorlauf nach
+`TargetLow`, das Zurücklesen bestätigte also nur die Zuordnung des Werkzeugs.
+Zu beachten außerdem: `Target_High` zeigt im Direktbetrieb nicht den
+konfigurierten Kurvenwert – es teilt sich die Speicherstelle mit der
+Vorlauf-Solltemperatur (siehe unten). Zone 2 hatte denselben Satz Kurven-Topics
+(TOP82 – TOP89); sie waren an diesen Anlagen nie überprüfbar und sind seit 3.4.0
+entfallen.
+
+Die Kühlkurve folgt derselben Überkreuzung (Werk: 15 °C bei 20 °C und 10 °C bei
+30 °C). Gemessen wurde nur die Heizseite.
 
 Zweck dieser Kommandos ist der **Notbetrieb**: Die Wärmepumpe soll auf ihrer
 eigenen Kurve weiterlaufen können, wenn die externe Kaskadensteuerung ausfällt.

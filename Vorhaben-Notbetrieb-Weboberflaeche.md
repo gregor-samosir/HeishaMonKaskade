@@ -13,8 +13,10 @@ Ist auch das WLAN weg, liegt ein Stromausfall vor — dafür wird hier keine
 Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
 **Stand dieser Datei:** 2026-08-20, Firmware 3.11.0 auf beiden Stufen.
-Alle Grundsatzfragen sind entschieden (Abschnitt 5). Offen sind drei
-Messungen (Abschnitt 6), danach kann gebaut werden.
+Alle Grundsatzfragen sind entschieden (Abschnitt 5), **alle drei Messungen sind
+beantwortet** (Abschnitt 6). Gebaut werden kann — mit einer Vorbedingung: Der
+Messlauf zu M1 hat einen Fehler in der Kurvenspiegelung aufgedeckt, der vor dem
+Notbetrieb behoben sein muss (Abschnitt 6a).
 
 ---
 
@@ -54,11 +56,17 @@ umsonst.
 Schritt | Kommando | Rückgelesen an
 :--- | :--- | :---
 1. Betriebsart auf Kurve | `HeatingMode` (SET35) = 0 | `Heating_Mode` (TOP76) = 0
-2. Oberer Kurvenpunkt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
-3. Unterer Kurvenpunkt | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
+2. Vorlauf bei kalt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
+3. Vorlauf bei warm | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
 4. Untere Außentemperatur | `Z1HeatCurveOutsideLowTemp` (SET29) | `Z1_Heat_Curve_Outside_Low_Temp` (TOP32)
 5. Obere Außentemperatur | `Z1HeatCurveOutsideHighTemp` (SET30) | `Z1_Heat_Curve_Outside_High_Temp` (TOP31)
 6. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
+
+Die Schritte 2–5 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
+Werte in einem Sammelfenster gesendet, alle vier binnen 15 s zurückgelesen. Zu
+Schritt 2 und 3 siehe die Paarungswarnung in Abschnitt 6a — **`TargetHigh`
+gehört zur *unteren* Außentemperatur**, und das steht in der Doku bislang
+falsch herum.
 
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
@@ -103,16 +111,29 @@ Drei Belege, die zusammenpassen:
 **Folge für den Notbetrieb:** umschalten, dann die vier Kurvenpunkte setzen,
 `Z1HeatRequestTemperature` gar nicht anfassen. Ein Wert weniger im Notfallpfad.
 
-**Folge für die Doku:** Die Gleichsetzung von `Z1HeatRequestTemperature` und
-`Z1HeatCurveTargetHighTemp` ist an drei Stellen zu
-präzisieren (siehe Abschnitt 9). Sie wird nicht falsch, aber sie gilt nur im
-Direktbetrieb. Eingetragen wird die Korrektur, wenn M1 sie am Gerät bestätigt.
+**Am 2026-08-20 am Gerät bestätigt (M1b).** Im Kurvenbetrieb sind die beiden
+Werte getrennte Speicherstellen, und der Benutzerwert wirkt als
+Parallelverschiebung — beides in einer Messung sichtbar:
 
-**Und ein Restrisiko, das daraus folgt:** Läuft die Kaskadensteuerung nur halb
-weiter und schickt ihren 5-min-Re-Assert `set/Z1HeatRequestTemperature 20`,
-landet die 20 im Kurvenbetrieb als *Verschiebung*. Die Bereichsprüfung der
-Firmware lässt −5..65 durch, klemmt also nicht. Was die Wärmepumpe daraus
-macht, ist Teil von M1.
+Gesendet | `Z1_Heat_Request_Temp` (TOP27) | `Main_Target_Temp` (TOP7) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
+:--- | ---: | ---: | ---:
+— (Kurve 34/26, Außentemperatur 28 °C) | 0 | 26 | 34
+`Z1HeatRequestTemperature` = 2 | 2 | **28** | 34
+`Z1HeatRequestTemperature` = 4 | 4 | **30** | 34
+
+Die Zieltemperatur folgt dem Kurvenwert plus Verschiebung, der Kurvenpunkt
+bleibt stehen. Im Direktbetrieb wäre TOP29 mitgewandert.
+
+**Folge für die Doku:** Die Gleichsetzung von `Z1HeatRequestTemperature` und
+`Z1HeatCurveTargetHighTemp` ist an drei Stellen zu präzisieren (siehe
+Abschnitt 9). Sie wird nicht falsch, aber sie gilt nur im Direktbetrieb.
+
+**Das Restrisiko ist erledigt (M1c).** Die Befürchtung war, der 5-min-Re-Assert
+der Kaskadensteuerung könnte mit `set/Z1HeatRequestTemperature 20` im
+Kurvenbetrieb als *Verschiebung* landen — die Bereichsprüfung der Firmware
+lässt −5..65 durch, klemmt also nicht. Die Wärmepumpe verwirft den Wert
+stillschweigend: Er steht nachweislich im Kommandotelegramm, und TOP27 bleibt
+unverändert stehen. Einzelheiten in Abschnitt 6.
 
 ## 3. Woher die Werte kommen — ein eigener MQTT-Kanal, nur im RAM
 
@@ -309,21 +330,127 @@ Knopf, den jemand drückt.
 
 **Die Seite hat damit genau einen Knopf.**
 
-## 6. Was noch zu messen ist
+## 6. Was zu messen war — alles beantwortet
 
-**M1 — an H1, stehende Anlage, ~20 min.** Der Lauf klärt drei Dinge, weil sie
-denselben Aufbau brauchen:
+**M1 — an H1, BEANTWORTET 2026-08-20.** Ein Lauf von 20 Minuten an der
+stehenden Anlage (`Heatpump_State` 0, `Compressor_Freq` 0), Kompressor über KNX
+freigegeben, Betriebsrichtung Kühlen (`Heat_Cool_SW_State` TOP101 = 1),
+Außentemperatur 28 °C. Werkzeuge: [`test/top_watch.py`](test/top_watch.py) für
+den TOP-Verlauf, [`test/produktiv_mitschnitt.py`](test/produktiv_mitschnitt.py)
+für die Kommandotelegramme.
 
-a. Nimmt die Wärmepumpe `Z1HeatCurveTargetHighTemp` (Byte 75) **im
-   Kurvenbetrieb** an? Das ist die tragende Annahme der Schrittfolge in
-   Abschnitt 2 — belegt ist bisher nur der Direktbetrieb.
-b. Verhält sich `Z1HeatRequestTemperature` (Byte 38) dort wirklich als
-   Parallelverschiebung? Bestätigt die Doku-Korrektur.
-c. Was macht ein hereinschneidender Re-Assert `set/Z1HeatRequestTemperature 20`
-   im Kurvenbetrieb — auf +5 geklemmt, verworfen oder etwas Drittes?
+**a. Nimmt die Wärmepumpe die Kurvenpunkte im Kurvenbetrieb an? — Ja.** Nach
+`HeatingMode 0` (TOP76 auf 0 nach 15 s, Werkskurve 55/35/−5/15 wie erwartet)
+wurden alle vier Punkte in *einem* Sammelfenster gesendet und binnen 15 s
+zurückgelesen:
 
-**M2 — an H1, ~10 min.** Ist wiederholtes `set/HeatingMode 1` im laufenden
-Direktbetrieb folgenlos? Trägt den Rückkehrweg aus Entscheidung 6.
+Gesendet | Zurückgelesen
+:--- | :---
+`Z1HeatCurveTargetHighTemp` = 34 | TOP29 = 34
+`Z1HeatCurveTargetLowTemp` = 26 | TOP30 = 26
+`Z1HeatCurveOutsideLowTemp` = −10 | TOP32 = −10
+`Z1HeatCurveOutsideHighTemp` = 15 | TOP31 = 15
+
+Damit trägt die Schrittfolge aus Abschnitt 2. Der obere Kurvenpunkt geht im
+Kurvenbetrieb durch — die Einschränkung aus `kurven_sync.py` gilt nur im
+Direktbetrieb.
+
+**b. Wirkt `Z1HeatRequestTemperature` als Parallelverschiebung? — Ja.**
+Messwerte in der Tabelle in Abschnitt 2. `Main_Target_Temp` (TOP7) folgte dem
+Kurvenwert plus Verschiebung (26 → 28 → 30), der Kurvenpunkt TOP29 blieb auf 34
+stehen. Getrennte Speicherstellen, Doku-Korrektur bestätigt.
+
+**c. Was macht ein hereinschneidender Re-Assert mit 20? — Nichts.** Die
+Wärmepumpe verwirft ihn stillschweigend. Dreifach belegt:
+
+* `set/Z1HeatRequestTemperature 20` zweimal einzeln gesendet — TOP27 blieb
+  beide Male auf seinem vorherigen Wert (2 bzw. 4), TOP7 und TOP29 unverändert.
+* Der Hexlog-Mitschnitt zeigt das Kommando im Telegramm (`Z1 Heat 20 C`) — es
+  wird also gesendet und nicht etwa von der Firmware gefiltert. Die
+  Gegenprobe mit einem gültigen Wert (4) schlug im selben Mitschnitt durch.
+* Im selben Fenster fing der Mitschnitt einen **echten Re-Assert** der
+  Kaskadensteuerung (Telegramm mit `Heatpump aus`, `WaterPump auto`,
+  `OperationMode`, `Z1 Heat 20 C`, `Z1 Cool 20 C`, `PumpSpeed 100`). Auch der
+  ließ die Verschiebung unberührt.
+
+Werte innerhalb −5..+5 werden dagegen sofort übernommen. Die Wärmepumpe prüft
+den Bereich also selbst — die Firmware muss das nicht nachbilden.
+
+**Eine Einschränkung, ehrlich notiert:** 71 s nach dem Moduswechsel trat
+einmalig ein Ausschlag auf — TOP27 sprang auf 20 und TOP7 auf 55, beides fiel
+5 s später von selbst auf 0 bzw. 35 zurück. Im eingeschwungenen Kurvenbetrieb
+war das nicht mehr zu reproduzieren. Für den Notbetrieb ohne Rückwirkung, weil
+dort ohnehin nichts nachgesendet wird.
+
+**M2 — an H1, BEANTWORTET 2026-08-20. Ja, folgenlos.** `set/HeatingMode 1` im
+laufenden Direktbetrieb, 31 s beobachtet: keine Änderung an TOP7, TOP27, TOP28,
+TOP29, TOP30 oder TOP76. Der Rückkehrweg aus Entscheidung 6 trägt — Node-RED
+darf die Zeile bedenkenlos in jeden Re-Assert legen.
+
+**Der Rückweg selbst ist dabei ein zweites Mal belegt.** Beim Zurückschalten
+lief derselbe Werks-Reset wie beim Hinschalten, 4 s nach dem Moduswechsel:
+TOP29 und TOP30 auf 35, TOP32 auf −5, und der Sollwert TOP27 übernahm die 35.
+Das ist genau die Beobachtung vom 2026-08-11 und bestätigt Entscheidung 7 (kein
+Knopf „Notbetrieb aus") aus einer zweiten Messung.
+
+**Und der Werks-Reset trifft die Kühlseite mit — auch bei aktivem KNX-Kühlen.**
+In beide Richtungen sprangen `Z1_Cool_Request_Temp` (TOP28),
+`Z1_Water_Target_Temp` (TOP42) und `Z1_Cool_Curve_Target_High_Temp` (TOP72) auf
+10. Der Kühl-Sollwert stand so 71 s (hin) bzw. 90 s (zurück) auf 10 °C, bis er
+zurückgesetzt wurde. Bei stehender Anlage folgenlos; bei laufendem Kühlbetrieb
+wäre es ein realer Eingriff. **Für den Notbetrieb heißt das:** Stufe 1 schaltet
+im Sommer nicht auf Kurve — genau so ist Entscheidung 1 gefasst (H1 bleibt im
+Sommer aus, nur H2 macht Warmwasser). Die Einschränkung gehört trotzdem in die
+Offline-Anleitung.
+
+## 6a. Nebenbefund aus M1: die Kurvenpaarung steht falsch herum
+
+Der Lauf hat einen Fehler aufgedeckt, der nichts mit dem Webknopf zu tun hat,
+aber den Notbetrieb unbrauchbar gemacht hätte.
+
+**Der Beleg.** Bei 28 °C Außentemperatur (TOP14), Kurve auf TargetHigh = 34 /
+TargetLow = 26 und Außenpunkten −10/+15, meldete `Main_Target_Temp` (TOP7)
+**26 °C**. Weit oberhalb der oberen Außentemperatur gilt also **TargetLow**.
+
+Daraus folgt die Paarung — und sie ist die umgekehrte von der, die in
+[`MQTT-Topics.md`](MQTT-Topics.md) steht:
+
+Wert | gehört zu | gilt bei
+:--- | :--- | :---
+`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter
+`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter
+
+Die Gegenprobe aus der Werkskurve passt: 55 °C bei −5 °C und 35 °C bei +15 °C —
+eine Heizkurve fällt mit steigender Außentemperatur. Nach der Lesart in
+`MQTT-Topics.md` müsste sie steigen.
+
+**Was das anrichtet.** [`test/kurven_sync.py`](test/kurven_sync.py) spiegelt
+`KK_HK_vlLo` — den Vorlauf bei der *niedrigen* Außentemperatur, 34 °C — nach
+`Z1HeatCurveTargetLowTemp`, also in das Feld, das bei *warmem* Wetter gilt. Die
+gespiegelte Kurve ist damit verdreht: 34 °C Vorlauf bei +15 °C und wärmer, und
+bei −10 °C der obere Punkt, den das Werkzeug bewusst gar nicht überträgt.
+
+Heute ohne Wirkung, weil die Anlage im Direktbetrieb läuft und die Kurve nur
+mitgeführt wird. **Der Notbetrieb würde sie aktivieren** — und läuft er, wie
+vorgesehen, an einem kalten Tag an, fährt die Wärmepumpe genau dann nach dem
+falschen Stützpunkt. Das ist der Fall, für den das ganze Vorhaben gebaut wird.
+
+**Zu tun, bevor gebaut wird:**
+
+1. Paarung in [`MQTT-Topics.md`](MQTT-Topics.md) korrigieren — Heizkurve
+   (Zeilen 70–73), Kühlkurve (108–111), SET-Tabelle (391–398).
+2. `MAPPING` und den Kopfkommentar in `kurven_sync.py` richtigstellen: `vlHi`
+   (Vorlauf bei hoher Außentemperatur) gehört nach `TargetLow`, `vlLo` nach
+   `TargetHigh`.
+3. Damit ändert sich die Rolle von `TargetHigh`: Er ist nicht mehr nur der
+   Wert, der sich mit dem Sollwert eine Speicherstelle teilt, sondern der
+   **tragende** Punkt der Notbetriebskurve — der Vorlauf bei Kälte. Er muss
+   über den Notbetriebskanal aus Abschnitt 3 kommen; das ist dort schon so
+   vorgesehen.
+4. Die Kühlkurve ist nach derselben Systematik zu drehen. Belegt ist sie nicht
+   — die Werkskurve (15 °C bei 20 °C, 10 °C bei 30 °C) zeigt dieselbe Ordnung,
+   gemessen wurde nur die Heizseite. Für den Notbetrieb ohne Belang
+   (Entscheidung 1), für `kurven_sync.py` schon.
 
 **M3 — an H2. BEANTWORTET 2026-08-20.** Ursprüngliche Frage: Läuft Warmwasser
 bei KNX-erzwungenem Kühlen mit `OperationMode` (SET9) = 3, oder braucht es die 5
@@ -384,8 +511,9 @@ unkritisch, aber hier nicht getrennt gemessen.
 ## 8. Testplan
 
 0. Rettungsanker (Tag), Branch, Ausgangszustand über `/tablerefresh` sichern.
-1. **M1 und M2 messen** (Abschnitt 6; M3 ist seit 2026-08-20 beantwortet) —
-   erst danach steht die Schrittfolge fest.
+1. **Die Kurvenpaarung richtigstellen** (Abschnitt 6a) — erst danach ist die
+   Schrittfolge das, was sie zu sein vorgibt. Die Messungen M1–M3 sind seit dem
+   2026-08-20 alle beantwortet.
 2. Hosttest für die prüfbaren Regeln, arduino-frei wie
    [`sendwindow.h`](src/sendwindow.h): Vollständigkeit der Werte,
    Bereichsgrenzen, Schrittfolge und Abbruch, Karenzzeit-Ausnahme.
@@ -409,12 +537,15 @@ unkritisch, aber hier nicht getrennt gemessen.
   „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt.
 * `NOTBETRIEB.md` im Node-RED-Projekt — samt der Rückkehr-Zeile im Re-Assert und
   der Bedingung dazu (Entscheidung 6).
-* **Zu korrigieren, sobald M1 vorliegt:** Die Gleichsetzung von
+* **Zu korrigieren, M1 liegt seit 2026-08-20 vor:** Die Gleichsetzung von
   `Z1HeatRequestTemperature` (SET5) und `Z1HeatCurveTargetHighTemp` (SET27) gilt
   nur im Direktbetrieb. Fundstellen: [`MQTT-Topics.md:468`](MQTT-Topics.md#L468)
   und [`MQTT-Topics.md:537`](MQTT-Topics.md#L537), Fußnote ² in
   [`SET-TOP-Zuordnung.md:125`](SET-TOP-Zuordnung.md#L125), der
   TargetHigh-Abschnitt in [`test/README.md:699`](test/README.md#L699).
+* **Vorrangig zu korrigieren:** die Kurvenpaarung in `MQTT-Topics.md` und
+  `kurven_sync.py` — Abschnitt 6a führt die Stellen einzeln auf. Das ist keine
+  Nacharbeit nach der Umsetzung, sondern eine Vorbedingung für sie.
 * **Zu korrigieren:** Changelog, `SET-TOP-Zuordnung.md` und das GitHub-Release
   zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
   fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
