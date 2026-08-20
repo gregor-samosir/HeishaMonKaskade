@@ -638,3 +638,70 @@ unkritisch, aber hier nicht getrennt gemessen.
 * **Zu korrigieren:** Changelog, `SET-TOP-Zuordnung.md` und das GitHub-Release
   zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
   fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
+
+---
+
+## 10. Stand der Umsetzung — Pause am 2026-08-20
+
+**Alles committet, Arbeitsverzeichnis sauber, Branch `notbetrieb-web`.**
+Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
+
+### Was steht
+
+Etappe | Inhalt | Commit
+:--- | :--- | :---
+0 | Tag, Branch, Arbeitsplan für Node-RED | `e2c81d0`
+1 | [`src/notbetrieb.h`](src/notbetrieb.h) + Hosttest, in der CI | `d367220`
+2 | Baustein A: Werte annehmen und halten | `6eaec46`
+2 | Nachweis Wiedereinspielung am Broker | `39417e9`
+2 | Nachweis am Prüfstand: übersteht den Neustart | `e5f654b`
+3 | Bausteine B, C und D: der Knopf | `17b7621`
+
+Die Bausteine A–D sind damit vollständig gebaut und am Prüfstand geprüft — dort
+läuft mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war
+der Zweck. Alle zehn Envs bauen, der Hosttest steht bei 96 Zusicherungen.
+
+### Was noch fehlt
+
+1. **Die Node-RED-Seite** — [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md).
+   Ohne sie bekommt H1 im Produktivbetrieb keine Werte, der Knopf bliebe dort
+   gesperrt. **Das ist die Voraussetzung für alles Weitere.**
+2. **Etappe 5 — Lauf an Stufe 1 bei stehender Anlage.** Zum ersten Mal wird
+   GRÜN erwartet. Dabei entsteht das **Kurvenfoto fürs Handbuch**: Sobald die
+   Anlage im Kurvenbetrieb mit 34 °C bei −10 °C und 26 °C bei +15 °C steht, ist
+   der Moment für das Foto vom Bedienpanel (siehe `pictures/IMG_4887.png` als
+   Beispiel — das zeigt allerdings die *Werks*kurve).
+   Danach aufräumen: `HeatingMode 1`, Sollwerte zurück, `kurven_sync.py`.
+3. **Etappe 6 — Wiederholung mit abgeschaltetem MQTT-Broker.** Der eigentliche
+   Nachweis. Ungemessen ist bis heute, ob die Firmware ohne erreichbaren Broker
+   sauber weiterläuft (die Reconnect-Logik hat einen Backoff, aber gemessen ist
+   das nicht).
+4. **Etappe 7 — Rückkehr prüfen, Doku, Release 3.12.0.** Die Nacharbeiten
+   stehen in Abschnitt 9.
+
+### Zustand der Geräte
+
+Gerät | Stand
+:--- | :---
+H1 (192.168.2.120) | 3.11.0, **unverändert**, Direktbetrieb, Kurve 34/26 bei −10/+15 |
+H2 (192.168.2.122) | 3.11.0, **unverändert** |
+Prüfstand (192.168.2.197) | Firmware dieses Branches, Rolle Heizen, alle vier Testwerte gesetzt (`/notbetrieb/status` liefert `0;1;6;0`) |
+
+Die Testwerte liegen unter dem Prefix `panasonic_heat_pump_test` im ioBroker und
+bleiben dort — sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
+
+### Wiedereinstieg prüfen
+
+```bash
+git switch notbetrieb-web
+c++ -std=c++17 -O2 -Wall -o /tmp/nb_test test/notbetrieb_test.cpp && /tmp/nb_test
+curl http://192.168.2.197/notbetrieb/status        # erwartet: 0;1;6;0
+```
+
+**Die Versionsnummer steht bewusst noch auf 3.11.0.** Eine Firmware mit Knopf,
+aber ohne Nachweis an der Anlage ist kein Release; 3.12.0 wird in Etappe 7
+gesetzt, zusammen mit dem Changelog.
+
+**Eine lokale Besonderheit:** Der USB-Port des Prüfstands hat sich auf
+`/dev/cu.usbserial-1110` geändert. Das steht in `platformio_user_env.ini`
+(gitignored) und ist auf einem anderen Rechner erneut anzupassen.
