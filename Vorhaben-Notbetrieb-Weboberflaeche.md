@@ -825,7 +825,7 @@ Etappe | Inhalt | Commit
 3 | Bausteine B, C und D: der Knopf | `17b7621`
 4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
 5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
-5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `96e2d33`
+5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
