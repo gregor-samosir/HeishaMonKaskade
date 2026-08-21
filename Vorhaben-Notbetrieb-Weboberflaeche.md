@@ -1111,12 +1111,22 @@ Bis zu diesem Lauf war die Rolle Warmwasser **nie auf einem Gerät gelaufen**:
 `/notbetrieb` antwortete an H2 mit 404. Ein Release mit einem Knopf, den nie
 jemand gedrückt hat, wäre kein Release gewesen.
 
-**Vorweg ein Fund beim Aufräumen der Rückfallebene:** In `~/HeishaMon-Rollback/`
-fehlte `heishamon_esp32_h2_ota_v3.11.0.bin` — für H1 war es da (vom
-Zurückflashen am Vorabend), für H2 nie entstanden. Es ist aus dem Tag `v3.11.0`
-in einem temporären Worktree gebaut und abgelegt worden, bevor das Produktivgerät
-angefasst wurde. Geprüft über MD5 gegen das H1-Binary und den Stufennamen im
-Abbild: zwei verschiedene Dateien, „Heisha Stufe 2" drin.
+**Vorweg ein Fund beim Aufräumen der Rückfallebene — und seine
+Richtigstellung:** Im lokalen Ordner `~/HeishaMon-Rollback/` fehlte
+`heishamon_esp32_h2_ota_v3.11.0.bin`. Es wurde deshalb aus dem Tag `v3.11.0` in
+einem temporären Worktree nachgebaut, bevor das Produktivgerät angefasst wurde
+(geprüft über MD5 gegen das H1-Binary und den Stufennamen im Abbild).
+
+**Der Rückfall war dabei nie in Gefahr, anders als hier zunächst notiert.** Die
+Binaries liegen nicht in der Git-Historie des privaten Repos — dessen
+`.gitignore` schließt `*.bin` ausdrücklich aus —, sondern an dessen
+**GitHub-Releases**. Und das private Release `v3.11.0` enthält alle vier
+Builds, auch den für H2, nur unter der dortigen Namensform ohne „v"
+(`heishamon_esp32_h2_ota_3.11.0.bin`). Gefehlt hat also nur die lokale Kopie.
+
+**Merke für künftige Releases:** Ein `cp` in den Ordner ist keine Sicherung. Der
+vorgesehene Weg steht in der `.gitignore` des Repos —
+`gh release create v<version> <dateien>`.
 
 **Ausgangszustand:** KNX auf Kühlen, Modus Nur-DHW — der Sommerfall, für den
 Stufe 2 gebaut ist. H2 an, `Operating_Mode_State` = 3, Speicher 64 °C bei
@@ -1232,9 +1242,14 @@ Etappe 7 zusammen mit dem Changelog — nachdem der Nachweis an der Anlage vorla
 und nicht davor. Beide Stufen laufen darauf, die Rollback-Binaries liegen in
 `~/HeishaMon-Rollback/`.
 
-**Achtung bei den Binaries:** Ab 3.12.0 steckt neben dem AP-Passwort auch das
-Notbetriebspasswort lesbar in jedem Abbild. Sie gehören damit erst recht nur ins
-private Rollback-Repo, nie in ein öffentliches Release.
+**Achtung bei den Binaries:** Ab 3.12.0 stecken **zwei** Passwörter lesbar in
+jedem Abbild — das des Setup-Hotspots (seit 3.8.1) und neu das des
+Notbetriebsknopfs, das auf dem ausgedruckten Notfallblatt steht. Am 2026-08-21
+mit `strings` nachgeprüft. Sie gehören damit erst recht nur an die Releases des
+**privaten** Repos, nie an ein öffentliches.
+
+Das private Release `v3.12.0` ist am 2026-08-21 angelegt und trägt alle vier
+produktiven Builds (beide ESP32-Stufen, beide D1-mini-Rückfallebenen).
 
 **Eine lokale Besonderheit:** Der USB-Port des Prüfstands hat sich auf
 `/dev/cu.usbserial-1110` geändert. Das steht in `platformio_user_env.ini`
