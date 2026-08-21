@@ -1289,7 +1289,7 @@ Etappe | Inhalt | Commit
 2 | Die Anzeige auf beiden Seiten, Knopffarbe, Lauftext | `c38066f`
 3 | Doku und Version 3.13.0 | `05ac412`
 3a | Nachweis: der Re-Assert kommt bei beiden Stufen an | `67d8d8e`
-4 | **Etappe B — der Herzschlag der Steuerung** | *dieser Commit*
+4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
 
 ### Die Entscheidungen
 
