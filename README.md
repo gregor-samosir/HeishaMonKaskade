@@ -159,7 +159,8 @@ zum Server im Keller läuft, soll wissen, ob dort überhaupt etwas zu holen ist.
 
 Die Karenz dafür sind **12 Minuten**, und die sind gerechnet, nicht geraten: Der
 Re-Assert kommt alle 300,0 s (am 2026-08-21 an H2 gemessen), zwölf Minuten decken
-zwei verpasste Takte samt Reserve ab. Zwei Regeln halten das zusammen:
+zwei verpasste Takte samt Reserve ab. Beide Karenzen sind am Prüfstand auf die
+Sekunde nachgemessen. Zwei Regeln halten das zusammen:
 
 * **Der Wiedereinspiel-Schwall zählt nicht als Lebenszeichen.** Der
   ioBroker-Adapter schickt jedem neuen Abonnenten die gespeicherten Set-Werte —

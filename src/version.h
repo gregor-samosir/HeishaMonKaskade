@@ -129,7 +129,28 @@
 //         belegt.
 //         NICHT abgedeckt vom Hosttest: die Anbindung in HeishaMon.cpp
 //         (mqtt_client.connected() als Eingang, der Aufruf in mqtt_callback)
-//         und die Anzeige selbst. Beide gehoeren in den Abnahmetest.
+//         und die Anzeige selbst. Beide gehoeren in den Abnahmetest - und der
+//         hat sich gelohnt, siehe unten.
+//
+//         AM PRUEFSTAND NACHGEWIESEN (2026-08-21, 14:08-15:02), ohne Eingriff
+//         an H1/H2 und ohne Testfenster: alle sechs Lagen, beide Karenzen auf
+//         die Sekunde (Stumm-Karenz zweimal, Broker-Karenz einmal), der
+//         Vorrang (14 min ohne Broker -> weiterhin "nicht erreichbar"), beide
+//         Logzeilen mit stimmigen Dauern und die Rueckkehr ohne zweite
+//         Stoermeldung. Protokoll in test/README.md und im Vorhaben.
+//
+//         DABEI GEFUNDEN UND BEHOBEN - der Grund, warum es den Abnahmetest
+//         gibt: Die Herzschlag-Meldung stand zunaechst im mqtt_callback. Dort
+//         darf sie nicht stehen. write_mqtt_log() ruft mqtt_client.publish(),
+//         und PubSubClient benutzt fuer Senden und Empfangen DENSELBEN Puffer
+//         - genau den, in den `topic` und `payload` waehrend des Callbacks
+//         zeigen. Aus "panasonic_heat_pump_test/set/QuietMode" wurde "0Q", die
+//         Firmware meldete "Unknown set topic 0Q", und das Kommando ging
+//         verloren. Betroffen waere ausgerechnet das erste Kommando nach dem
+//         Ende einer Stumm-Meldung gewesen. Jetzt merkt sich der Callback nur
+//         die Dauer (stilleBeendetSekunden), geloggt wird aus loop() - dasselbe
+//         Muster wie wifiOutageSeconds. Merke fuer kuenftige Aenderungen an
+//         mqtt_callback(): dort nicht loggen.
 //
 // 3.12.0 - Der Notbetrieb ist ueber die Weboberflaeche schaltbar. Ein Knopf auf
 //         /notbetrieb stellt die Waermepumpe auf ihre eigene Heizkurve (Stufe 1)
