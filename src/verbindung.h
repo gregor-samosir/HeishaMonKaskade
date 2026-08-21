@@ -17,19 +17,29 @@
 /* aus - im Sommer ueber Tage, im Januar ueber Stunden, wenn der Sollwert    */
 /* der fallenden Aussentemperatur nicht mehr nachgefuehrt wird.              */
 /*                                                                           */
-/* Die Firmware WEISS es laengst (mqtt_client.connected() ist false, der     */
-/* Reconnect laeuft im Backoff ins Leere), sie sagt es nur niemandem ausser  */
-/* im MQTT-Log - und das geht in genau dieser Lage per Definition ins Leere. */
-/* Diese Datei haelt fest, SEIT WANN, und beantwortet die eine Frage, die    */
-/* jemand vor der Weboberflaeche hat: brauche ich den Notbetriebsknopf?      */
+/* ZWEI AUSFAELLE, EINE FOLGE. Beobachtet wurde der erste, gemeint sind      */
+/* beide:                                                                    */
 /*                                                                           */
-/* Der Notbetriebsknopf selbst haengt NICHT an dieser Wacht - er ist von ihr */
+/*   1. Der Broker ist weg (ioBroker aus). Die Firmware weiss das laengst -  */
+/*      mqtt_client.connected() ist false, der Reconnect laeuft im Backoff   */
+/*      ins Leere -, sie sagte es nur niemandem ausser im MQTT-Log, und das  */
+/*      geht in genau dieser Lage per Definition ins Leere.                  */
+/*   2. Der Broker laeuft, aber die Kaskadenregelung rechnet nicht mehr      */
+/*      (Node-RED-Container weg, Flow im Fehler). Von aussen sieht alles     */
+/*      gesund aus; die Waermepumpe bekommt trotzdem keine Vorgaben mehr.    */
+/*                                                                           */
+/* Fuer den Menschen vor der Weboberflaeche ist die Folge dieselbe: Niemand  */
+/* fuehrt den Sollwert nach. Beide Faelle laufen deshalb ueber DIESELBE      */
+/* Anzeige, nur mit unterschiedlichem Text - wer zum Server im Keller laeuft, */
+/* soll wissen, ob dort ueberhaupt etwas zu holen ist.                       */
+/*                                                                           */
+/* Der Notbetriebsknopf haengt NICHT an dieser Wacht - er ist von ihr        */
 /* vollstaendig unabhaengig und funktioniert auch, wenn hier etwas falsch    */
 /* stuende. Das hier ist reine Auskunft.                                     */
 /*****************************************************************************/
 
 /*****************************************************************************/
-/* Karenz: 5 Minuten                                                         */
+/* Karenz fuer den Broker-Ausfall: 5 Minuten                                 */
 /*                                                                           */
 /* Unterhalb davon wird NICHTS gemeldet. Der Grund ist nicht der WLAN-       */
 /* Wackler allein: Ein Neustart des ioBroker-Adapters oder des Containers    */
@@ -46,6 +56,20 @@
 /* mindestens acht Verbindungsversuche hinter sich.                          */
 /*****************************************************************************/
 #define VERBINDUNG_KARENZ_MS 300000u
+
+/*****************************************************************************/
+/* Karenz fuer die stumme Steuerung: 12 Minuten                              */
+/*                                                                           */
+/* Der Re-Assert des Hauptmodus-Verteilers kommt alle 300,0 s - am           */
+/* 2026-08-21 an H2 gemessen, nicht angenommen: zwei Takte im Abstand von    */
+/* exakt 300,0 s, je Takt sieben empfangene Kommandos. Ein einzelner         */
+/* ausgefallener Takt ist noch kein Ausfall; zwoelf Minuten decken zwei      */
+/* verpasste Takte samt Reserve ab.                                          */
+/*                                                                           */
+/* Deutlich groesser als die Broker-Karenz zu sein ist kein Zufall: Hier     */
+/* wird auf ein AUSBLEIBEN gewartet, und das ist die unsicherere Aussage.    */
+/*****************************************************************************/
+#define VERBINDUNG_STUMM_KARENZ_MS 720000u
 
 /*****************************************************************************/
 /* Deckel der Ausfalldauer: 30 Tage                                          */
@@ -68,7 +92,93 @@
 #define VERBINDUNG_DECKEL_TAGE 30u
 
 /*****************************************************************************/
-/* Die vier Lagen                                                            */
+/* Der Kern: ein laufender Ausfall                                           */
+/*                                                                           */
+/* Beide Faelle - Broker weg und Steuerung stumm - brauchen dasselbe: einen  */
+/* Beginn, eine mitlaufende Dauer und die Frage, ob die Karenz ueberschritten */
+/* ist. Das steht deshalb EINMAL hier und nicht zweimal nebeneinander; die   */
+/* Ueberlauffestigkeit ist der subtile Teil, und zweimal hingeschrieben ist  */
+/* zweimal Gelegenheit, sie falsch zu machen.                                */
+/*                                                                           */
+/* dauer_ms wird FORTGESCHRIEBEN und nicht bei jeder Abfrage neu gerechnet.  */
+/* Das ist der Kern der Ueberlaufsicherheit: (now - seit) wird nach 49,7     */
+/* Tagen wieder klein, ein bei der Abfrage gerechneter Wert fiele damit      */
+/* unter die Karenz zurueck und die Stoermeldung verschwaende von selbst.    */
+/* Die Merker karenz_ueber und ueber_deckel koennen dagegen nur in eine      */
+/* Richtung kippen und gehen erst beim Zuruecksetzen wieder auf false.       */
+/*****************************************************************************/
+struct Ausfall
+{
+  uint32_t seit;     // millis() im Moment des Ausfallbeginns
+  uint32_t dauer_ms; // fortgeschriebene Dauer, gedeckelt
+  bool laeuft;       // Ausfall ist im Gange
+  bool karenz_ueber; // Karenz einmal ueberschritten (kippt nicht zurueck)
+  bool ueber_deckel; // Dauer hat den 30-Tage-Deckel erreicht
+};
+
+// Kein Ausfall: alle Merker zurueck auf Anfang.
+inline void ausfall_zuruecksetzen(Ausfall *a)
+{
+  if (!a)
+    return;
+  a->seit = 0;
+  a->dauer_ms = 0;
+  a->laeuft = false;
+  a->karenz_ueber = false;
+  a->ueber_deckel = false;
+}
+
+// Ausfall beginnt jetzt. Ein bereits laufender Ausfall wird NICHT neu
+// gestartet - sonst setzte jeder Aufruf die Uhr zurueck und die Dauer bliebe
+// ewig bei null.
+inline void ausfall_beginnen(Ausfall *a, uint32_t now)
+{
+  if (!a || a->laeuft)
+    return;
+  ausfall_zuruecksetzen(a);
+  a->laeuft = true;
+  a->seit = now;
+}
+
+// Dauer fortschreiben. Muss haeufiger als alle 19,7 Tage aufgerufen werden,
+// damit der Deckel die Ueberlaufnaht sicher vor der Differenz erreicht - aus
+// loop() heraus ist das reichlich erfuellt.
+inline void ausfall_fortschreiben(Ausfall *a, uint32_t now, uint32_t karenz)
+{
+  if (!a || !a->laeuft)
+    return;
+
+  uint32_t verstrichen = (uint32_t)(now - a->seit);
+  if (a->ueber_deckel || verstrichen >= VERBINDUNG_DECKEL_MS)
+  {
+    a->ueber_deckel = true;
+    a->dauer_ms = VERBINDUNG_DECKEL_MS;
+  }
+  else
+  {
+    a->dauer_ms = verstrichen;
+  }
+
+  if (a->dauer_ms >= karenz)
+  {
+    a->karenz_ueber = true;
+  }
+}
+
+// Meldenswert ist ein beendeter Ausfall nur, wenn er die Karenz ueberschritten
+// hatte - was auf der Seite nie stand, soll auch nicht ins Log.
+inline bool ausfall_meldenswert(const Ausfall *a)
+{
+  return a && a->laeuft && a->karenz_ueber;
+}
+
+inline uint32_t ausfall_sekunden(const Ausfall *a)
+{
+  return (a && a->laeuft) ? (a->dauer_ms / 1000u) : 0u;
+}
+
+/*****************************************************************************/
+/* Die fuenf Lagen                                                           */
 /*                                                                           */
 /* KARENZ ist bewusst ein eigener Wert und nicht mit VERBUNDEN               */
 /* zusammengefasst: Die Seite zeigt in beiden Faellen dasselbe, aber wer die */
@@ -78,34 +188,29 @@
 /* Einschalten NIE eine Verbindung, ist die wahre Ausfalldauer unbekannt -   */
 /* der Ausfall kann viel aelter sein als das Geraet. "seit 7 Minuten" waere  */
 /* dann falsch. Die Seite sagt in diesem Fall "seit dem Neustart".           */
+/*                                                                           */
+/* STEUERUNG_STUMM ist der zweite Ausfall: Broker da, aber seit ueber zwoelf */
+/* Minuten kein Kommando. Die Dauer ist hier IMMER ehrlich, auch ohne je     */
+/* empfangenes Kommando - die Uhr laeuft ab dem Verbindungsaufbau, und der   */
+/* Satz lautet "sendet seit X keine Vorgaben", nicht "keine Vorgaben mehr".  */
 /*****************************************************************************/
 enum VerbindungsLage
 {
   VERBINDUNG_VERBUNDEN = 0,
-  VERBINDUNG_KARENZ = 1,               // getrennt, aber noch innerhalb der Karenz
-  VERBINDUNG_GESTOERT = 2,             // getrennt, Karenz vorbei, Dauer bekannt
-  VERBINDUNG_GESTOERT_SEIT_NEUSTART = 3 // getrennt, Karenz vorbei, nie verbunden
+  VERBINDUNG_KARENZ = 1,                // getrennt, aber noch innerhalb der Karenz
+  VERBINDUNG_GESTOERT = 2,              // getrennt, Karenz vorbei, Dauer bekannt
+  VERBINDUNG_GESTOERT_SEIT_NEUSTART = 3, // getrennt, Karenz vorbei, nie verbunden
+  VERBINDUNG_STEUERUNG_STUMM = 4        // verbunden, aber keine Vorgaben mehr
 };
 
 /*****************************************************************************/
 /* Der Zustand der Wacht                                                     */
-/*                                                                           */
-/* ausfall_ms wird FORTGESCHRIEBEN und nicht bei jeder Abfrage neu gerechnet.*/
-/* Das ist der Kern der Ueberlaufsicherheit: (now - getrennt_seit) wird nach */
-/* 49,7 Tagen wieder klein, ein bei der Abfrage gerechneter Wert fiele damit */
-/* unter die Karenz zurueck und die Stoermeldung verschwaende von selbst.    */
-/* Die beiden Merker karenz_ueberschritten und ueber_deckel koennen dagegen  */
-/* nur in eine Richtung kippen und werden erst beim Verbindungsaufbau        */
-/* zurueckgesetzt.                                                           */
 /*****************************************************************************/
 struct VerbindungsWacht
 {
-  uint32_t getrennt_seit;     // millis() im Moment des Verbindungsverlusts
-  uint32_t ausfall_ms;        // fortgeschriebene Dauer, gedeckelt
-  bool getrennt;              // aktueller Zustand
-  bool je_verbunden;          // seit dem Neustart schon einmal verbunden gewesen
-  bool karenz_ueberschritten; // Karenz einmal ueberschritten (kippt nicht zurueck)
-  bool ueber_deckel;          // Dauer hat den 30-Tage-Deckel erreicht
+  Ausfall broker;    // Broker nicht erreichbar
+  Ausfall stumm;     // Broker erreichbar, aber keine Vorgaben
+  bool je_verbunden; // seit dem Neustart schon einmal verbunden gewesen
 };
 
 /*****************************************************************************/
@@ -114,18 +219,58 @@ struct VerbindungsWacht
 /* Das ist die Wahrheit im Moment des Einschaltens - setupMqtt() versucht    */
 /* die erste Verbindung erst danach. Wuerde hier "verbunden" stehen, meldete */
 /* die Seite eines Geraets, das den Broker nie erreicht hat, dauerhaft alles */
-/* in Ordnung.                                                                */
+/* in Ordnung.                                                               */
+/*                                                                           */
+/* Die Stumm-Uhr laeuft dabei NICHT: Ohne Verbindung kann per Definition     */
+/* kein Kommando kommen, Stille ist dort keine Aussage ueber die Steuerung.  */
 /*****************************************************************************/
 inline void verbindung_init(VerbindungsWacht *w, uint32_t now)
 {
   if (!w)
     return;
-  w->getrennt_seit = now;
-  w->ausfall_ms = 0;
-  w->getrennt = true;
+  ausfall_zuruecksetzen(&w->broker);
+  ausfall_zuruecksetzen(&w->stumm);
+  ausfall_beginnen(&w->broker, now);
   w->je_verbunden = false;
-  w->karenz_ueberschritten = false;
-  w->ueber_deckel = false;
+}
+
+/*****************************************************************************/
+/* Ein Set-Kommando ist eingetroffen - der Herzschlag der Steuerung          */
+/*                                                                           */
+/* Rueckgabe: die Dauer der Stille in Sekunden, wenn sie die Karenz          */
+/* ueberschritten hatte (fuer die Log-Zeile), sonst 0.                       */
+/*                                                                           */
+/* WAS ZAEHLT UND WAS NICHT - hier steckt die eigentliche Ueberlegung:       */
+/*                                                                           */
+/* Der Aufruf gehoert in mqtt_callback() NACH die SUBSCRIBE_GRACE-Pruefung,  */
+/* nicht davor. Der Grund ist genau die Wiedereinspielung, wegen der es die  */
+/* Karenzzeit gibt: Der ioBroker-Adapter schickt jedem neuen Abonnenten die  */
+/* gespeicherten Werte aller Set-Topics - und zwar AUCH DANN, wenn Node-RED  */
+/* laengst tot ist. Dieser Schwall ist also kein Lebenszeichen der           */
+/* Kaskadenregelung, sondern nur eines des Brokers, und den beobachtet       */
+/* bereits die andere Uhr. Wuerde er mitzaehlen, verstummte die Meldung nach */
+/* jedem Reconnect fuer zwoelf Minuten, ohne dass sich etwas geaendert haette.*/
+/*                                                                           */
+/* Ebenfalls NICHT zaehlt der Notbetriebszweig: Er wird ohnehin vor der      */
+/* Karenzpruefung abschliessend behandelt, und seine Werte kommen nur bei    */
+/* Aenderung und beim Reconnect - kein Takt, aus dem sich etwas ableiten     */
+/* liesse.                                                                   */
+/*                                                                           */
+/* Ein Kommando, das die Firmware danach VERWIRFT (unbekanntes Topic,        */
+/* Bereichsfehler), zaehlt dagegen sehr wohl: Die Steuerung hat gesendet,    */
+/* sie lebt. Deshalb steht der Aufruf vor build_heatpump_command().          */
+/*****************************************************************************/
+inline uint32_t verbindung_set_empfangen(VerbindungsWacht *w, uint32_t now)
+{
+  if (!w)
+    return 0;
+
+  uint32_t gemeldet = ausfall_meldenswert(&w->stumm) ? ausfall_sekunden(&w->stumm) : 0u;
+
+  // Die Uhr laeuft ab jetzt neu - der naechste Takt wird binnen 300 s erwartet
+  ausfall_zuruecksetzen(&w->stumm);
+  ausfall_beginnen(&w->stumm, now);
+  return gemeldet;
 }
 
 /*****************************************************************************/
@@ -138,9 +283,10 @@ inline void verbindung_init(VerbindungsWacht *w, uint32_t now)
 /* Ein kurzer Aussetzer unterhalb der Karenz meldet nichts: Er war schon auf */
 /* der Seite kein Thema und soll es im Log auch nicht sein.                   */
 /*                                                                            */
-/* Die Differenz laeuft in unsigned-Arithmetik (now - getrennt_seit) und ist  */
-/* damit ueber die millis()-Naht hinweg richtig - siehe sendwindow.h, wo      */
-/* dieselbe Regel mit einer Gegenprobe belegt ist.                            */
+/* Die Stumm-Uhr laeuft nur bei stehender Verbindung. Sie startet mit dem     */
+/* Verbindungsaufbau und nicht mit dem Einschalten: Ohne Broker sagt Stille   */
+/* nichts ueber die Steuerung aus, und die Uhr weiterlaufen zu lassen wuerde  */
+/* nach der Rueckkehr des Brokers sofort eine zweite Stoermeldung erzeugen.   */
 /*****************************************************************************/
 inline bool verbindung_nachfuehren(VerbindungsWacht *w, bool verbunden,
                                    uint32_t now, uint32_t *ausfall_s)
@@ -150,45 +296,26 @@ inline bool verbindung_nachfuehren(VerbindungsWacht *w, bool verbunden,
 
   if (verbunden)
   {
-    bool meldenswert = w->getrennt && w->karenz_ueberschritten;
+    bool meldenswert = ausfall_meldenswert(&w->broker);
     if (meldenswert && ausfall_s)
     {
-      *ausfall_s = w->ausfall_ms / 1000u;
+      *ausfall_s = ausfall_sekunden(&w->broker);
     }
-    // Verbindung steht: alle Merker zurueck auf Anfang
-    w->getrennt = false;
-    w->je_verbunden = true;
-    w->ausfall_ms = 0;
-    w->karenz_ueberschritten = false;
-    w->ueber_deckel = false;
+    if (w->broker.laeuft) // Verbindung gerade zurueckgekehrt
+    {
+      ausfall_zuruecksetzen(&w->broker);
+      w->je_verbunden = true;
+      // Ab hier ist Stille eine Aussage - vorher war sie es nicht
+      ausfall_beginnen(&w->stumm, now);
+    }
+    ausfall_fortschreiben(&w->stumm, now, VERBINDUNG_STUMM_KARENZ_MS);
     return meldenswert;
   }
 
-  if (!w->getrennt) // erster Durchlauf ohne Verbindung: Zeitpunkt merken
-  {
-    w->getrennt = true;
-    w->getrennt_seit = now;
-    w->ausfall_ms = 0;
-    return false;
-  }
-
-  // Dauer fortschreiben. Der Deckel kippt nur einmal und nie zurueck; ohne
-  // ihn liefe der Wert nach 49,7 Tagen ueber und finge wieder bei 0 an.
-  uint32_t verstrichen = (uint32_t)(now - w->getrennt_seit);
-  if (w->ueber_deckel || verstrichen >= VERBINDUNG_DECKEL_MS)
-  {
-    w->ueber_deckel = true;
-    w->ausfall_ms = VERBINDUNG_DECKEL_MS;
-  }
-  else
-  {
-    w->ausfall_ms = verstrichen;
-  }
-
-  if (w->ausfall_ms >= VERBINDUNG_KARENZ_MS)
-  {
-    w->karenz_ueberschritten = true;
-  }
+  // Ohne Verbindung wird nur der Broker-Ausfall gezaehlt
+  ausfall_zuruecksetzen(&w->stumm);
+  ausfall_beginnen(&w->broker, now);
+  ausfall_fortschreiben(&w->broker, now, VERBINDUNG_KARENZ_MS);
   return false;
 }
 
@@ -198,28 +325,58 @@ inline bool verbindung_nachfuehren(VerbindungsWacht *w, bool verbunden,
 /* Liest nur die fortgeschriebenen Merker aus und rechnet selbst NICHT mit   */
 /* der Zeit - deshalb kann die Antwort zwischen zwei Nachfuehrungen nicht    */
 /* springen, und der Ueberlauf ist hier kein Thema mehr.                     */
+/*                                                                           */
+/* Der Broker-Ausfall hat Vorrang vor der stummen Steuerung. Ohne Broker     */
+/* KANN kein Kommando kommen - beides zu melden waere doppelt gemoppelt und  */
+/* wuerde jemanden zum Server schicken, um dort nach dem falschen Fehler zu  */
+/* suchen.                                                                   */
 /*****************************************************************************/
 inline VerbindungsLage verbindung_lage(const VerbindungsWacht *w)
 {
-  if (!w || !w->getrennt)
+  if (!w)
     return VERBINDUNG_VERBUNDEN;
-  if (!w->karenz_ueberschritten)
-    return VERBINDUNG_KARENZ;
-  return w->je_verbunden ? VERBINDUNG_GESTOERT : VERBINDUNG_GESTOERT_SEIT_NEUSTART;
+
+  if (w->broker.laeuft)
+  {
+    if (!w->broker.karenz_ueber)
+      return VERBINDUNG_KARENZ;
+    return w->je_verbunden ? VERBINDUNG_GESTOERT : VERBINDUNG_GESTOERT_SEIT_NEUSTART;
+  }
+
+  if (w->stumm.laeuft && w->stumm.karenz_ueber)
+    return VERBINDUNG_STEUERUNG_STUMM;
+
+  return VERBINDUNG_VERBUNDEN;
 }
 
 /*****************************************************************************/
-/* Ausfalldauer in Sekunden                                                  */
+/* Ausfalldauer in Sekunden - passend zur gemeldeten Lage                    */
 /*                                                                           */
-/* Nur fuer die Anzeige gedacht. Bei bestehender Verbindung 0 - eine         */
-/* "Dauer" gaebe es dort nicht, und 0 ist der einzige Wert, der nicht        */
-/* versehentlich als Zeitangabe durchgeht.                                   */
+/* Nur fuer die Anzeige gedacht. Bei ungestoerter Lage 0 - eine "Dauer"      */
+/* gaebe es dort nicht, und 0 ist der einzige Wert, der nicht versehentlich  */
+/* als Zeitangabe durchgeht.                                                 */
 /*****************************************************************************/
 inline uint32_t verbindung_ausfall_sekunden(const VerbindungsWacht *w)
 {
-  if (!w || !w->getrennt)
+  if (!w)
     return 0;
-  return w->ausfall_ms / 1000u;
+  if (w->broker.laeuft)
+    return ausfall_sekunden(&w->broker);
+  if (w->stumm.laeuft && w->stumm.karenz_ueber)
+    return ausfall_sekunden(&w->stumm);
+  return 0;
+}
+
+// Gilt fuer die gerade gemeldete Lage der 30-Tage-Deckel?
+inline bool verbindung_ueber_deckel(const VerbindungsWacht *w)
+{
+  if (!w)
+    return false;
+  if (w->broker.laeuft)
+    return w->broker.ueber_deckel;
+  if (w->stumm.laeuft && w->stumm.karenz_ueber)
+    return w->stumm.ueber_deckel;
+  return false;
 }
 
 /*****************************************************************************/

@@ -408,6 +408,28 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     return; // kein Timer angefasst, der Abfragezyklus laeuft unveraendert weiter
   }
 
+  // HERZSCHLAG DER STEUERUNG (3.13.0). Der Aufruf steht bewusst HIER - nach
+  // der Karenzpruefung, vor dem Bauen des Kommandos:
+  //
+  // * Nach der Karenzpruefung, weil der Wiedereinspiel-Schwall des
+  //   ioBroker-Adapters KEIN Lebenszeichen der Kaskadenregelung ist. Der
+  //   Adapter schickt jedem neuen Abonnenten die gespeicherten Werte, auch
+  //   wenn Node-RED laengst tot ist. Zaehlte er mit, verstummte die Meldung
+  //   nach jedem Reconnect fuer zwoelf Minuten, ohne dass sich etwas
+  //   geaendert haette.
+  // * Vor build_heatpump_command(), weil ein Kommando, das die Firmware
+  //   danach verwirft (unbekanntes Topic, Bereichsfehler), trotzdem beweist,
+  //   dass die Steuerung sendet - und genau darum geht es hier.
+  {
+    uint32_t stille_s = verbindung_set_empfangen(&hausteuerung, (uint32_t)millis());
+    if (stille_s > 0)
+    {
+      (void)snprintf(log_msg, sizeof(log_msg),
+                     "Hausteuerung hat %lu s keine Vorgaben gesendet", (unsigned long)stille_s);
+      write_mqtt_log(log_msg);
+    }
+  }
+
   Send_Pana_Mainquery_Timer.stop();
   write_telnet_log((char *)"Callback from mqtt");
 

@@ -6,9 +6,8 @@
 //
 // Worum es geht: Faellt der ioBroker aus, heizt die Waermepumpe mit dem
 // zuletzt gesetzten Sollwert einfach weiter - kein Alarm, kein Hinweis. Die
-// Weboberflaeche soll das sagen. Damit sie es RICHTIG sagt, muessen vier
-// Dinge stimmen, und alle vier sind am Geraet schlecht bis gar nicht
-// nachweisbar:
+// Weboberflaeche soll das sagen. Damit sie es RICHTIG sagt, muessen sechs
+// Dinge stimmen, und alle sind am Geraet schlecht bis gar nicht nachweisbar:
 //
 //  1. Die Karenz von 5 Minuten - kurze Broker-Neustarts duerfen keine
 //     Stoermeldung ausloesen, die von selbst wieder verschwindet.
@@ -18,6 +17,11 @@
 //     gerechnete Dauer faellt dort unter die Karenz zurueck und die
 //     Stoermeldung verschwaende ausgerechnet nach einem langen Ausfall.
 //  4. Der Deckel bei 30 Tagen samt Textform.
+//  5. Der Herzschlag (3.13.0): Broker erreichbar, aber seit ueber zwoelf
+//     Minuten kein Kommando - die Kaskadenregelung rechnet nicht mehr.
+//  6. Der Vorrang zwischen beiden und die Regel, dass die Stumm-Uhr ohne
+//     Verbindung NICHT laeuft. Ohne sie meldete die Seite nach jeder
+//     Rueckkehr des Brokers sofort einen zweiten Fehler, den es nie gab.
 //
 // Bauen und ausfuehren:
 //   c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test test/verbindung_test.cpp
@@ -100,7 +104,7 @@ int main(void)
   /***************************************************************************/
   printf("\nAnfangszustand nach dem Einschalten:\n");
   verbindung_init(&w, 0);
-  pruefe(w.getrennt, "startet als getrennt (setupMqtt kommt erst danach)");
+  pruefe(w.broker.laeuft, "startet als getrennt (setupMqtt kommt erst danach)");
   pruefe(!w.je_verbunden, "startet mit 'nie verbunden'");
   pruefe(verbindung_lage(&w) == VERBINDUNG_KARENZ,
          "direkt nach dem Einschalten gilt die Karenz, keine Stoermeldung");
@@ -130,7 +134,7 @@ int main(void)
          "auf der Grenze: Stoermeldung steht");
   pruefe_zahl(verbindung_ausfall_sekunden(&w), 300, "Ausfalldauer auf der Grenze (Sekunden)");
 
-  verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.ueber_deckel);
+  verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.broker.ueber_deckel);
   pruefe_text(text, "5 Minuten", "Text auf der Grenze");
 
   /***************************************************************************/
@@ -219,10 +223,10 @@ int main(void)
     // Gegenprobe: die naive Rechnung liegt an derselben Stelle falsch. Sie
     // steht bewusst NICHT im Firmwarecode - der Test belegt nur, dass der
     // Unterschied real ist und die gewaehlte Bauweise nicht Geschmackssache.
-    uint32_t naiv_ms = (uint32_t)(jetzt - w.getrennt_seit);
+    uint32_t naiv_ms = (uint32_t)(jetzt - w.broker.seit);
     pruefe(naiv_ms == 18u * 60u * 1000u,
            "Gegenprobe: die unsigned-Differenz selbst traegt ueber die Naht");
-    bool naiv_vergleich = (jetzt >= w.getrennt_seit + VERBINDUNG_KARENZ_MS);
+    bool naiv_vergleich = (jetzt >= w.broker.seit + VERBINDUNG_KARENZ_MS);
     pruefe(naiv_vergleich == false,
            "Gegenprobe: naives (now >= start + karenz) liegt an der Naht falsch");
     pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
@@ -243,26 +247,26 @@ int main(void)
     const uint32_t stunde = 3600u * 1000u;
 
     uint32_t jetzt = laufen_lassen(&w, false, 0, 29u * 24u * stunde, stunde);
-    pruefe(!w.ueber_deckel, "nach 29 Tagen ist der Deckel noch nicht erreicht");
+    pruefe(!w.broker.ueber_deckel, "nach 29 Tagen ist der Deckel noch nicht erreicht");
     pruefe_zahl(verbindung_ausfall_sekunden(&w), 29u * 24u * 3600u, "29 Tage in Sekunden");
-    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.ueber_deckel);
+    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.broker.ueber_deckel);
     pruefe_text(text, "29 Tagen", "Text nach 29 Tagen");
 
     jetzt = laufen_lassen(&w, false, jetzt, 2u * 24u * stunde, stunde);
-    pruefe(w.ueber_deckel, "nach 31 Tagen greift der Deckel");
-    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.ueber_deckel);
+    pruefe(w.broker.ueber_deckel, "nach 31 Tagen greift der Deckel");
+    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.broker.ueber_deckel);
     pruefe_text(text, "mehr als 30 Tagen", "Text ueber dem Deckel");
 
     // ueber die Naht hinaus weiterlaufen: der Deckel darf nicht zurueckkippen
     (void)laufen_lassen(&w, false, jetzt, 25u * 24u * stunde, stunde);
-    pruefe(w.ueber_deckel, "der Deckel kippt auch ueber die millis()-Naht nicht zurueck");
+    pruefe(w.broker.ueber_deckel, "der Deckel kippt auch ueber die millis()-Naht nicht zurueck");
     pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
            "und die Stoermeldung steht weiterhin");
 
     // nach der Rueckkehr ist alles zurueckgesetzt
     (void)verbindung_nachfuehren(&w, true, jetzt + stunde, nullptr);
-    pruefe(!w.ueber_deckel, "die Rueckkehr setzt den Deckel zurueck");
-    pruefe(!w.karenz_ueberschritten, "die Rueckkehr setzt den Karenzmerker zurueck");
+    pruefe(!w.broker.ueber_deckel, "die Rueckkehr setzt den Deckel zurueck");
+    pruefe(!w.broker.karenz_ueber, "die Rueckkehr setzt den Karenzmerker zurueck");
   }
 
   /***************************************************************************/
@@ -289,15 +293,15 @@ int main(void)
     uint32_t jetzt = laufen_lassen(&w, false, 0, 1193u * stunde, stunde);
     jetzt = laufen_lassen(&w, false, jetzt, 4u * 60u * 1000u, 60u * 1000u);
 
-    uint32_t naiv_ms = (uint32_t)(jetzt - w.getrennt_seit);
+    uint32_t naiv_ms = (uint32_t)(jetzt - w.broker.seit);
     pruefe(naiv_ms < VERBINDUNG_KARENZ_MS,
            "der Zeitpunkt ist getroffen: naive Differenz liegt unter der Karenz");
     printf("       (naive Differenz: %u ms, Karenz: %u ms)\n", naiv_ms, VERBINDUNG_KARENZ_MS);
 
     pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
            "die Stoermeldung steht trotzdem - sie verschwindet NICHT an der Naht");
-    pruefe(w.ueber_deckel, "und die Dauer ist gedeckelt statt zurueckgesprungen");
-    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.ueber_deckel);
+    pruefe(w.broker.ueber_deckel, "und die Dauer ist gedeckelt statt zurueckgesprungen");
+    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w), w.broker.ueber_deckel);
     pruefe_text(text, "mehr als 30 Tagen", "Text nach 49,7 Tagen Ausfall");
   }
 
@@ -350,6 +354,162 @@ int main(void)
   }
 
   /***************************************************************************/
+  /* 7a. Der Herzschlag: Broker da, aber die Steuerung rechnet nicht mehr    */
+  /*                                                                          */
+  /* Der Re-Assert kommt alle 300,0 s (am 2026-08-21 an H2 gemessen). Die     */
+  /* Karenz von zwoelf Minuten deckt zwei verpasste Takte samt Reserve ab.    */
+  /* Auch hier wird die Grenze selbst geprueft, nicht ein Punkt dahinter.     */
+  /***************************************************************************/
+  printf("\nHerzschlag der Steuerung (Broker erreichbar):\n");
+  {
+    verbindung_init(&w, 0);
+    uint32_t jetzt = 1000;
+    (void)verbindung_nachfuehren(&w, true, jetzt, nullptr); // Verbindung steht
+    pruefe(w.stumm.laeuft, "die Stumm-Uhr startet mit dem Verbindungsaufbau");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN, "und meldet zunaechst nichts");
+
+    jetzt = laufen_lassen(&w, true, jetzt, VERBINDUNG_STUMM_KARENZ_MS - 1000u, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN,
+           "eine Sekunde vor der Grenze: noch keine Meldung");
+
+    jetzt = laufen_lassen(&w, true, jetzt, 1000u, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_STEUERUNG_STUMM,
+           "auf der Grenze: die Steuerung gilt als stumm");
+    pruefe_zahl(verbindung_ausfall_sekunden(&w), 12u * 60u,
+                "gemeldete Dauer ist die der Stille, nicht die des Brokers");
+    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w),
+                          verbindung_ueber_deckel(&w));
+    pruefe_text(text, "12 Minuten", "Text der stummen Steuerung");
+
+    // Ein Kommando setzt die Uhr zurueck - der naechste Takt wird binnen 300 s
+    // erwartet, die Meldung muss sofort verschwinden.
+    uint32_t stille = verbindung_set_empfangen(&w, jetzt);
+    pruefe_zahl(stille, 12u * 60u, "die beendete Stille wird zum Loggen gemeldet");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN,
+           "nach einem Kommando ist die Meldung sofort weg");
+    pruefe_zahl(verbindung_ausfall_sekunden(&w), 0, "und die Dauer ist zurueckgesetzt");
+
+    // Ein Kommando im Normalbetrieb meldet nichts - sonst stuende nach jedem
+    // Re-Assert eine Zeile im Log, die keine Stoerung beschreibt.
+    jetzt = laufen_lassen(&w, true, jetzt, 300u * 1000u, 1000u); // ein Takt
+    pruefe_zahl(verbindung_set_empfangen(&w, jetzt), 0,
+                "ein Kommando im 5-min-Takt meldet nichts");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN, "und die Lage bleibt ruhig");
+  }
+
+  /***************************************************************************/
+  /* 7b. Der Vorrang: ohne Broker ist Stille keine Aussage                   */
+  /*                                                                          */
+  /* Die wichtigste Regel des Zusammenspiels. Ohne Broker KANN kein Kommando  */
+  /* kommen - liefe die Stumm-Uhr weiter, meldete die Seite nach der Rueckkehr */
+  /* des Brokers sofort einen zweiten Fehler, den es nie gab, und schickte    */
+  /* jemanden zum Server, um dort nach dem falschen Fehler zu suchen.         */
+  /***************************************************************************/
+  printf("\nVorrang zwischen Broker-Ausfall und stummer Steuerung:\n");
+  {
+    verbindung_init(&w, 0);
+    uint32_t jetzt = 1000;
+    (void)verbindung_nachfuehren(&w, true, jetzt, nullptr);
+
+    // erst stumm werden lassen, dann faellt auch der Broker aus
+    jetzt = laufen_lassen(&w, true, jetzt, VERBINDUNG_STUMM_KARENZ_MS, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_STEUERUNG_STUMM, "Ausgangslage: stumm");
+
+    jetzt = laufen_lassen(&w, false, jetzt, VERBINDUNG_KARENZ_MS, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
+           "faellt der Broker aus, gilt der Broker-Ausfall");
+    pruefe(!w.stumm.laeuft, "die Stumm-Uhr steht still, solange der Broker weg ist");
+    pruefe_zahl(verbindung_ausfall_sekunden(&w), 5u * 60u,
+                "gemeldet wird die Dauer des BROKER-Ausfalls");
+
+    // laenger ohne Broker als die Stumm-Karenz: trotzdem nur eine Meldung
+    jetzt = laufen_lassen(&w, false, jetzt, 20u * 60u * 1000u, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
+           "auch nach 25 min ohne Broker bleibt es der Broker-Ausfall");
+
+    // Rueckkehr: die Stumm-Uhr faengt bei null an, nicht bei 25 Minuten
+    uint32_t gemeldet = 0;
+    pruefe(verbindung_nachfuehren(&w, true, jetzt, &gemeldet),
+           "die Rueckkehr des Brokers wird gemeldet");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN,
+           "unmittelbar danach ist die Lage ruhig - keine zweite Stoermeldung");
+    pruefe_zahl(verbindung_ausfall_sekunden(&w), 0, "die Stumm-Uhr faengt bei null an");
+
+    // und laeuft ab jetzt neu: erst nach der vollen Karenz wieder eine Meldung
+    jetzt = laufen_lassen(&w, true, jetzt, VERBINDUNG_STUMM_KARENZ_MS - 1000u, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_VERBUNDEN,
+           "kurz vor der Stumm-Karenz nach der Rueckkehr: immer noch ruhig");
+    jetzt = laufen_lassen(&w, true, jetzt, 1000u, 1000u);
+    pruefe(verbindung_lage(&w) == VERBINDUNG_STEUERUNG_STUMM,
+           "kommt dann wirklich nichts, meldet sie sich doch noch");
+  }
+
+  /***************************************************************************/
+  /* 7b2. Die Reihenfolge in verbindung_lage() als zweite Sicherung          */
+  /*                                                                          */
+  /* Die eigentliche Vorrangregel steckt oben im Zuruecksetzen der Stumm-Uhr  */
+  /* beim Verbindungsverlust - dieser Zustand entsteht im Betrieb also gar    */
+  /* nicht. Genau das hat eine Gegenprobe gezeigt: Dreht man die Reihenfolge  */
+  /* in verbindung_lage() um, faellt KEINE Zusicherung um, weil beide Uhren   */
+  /* nie gleichzeitig laufen.                                                 */
+  /*                                                                          */
+  /* Die Reihenfolge bleibt trotzdem stehen - als zweite Sicherung fuer den   */
+  /* Fall, dass jemand das Zuruecksetzen spaeter entfernt. Damit sie eine     */
+  /* geprueft ist und keine geglaubte, baut dieser Abschnitt den Zustand von  */
+  /* Hand: beide Uhren laufen, beide ueber ihrer Karenz.                      */
+  /***************************************************************************/
+  printf("\nReihenfolge in verbindung_lage (zweite Sicherung):\n");
+  {
+    verbindung_init(&w, 0);
+    w.je_verbunden = true;
+
+    // Broker-Ausfall: laeuft, ueber der Karenz
+    ausfall_zuruecksetzen(&w.broker);
+    ausfall_beginnen(&w.broker, 0);
+    ausfall_fortschreiben(&w.broker, VERBINDUNG_KARENZ_MS, VERBINDUNG_KARENZ_MS);
+
+    // Stumm-Uhr: ebenfalls laufend und ueber IHRER Karenz - im Betrieb
+    // unmoeglich, hier absichtlich hergestellt
+    ausfall_zuruecksetzen(&w.stumm);
+    ausfall_beginnen(&w.stumm, 0);
+    ausfall_fortschreiben(&w.stumm, VERBINDUNG_STUMM_KARENZ_MS, VERBINDUNG_STUMM_KARENZ_MS);
+
+    pruefe(w.broker.karenz_ueber && w.stumm.karenz_ueber,
+           "Aufbau: beide Uhren laufen und sind ueber ihrer Karenz");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_GESTOERT,
+           "der Broker-Ausfall gewinnt - er ist die Ursache, nicht die Folge");
+    pruefe_zahl(verbindung_ausfall_sekunden(&w), 5u * 60u,
+                "und die gemeldete Dauer ist die des Brokers");
+  }
+
+  /***************************************************************************/
+  /* 7c. Die Stumm-Uhr am millis()-Ueberlauf                                 */
+  /*                                                                          */
+  /* Dieselbe Falle wie beim Broker-Ausfall - und weil beide Uhren denselben  */
+  /* Kern benutzen (struct Ausfall), belegt dieser Abschnitt zugleich, dass   */
+  /* der Kern wirklich geteilt ist und nicht zweimal dasteht.                 */
+  /***************************************************************************/
+  printf("\nStumm-Uhr ueber die 49,7-Tage-Naht:\n");
+  {
+    const uint32_t stunde = 3600u * 1000u;
+    verbindung_init(&w, 0);
+    (void)verbindung_nachfuehren(&w, true, 0, nullptr);
+
+    uint32_t jetzt = laufen_lassen(&w, true, 0, 1193u * stunde, stunde);
+    jetzt = laufen_lassen(&w, true, jetzt, 4u * 60u * 1000u, 60u * 1000u);
+
+    uint32_t naiv_ms = (uint32_t)(jetzt - w.stumm.seit);
+    pruefe(naiv_ms < VERBINDUNG_STUMM_KARENZ_MS,
+           "der Zeitpunkt ist getroffen: naive Differenz liegt unter der Karenz");
+    pruefe(verbindung_lage(&w) == VERBINDUNG_STEUERUNG_STUMM,
+           "die Meldung steht trotzdem - sie verschwindet NICHT an der Naht");
+    pruefe(verbindung_ueber_deckel(&w), "und die Dauer ist gedeckelt");
+    verbindung_dauer_text(text, sizeof(text), verbindung_ausfall_sekunden(&w),
+                          verbindung_ueber_deckel(&w));
+    pruefe_text(text, "mehr als 30 Tagen", "Text nach 49,7 Tagen Stille");
+  }
+
+  /***************************************************************************/
   /* 8. Robustheit gegen Nullzeiger und Nullpuffer                           */
   /*                                                                          */
   /* Die Weboberflaeche ruft das aus einem HTTP-Handler auf. Ein Absturz dort */
@@ -363,6 +523,8 @@ int main(void)
   pruefe(verbindung_lage(nullptr) == VERBINDUNG_VERBUNDEN,
          "Lage mit Nullzeiger meldet 'verbunden' statt einen Fehlalarm");
   pruefe_zahl(verbindung_ausfall_sekunden(nullptr), 0, "Dauer mit Nullzeiger");
+  pruefe_zahl(verbindung_set_empfangen(nullptr, 1000), 0, "Herzschlag mit Nullzeiger");
+  pruefe(!verbindung_ueber_deckel(nullptr), "Deckelabfrage mit Nullzeiger");
   verbindung_dauer_text(nullptr, 10, 60, false); // darf nicht abstuerzen
   verbindung_dauer_text(text, 0, 60, false);     // darf nicht schreiben
   pruefe(true, "Textfunktion vertraegt Nullpuffer und Laenge 0");
@@ -379,6 +541,13 @@ int main(void)
   pruefe_zahl(VERBINDUNG_KARENZ_MS, 300000u, "Karenz betraegt 5 Minuten");
   pruefe(VERBINDUNG_KARENZ_MS > 60000u,
          "Karenz liegt ueber dem groessten Reconnect-Abstand (MQTT_RECONNECT_MAX 60 s)");
+  pruefe_zahl(VERBINDUNG_STUMM_KARENZ_MS, 720000u, "Stumm-Karenz betraegt 12 Minuten");
+  // Der Re-Assert-Takt ist gemessene 300,0 s. Weniger als zwei volle Takte
+  // Karenz hiesse, dass ein einzelner verpasster Takt schon Alarm ausloest.
+  pruefe(VERBINDUNG_STUMM_KARENZ_MS > 2u * 300u * 1000u,
+         "Stumm-Karenz deckt mehr als zwei Re-Assert-Takte ab (2 x 300 s)");
+  pruefe(VERBINDUNG_STUMM_KARENZ_MS > VERBINDUNG_KARENZ_MS,
+         "Stumm-Karenz ist groesser als die Broker-Karenz (unsicherere Aussage)");
   pruefe_zahl(VERBINDUNG_DECKEL_MS, VERBINDUNG_DECKEL_TAGE * 24u * 3600u * 1000u,
               "Deckel in ms passt zur Tagesangabe im Text");
 

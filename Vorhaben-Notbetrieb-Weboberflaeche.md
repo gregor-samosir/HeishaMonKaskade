@@ -25,8 +25,10 @@ im Kühlbetrieb. Beide Stufen tragen die Firmware dieses Branches, Etappe 7 (Dok
 Release 3.12.0) ist erledigt.
 
 **Fortsetzung 3.13.0, seit dem 2026-08-21:** Zwei der Folgethemen aus Abschnitt 9
-sind gebaut — die Weboberfläche meldet jetzt, wenn die Hausteuerung nicht
-erreichbar ist, und der Notbetriebsknopf ist blau statt rot. Einzelheiten,
+sind gebaut — die Weboberfläche meldet jetzt, wenn die Hausteuerung ausgefallen
+ist, und der Notbetriebsknopf ist blau statt rot. Dazu **Etappe B**: Sie
+unterscheidet zwei Ausfälle, den weggefallenen Broker und die stumme Steuerung
+(Broker da, aber der 5-Minuten-Re-Assert bleibt aus). Einzelheiten,
 Entscheidungen und der Prüfplan stehen in **Abschnitt 11**; der Nachweis am Gerät
 steht noch aus und läuft am Prüfstand, ohne Eingriff an der Anlage.
 
@@ -1286,6 +1288,8 @@ Etappe | Inhalt | Commit
 1 | [`src/verbindung.h`](src/verbindung.h) + Hosttest, in der CI | `76002ab`
 2 | Die Anzeige auf beiden Seiten, Knopffarbe, Lauftext | `c38066f`
 3 | Doku und Version 3.13.0 | `05ac412`
+3a | Nachweis: der Re-Assert kommt bei beiden Stufen an | `67d8d8e`
+4 | **Etappe B — der Herzschlag der Steuerung** | *dieser Commit*
 
 ### Die Entscheidungen
 
@@ -1294,11 +1298,11 @@ Etappe | Inhalt | Commit
 der Broker *ist* der ioBroker-Adapter. Ohne WLAN wäre auch die Weboberfläche
 weg, die die Auskunft anzeigen soll.
 
-Damit ist ein zweiter Ausfall bewusst **noch nicht** abgedeckt: „Broker läuft,
-aber die Kaskadenregelung rechnet nicht mehr" — der Fall *Node-RED-Container
-weg, ioBroker läuft* aus der Tabelle in Abschnitt 1. Für den Menschen vor der
-Seite ist die Folge identisch: niemand führt den Sollwert nach. Er ist als
-eigener Schritt vorgesehen, siehe unten.
+Der zweite Ausfall — „Broker läuft, aber die Kaskadenregelung rechnet nicht
+mehr", der Fall *Node-RED-Container weg, ioBroker läuft* aus der Tabelle in
+Abschnitt 1 — wurde als **Etappe B** direkt danach gebaut, siehe unten. Für den
+Menschen vor der Seite ist die Folge identisch: niemand führt den Sollwert nach.
+Er bekommt deshalb dieselbe Anzeige, aber einen eigenen Text.
 
 **Karenz: 5 Minuten.** Ein Neustart des ioBroker-Adapters oder des Containers
 auf der Synology dauert regelmäßig ein bis zwei Minuten. Eine Störmeldung, die
@@ -1390,11 +1394,30 @@ Eingriff an H1 oder H2 und ohne Testfenster**.
 7. Erst danach OTA auf H1 und H2, mit der üblichen Abnahme gegen die Baseline
    ([`test/tablesnap.py`](test/tablesnap.py)).
 
-### Weiter offen — der Herzschlag (Etappe B)
+### Etappe B — der Herzschlag, gebaut am 2026-08-21
 
-Der Ausfall „Broker läuft, Node-RED rechnet nicht mehr" ist mit einer Zeitmarke
-auf das zuletzt empfangene `set`-Kommando zu erkennen. Zwei Punkte waren dafür
-zu klären; einer ist es jetzt:
+Der Ausfall „Broker läuft, Node-RED rechnet nicht mehr" wird an einer Zeitmarke
+auf das zuletzt empfangene `set`-Kommando erkannt. Karenz **12 Minuten**, eigene
+Lage (4) in der Statusroute, eigener Text auf der Seite:
+
+> **Hausteuerung erreichbar, sendet aber seit 23 Minuten keine Vorgaben.**
+> Der Server antwortet, aber die Steuerung rechnet nicht mehr.
+
+Das ausdrückliche „erreichbar" ist der Zweck der Unterscheidung: Wer zum Server
+im Keller läuft, soll wissen, ob dort überhaupt etwas zu holen ist.
+
+**Zwei Regeln halten das zusammen, und beide sind im Hosttest belegt:**
+
+1. **Ist der Broker weg, gilt der Broker-Ausfall.** Beides zu melden wäre
+   doppelt gemoppelt — ohne Broker *kann* kein Kommando kommen. Die Uhr für die
+   stumme Steuerung läuft deshalb nur bei stehender Verbindung und startet mit
+   dem Verbindungsaufbau neu. Die Gegenprobe zeigt, was ohne diese Regel
+   passiert: Unmittelbar nach der Rückkehr des Brokers meldet die Seite einen
+   zweiten Fehler, den es nie gab.
+2. **Der Wiedereinspiel-Schwall zählt nicht als Lebenszeichen** — dazu unten
+   mehr, das war eine Korrektur an meiner eigenen Annahme.
+
+**Beide Punkte, die vorher zu klären waren, sind beantwortet:**
 
 * **Bekommt H2 in jedem Re-Assert-Takt ein `set`-Kommando? Ja.** Am 2026-08-21
   im Flow-Code nachgesehen (`Hauptmodus-Verteiler V6.5`, §6 „Idempotente
@@ -1424,13 +1447,51 @@ zu klären; einer ist es jetzt:
 
   Der Herzschlag ist damit an beiden Stufen tragfähig, und der Takt ist keine
   Annahme mehr, sondern gemessen.
-* **Die Zeitmarke muss VOR der Karenzprüfung gesetzt werden** ([`HeishaMon.cpp`
-  in `mqtt_callback`](src/HeishaMon.cpp)) — empfangen ist empfangen, auch wenn
-  das Kommando als Wiedereinspielung verworfen wird. Sonst zählt ausgerechnet
-  der Schwall nach einem Reconnect nicht als Lebenszeichen.
+* **Die Zeitmarke gehört NACH die Karenzprüfung — nicht davor.** Hier stand
+  vorher das Gegenteil, mit der Begründung „empfangen ist empfangen". Das ist
+  falsch, und zwar aus genau dem Grund, aus dem es die Karenzzeit überhaupt
+  gibt: Der ioBroker-Adapter spielt jedem neuen Abonnenten die gespeicherten
+  Set-Werte ein — **auch dann, wenn Node-RED längst tot ist**. Dieser Schwall
+  belegt nur, dass der Broker lebt, und das beobachtet bereits die andere Uhr.
+  Vor der Karenzprüfung gestempelt, verstummte die Meldung nach jedem Reconnect
+  für zwölf Minuten, ohne dass sich etwas geändert hätte.
 
-Die Karenz für den Herzschlag muss deutlich über der Verbindungskarenz liegen:
-Der Takt ist gemessene 300,0 s, ein einzelner ausgefallener Takt ist noch kein
-Ausfall. Vorschlag: **12 Minuten**, also mehr als zwei verpasste Takte — und
-damit weit genug vom Takt entfernt, dass eine verzögerte Auslieferung keinen
-Fehlalarm auslöst.
+  Ein Kommando, das die Firmware danach **verwirft** (unbekanntes Topic,
+  Bereichsfehler), zählt dagegen sehr wohl — die Steuerung hat gesendet, sie
+  lebt. Der Aufruf steht deshalb vor `build_heatpump_command()`.
+
+**Die Karenz liegt bei 12 Minuten** und damit deutlich über der
+Verbindungskarenz. Der Takt ist gemessene 300,0 s, ein einzelner ausgefallener
+Takt ist noch kein Ausfall; zwölf Minuten decken zwei verpasste Takte samt
+Reserve ab. Dass sie größer ist als die Broker-Karenz, ist kein Zufall: Hier
+wird auf ein *Ausbleiben* gewartet, und das ist die unsicherere Aussage.
+
+### Ein Befund aus der Gegenprobe, der eine Lücke aufdeckte
+
+Beide Uhren teilen sich denselben Kern (`struct Ausfall`) — die
+Überlauffestigkeit ist der subtile Teil, und zweimal hingeschrieben wäre zweimal
+Gelegenheit, sie falsch zu machen. Fünf Gegenproben sind gefahren; eine davon
+**bestand**, und das war die aufschlussreiche:
+
+Dreht man den Vorrang in `verbindung_lage()` um, fällt keine einzige Zusicherung
+um. Der Grund: Beide Uhren laufen im Betrieb nie gleichzeitig, weil die Stumm-Uhr
+beim Verbindungsverlust zurückgesetzt wird. Die Reihenfolge dort ist also eine
+**zweite Sicherung**, keine tragende Regel — sie greift nur, falls jemand später
+das Zurücksetzen entfernt. Sie bleibt stehen, aber der Test baut den im Betrieb
+unmöglichen Zustand jetzt von Hand, damit sie geprüft ist und nicht geglaubt.
+
+### Prüfplan-Ergänzung für Etappe B
+
+Am Prüfstand, im Anschluss an die Schritte oben:
+
+8. Broker wieder erreichbar, dann **den Node-RED-Flow anhalten** (oder den
+   Container stoppen) und 12 Minuten warten. Die Seite muss von „verbunden" auf
+   „Hausteuerung erreichbar, sendet aber seit …" wechseln — **nicht** auf „nicht
+   erreichbar".
+9. Flow wieder starten: Spätestens mit dem nächsten Re-Assert (< 5 min) muss die
+   Meldung verschwinden, und im MQTT-Log steht „Hausteuerung hat *n* s keine
+   Vorgaben gesendet".
+10. **Die Gegenprobe zur Vorrangregel:** Broker abschalten und länger als 12
+    Minuten warten. Es darf **nur** „nicht erreichbar" erscheinen, nie die
+    Stumm-Meldung — und direkt nach dem Wiedereinschalten des Brokers darf die
+    Stumm-Meldung ebenfalls nicht aufblitzen.

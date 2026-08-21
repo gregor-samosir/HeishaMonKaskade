@@ -402,14 +402,46 @@ nicht nachweisbar:
   samt der Schwellen: Bis 89 Minuten wird in Minuten gezaehlt, bis 47 Stunden
   in Stunden - "seit 90 Minuten" ist die genauere Auskunft als "seit 1 Stunde".
 
-62 Zusicherungen. **Gegenprobe gemacht**, zweimal:
+Dazu die Regeln des **Herzschlags** (der zweite Ausfall: Broker da, aber die
+Kaskadenregelung rechnet nicht mehr):
 
-* Karenz auf 1 Minute verstellt -> 6 Abweichungen.
-* Die Dauer bei jeder Abfrage aus `(now - getrennt_seit)` gerechnet statt
-  fortgeschrieben -> 6 Abweichungen, und der Text lautet dort nach 49,7 Tagen
-  Ausfall **"1 Minute"**. Genau diese Falschauskunft verhindert der Deckel bei
-  30 Tagen: Sie waere schlimmer als gar keine Angabe, weil sie ausgerechnet
+* **Die Stumm-Karenz von 12 Minuten**, ebenfalls auf die Sekunde. Der Re-Assert
+  kommt alle 300,0 s (gemessen, siehe Abschnitt darueber) - zwoelf Minuten
+  decken zwei verpasste Takte samt Reserve ab.
+* **Der Vorrang**: Ist der Broker weg, gilt der Broker-Ausfall. Beides zu melden
+  wuerde jemanden zum Server schicken, um dort nach dem falschen Fehler zu
+  suchen.
+* **Die Stumm-Uhr steht still, solange der Broker weg ist**, und startet mit dem
+  Verbindungsaufbau neu. Ohne diese Regel meldete die Seite unmittelbar nach der
+  Rueckkehr des Brokers sofort einen zweiten Fehler, den es nie gab.
+
+95 Zusicherungen. Beide Uhren teilen sich denselben Kern (`struct Ausfall`) -
+die Ueberlauffestigkeit ist der subtile Teil, und zweimal hingeschrieben waere
+zweimal Gelegenheit, sie falsch zu machen.
+
+**Gegenproben gemacht, fuenfmal:**
+
+| Regel gebrochen | Abweichungen |
+|:--- |:--- |
+| Karenz auf 1 Minute verstellt | 6 |
+| Dauer gerechnet statt fortgeschrieben | 6 |
+| Stumm-Uhr laeuft ohne Verbindung weiter | 6 |
+| Stumm-Karenz auf 4 Minuten (unter einem Takt) | 7 |
+| Vorrang in `verbindung_lage()` umgedreht | 1 |
+
+Zwei davon sind es wert, einzeln genannt zu werden:
+
+* Bei **gerechneter statt fortgeschriebener Dauer** lautet der Text nach 49,7
+  Tagen Ausfall **"1 Minute"**. Genau diese Falschauskunft verhindert der Deckel
+  bei 30 Tagen: Sie waere schlimmer als gar keine Angabe, weil sie ausgerechnet
   nach einem sehr langen Ausfall "alles in Ordnung" behauptet.
+* Die Gegenprobe zum **Vorrang bestand zunaechst** - und das war der
+  aufschlussreiche Fall. Der Vorrang in `verbindung_lage()` war gar nicht
+  geprueft, weil beide Uhren im Betrieb nie gleichzeitig laufen (die
+  Stumm-Uhr wird beim Verbindungsverlust zurueckgesetzt). Die Reihenfolge steht
+  als zweite Sicherung weiter da, fuer den Fall dass jemand das Zuruecksetzen
+  spaeter entfernt; damit sie eine geprueft ist und keine geglaubte, baut der
+  Test den unmoeglichen Zustand jetzt von Hand.
 
 Beim ersten Lauf standen 11 Abweichungen - und vier davon lagen an **den
 Zusicherungen**, nicht am Header: Der Verlustmoment kostet einen
@@ -422,8 +454,17 @@ bemerkt. Das ist der eigentliche Wert des Musters: Es zwingt dazu, die Zusage
 auszurechnen statt sie zu schaetzen.
 
 **Was der Test nicht abdeckt:** die Anbindung in `HeishaMon.cpp`
-(`mqtt_client.connected()` als Eingang der Wacht) und die Anzeige selbst. Beides
-gehoert in den Abnahmetest - siehe unten, "Verbindungsanzeige am Pruefstand".
+(`mqtt_client.connected()` als Eingang der Wacht, der Aufruf von
+`verbindung_set_empfangen()` in `mqtt_callback`) und die Anzeige selbst. Beides
+gehoert in den Abnahmetest.
+
+**Merke zur Platzierung des Herzschlags:** Der Aufruf steht in `mqtt_callback()`
+**nach** der `SUBSCRIBE_GRACE`-Pruefung. Der Grund ist genau die
+Wiedereinspielung, wegen der es die Karenzzeit ueberhaupt gibt: Der
+ioBroker-Adapter schickt jedem neuen Abonnenten die gespeicherten Set-Werte -
+auch wenn Node-RED laengst tot ist. Dieser Schwall belegt nur, dass der Broker
+lebt, und den beobachtet bereits die andere Uhr. Vor der Pruefung gestempelt,
+verstummte die Meldung nach jedem Reconnect fuer zwoelf Minuten.
 
 ## Der 5-min-Re-Assert kommt bei BEIDEN Stufen an (2026-08-21, H2)
 
@@ -956,7 +997,7 @@ FEHLERpfad, den man an der echten Anlage nicht provozieren will.
 ```
 curl -u admin:heisha http://192.168.2.197/notbetrieb            # Seite
 curl -u admin:heisha -X POST http://192.168.2.197/notbetrieb/start
-curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext
+curl http://192.168.2.197/notbetrieb/status                     # ...;Sperre;Lage;Dauertext (Lage: 0 ok, 2 Broker weg, 4 Steuerung stumm)
 ```
 
 **Ablauf, wie er sein soll:**

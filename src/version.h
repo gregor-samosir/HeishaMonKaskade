@@ -1,9 +1,10 @@
 #pragma once
 // Changelog:
-// 3.13.0 - Die Weboberflaeche sagt, wenn die Hausteuerung nicht erreichbar ist.
-//         Dazu zwei Korrekturen an der Notbetriebsseite: der Knopf ist blau
-//         statt rot, und "Laeuft..." heisst jetzt "Konfiguration Notbetrieb
-//         laeuft".
+// 3.13.0 - Die Weboberflaeche sagt, wenn die Hausteuerung ausgefallen ist -
+//         und sie unterscheidet dabei ZWEI Ausfaelle: Broker weg, und Broker
+//         da, aber die Kaskadenregelung rechnet nicht mehr. Dazu zwei
+//         Korrekturen an der Notbetriebsseite: der Knopf ist blau statt rot,
+//         und "Laeuft..." heisst jetzt "Konfiguration Notbetrieb laeuft".
 //
 //         WARUM. Owner-Beobachtung 2026-08-21, mitten im Nachweis zu 3.12.0:
 //         Waehrend der Broker weg war, heizte die Waermepumpe einfach weiter,
@@ -40,10 +41,43 @@
 //         GEMESSEN WIRD DIE MQTT-VERBINDUNG, nicht das WLAN. Der Ausfall, um
 //         den es geht, ist der des ioBroker - und der MQTT-Broker IST der
 //         ioBroker-Adapter. Ohne WLAN waere auch die Weboberflaeche weg, die
-//         diese Auskunft anzeigen soll. Der Fall "Broker laeuft, aber die
-//         Kaskadenregelung rechnet nicht mehr" ist damit NICHT abgedeckt; er
-//         ist als eigener Schritt vorgesehen (Herzschlag ueber den 5-min-
-//         Re-Assert) und im Vorhaben festgehalten.
+//         diese Auskunft anzeigen soll.
+//
+//         DER ZWEITE AUSFALL: DIE STUMME STEUERUNG. Broker erreichbar, aber
+//         seit ueber zwoelf Minuten kein Kommando - dann rechnet die
+//         Kaskadenregelung nicht mehr (Node-RED-Container weg, Flow im
+//         Fehler). Von aussen sieht alles gesund aus, die Waermepumpe bekommt
+//         trotzdem keine Vorgaben. Die Seite sagt dann ausdruecklich
+//         "Hausteuerung erreichbar, sendet aber seit 23 Minuten keine
+//         Vorgaben" - wer zum Server im Keller laeuft, soll wissen, ob dort
+//         ueberhaupt etwas zu holen ist.
+//
+//         DIE ZWOELF MINUTEN SIND GERECHNET, NICHT GERATEN. Der Re-Assert des
+//         Hauptmodus-Verteilers kommt alle 300,0 s - am 2026-08-21 an H2
+//         gemessen (zwei Takte, Abstand exakt 300,0 s, je Takt sieben
+//         empfangene Kommandos). Ein einzelner verpasster Takt ist noch kein
+//         Ausfall; zwoelf Minuten decken zwei verpasste Takte samt Reserve ab.
+//
+//         WAS ALS HERZSCHLAG ZAEHLT. Der Aufruf steht in mqtt_callback()
+//         NACH der SUBSCRIBE_GRACE-Pruefung. Der Grund ist genau die
+//         Wiedereinspielung, wegen der es die Karenzzeit gibt: Der
+//         ioBroker-Adapter schickt jedem neuen Abonnenten die gespeicherten
+//         Werte aller Set-Topics, AUCH wenn Node-RED laengst tot ist. Dieser
+//         Schwall ist kein Lebenszeichen der Kaskadenregelung, sondern nur
+//         eines des Brokers - und den beobachtet bereits die andere Uhr.
+//         Zaehlte er mit, verstummte die Meldung nach jedem Reconnect fuer
+//         zwoelf Minuten, ohne dass sich etwas geaendert haette. Ein Kommando,
+//         das die Firmware danach VERWIRFT (unbekanntes Topic,
+//         Bereichsfehler), zaehlt dagegen sehr wohl: Die Steuerung hat
+//         gesendet, sie lebt.
+//
+//         VORRANG UND EINE UHR, DIE STILLSTEHT. Ist der Broker weg, gilt der
+//         Broker-Ausfall - beides zu melden wuerde jemanden zum Server
+//         schicken, um dort nach dem falschen Fehler zu suchen. Die Stumm-Uhr
+//         laeuft deshalb nur bei stehender Verbindung und startet mit dem
+//         Verbindungsaufbau. Ohne diese Regel meldete die Seite unmittelbar
+//         nach der Rueckkehr des Brokers sofort einen zweiten Fehler, den es
+//         nie gab.
 //
 //         DER SONDERFALL "NIE VERBUNDEN". Hatte die Firmware seit dem
 //         Einschalten nie eine Verbindung, ist die wahre Ausfalldauer
@@ -64,27 +98,38 @@
 //         Die uebrigen Seiten (Home, Settings, Firmware) bleiben unberuehrt.
 //
 //         STATUSROUTE ERWEITERT. /notbetrieb/status liefert zwei Felder mehr:
-//         Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext. Die
+//         Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext. Lage: 0
+//         verbunden, 1 Karenz, 2 Broker weg, 3 seit dem Neustart nie
+//         verbunden, 4 Steuerung stumm. Die
 //         Textform der Dauer kommt fertig von dort - gerechnet wird sie in
 //         verbindung.h, also an einer Stelle und vom Hosttest abgedeckt. Die
 //         Startseite fragt dieselbe Route im 30-s-Takt der Tabelle ab; eine
 //         zweite Route fuer zwei Felder waere auf einem ESP8266 der teurere
 //         Weg.
 //
-//         GROESSE. ESP32-S3 RAM +16 B, Flash +2284 B; ESP8266 RAM +512 B
-//         (59,5 % -> 60,1 %), Flash +2304 B (je gegen 3.12.0, Stufe 1).
+//         GROESSE. ESP32-S3 RAM +32 B, Flash +3224 B; ESP8266 RAM +768 B
+//         (59,5 % -> 60,4 %), Flash +3224 B (je gegen 3.12.0, Stufe 1).
 //
 //         REGELN HOSTTESTBAR. src/verbindung.h ist arduino-frei wie
 //         sendwindow.h, telegram.h und notbetrieb.h;
-//         test/verbindung_test.cpp bindet es direkt ein und steht bei 62
-//         Zusicherungen. Die Gegenprobe ist gefahren: Karenz auf 1 min
-//         verstellt = 6 Abweichungen; die Dauer bei jeder Abfrage gerechnet
-//         statt fortgeschrieben = 6 Abweichungen, und der Text lautet dort
-//         nach 49,7 Tagen Ausfall "1 Minute" - also genau die Falschauskunft
-//         am millis()-Ueberlauf, die der Deckel bei 30 Tagen verhindert.
+//         test/verbindung_test.cpp bindet es direkt ein und steht bei 95
+//         Zusicherungen. Beide Uhren teilen sich denselben Kern (struct
+//         Ausfall) - die Ueberlauffestigkeit ist der subtile Teil, und
+//         zweimal hingeschrieben waere zweimal Gelegenheit, sie falsch zu
+//         machen. Fuenf Gegenproben gefahren: Karenz auf 1 min verstellt = 6
+//         Abweichungen; Dauer gerechnet statt fortgeschrieben = 6 (Text nach
+//         49,7 Tagen Ausfall dann "1 Minute" - genau die Falschauskunft, die
+//         der Deckel verhindert); Stumm-Uhr laeuft ohne Verbindung weiter = 6
+//         (die Seite meldete dann direkt nach der Rueckkehr des Brokers einen
+//         zweiten Fehler); Stumm-Karenz auf 4 min = 7; Vorrang umgedreht = 1.
+//         Die letzte Gegenprobe deckte eine Luecke auf: Der Vorrang in
+//         verbindung_lage() war zunaechst gar nicht geprueft, weil die Uhren
+//         im Betrieb nie gleichzeitig laufen. Er steht als zweite Sicherung
+//         weiter da und wird jetzt mit einem von Hand gebauten Zustand
+//         belegt.
 //         NICHT abgedeckt vom Hosttest: die Anbindung in HeishaMon.cpp
-//         (mqtt_client.connected() als Eingang) und die Anzeige selbst. Beide
-//         gehoeren in den Abnahmetest.
+//         (mqtt_client.connected() als Eingang, der Aufruf in mqtt_callback)
+//         und die Anzeige selbst. Beide gehoeren in den Abnahmetest.
 //
 // 3.12.0 - Der Notbetrieb ist ueber die Weboberflaeche schaltbar. Ein Knopf auf
 //         /notbetrieb stellt die Waermepumpe auf ihre eigene Heizkurve (Stufe 1)

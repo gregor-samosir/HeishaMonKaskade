@@ -283,6 +283,16 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 #define VB_TXT_FOLGE "Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter. Wird es zu kalt, hilft der Notbetrieb."
 #define VB_TXT_FOLGE_HIER "Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter."
 
+// Der zweite Ausfall: Der Server im Keller antwortet, aber es kommt nichts mehr
+// von ihm. Der Text muss sich deutlich vom ersten unterscheiden - wer zum
+// Server läuft, soll wissen, ob dort überhaupt etwas zu holen ist. Deshalb
+// steht hier ausdrücklich "erreichbar", und der Hinweis zeigt auf die
+// Steuerungssoftware statt auf den Server.
+#define VB_TXT_STUMM_VOR "Hausteuerung erreichbar, sendet aber seit "
+#define VB_TXT_STUMM_NACH " keine Vorgaben."
+#define VB_TXT_STUMM_FOLGE "Der Server antwortet, aber die Steuerung rechnet nicht mehr. Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter."
+
+
 /*****************************************************************************/
 /* Die Verbindungsanzeige - einmal als JavaScript, einmal als C++            */
 /*                                                                           */
@@ -309,6 +319,10 @@ static const char verbindungJS[] PROGMEM =
     "if(lage==0||lage==1){"
     "if(zeigeOk){e.className='w3-text-grey w3-small';e.innerHTML='<p>" VB_TXT_VERBUNDEN "</p>';}"
     "else{e.className='';e.innerHTML='';}return;}"
+    // Lage 4 = Broker da, aber keine Vorgaben mehr. Eigener Text, weil sonst
+    // jemand zum Server laeuft, um dort nach dem falschen Fehler zu suchen.
+    "if(lage==4){e.className='w3-panel w3-orange';"
+    "e.innerHTML='<h3>" VB_TXT_STUMM_VOR "'+dauer+'" VB_TXT_STUMM_NACH "</h3><p>" VB_TXT_STUMM_FOLGE "</p>';return;}"
     // Lage 3 = seit dem Neustart nie verbunden. Dort ist die wahre Dauer
     // unbekannt, eine Minutenangabe waere gelogen.
     "var s=(lage==3)?'" VB_TXT_WEG_NEUSTART "':('" VB_TXT_WEG_VOR "'+dauer+'" VB_TXT_WEG_NACH "');"
@@ -353,18 +367,28 @@ static void verbindungszeile(String &out, bool zeigeOk)
     return;
   }
 
+  // Der Puffer ist grosszuegig: der laengste Text ist "mehr als 30 Tagen"
+  char dauer[32];
+  verbindung_dauer_text(dauer, sizeof(dauer),
+                        verbindung_ausfall_sekunden(&hausteuerung),
+                        verbindung_ueber_deckel(&hausteuerung));
+
   out += "<div id='nbverb' class='w3-panel w3-orange'><h3>";
+  if (lage == VERBINDUNG_STEUERUNG_STUMM)
+  {
+    out += VB_TXT_STUMM_VOR;
+    out += dauer;
+    out += VB_TXT_STUMM_NACH;
+    out += "</h3><p>" VB_TXT_STUMM_FOLGE "</p></div>";
+    return;
+  }
+
   if (lage == VERBINDUNG_GESTOERT_SEIT_NEUSTART)
   {
     out += VB_TXT_WEG_NEUSTART;
   }
   else
   {
-    // Der Puffer ist grosszuegig: der laengste Text ist "mehr als 30 Tagen"
-    char dauer[32];
-    verbindung_dauer_text(dauer, sizeof(dauer),
-                          verbindung_ausfall_sekunden(&hausteuerung),
-                          hausteuerung.ueber_deckel);
     out += VB_TXT_WEG_VOR;
     out += dauer;
     out += VB_TXT_WEG_NACH;
@@ -870,11 +894,14 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   {
     char dauer[32] = "";
     const VerbindungsLage lage = verbindung_lage(&hausteuerung);
-    if (lage == VERBINDUNG_GESTOERT)
+    // Nur die beiden Lagen mit einer echten Dauer bekommen einen Text. Lage 3
+    // ("nie verbunden") hat keine, und ein Text dort waere genau die
+    // Minutenzahl, die nicht stimmt.
+    if (lage == VERBINDUNG_GESTOERT || lage == VERBINDUNG_STEUERUNG_STUMM)
     {
       verbindung_dauer_text(dauer, sizeof(dauer),
                             verbindung_ausfall_sekunden(&hausteuerung),
-                            hausteuerung.ueber_deckel);
+                            verbindung_ueber_deckel(&hausteuerung));
     }
     (void)snprintf(status + used, sizeof(status) - used, ";%u;%s", (unsigned)lage, dauer);
   }

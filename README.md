@@ -106,6 +106,7 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 | WLAN-Ausfall | keine Prüfung im Betrieb | Watchdog: Reconnect nach 30 s, Neustart nach 5 min |
 | Byte 110 | nicht dekodiert | vier Topics mit den Ist-Zuständen (heizt/kühlt tatsächlich) |
 | Broker weg | nur eine Zeile im MQTT-Log, die niemanden erreicht | die Weboberfläche sagt es: „Hausteuerung seit 14 Minuten nicht erreichbar" |
+| Steuerung rechnet nicht mehr | fällt gar nicht auf, von außen sieht alles gesund aus | erkannt am ausbleibenden 5-min-Re-Assert, eigener Text auf der Seite |
 
 Im Detail:
 
@@ -147,8 +148,26 @@ vom Hosttest abgedeckt:
 
 Gemessen wird die **MQTT-Verbindung**, nicht das WLAN: Der Ausfall, um den es
 geht, ist der des ioBroker, und ohne WLAN wäre auch die Weboberfläche weg, die
-die Auskunft anzeigen soll. Der Fall „Broker läuft, aber die Kaskadenregelung
-rechnet nicht mehr" ist damit noch nicht abgedeckt.
+die Auskunft anzeigen soll.
+
+**Der zweite Ausfall ist der unauffälligere:** Der Broker läuft, aber die
+Kaskadenregelung rechnet nicht mehr — Node-RED-Container weg, Flow im Fehler.
+Von außen sieht alles gesund aus, die Wärmepumpe bekommt trotzdem keine Vorgaben.
+Die Firmware erkennt das am ausbleibenden Re-Assert und sagt dann ausdrücklich
+„Hausteuerung **erreichbar**, sendet aber seit 23 Minuten keine Vorgaben" — wer
+zum Server im Keller läuft, soll wissen, ob dort überhaupt etwas zu holen ist.
+
+Die Karenz dafür sind **12 Minuten**, und die sind gerechnet, nicht geraten: Der
+Re-Assert kommt alle 300,0 s (am 2026-08-21 an H2 gemessen), zwölf Minuten decken
+zwei verpasste Takte samt Reserve ab. Zwei Regeln halten das zusammen:
+
+* **Der Wiedereinspiel-Schwall zählt nicht als Lebenszeichen.** Der
+  ioBroker-Adapter schickt jedem neuen Abonnenten die gespeicherten Set-Werte —
+  auch wenn Node-RED längst tot ist. Der Herzschlag wird deshalb erst *hinter*
+  der Karenzzeit aus 3.6.1 gestempelt.
+* **Ist der Broker weg, gilt der Broker-Ausfall.** Beides zu melden würde jemanden
+  zum Server schicken, um dort nach dem falschen Fehler zu suchen. Die Uhr für
+  die stumme Steuerung läuft deshalb nur bei stehender Verbindung.
 
 ### Der Notbetrieb ist ein Knopf im Browser (3.12.0)
 
