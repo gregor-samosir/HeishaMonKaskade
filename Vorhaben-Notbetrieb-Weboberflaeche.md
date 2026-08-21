@@ -817,10 +817,14 @@ dieses Repos, die unten ausdrücklich als offen markiert sind.
   fotografieren, Wartungsmodus wieder aus. Für einen Lauf, der die Anlage
   einschalten soll, bleibt er das falsche Werkzeug
   ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
-* **OFFEN:** `NOTBETRIEB.md` im Node-RED-Projekt — §7 beschreibt noch den
-  Handweg am Bedienterminal als einzigen Weg; der Knopf gehört davor, der
-  Handweg bleibt als Rückfall. Die Rückkehr-Zeile im Re-Assert und ihre
-  Herzschlag-Bedingung (Entscheidung 6) stehen dort bereits in §9.
+* ✔ **Erledigt:** `NOTBETRIEB.md` im Node-RED-Projekt — §7a (Knopf) vor §7b
+  (Handweg) steht seit dem 2026-08-21. Am selben Tag mit 3.13.0 nachgezogen
+  (dort `928eb69`): §0 nennt die Bridge-Seite als **besseren Ausfalltest** als
+  die Familien-App (die lädt bei einer bloß stummen Steuerung und zeigt
+  eingefrorene Werte), §2 führt die Bridge-Seiten als zweite verlässliche
+  Anzeige, §7a sagt **blauer** Knopf, und §9 trennt die **zwei Herzschläge**
+  auseinander — den der Kaskadenregelung (Bedingung für die Rückkehr-Zeile) und
+  den der Firmware (Ausfallerkennung).
 * ✔ **Erledigt 2026-08-21:** Die Gleichsetzung von
   `Z1HeatRequestTemperature` (SET5) und `Z1HeatCurveTargetHighTemp` (SET27) gilt
   nur im Direktbetrieb. Fundstellen: [`MQTT-Topics.md:468`](MQTT-Topics.md#L468)
