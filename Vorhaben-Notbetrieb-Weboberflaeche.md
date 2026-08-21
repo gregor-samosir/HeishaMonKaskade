@@ -20,7 +20,9 @@ Messungen beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen
 Fehler in der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind
 korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. **Auch Etappe 6 ist gefahren:** Der Knopf schaltet mit
 abgeschaltetem Broker, die Firmware übersteht den Ausfall und holt sich in 52 s
-von allein zurück. Offen ist nur noch Etappe 7 (Doku, Release 3.12.0).
+von allein zurück. **Und der Warmwasserknopf an H2 ist belegt** — GRÜN nach 24 s
+im Kühlbetrieb. Beide Stufen tragen jetzt die Firmware dieses Branches. Offen ist
+nur noch Etappe 7 (Doku, Release 3.12.0).
 
 ---
 
@@ -873,6 +875,7 @@ Etappe | Inhalt | Commit
 5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
 5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | `a6fdafd`
 6 | **Etappe 6: GRÜN ohne Broker, Rückkehr nach 52 s** | `a59955a`
+6a | **Der Warmwasserknopf an H2: GRÜN nach 24 s** | dieser Commit
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
@@ -1077,12 +1080,71 @@ Sollwert nach dem Werks-Reset knapp fünf Minuten auf 35 °C stand — das läuf
 allein aus. Nach dem Zurückschalten auf Kühlen (Modus Nur-DHW) steht H1 wieder
 exakt auf dem Stand von 00:52, vor dem ersten Lauf des Abends.
 
+### Der Warmwasserknopf an H2 — 2026-08-21, 02:19
+
+Bis zu diesem Lauf war die Rolle Warmwasser **nie auf einem Gerät gelaufen**:
+`NOTBETRIEB_ROLLE_WASSER` war gebaut, hosttestbar und im Broker versorgt, aber
+`/notbetrieb` antwortete an H2 mit 404. Ein Release mit einem Knopf, den nie
+jemand gedrückt hat, wäre kein Release gewesen.
+
+**Vorweg ein Fund beim Aufräumen der Rückfallebene:** In `~/HeishaMon-Rollback/`
+fehlte `heishamon_esp32_h2_ota_v3.11.0.bin` — für H1 war es da (vom
+Zurückflashen am Vorabend), für H2 nie entstanden. Es ist aus dem Tag `v3.11.0`
+in einem temporären Worktree gebaut und abgelegt worden, bevor das Produktivgerät
+angefasst wurde. Geprüft über MD5 gegen das H1-Binary und den Stufennamen im
+Abbild: zwei verschiedene Dateien, „Heisha Stufe 2" drin.
+
+**Ausgangszustand:** KNX auf Kühlen, Modus Nur-DHW — der Sommerfall, für den
+Stufe 2 gebaut ist. H2 an, `Operating_Mode_State` = 3, Speicher 64 °C bei
+Sollwert 48, Kompressor 0 Hz. Kein KNX-Eingriff, kein Ladebedarf.
+
+**Der Status nach dem Flashen ist für sich schon ein Nachweis:** `0;1;3;0;0`
+
+* **Drei Schritte statt sieben** — das Rollen-Flag greift, H2 fährt die
+  Warmwasser-Folge.
+* **`fehlend` = 0** — `DHWTemp` war binnen Sekunden nach dem Neustart wieder da.
+  Die Broker-Wiedereinspielung ist damit an einem zweiten Gerät belegt.
+* **Sperre = 0, obwohl `Heat_Cool_SW_State` auf Cool steht.** Das ist der
+  Nachweis, den es nur hier gibt: Die Betriebsart-Sperre gilt für Heizen und
+  **nicht** für Warmwasser. Am selben Abend war H1 im selben Kühlbetrieb
+  gesperrt.
+
+**Der Lauf hatte zunächst gar keinen Beweiswert** — und das ist der lehrreiche
+Teil. Alle drei Schritte fanden ihren Sollwert bereits vor: `OperationMode` = 3,
+`DHWTemp` = 48, `Heatpump` = 1. Der Knopf hätte GRÜN gemeldet, ohne dass sich ein
+Byte ändert. Deshalb wurden im Ruhefenster vorher zwei Werte verstellt und die
+Rückmeldung abgewartet:
+
+```
+02:18:43  set/DHWTemp 45 und set/Heatpump 0   (ein Telegramm, 20 ms Abstand)
+02:18:52  von der Waermepumpe bestaetigt: TOP0=0, TOP9=45
+02:18:52  KNOPF
+02:19:16  GRUEN nach 24 s (drei Schritte a 8 s)
+```
+
+Gesendet | vor dem Knopf | nach dem Lauf
+:--- | ---: | ---:
+`DHW_Target_Temp` (TOP9) | **45** | **48**
+`Heatpump_State` (TOP0) | **0 = aus** | **1 = An**
+`Operating_Mode_State` (TOP4) | 3 | 3
+
+Zwei von drei Schritten tragen damit den Beweis; der dritte ist über M3
+inhaltlich belegt. **Endkontrolle:** von 92 Zeilen weicht genau eine ab —
+`Main_Inlet_Temp` 19,75 → 19,50, ein laufender Messwert.
+
+**Nicht abgedeckt bleibt der Heizmodus.** M3 und dieser Lauf fanden beide im
+Kühlbetrieb statt. Dass `OperationMode` = 3 im Heizbetrieb durchgeht, ist
+plausibel — wenn es sogar im Kühlbetrieb trägt, wo die Anlage Heizmodi ablehnt —
+aber ungemessen. Ein eigener KNX-Wechsel lohnt dafür nicht; der Fall sollte
+mitlaufen, wenn der Schalter ohnehin auf Heizen steht, etwa beim Termin fürs
+Kurvenfoto.
+
 ### Zustand der Geräte
 
 Gerät | Stand
 :--- | :---
 H1 (192.168.2.120) | **Firmware dieses Branches**, per OTA am 2026-08-21 um 00:54 (Env `heishamon_esp32_h1_ota`). Versionsanzeige weiter 3.11.0 — die Nummer wird erst in Etappe 7 gesetzt. Abnahme gegen die Baseline ohne Abweichung. Anlage steht, Direktbetrieb, Betriebsart Cool. Rückfall: `heishamon_esp32_h1_ota_v3.11.0.bin` in `~/HeishaMon-Rollback/` |
-H2 (192.168.2.122) | 3.11.0, **unverändert** — der Warmwasser-Knopf ist dort noch nicht drauf |
+H2 (192.168.2.122) | **Firmware dieses Branches**, per OTA am 2026-08-21 um 02:15 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung, Knopf am Gerät belegt. Rückfall: `heishamon_esp32_h2_ota_v3.11.0.bin` in `~/HeishaMon-Rollback/`, am 2026-08-21 aus dem Tag nachgebaut |
 Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
