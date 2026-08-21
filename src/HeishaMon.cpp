@@ -106,6 +106,11 @@ unsigned int ignoredSetCommands = 0;
 // sonst waere auch die Weboberflaeche weg, die diese Auskunft anzeigen soll.
 VerbindungsWacht hausteuerung;
 
+// Dauer der zuletzt beendeten Stille, wartet aufs Loggen aus loop(). Der Wert
+// wird im MQTT-Callback gesetzt und NICHT dort geloggt - warum, steht an der
+// Setzstelle in mqtt_callback(). Gleiches Muster wie wifiOutageSeconds.
+uint32_t stilleBeendetSekunden = 0;
+
 // WLAN-Watchdog (siehe check_wifi)
 bool wifiIsDown = false;
 unsigned long wifiDownSince = 0;
@@ -416,17 +421,26 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
   //   Adapter schickt jedem neuen Abonnenten die gespeicherten Werte, auch
   //   wenn Node-RED laengst tot ist. Zaehlte er mit, verstummte die Meldung
   //   nach jedem Reconnect fuer zwoelf Minuten, ohne dass sich etwas
-  //   geaendert haette.
+  //   geaendert haette. (Am 2026-08-21 am Pruefstand gemessen: 34
+  //   wiedereingespielte Kommandos direkt nach dem Verbinden.)
   // * Vor build_heatpump_command(), weil ein Kommando, das die Firmware
   //   danach verwirft (unbekanntes Topic, Bereichsfehler), trotzdem beweist,
   //   dass die Steuerung sendet - und genau darum geht es hier.
+  //
+  // HIER WIRD NUR GEMERKT, NICHT GELOGGT - und das ist keine Stilfrage:
+  // write_mqtt_log() ruft mqtt_client.publish(), und PubSubClient benutzt fuer
+  // Senden und Empfangen DENSELBEN Puffer. In diesen Puffer zeigen `topic` und
+  // `payload` waehrend des Callbacks. Ein Publish an dieser Stelle
+  // ueberschreibt sie also mitten in der Auswertung. Am 2026-08-21 am
+  // Pruefstand genau so passiert: Aus "panasonic_heat_pump_test/set/QuietMode"
+  // wurde "0Q", die Firmware meldete "Unknown set topic 0Q" und das Kommando
+  // ging verloren. Die Meldung geht deshalb aus loop() raus, wenn der Puffer
+  // wieder frei ist - dasselbe Muster wie bei wifiOutageSeconds.
   {
     uint32_t stille_s = verbindung_set_empfangen(&hausteuerung, (uint32_t)millis());
     if (stille_s > 0)
     {
-      (void)snprintf(log_msg, sizeof(log_msg),
-                     "Hausteuerung hat %lu s keine Vorgaben gesendet", (unsigned long)stille_s);
-      write_mqtt_log(log_msg);
+      stilleBeendetSekunden = stille_s;
     }
   }
 
@@ -934,6 +948,17 @@ void loop()
   // Rueckkehr erst im naechsten Durchlauf, wenn die Verbindung wirklich steht
   // und die Log-Zeile darunter auch beim Broker ankommt.
   {
+    // Die im Callback gemerkte Stille-Dauer jetzt melden - hier ist der
+    // PubSubClient-Puffer frei (siehe die Begruendung in mqtt_callback).
+    if (stilleBeendetSekunden > 0)
+    {
+      (void)snprintf(log_msg, sizeof(log_msg),
+                     "Hausteuerung hat %lu s keine Vorgaben gesendet",
+                     (unsigned long)stilleBeendetSekunden);
+      write_mqtt_log(log_msg);
+      stilleBeendetSekunden = 0;
+    }
+
     // uint32_t und nicht unsigned long: Auf ESP8266 und ESP32 ist beides
     // 32 Bit, aber die Wacht rechnet durchgaengig in uint32_t (siehe
     // verbindung.h). Ein Zeigercast zwischen beiden Typen waere genau die
