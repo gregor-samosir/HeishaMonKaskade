@@ -32,8 +32,10 @@ unterscheidet zwei Ausfälle, den weggefallenen Broker und die stumme Steuerung
 Entscheidungen und der Prüfplan stehen in **Abschnitt 11**; der Nachweis am Gerät
 ist am 2026-08-21 am Prüfstand erbracht — alle sechs Lagen, ohne Eingriff an der
 Anlage. **Dabei ist ein Fehler in Etappe B aufgefallen und behoben worden**
-(eine Log-Zeile im MQTT-Callback zerstörte das eintreffende Kommando). Offen ist
-nur noch der OTA-Rollout auf H1 und H2.
+(eine Log-Zeile im MQTT-Callback zerstörte das eintreffende Kommando).
+**Beide Stufen laufen seit dem 2026-08-21 nachmittags auf 3.13.0**, Abnahme
+grün, und die Gegenprobe im Normalbetrieb zeigt über drei Re-Assert-Takte
+hinweg keinen Fehlalarm.
 
 ---
 
@@ -1295,6 +1297,7 @@ Etappe | Inhalt | Commit
 4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
 5 | Fix: Logzeile aus dem MQTT-Callback nach loop() | `ff56532`
 6 | Nachweis am Prüfstand, alle sechs Lagen | `4e8d263`
+7 | **Rollout auf H1 und H2, Abnahme grün** | *dieser Commit*
 
 ### Die Entscheidungen
 
@@ -1583,6 +1586,57 @@ Der Prüfstand steht wieder auf `192.168.2.147:1883`, Status `0;1;7;0;2;0;` —
 Notbetriebswerte vollständig, Lage 0, Sperre 2 (mangels Wärmepumpe kein TOP101,
 wie erwartet). Der Minibroker ist beendet, Port 1883 auf dem Arbeitsrechner
 wieder frei. An H1 und H2 wurde nichts angefasst.
+
+### Der Rollout, 2026-08-21 — beide Stufen auf 3.13.0
+
+**H1 um 15:08:22, H2 um 15:16:22** (Envs `heishamon_esp32_h1_ota` und
+`heishamon_esp32_h2_ota`), nacheinander mit Abnahme dazwischen, damit nie beide
+Stufen gleichzeitig weg sind. Baseline vorher und nachher über
+[`test/tablesnap.py`](test/tablesnap.py).
+
+ | H1 (192.168.2.120) | H2 (192.168.2.122)
+:--- | :--- | :---
+Version | 3.13.0 ✓ | 3.13.0 ✓
+Statusroute | `0;1;7;0;2;0;` | `0;1;3;0;0;0;`
+Tabellenstruktur | 92 Topics, identisch ✓ | identisch ✓
+Abweichungen zur Baseline | 4 laufende Messwerte | 2 laufende Messwerte
+Sollwerte über den Reboot | alle fünf unverändert ✓ | alle fünf unverändert ✓
+LWT | Online ✓ | Online ✓
+
+Die Abweichungen sind ausschließlich Werte, die sich ohnehin bewegen — an
+beiden Stufen die Außentemperatur (22 → 21 °C), dazu an H1 Raumthermostat,
+Außenrohr und Hochdruck, an H2 der Wärmetauscher-Auslauf. **Kein Sollwert hat
+sich verstellt**, die `SUBSCRIBE_GRACE` aus 3.6.1 hat wie vorgesehen gegriffen
+(`Quiet_Mode_Level` 0, `Z1_Heat_Request_Temp` 20, `Z1HeatCurveTargetHigh` 20,
+`DHW_Target_Temp` 50 bzw. 48).
+
+### Die wichtigste Gegenprobe: kein Fehlalarm im Normalbetrieb
+
+Eine Anzeige, die grundlos Alarm schlägt, ist schlimmer als keine. Der
+entscheidende Nachweis ist deshalb nicht, dass die Meldung kommt, wenn sie soll
+— sondern dass sie **ausbleibt**, solange alles läuft.
+
+**Beide Stufen 18 Minuten lang beobachtet (15:19–15:37), 37 Messpunkte, im
+30-Sekunden-Takt:** durchgehend Lage 0, kein einziger Lagewechsel, **kein
+einziges Vorkommen von Lage 4**.
+
+Das ist mehr als drei Re-Assert-Takte und deutlich über der Stumm-Karenz von
+zwölf Minuten. Käme der Herzschlag nicht durch — würde also der echte Re-Assert
+aus irgendeinem Grund nicht als Lebenszeichen gezählt —, hätte spätestens nach
+zwölf Minuten an beiden Stufen die Stumm-Meldung stehen müssen. Damit ist der
+Herzschlag nicht nur im Fehlerfall belegt (Prüfstand), sondern auch im
+Normalfall.
+
+Die Anzeige selbst an H1 im Normalbetrieb: Notbetriebsseite „Hausteuerung:
+verbunden" (grau, klein), Startseite leer.
+
+### Rollback
+
+`~/HeishaMon-Rollback/` trägt alle vier produktiven Abbilder als `v3.13.0`
+(beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
+3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout
+erneut mit `strings` nachgeprüft. Die Binaries gehören nur an die Releases des
+**privaten** Repos.
 
 ### Prüfplan-Ergänzung für Etappe B
 
