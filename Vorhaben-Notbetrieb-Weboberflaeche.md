@@ -1163,12 +1163,30 @@ aber ungemessen. Ein eigener KNX-Wechsel lohnt dafür nicht; der Fall sollte
 mitlaufen, wenn der Schalter ohnehin auf Heizen steht, etwa beim Termin fürs
 Kurvenfoto.
 
+### Der eigene Zugang — am Gerät geprüft (2026-08-21, 02:46)
+
+Acht Abfragen gegen die frisch geflashten Stufen, alle wie erwartet:
+
+Weg | Endpunkt | Ergebnis
+:--- | :--- | :---
+`admin` + OTA-Passwort | `/notbetrieb` | **401** — der alte Weg ist zu
+`admin` + OTA-Passwort | `/notbetrieb/start` | **401**
+`notbetrieb` + falsches Passwort | `/notbetrieb` | **401**
+`notbetrieb` + eigenes Passwort | `/notbetrieb` an H1 | **200**
+`notbetrieb` + eigenes Passwort | `/notbetrieb` an H2 | **200**
+`admin` + OTA-Passwort | `/settings` | **200** — unverändert
+`notbetrieb` + eigenes Passwort | `/settings` | **401** — trennt in beide Richtungen
+ohne Anmeldung | `/notbetrieb/status` | **200** — bewusst offen
+
+Die Trennung wirkt also beidseitig: Mit dem Notbetriebspasswort kommt niemand an
+die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
+
 ### Zustand der Geräte
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **Firmware dieses Branches**, per OTA am 2026-08-21 um 00:54 (Env `heishamon_esp32_h1_ota`). Versionsanzeige weiter 3.11.0 — die Nummer wird erst in Etappe 7 gesetzt. Abnahme gegen die Baseline ohne Abweichung. Anlage steht, Direktbetrieb, Betriebsart Cool. Rückfall: `heishamon_esp32_h1_ota_v3.11.0.bin` in `~/HeishaMon-Rollback/` |
-H2 (192.168.2.122) | **Firmware dieses Branches**, per OTA am 2026-08-21 um 02:15 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung, Knopf am Gerät belegt. Rückfall: `heishamon_esp32_h2_ota_v3.11.0.bin` in `~/HeishaMon-Rollback/`, am 2026-08-21 aus dem Tag nachgebaut |
+H1 (192.168.2.120) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h1_ota`). Abnahme gegen die Baseline: eine Abweichung, ein laufender Messwert. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2`) |
+H2 (192.168.2.122) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung. Knopf frei (`0;1;3;0;0`) |
 Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
@@ -1209,9 +1227,14 @@ curl -s "http://192.168.2.147:8087/getPlainValue/mqtt.0.panasonic_heat_pump.stat
 curl http://192.168.2.120/notbetrieb/status
 ```
 
-**Die Versionsnummer steht bewusst noch auf 3.11.0.** Eine Firmware mit Knopf,
-aber ohne Nachweis an der Anlage ist kein Release; 3.12.0 wird in Etappe 7
-gesetzt, zusammen mit dem Changelog.
+**Die Versionsnummer steht seit dem 2026-08-21 auf 3.12.0**, gesetzt in
+Etappe 7 zusammen mit dem Changelog — nachdem der Nachweis an der Anlage vorlag
+und nicht davor. Beide Stufen laufen darauf, die Rollback-Binaries liegen in
+`~/HeishaMon-Rollback/`.
+
+**Achtung bei den Binaries:** Ab 3.12.0 steckt neben dem AP-Passwort auch das
+Notbetriebspasswort lesbar in jedem Abbild. Sie gehören damit erst recht nur ins
+private Rollback-Repo, nie in ein öffentliches Release.
 
 **Eine lokale Besonderheit:** Der USB-Port des Prüfstands hat sich auf
 `/dev/cu.usbserial-1110` geändert. Das steht in `platformio_user_env.ini`
