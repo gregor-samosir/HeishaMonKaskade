@@ -838,8 +838,10 @@ dieses Repos, die unten ausdrücklich als offen markiert sind.
 * ✔ **Erledigt 2026-08-21 im Repo:** Changelog und `SET-TOP-Zuordnung.md`
   sagten sinngemäß „damit ist der Notbetrieb vollständig fernschaltbar". Das
   stimmt nur, solange ein Broker erreichbar ist; beide Stellen sind präzisiert,
-  der Changelog zu 3.12.0 greift es auf. **OFFEN bleibt der Text des
-  GitHub-Release zu 3.11.0** — der lässt sich nur dort ändern.
+  der Changelog zu 3.12.0 greift es auf. **Auch der Text des GitHub-Release zu
+  3.11.0 ist nachgezogen** — als Nachtrag statt Umschreiben, zweimal: einmal
+  mit 3.12.0 (die Lücke selbst) und am 2026-08-21 mit 3.13.0 (dass sie bis
+  dahin niemandem auffiel).
 
 **ERLEDIGT in 3.13.0 — Abschnitt 11 führt es aus.** Der Text unten steht
 unverändert, weil er die Ausgangslage beschreibt.
