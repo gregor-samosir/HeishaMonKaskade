@@ -1294,7 +1294,7 @@ Etappe | Inhalt | Commit
 3a | Nachweis: der Re-Assert kommt bei beiden Stufen an | `67d8d8e`
 4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
 5 | Fix: Logzeile aus dem MQTT-Callback nach loop() | `ff56532`
-6 | Nachweis am Prüfstand, alle sechs Lagen | *dieser Commit*
+6 | Nachweis am Prüfstand, alle sechs Lagen | `4e8d263`
 
 ### Die Entscheidungen
 

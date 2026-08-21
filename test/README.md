@@ -520,6 +520,80 @@ spaeter kommt aus der Waechter-Logik mit ihrem eigenen Takt (`QuietMode`).
 Der Mitschnitt ist **vollstaendig passiv** und braucht kein Testfenster: Er
 liest nur den Telnet-Strom und sendet nichts, auch keine Umschalttasten.
 
+## Verbindungsanzeige am Pruefstand (2026-08-21, 3.13.0)
+
+Der Abnahmetest zu 3.13.0 - und der Beleg dafuer, dass er noetig war: Er hat
+einen Fehler gefunden, den kein Hosttest finden konnte.
+
+**Der Pruefstand ist fuer DIESE Funktion wieder taugliches Werkzeug.** Fuer den
+Notbetriebsknopf war er seit der Sperre ausgeschieden (ohne Waermepumpe kein
+TOP101, also bleibt der Knopf gesperrt) - eine Verbindungsanzeige braucht kein
+TOP101. Der ganze Nachweis lief ohne Eingriff an H1/H2 und ohne Testfenster.
+
+### Zwei Kniffe, ohne die es nicht gegangen waere
+
+**1. Der Pruefstand wird von allein stumm.** Er laeuft unter dem Prefix
+`panasonic_heat_pump_test`, und dorthin sendet der Hauptmodus-Verteiler nichts.
+Die Lage 4 ("Steuerung stumm") stellt sich also von selbst ein - der
+Node-RED-Container musste nicht angehalten werden.
+
+**2. Fuer den Broker-Ausfall braucht es einen eigenen Broker.** Ueber
+`/settings` laesst sich die Serveradresse zwar auf eine tote IP stellen, aber
+**jede Aenderung dort startet das Geraet neu** - und danach ist die Lage immer
+3 ("seit dem Neustart nie verbunden"), nie 2. Fuer Lage 2 muss eine BESTEHENDE
+Verbindung abreissen. Den ioBroker der Anlage dafuer anzufassen waere das
+falsche Mittel; stattdessen lief ein minimaler MQTT-Broker auf dem
+Arbeitsrechner (rund 200 Zeilen, nur CONNECT/CONNACK, SUBSCRIBE/SUBACK,
+PUBLISH, PINGREQ/PINGRESP - mehr braucht PubSubClient nicht), auf den der
+Pruefstand fuer die Dauer des Nachweises umgestellt wurde. Als Zugabe zeigt er
+die Logzeilen der Firmware direkt an.
+
+### Was gemessen wurde
+
+Zeit | Pruefung | Erwartet | Gemessen
+:--- | :--- | :--- | :---
+14:23:38 | Stumm-Karenz, 1. Lauf | 14:23:29 | im 20-s-Fenster getroffen
+14:39:26 | Stumm-Karenz, 2. Lauf | 14:39:23 | getroffen
+14:39:49 | Rueckkehr der Vorgaben | Lage 0 + Logzeile | "hat 745 s keine Vorgaben gesendet"
+14:41:05 | Broker gekappt | Lage 1, keine Meldung | ok
+14:46:06 | Broker-Karenz 5 min | 14:46:06 | punktgenau
+14:55:07 | Vorrang | nach 14 min ohne Broker Lage 2 | `...;2;14 Minuten`
+14:55:09 | Rueckkehr des Brokers | Logzeile, Lage 0, keine Stumm-Meldung | "war 850 s nicht erreichbar"
+15:00:58 | Lage 3 | Text ohne Minutenzahl, Dauertext leer | ok
+
+### Der Fehler, den der Lauf gefunden hat
+
+Das erste Kommando an den Pruefstand ging verloren:
+
+```
+14:24:14  Error: Unknown set topic 0Q
+```
+
+Aus `panasonic_heat_pump_test/set/QuietMode` war `0Q` geworden.
+
+**`write_mqtt_log()` ruft `mqtt_client.publish()`, und PubSubClient benutzt fuer
+Senden und Empfangen DENSELBEN Puffer.** Genau dorthin zeigen `topic` und
+`payload` waehrend des Callbacks. Etappe B setzte die Herzschlag-Meldung mitten
+in der Auswertung ab und ueberschrieb damit den Topic-Namen.
+
+**Merke fuer kuenftige Aenderungen an `mqtt_callback()`: dort NICHT loggen.**
+Der bestehende Code haelt sich daran - `write_mqtt_log()` steht nur an Stellen,
+an denen `topic` und `msg` nicht mehr gebraucht werden. Wer eine Meldung
+braucht, merkt sich den Wert und gibt ihn aus `loop()` aus (Muster:
+`wifiOutageSeconds`, seit 3.13.0 auch `stilleBeendetSekunden`).
+
+### Nebenbefund: 34 wiedereingespielte Kommandos bei JEDEM Verbinden
+
+```
+14:11:34  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+14:27:19  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+Der ioBroker-Adapter spielt das dem Pruefstand ein, obwohl unter diesem Prefix
+**niemand steuert**. Das ist der gemessene Beleg dafuer, warum der Herzschlag
+NACH der `SUBSCRIBE_GRACE`-Pruefung gestempelt wird: Davor haetten diese 34
+Nachrichten als "die Steuerung lebt" gezaehlt.
+
 ## Kurven-Set-Kommandos (SET27-SET34)
 
 `kurven_test.py` weist die acht Kurvenbefehle am laufenden Geraet nach, ohne
