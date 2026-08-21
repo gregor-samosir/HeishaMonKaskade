@@ -1213,9 +1213,9 @@ die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h1_ota`). Abnahme gegen die Baseline: eine Abweichung, ein laufender Messwert. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2`) |
-H2 (192.168.2.122) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung. Knopf frei (`0;1;3;0;0`) |
-Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
+H1 (192.168.2.120) | **3.13.0**, per OTA am 2026-08-21 um 15:08 (Env `heishamon_esp32_h1_ota`). Abnahme grün, vier laufende Messwerte. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2;0;`) |
+H2 (192.168.2.122) | **3.13.0**, per OTA am 2026-08-21 um 15:16 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme grün, zwei laufende Messwerte. Knopf frei (`0;1;3;0;0;0;`) |
+Prüfstand (192.168.2.197) | **3.13.0**, per USB am 2026-08-21 um 14:27, Rolle Heizen, Broker wieder auf 192.168.2.147. Für den Notbetriebsknopf weiterhin untauglich (ohne Wärmepumpe kein TOP101), für die **Verbindungsanzeige** dagegen genau richtig — dort ist der ganze Nachweis zu 3.13.0 gelaufen |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
 läuft normal weiter. Nichts ist aufzuräumen.
@@ -1297,7 +1297,7 @@ Etappe | Inhalt | Commit
 4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
 5 | Fix: Logzeile aus dem MQTT-Callback nach loop() | `ff56532`
 6 | Nachweis am Prüfstand, alle sechs Lagen | `4e8d263`
-7 | **Rollout auf H1 und H2, Abnahme grün** | *dieser Commit*
+7 | **Rollout auf H1 und H2, Abnahme grün** | `8c07350`
 
 ### Die Entscheidungen
 
