@@ -875,7 +875,7 @@ Etappe | Inhalt | Commit
 5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
 5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | `a6fdafd`
 6 | **Etappe 6: GRÜN ohne Broker, Rückkehr nach 52 s** | `a59955a`
-6a | **Der Warmwasserknopf an H2: GRÜN nach 24 s** | dieser Commit
+6a | **Der Warmwasserknopf an H2: GRÜN nach 24 s** | `4676e0e`
 
 Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
 mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
