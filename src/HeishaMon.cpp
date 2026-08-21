@@ -100,6 +100,17 @@ unsigned long mqttReconnectDelay = MQTT_RECONNECT_MIN; // waechst bei Misserfolg
 unsigned long setCommandsIgnoredUntil = 0;
 unsigned int ignoredSetCommands = 0;
 
+// Verbindung zur Hausteuerung (siehe verbindung.h). Sie haengt am MQTT-Client
+// und nicht am WLAN: Der Ausfall, um den es geht, ist der des ioBroker - und
+// der MQTT-Broker IST der ioBroker-Adapter. Das WLAN laeuft dabei weiter,
+// sonst waere auch die Weboberflaeche weg, die diese Auskunft anzeigen soll.
+VerbindungsWacht hausteuerung;
+
+// Dauer der zuletzt beendeten Stille, wartet aufs Loggen aus loop(). Der Wert
+// wird im MQTT-Callback gesetzt und NICHT dort geloggt - warum, steht an der
+// Setzstelle in mqtt_callback(). Gleiches Muster wie wifiOutageSeconds.
+uint32_t stilleBeendetSekunden = 0;
+
 // WLAN-Watchdog (siehe check_wifi)
 bool wifiIsDown = false;
 unsigned long wifiDownSince = 0;
@@ -400,6 +411,37 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
     (void)snprintf(log_msg, sizeof(log_msg), "Verworfen (Wiedereinspielung nach Connect): %.64s", topic);
     write_telnet_log(log_msg);
     return; // kein Timer angefasst, der Abfragezyklus laeuft unveraendert weiter
+  }
+
+  // HERZSCHLAG DER STEUERUNG (3.13.0). Der Aufruf steht bewusst HIER - nach
+  // der Karenzpruefung, vor dem Bauen des Kommandos:
+  //
+  // * Nach der Karenzpruefung, weil der Wiedereinspiel-Schwall des
+  //   ioBroker-Adapters KEIN Lebenszeichen der Kaskadenregelung ist. Der
+  //   Adapter schickt jedem neuen Abonnenten die gespeicherten Werte, auch
+  //   wenn Node-RED laengst tot ist. Zaehlte er mit, verstummte die Meldung
+  //   nach jedem Reconnect fuer zwoelf Minuten, ohne dass sich etwas
+  //   geaendert haette. (Am 2026-08-21 am Pruefstand gemessen: 34
+  //   wiedereingespielte Kommandos direkt nach dem Verbinden.)
+  // * Vor build_heatpump_command(), weil ein Kommando, das die Firmware
+  //   danach verwirft (unbekanntes Topic, Bereichsfehler), trotzdem beweist,
+  //   dass die Steuerung sendet - und genau darum geht es hier.
+  //
+  // HIER WIRD NUR GEMERKT, NICHT GELOGGT - und das ist keine Stilfrage:
+  // write_mqtt_log() ruft mqtt_client.publish(), und PubSubClient benutzt fuer
+  // Senden und Empfangen DENSELBEN Puffer. In diesen Puffer zeigen `topic` und
+  // `payload` waehrend des Callbacks. Ein Publish an dieser Stelle
+  // ueberschreibt sie also mitten in der Auswertung. Am 2026-08-21 am
+  // Pruefstand genau so passiert: Aus "panasonic_heat_pump_test/set/QuietMode"
+  // wurde "0Q", die Firmware meldete "Unknown set topic 0Q" und das Kommando
+  // ging verloren. Die Meldung geht deshalb aus loop() raus, wenn der Puffer
+  // wieder frei ist - dasselbe Muster wie bei wifiOutageSeconds.
+  {
+    uint32_t stille_s = verbindung_set_empfangen(&hausteuerung, (uint32_t)millis());
+    if (stille_s > 0)
+    {
+      stilleBeendetSekunden = stille_s;
+    }
   }
 
   Send_Pana_Mainquery_Timer.stop();
@@ -851,6 +893,11 @@ void setup()
   // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
   notbetrieb_init();
 
+  // Anfangszustand der Verbindungswacht: getrennt und noch nie verbunden.
+  // Muss VOR setupMqtt() stehen - dort faellt die erste Verbindung, und ein
+  // spaeteres init() wuerde sie wieder auf "nie verbunden" zuruecksetzen.
+  verbindung_init(&hausteuerung, millis());
+
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
@@ -895,6 +942,40 @@ void loop()
   // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
   // haengen, der ohnehin nur scheitern kann.
   notbetrieb_loop(actual_data);
+
+  // Verbindungswacht nachfuehren. Sie kostet nichts, wenn sich nichts aendert,
+  // und steht bewusst VOR dem Wiederverbindungsversuch: So meldet sie die
+  // Rueckkehr erst im naechsten Durchlauf, wenn die Verbindung wirklich steht
+  // und die Log-Zeile darunter auch beim Broker ankommt.
+  {
+    // Die im Callback gemerkte Stille-Dauer jetzt melden - hier ist der
+    // PubSubClient-Puffer frei (siehe die Begruendung in mqtt_callback).
+    if (stilleBeendetSekunden > 0)
+    {
+      (void)snprintf(log_msg, sizeof(log_msg),
+                     "Hausteuerung hat %lu s keine Vorgaben gesendet",
+                     (unsigned long)stilleBeendetSekunden);
+      write_mqtt_log(log_msg);
+      stilleBeendetSekunden = 0;
+    }
+
+    // uint32_t und nicht unsigned long: Auf ESP8266 und ESP32 ist beides
+    // 32 Bit, aber die Wacht rechnet durchgaengig in uint32_t (siehe
+    // verbindung.h). Ein Zeigercast zwischen beiden Typen waere genau die
+    // Falle, die dieser Header vermeidet.
+    uint32_t ausfall_s = 0;
+    if (verbindung_nachfuehren(&hausteuerung, mqtt_client.connected(),
+                               (uint32_t)millis(), &ausfall_s))
+    {
+      // Gleiches Muster wie die WLAN-Meldung: waehrend des Ausfalls waere sie
+      // ins Leere gegangen, nach der Rueckkehr kommt sie an. Fuer den
+      // Menschen vor der Weboberflaeche ist sie zu spaet - dafuer steht die
+      // Anzeige auf der Seite. Sie ist die Spur fuer die Nachschau danach.
+      (void)snprintf(log_msg, sizeof(log_msg), "Hausteuerung war %lu s nicht erreichbar",
+                     (unsigned long)ausfall_s);
+      write_mqtt_log(log_msg);
+    }
+  }
 
   if (!mqtt_client.connected())
   {

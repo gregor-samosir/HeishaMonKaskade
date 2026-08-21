@@ -92,6 +92,16 @@ jobs:
       #                  warum dieser Test in der CI steht: wird sie vergessen,
       #                  funktioniert der Knopf im Labor und nach jedem Neustart
       #                  nicht mehr - auffallen würde das erst im Ernstfall.
+      # verbindung_test: Zeitregeln der Verbindungswacht aus 3.13.0 - Karenz von
+      #                  5 Minuten, der Sonderfall "seit dem Neustart nie
+      #                  verbunden" und der millis()-Überlauf nach 49,7 Tagen.
+      #                  Der Überlauf ist der Grund, warum dieser Test in der
+      #                  CI steht: Eine bei jeder Abfrage gerechnete Dauer
+      #                  fällt an der Naht unter die Karenz zurück, und die
+      #                  Störmeldung verschwände ausgerechnet nach einem sehr
+      #                  langen Ausfall. An der Anlage wäre das nicht
+      #                  abzuwarten - die Gegenprobe zeigt dort "seit 1 Minute
+      #                  nicht erreichbar" nach 49,7 Tagen ohne Broker.
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
@@ -113,6 +123,8 @@ jobs:
           /tmp/byte28_test
           c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
           /tmp/notbetrieb_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test test/verbindung_test.cpp
+          /tmp/verbindung_test
           ./test/decode_hosttest.sh
           python3 test/css_klassen_test.py
 

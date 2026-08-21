@@ -677,6 +677,51 @@ and the MQTT credentials.
 number, is polled every two seconds, and authenticating that on an ESP8266
 would be noticeable.
 
+### `/notbetrieb/status` also carries the connection state (new in 3.13.0)
+
+The route grew two fields. Full format:
+
+```
+Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext
+```
+
+`Lage` is the state of the connection to the house control: **0** connected,
+**1** disconnected but still inside the five-minute grace period, **2**
+disconnected past the grace period, **3** never connected since this device
+booted, **4** broker reachable but no set command for over twelve minutes — the
+cascade control is no longer computing. `Dauertext` is the outage duration
+already formatted for display ("14 Minuten", "mehr als 30 Tagen") and is empty
+unless `Lage` is 2 or 4 — the formatting rule lives in `src/verbindung.h` so that
+firmware, web page and host test share one truth.
+
+The **home page** polls this same route, at the 30-second interval of the topic
+table. That the path says "notbetrieb" is deliberate: it is the device's only
+status route, it is reachable without a login, and a second route for two
+fields would be the more expensive option on an ESP8266.
+
+What is measured is the **MQTT connection**, not the WLAN. The outage this is
+about is the ioBroker going down — and the MQTT broker *is* the ioBroker
+adapter. Without WLAN the web interface itself would be gone.
+
+### The heartbeat: which messages count (new in 3.13.0)
+
+`Lage` 4 means the broker answers but nothing arrives from the control. The
+timestamp behind it is set in `mqtt_callback()` **after** the `SUBSCRIBE_GRACE`
+check, and that placement is the whole point: the adapter replays every stored
+`set/` value to each new subscriber, **including when Node-RED is dead**. That
+burst proves the broker is alive — which the other clock already watches — and
+says nothing about the control. Counting it would silence the message for twelve
+minutes after every reconnect.
+
+Topics under `<prefix>/notbetrieb/` never count either: they are handled before
+the grace check and only arrive on change and on reconnect, so there is no
+interval to reason about. A `set/` command that the firmware then **rejects**
+(unknown topic, out of range) does count — the control sent it, so it is alive.
+
+While the broker is unreachable the heartbeat clock is stopped, not just
+ignored: without a broker no command can arrive, so silence says nothing. It
+restarts when the connection comes back.
+
 ### The heating button is locked unless TOP101 reads 0 (new in 3.12.0)
 
 Having the values is not enough. On stage 1 the button is only released while

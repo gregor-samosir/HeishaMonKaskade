@@ -21,8 +21,21 @@ Fehler in der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind
 korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. **Auch Etappe 6 ist gefahren:** Der Knopf schaltet mit
 abgeschaltetem Broker, die Firmware übersteht den Ausfall und holt sich in 52 s
 von allein zurück. **Und der Warmwasserknopf an H2 ist belegt** — GRÜN nach 24 s
-im Kühlbetrieb. Beide Stufen tragen jetzt die Firmware dieses Branches. Offen ist
-nur noch Etappe 7 (Doku, Release 3.12.0).
+im Kühlbetrieb. Beide Stufen tragen die Firmware dieses Branches, Etappe 7 (Doku,
+Release 3.12.0) ist erledigt.
+
+**Fortsetzung 3.13.0, seit dem 2026-08-21:** Zwei der Folgethemen aus Abschnitt 9
+sind gebaut — die Weboberfläche meldet jetzt, wenn die Hausteuerung ausgefallen
+ist, und der Notbetriebsknopf ist blau statt rot. Dazu **Etappe B**: Sie
+unterscheidet zwei Ausfälle, den weggefallenen Broker und die stumme Steuerung
+(Broker da, aber der 5-Minuten-Re-Assert bleibt aus). Einzelheiten,
+Entscheidungen und der Prüfplan stehen in **Abschnitt 11**; der Nachweis am Gerät
+ist am 2026-08-21 am Prüfstand erbracht — alle sechs Lagen, ohne Eingriff an der
+Anlage. **Dabei ist ein Fehler in Etappe B aufgefallen und behoben worden**
+(eine Log-Zeile im MQTT-Callback zerstörte das eintreffende Kommando).
+**Beide Stufen laufen seit dem 2026-08-21 nachmittags auf 3.13.0**, Abnahme
+grün, und die Gegenprobe im Normalbetrieb zeigt über drei Re-Assert-Takte
+hinweg keinen Fehlalarm.
 
 ---
 
@@ -824,6 +837,9 @@ dieses Repos, die unten ausdrücklich als offen markiert sind.
   der Changelog zu 3.12.0 greift es auf. **OFFEN bleibt der Text des
   GitHub-Release zu 3.11.0** — der lässt sich nur dort ändern.
 
+**ERLEDIGT in 3.13.0 — Abschnitt 11 führt es aus.** Der Text unten steht
+unverändert, weil er die Ausgangslage beschreibt.
+
 **Folgethema, nicht Teil dieses Vorhabens — niemand merkt den Ausfall.**
 Owner-Beobachtung 2026-08-21, mitten in Etappe 6: Während der Broker weg war,
 heizte die Wärmepumpe einfach weiter, mit dem zuletzt gesetzten Sollwert. Kein
@@ -844,6 +860,8 @@ Notbetriebsseite, „Hausteuerung: seit 14 Minuten nicht erreichbar", aus dem, w
 die Firmware ohnehin kennt. Mit einer Karenz von einigen Minuten, damit ein
 WLAN-Wackler keinen Fehlalarm auslöst. Wer dann die Seite öffnet, weiß sofort,
 ob er den Knopf braucht.
+
+**ERLEDIGT in 3.13.0 — der Knopf ist blau.**
 
 **Kleinigkeit, aber dieselbe Richtung — Rot heißt auf der Seite zweierlei.** Der
 Knopf ist rot eingefärbt („drück mich"), das Ergebnisfeld ROT bedeutet „hat
@@ -1195,9 +1213,9 @@ die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h1_ota`). Abnahme gegen die Baseline: eine Abweichung, ein laufender Messwert. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2`) |
-H2 (192.168.2.122) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung. Knopf frei (`0;1;3;0;0`) |
-Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
+H1 (192.168.2.120) | **3.13.0**, per OTA am 2026-08-21 um 15:08 (Env `heishamon_esp32_h1_ota`). Abnahme grün, vier laufende Messwerte. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2;0;`) |
+H2 (192.168.2.122) | **3.13.0**, per OTA am 2026-08-21 um 15:16 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme grün, zwei laufende Messwerte. Knopf frei (`0;1;3;0;0;0;`) |
+Prüfstand (192.168.2.197) | **3.13.0**, per USB am 2026-08-21 um 14:27, Rolle Heizen, Broker wieder auf 192.168.2.147. Für den Notbetriebsknopf weiterhin untauglich (ohne Wärmepumpe kein TOP101), für die **Verbindungsanzeige** dagegen genau richtig — dort ist der ganze Nachweis zu 3.13.0 gelaufen |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
 läuft normal weiter. Nichts ist aufzuräumen.
@@ -1254,3 +1272,385 @@ produktiven Builds (beide ESP32-Stufen, beide D1-mini-Rückfallebenen).
 **Eine lokale Besonderheit:** Der USB-Port des Prüfstands hat sich auf
 `/dev/cu.usbserial-1110` geändert. Das steht in `platformio_user_env.ini`
 (gitignored) und ist auf einem anderen Rechner erneut anzupassen.
+
+---
+
+## 11. Nachtrag 3.13.0 — die Anzeige, die den Ausfall sichtbar macht
+
+**Stand: 2026-08-21, im Repo fertig, der Nachweis am Gerät steht noch aus.**
+Branch `verbindungsanzeige`, Rettungsanker: Tag
+`rettungsanker-vor-verbindungsanzeige-2026-08-21` auf `main`.
+
+Aufgegriffen sind die beiden Folgethemen aus Abschnitt 9 — der stille Ausfall
+und die doppelte Bedeutung von Rot. Dazu kam eine dritte Kleinigkeit aus der
+Bedienung: Der Text „Läuft…" während der Schrittfolge sagte nicht, *was* läuft.
+
+### Was gebaut ist
+
+Etappe | Inhalt | Commit
+:--- | :--- | :---
+0 | Tag und Branch | —
+1 | [`src/verbindung.h`](src/verbindung.h) + Hosttest, in der CI | `76002ab`
+2 | Die Anzeige auf beiden Seiten, Knopffarbe, Lauftext | `c38066f`
+3 | Doku und Version 3.13.0 | `05ac412`
+3a | Nachweis: der Re-Assert kommt bei beiden Stufen an | `67d8d8e`
+4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
+5 | Fix: Logzeile aus dem MQTT-Callback nach loop() | `ff56532`
+6 | Nachweis am Prüfstand, alle sechs Lagen | `4e8d263`
+7 | **Rollout auf H1 und H2, Abnahme grün** | `8c07350`
+
+### Die Entscheidungen
+
+**Gemessen wird die MQTT-Verbindung, nicht das WLAN** (Owner-Entscheidung
+2026-08-21, Variante A). Der Ausfall, um den es geht, ist der des ioBroker — und
+der Broker *ist* der ioBroker-Adapter. Ohne WLAN wäre auch die Weboberfläche
+weg, die die Auskunft anzeigen soll.
+
+Der zweite Ausfall — „Broker läuft, aber die Kaskadenregelung rechnet nicht
+mehr", der Fall *Node-RED-Container weg, ioBroker läuft* aus der Tabelle in
+Abschnitt 1 — wurde als **Etappe B** direkt danach gebaut, siehe unten. Für den
+Menschen vor der Seite ist die Folge identisch: niemand führt den Sollwert nach.
+Er bekommt deshalb dieselbe Anzeige, aber einen eigenen Text.
+
+**Karenz: 5 Minuten.** Ein Neustart des ioBroker-Adapters oder des Containers
+auf der Synology dauert regelmäßig ein bis zwei Minuten. Eine Störmeldung, die
+von selbst wieder verschwindet, erzieht die Familie dazu, sie zu übersehen — und
+dann wird auch die echte übersehen. Der Reconnect-Backoff (5 s bis 60 s) liegt
+vollständig darunter: In fünf Minuten hat die Firmware mindestens acht
+Verbindungsversuche hinter sich.
+
+**Die Notbetriebsseite zeigt auch den Normalfall, die Startseite nicht.** Wer
+die Notbetriebsseite öffnet, ist im Zweifel; ein ruhiges „Hausteuerung:
+verbunden" sagt ihm, dass er den Knopf **nicht** braucht — und das ist die
+häufigere und die gefährlichere Fehlentscheidung. Die Startseite ist ein
+Nachschauwerkzeug; ein dauerhaftes „verbunden" über der Topic-Tabelle würde nach
+kurzer Zeit übersehen, samt der Störmeldung an derselben Stelle.
+
+**Farbe: Orange.** Rot ist ab jetzt das Laufergebnis und sonst nichts, Gelb ist
+„Konfiguration Notbetrieb läuft". Dass der Sperrhinweis dieselbe Farbe trägt,
+ist stimmig — beides heißt „so wie es ist, geht es nicht weiter".
+
+**Der Knopf ist blau.** Zwei Zeichen im Quelltext, wie in Abschnitt 9 vermutet.
+`w3-blue` war im eingebetteten CSS bereits definiert und stand schon an der
+richtigen Stelle hinter `.w3-button`, deshalb hat
+[`test/css_klassen_test.py`](test/css_klassen_test.py) den Wechsel ohne
+Anpassung mitgetragen.
+
+**Die Seite spricht Deutsch.** `webHeader` trägt jetzt ein `charset`, und die
+Texte der Notbetriebsseite haben Umlaute. Bis 3.12.0 war jeder Text der
+Oberfläche in `ae/oe/ue` geschrieben und die Zeile deshalb entbehrlich; diese
+eine Seite liest im Ernstfall jemand aus der Familie. Die übrigen Seiten (Home,
+Settings, Firmware) bleiben unberührt — sie sind Technikseiten. Im Binary
+nachgeprüft, dass die Umlaute als UTF-8 ankommen; alle Quelldateien waren
+vorher reines ASCII, es kann also nichts umkippen.
+
+### Drei Regeln, die man falsch programmieren kann
+
+Sie stehen arduino-frei in [`src/verbindung.h`](src/verbindung.h) und werden von
+[`test/verbindung_test.cpp`](test/verbindung_test.cpp) mit 62 Zusicherungen
+geprüft — gleiches Muster wie `sendwindow.h` und `notbetrieb.h`.
+
+1. **Die Karenz auf die Sekunde.** Geprüft wird die Grenze selbst, nicht ein
+   Punkt weit dahinter.
+2. **„Seit dem Neustart" statt einer Zahl**, wenn seit dem Einschalten nie eine
+   Verbindung bestand. Dort ist die wahre Ausfalldauer unbekannt — der Broker
+   kann seit Tagen weg sein, das Gerät ist nur gerade neu gestartet.
+3. **Der `millis()`-Überlauf nach 49,7 Tagen.** Deshalb wird die Dauer
+   *fortgeschrieben* und nicht bei jeder Abfrage neu gerechnet, und deshalb gibt
+   es den Deckel bei 30 Tagen.
+
+**Die Gegenprobe ist der aufschlussreiche Teil.** Ersetzt man das Fortschreiben
+durch die naive Rechnung, meldet die Seite nach 49,7 Tagen Ausfall „Hausteuerung
+seit **1 Minute** nicht erreichbar" — also „alles in Ordnung", ausgerechnet nach
+sieben Wochen ohne Steuerung. Der Test trifft diesen Zeitpunkt gezielt: eine
+Ausfalldauer knapp über der Naht, an der die naive Differenz unter der Karenz
+liegt. Nur so ist belegt, dass der Fall nicht bloß zufällig ausblieb.
+
+Vier der ursprünglichen Zusicherungen waren **falsch aufgeschrieben**, nicht der
+Header — unter anderem die Annahme, 30 Tage lägen unter der halben
+`millis()`-Breite. Tun sie nicht (die liegt bei 24,85 Tagen); sie müssen es auch
+nicht, weil die unsigned-Differenz bis zur vollen Naht eindeutig ist und
+zwischen Deckel und Naht 19 Tage bleiben.
+
+### Was der Hosttest nicht abdeckt
+
+Die Anbindung in [`HeishaMon.cpp`](src/HeishaMon.cpp) — also
+`mqtt_client.connected()` als Eingang der Wacht — und die Anzeige selbst. Beides
+gehört in den Abnahmetest.
+
+**Der Prüfstand ist dafür wieder das richtige Werkzeug.** Für den Notbetriebsknopf
+war er seit der Sperre ausgeschieden (ohne Wärmepumpe kein TOP101); eine
+Verbindungsanzeige braucht kein TOP101. Der ganze Nachweis lief damit **ohne
+Eingriff an H1 oder H2 und ohne Testfenster** — und er hat sich gelohnt: Genau
+in dieser nicht hosttestbaren Anbindung steckte ein Fehler (Protokoll unten).
+
+### Prüfplan
+
+1. Prüfstand (192.168.2.197) mit Strom versorgen und die Firmware dieses
+   Branches per USB aufspielen (Env `d1_mini_test`).
+2. Startseite und `/notbetrieb` öffnen: Auf der Notbetriebsseite muss
+   „Hausteuerung: verbunden" stehen, auf der Startseite nichts.
+3. **Den Broker unerreichbar machen** — am einfachsten über
+   `/settings`: die MQTT-Serveradresse auf eine tote IP im eigenen Netz stellen
+   und speichern. Das ist reversibel und rührt den ioBroker nicht an.
+4. **Fünf Minuten warten.** Vorher darf nichts erscheinen — das ist die halbe
+   Prüfung. Danach muss auf beiden Seiten die orange Zeile stehen, und die
+   Minutenzahl muss mitlaufen.
+5. Serveradresse zurückstellen. Nach der Rückkehr muss die Zeile verschwinden
+   und im MQTT-Log eine Zeile „Hausteuerung war *n* s nicht erreichbar" stehen.
+6. **Den Sonderfall prüfen:** mit toter Serveradresse neu starten. Dann muss
+   dort „seit dem Neustart dieses Geräts" stehen, keine Minutenzahl.
+7. Erst danach OTA auf H1 und H2, mit der üblichen Abnahme gegen die Baseline
+   ([`test/tablesnap.py`](test/tablesnap.py)).
+
+### Etappe B — der Herzschlag, gebaut am 2026-08-21
+
+Der Ausfall „Broker läuft, Node-RED rechnet nicht mehr" wird an einer Zeitmarke
+auf das zuletzt empfangene `set`-Kommando erkannt. Karenz **12 Minuten**, eigene
+Lage (4) in der Statusroute, eigener Text auf der Seite:
+
+> **Hausteuerung erreichbar, sendet aber seit 23 Minuten keine Vorgaben.**
+> Der Server antwortet, aber die Steuerung rechnet nicht mehr.
+
+Das ausdrückliche „erreichbar" ist der Zweck der Unterscheidung: Wer zum Server
+im Keller läuft, soll wissen, ob dort überhaupt etwas zu holen ist.
+
+**Zwei Regeln halten das zusammen, und beide sind im Hosttest belegt:**
+
+1. **Ist der Broker weg, gilt der Broker-Ausfall.** Beides zu melden wäre
+   doppelt gemoppelt — ohne Broker *kann* kein Kommando kommen. Die Uhr für die
+   stumme Steuerung läuft deshalb nur bei stehender Verbindung und startet mit
+   dem Verbindungsaufbau neu. Die Gegenprobe zeigt, was ohne diese Regel
+   passiert: Unmittelbar nach der Rückkehr des Brokers meldet die Seite einen
+   zweiten Fehler, den es nie gab.
+2. **Der Wiedereinspiel-Schwall zählt nicht als Lebenszeichen** — dazu unten
+   mehr, das war eine Korrektur an meiner eigenen Annahme.
+
+**Beide Punkte, die vorher zu klären waren, sind beantwortet:**
+
+* **Bekommt H2 in jedem Re-Assert-Takt ein `set`-Kommando? Ja.** Am 2026-08-21
+  im Flow-Code nachgesehen (`Hauptmodus-Verteiler V6.5`, §6 „Idempotente
+  Ausgabe"): Der Verteiler sendet zwar nur bei Änderung gegenüber `lastSent` —
+  aber der 5-Minuten-Takt setzt `state.lastSent = {}` zurück, und danach gelten
+  **alle dreizehn Kanäle als geändert**. Sechs davon gehen an H2 (Ausgänge 7–12:
+  `Z1HeatRequestTemperature`, `Z1CoolRequestTemperature`, `Heatpump`,
+  `OperationMode`, `WaterPump`, `WaterPumpSpeed`). Beide Stufen bekommen also in
+  jedem Takt Verkehr; ein Herzschlag trüge an beiden.
+  **Und es kommt auch wirklich an — am 2026-08-21 an H2 gemessen.** Ein
+  passiver Telnet-Mitschnitt über 400 s (nichts gesendet, nur mitgelesen) fing
+  zwei volle Takte:
+
+  ```
+  13:40:46  6 × "Callback from mqtt" innerhalb von 0,1 s
+  13:40:57  1 × "Callback from mqtt"
+  13:45:46  6 × "Callback from mqtt" innerhalb von 0,1 s
+  13:45:57  1 × "Callback from mqtt"
+  ```
+
+  Taktabstand exakt 300,0 s, je Takt sieben empfangene Kommandos. Damit ist
+  auch die Restfrage beantwortet: **Der ioBroker-MQTT-Adapter publiziert auch
+  unveränderte Werte** — sonst wäre der zweite Takt leer geblieben, denn an den
+  Sollwerten hatte sich zwischen 13:40 und 13:45 nichts geändert. Die sechs im
+  Schwall sind die WP2-Kanäle des Verteilers; der siebte zehn Sekunden später
+  kommt aus der Wächter-Logik mit ihrem eigenen Takt (`QuietMode`).
+
+  Der Herzschlag ist damit an beiden Stufen tragfähig, und der Takt ist keine
+  Annahme mehr, sondern gemessen.
+* **Die Zeitmarke gehört NACH die Karenzprüfung — nicht davor.** Hier stand
+  vorher das Gegenteil, mit der Begründung „empfangen ist empfangen". Das ist
+  falsch, und zwar aus genau dem Grund, aus dem es die Karenzzeit überhaupt
+  gibt: Der ioBroker-Adapter spielt jedem neuen Abonnenten die gespeicherten
+  Set-Werte ein — **auch dann, wenn Node-RED längst tot ist**. Dieser Schwall
+  belegt nur, dass der Broker lebt, und das beobachtet bereits die andere Uhr.
+  Vor der Karenzprüfung gestempelt, verstummte die Meldung nach jedem Reconnect
+  für zwölf Minuten, ohne dass sich etwas geändert hätte.
+
+  Ein Kommando, das die Firmware danach **verwirft** (unbekanntes Topic,
+  Bereichsfehler), zählt dagegen sehr wohl — die Steuerung hat gesendet, sie
+  lebt. Der Aufruf steht deshalb vor `build_heatpump_command()`.
+
+**Die Karenz liegt bei 12 Minuten** und damit deutlich über der
+Verbindungskarenz. Der Takt ist gemessene 300,0 s, ein einzelner ausgefallener
+Takt ist noch kein Ausfall; zwölf Minuten decken zwei verpasste Takte samt
+Reserve ab. Dass sie größer ist als die Broker-Karenz, ist kein Zufall: Hier
+wird auf ein *Ausbleiben* gewartet, und das ist die unsicherere Aussage.
+
+### Ein Befund aus der Gegenprobe, der eine Lücke aufdeckte
+
+Beide Uhren teilen sich denselben Kern (`struct Ausfall`) — die
+Überlauffestigkeit ist der subtile Teil, und zweimal hingeschrieben wäre zweimal
+Gelegenheit, sie falsch zu machen. Fünf Gegenproben sind gefahren; eine davon
+**bestand**, und das war die aufschlussreiche:
+
+Dreht man den Vorrang in `verbindung_lage()` um, fällt keine einzige Zusicherung
+um. Der Grund: Beide Uhren laufen im Betrieb nie gleichzeitig, weil die Stumm-Uhr
+beim Verbindungsverlust zurückgesetzt wird. Die Reihenfolge dort ist also eine
+**zweite Sicherung**, keine tragende Regel — sie greift nur, falls jemand später
+das Zurücksetzen entfernt. Sie bleibt stehen, aber der Test baut den im Betrieb
+unmöglichen Zustand jetzt von Hand, damit sie geprüft ist und nicht geglaubt.
+
+### Das Protokoll vom 2026-08-21, 14:08–15:02 — alles am Prüfstand
+
+**Gefahren, ohne H1 oder H2 anzufassen und ohne Testfenster.** Der Prüfstand
+(192.168.2.197, Env `d1_mini_test`) ist für diese Funktion wieder das richtige
+Werkzeug: Eine Verbindungsanzeige braucht kein TOP101 und damit keine
+Wärmepumpe.
+
+**Ein Glücksfall im Aufbau:** Der Prüfstand läuft unter dem Prefix
+`panasonic_heat_pump_test`, und dorthin sendet der Hauptmodus-Verteiler nichts.
+Er wird also **von allein stumm** — der Herzschlag ließ sich nachweisen, ohne
+den Node-RED-Container anzuhalten.
+
+Für den Broker-Ausfall brauchte es einen Broker, der sich abschalten lässt, ohne
+den ioBroker der Anlage anzurühren. Über `/settings` geht das nicht: Jede
+Änderung dort startet das Gerät neu, und danach ist die Lage immer 3 („nie
+verbunden"), nie 2. Also lief für die zweite Hälfte ein **minimaler
+MQTT-Broker** auf dem Arbeitsrechner (192.168.2.145), auf den der Prüfstand
+umgestellt wurde — er kann nur, was PubSubClient braucht, und zeigt die
+Log-Zeilen der Firmware direkt an.
+
+Zeit | Prüfung | Erwartet | Gemessen
+:--- | :--- | :--- | :---
+14:11 | Ausgangslage verbunden | Startseite leer, Notbetriebsseite „verbunden" | beides ✓
+14:23:38 | **Stumm-Karenz, 1. Lauf** | 14:23:29 (Verbindung 14:11:29 + 12 min) | im 20-s-Fenster getroffen ✓
+14:39:26 | **Stumm-Karenz, 2. Lauf** | 14:39:23 (letztes Kommando 14:27:23 + 12 min) | ✓
+14:39:49 | Rückkehr der Vorgaben | Lage sofort 0, Log mit der Stille-Dauer | „Hausteuerung hat **745 s** keine Vorgaben gesendet" (14:27:23 → 14:39:48) ✓
+14:41:05 | Broker gekappt | Lage 1 = Karenz, **keine** Störmeldung | ✓
+14:46:06 | **Broker-Karenz** | 14:46:06 (Abriss ~14:41:06 + 5 min) | punktgenau ✓
+14:55:07 | **Vorrang** | nach 14 min ohne Broker weiterhin Lage 2 | `0;1;7;15;1;**2**;14 Minuten` ✓
+14:55:09 | **Rückkehr des Brokers** | Log mit Dauer, Lage 0, **keine** Stumm-Meldung | „Hausteuerung war **850 s** nicht erreichbar", Lage 0 ✓
+15:00:58 | **Lage 3 „nie verbunden"** | Text ohne Minutenzahl | „Hausteuerung seit dem Neustart dieses Geräts nicht erreichbar", Dauertext **leer** ✓
+
+**Die beiden Seiten sagen wirklich Verschiedenes** — im selben Störfall:
+
+* Startseite: „… Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter.
+  **Wird es zu kalt, hilft der Notbetrieb.**"
+* Notbetriebsseite: derselbe Satz **ohne** den Verweis — wer dort steht, braucht
+  den Hinweis auf den Notbetrieb nicht mehr.
+
+Die Umlaute kommen über das neue `charset` korrekt an („Wärmepumpe läuft"),
+der Knopf ist blau.
+
+### Der Fehler, den dieser Lauf gefunden hat
+
+**Das erste Kommando an den Prüfstand ging verloren.** Statt `SET3 QuietMode: 0`
+meldete die Firmware:
+
+```
+14:24:14  Error: Unknown set topic 0Q
+```
+
+Aus `panasonic_heat_pump_test/set/QuietMode` war `0Q` geworden.
+
+**Ursache:** `write_mqtt_log()` ruft `mqtt_client.publish()`, und **PubSubClient
+benutzt für Senden und Empfangen denselben Puffer**. Genau in diesen Puffer
+zeigen `topic` und `payload` während des Callbacks. Etappe B setzte die
+Herzschlag-Meldung mitten in der Auswertung ab und überschrieb damit den
+Topic-Namen. Der bestehende Code war nie betroffen: Dort steht
+`write_mqtt_log()` nur an Stellen, an denen `topic` und `msg` nicht mehr
+gebraucht werden.
+
+**Was das im Betrieb bedeutet hätte:** Jedes Mal, wenn die Stumm-Meldung endet,
+wäre genau das erste Kommando danach verschluckt worden — ausgerechnet das, das
+die Rückkehr der Steuerung anzeigt.
+
+**Behoben** (`ff56532`): Der Callback merkt sich nur noch die Dauer, geloggt wird
+aus `loop()`, wenn der Puffer frei ist — dasselbe Muster wie `wifiOutageSeconds`
+beim WLAN-Ausfall. Gegenprobe am Gerät: dasselbe Kommando meldet jetzt
+`<SUB> SET3 QuietMode: 0`.
+
+Das ist genau die Lücke, die im Changelog als „gehört in den Abnahmetest" steht —
+die Anbindung in `HeishaMon.cpp`, die kein Hosttest abdecken kann. Sie ist damit
+auch der Beleg, dass der Abnahmetest nötig war.
+
+### Ein Nebenbefund, der die Platzierung des Herzschlags bestätigt
+
+Zweimal im Log, nach jedem Verbindungsaufbau:
+
+```
+14:11:34  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+14:27:19  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+**34 Set-Kommandos** spielt der ioBroker-Adapter dem Prüfstand beim Verbinden
+ein — obwohl unter dem Prefix `panasonic_heat_pump_test` niemand steuert, weder
+Node-RED noch sonst wer. Hätte der Herzschlag wie ursprünglich geplant *vor* der
+Karenzprüfung gestempelt, wären diese 34 Nachrichten als „die Steuerung lebt"
+durchgegangen — und die Stumm-Meldung wäre nach jedem Reconnect zwölf Minuten
+lang unterdrückt worden, ohne dass irgendetwas rechnet. Aus dem Adaptercode
+abgeleitet war das vorher schon; jetzt ist es gemessen.
+
+### Zustand nach dem Lauf
+
+Der Prüfstand steht wieder auf `192.168.2.147:1883`, Status `0;1;7;0;2;0;` —
+Notbetriebswerte vollständig, Lage 0, Sperre 2 (mangels Wärmepumpe kein TOP101,
+wie erwartet). Der Minibroker ist beendet, Port 1883 auf dem Arbeitsrechner
+wieder frei. An H1 und H2 wurde nichts angefasst.
+
+### Der Rollout, 2026-08-21 — beide Stufen auf 3.13.0
+
+**H1 um 15:08:22, H2 um 15:16:22** (Envs `heishamon_esp32_h1_ota` und
+`heishamon_esp32_h2_ota`), nacheinander mit Abnahme dazwischen, damit nie beide
+Stufen gleichzeitig weg sind. Baseline vorher und nachher über
+[`test/tablesnap.py`](test/tablesnap.py).
+
+ | H1 (192.168.2.120) | H2 (192.168.2.122)
+:--- | :--- | :---
+Version | 3.13.0 ✓ | 3.13.0 ✓
+Statusroute | `0;1;7;0;2;0;` | `0;1;3;0;0;0;`
+Tabellenstruktur | 92 Topics, identisch ✓ | identisch ✓
+Abweichungen zur Baseline | 4 laufende Messwerte | 2 laufende Messwerte
+Sollwerte über den Reboot | alle fünf unverändert ✓ | alle fünf unverändert ✓
+LWT | Online ✓ | Online ✓
+
+Die Abweichungen sind ausschließlich Werte, die sich ohnehin bewegen — an
+beiden Stufen die Außentemperatur (22 → 21 °C), dazu an H1 Raumthermostat,
+Außenrohr und Hochdruck, an H2 der Wärmetauscher-Auslauf. **Kein Sollwert hat
+sich verstellt**, die `SUBSCRIBE_GRACE` aus 3.6.1 hat wie vorgesehen gegriffen
+(`Quiet_Mode_Level` 0, `Z1_Heat_Request_Temp` 20, `Z1HeatCurveTargetHigh` 20,
+`DHW_Target_Temp` 50 bzw. 48).
+
+### Die wichtigste Gegenprobe: kein Fehlalarm im Normalbetrieb
+
+Eine Anzeige, die grundlos Alarm schlägt, ist schlimmer als keine. Der
+entscheidende Nachweis ist deshalb nicht, dass die Meldung kommt, wenn sie soll
+— sondern dass sie **ausbleibt**, solange alles läuft.
+
+**Beide Stufen 18 Minuten lang beobachtet (15:19–15:37), 37 Messpunkte, im
+30-Sekunden-Takt:** durchgehend Lage 0, kein einziger Lagewechsel, **kein
+einziges Vorkommen von Lage 4**.
+
+Das ist mehr als drei Re-Assert-Takte und deutlich über der Stumm-Karenz von
+zwölf Minuten. Käme der Herzschlag nicht durch — würde also der echte Re-Assert
+aus irgendeinem Grund nicht als Lebenszeichen gezählt —, hätte spätestens nach
+zwölf Minuten an beiden Stufen die Stumm-Meldung stehen müssen. Damit ist der
+Herzschlag nicht nur im Fehlerfall belegt (Prüfstand), sondern auch im
+Normalfall.
+
+Die Anzeige selbst an H1 im Normalbetrieb: Notbetriebsseite „Hausteuerung:
+verbunden" (grau, klein), Startseite leer.
+
+### Rollback
+
+`~/HeishaMon-Rollback/` trägt alle vier produktiven Abbilder als `v3.13.0`
+(beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
+3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout
+erneut mit `strings` nachgeprüft. Die Binaries gehören nur an die Releases des
+**privaten** Repos.
+
+### Prüfplan-Ergänzung für Etappe B
+
+**Alle erledigt am 2026-08-21, Protokoll oben.** Der ursprüngliche Plan stand so
+da:
+
+8. Broker wieder erreichbar, dann **den Node-RED-Flow anhalten** (oder den
+   Container stoppen) und 12 Minuten warten. Die Seite muss von „verbunden" auf
+   „Hausteuerung erreichbar, sendet aber seit …" wechseln — **nicht** auf „nicht
+   erreichbar".
+9. Flow wieder starten: Spätestens mit dem nächsten Re-Assert (< 5 min) muss die
+   Meldung verschwinden, und im MQTT-Log steht „Hausteuerung hat *n* s keine
+   Vorgaben gesendet".
+10. **Die Gegenprobe zur Vorrangregel:** Broker abschalten und länger als 12
+    Minuten warten. Es darf **nur** „nicht erreichbar" erscheinen, nie die
+    Stumm-Meldung — und direkt nach dem Wiedereinschalten des Brokers darf die
+    Stumm-Meldung ebenfalls nicht aufblitzen.

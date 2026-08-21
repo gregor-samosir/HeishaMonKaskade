@@ -374,6 +374,226 @@ Abweichungen durch. **Was er nicht abdeckt**, sind die Zustandsuebergaenge in
 `HeishaMon.cpp` selbst (Ticker, Serial, Flags) - die sind ohne die halbe
 Arduino-Welt nicht uebersetzbar und bleiben Sache des Abnahmetests.
 
+## Verbindungswacht (verbindung_test.cpp, 3.13.0)
+
+Dasselbe Muster: Die Regeln stehen in `src/verbindung.h`, Firmware und Hosttest
+binden dieselbe Datei ein. Geprueft wird, seit wann die Verbindung zur
+Hausteuerung weg ist und wie die Weboberflaeche das formuliert.
+
+Der Anlass steht im Vorhaben: Waehrend eines Broker-Ausfalls am 2026-08-21 heizte
+die Waermepumpe mit dem zuletzt gesetzten Sollwert einfach weiter, und die
+Oberflaeche zeigte davon nichts. Vier Dinge muessen stimmen, damit die Anzeige
+nicht schlimmer ist als keine - und alle vier sind am Geraet schlecht bis gar
+nicht nachweisbar:
+
+* **Die Karenz von 5 Minuten**, auf die Sekunde. Geprueft wird die Grenze
+  selbst: eine Sekunde davor darf nichts stehen, auf der Grenze muss die
+  Meldung da sein. Ein Test, der nur "nach 10 Minuten steht es da" prueft,
+  wuerde eine um Faktor zwei falsche Karenz nicht bemerken.
+* **Der Sonderfall "seit dem Neustart nie verbunden"** muss sich vom normalen
+  Ausfall unterscheiden lassen. Dort ist die wahre Dauer unbekannt: Der Broker
+  kann seit Tagen weg sein, das Geraet ist nur gerade neu gestartet.
+* **Der `millis()`-Ueberlauf nach 49,7 Tagen.** Der Test trifft dabei bewusst
+  einen boesartigen Zeitpunkt - eine Ausfalldauer knapp ueber der Naht, an der
+  die naive Differenz UNTER der Karenz liegt. Nur so ist belegt, dass die
+  Stoermeldung dort nicht verschwindet, statt dass der Fall bloss zufaellig
+  nicht auftrat.
+* **Die Textform** ("14 Minuten", "1 Stunde", "2 Tagen", "mehr als 30 Tagen")
+  samt der Schwellen: Bis 89 Minuten wird in Minuten gezaehlt, bis 47 Stunden
+  in Stunden - "seit 90 Minuten" ist die genauere Auskunft als "seit 1 Stunde".
+
+Dazu die Regeln des **Herzschlags** (der zweite Ausfall: Broker da, aber die
+Kaskadenregelung rechnet nicht mehr):
+
+* **Die Stumm-Karenz von 12 Minuten**, ebenfalls auf die Sekunde. Der Re-Assert
+  kommt alle 300,0 s (gemessen, siehe Abschnitt darueber) - zwoelf Minuten
+  decken zwei verpasste Takte samt Reserve ab.
+* **Der Vorrang**: Ist der Broker weg, gilt der Broker-Ausfall. Beides zu melden
+  wuerde jemanden zum Server schicken, um dort nach dem falschen Fehler zu
+  suchen.
+* **Die Stumm-Uhr steht still, solange der Broker weg ist**, und startet mit dem
+  Verbindungsaufbau neu. Ohne diese Regel meldete die Seite unmittelbar nach der
+  Rueckkehr des Brokers sofort einen zweiten Fehler, den es nie gab.
+
+95 Zusicherungen. Beide Uhren teilen sich denselben Kern (`struct Ausfall`) -
+die Ueberlauffestigkeit ist der subtile Teil, und zweimal hingeschrieben waere
+zweimal Gelegenheit, sie falsch zu machen.
+
+**Gegenproben gemacht, fuenfmal:**
+
+| Regel gebrochen | Abweichungen |
+|:--- |:--- |
+| Karenz auf 1 Minute verstellt | 6 |
+| Dauer gerechnet statt fortgeschrieben | 6 |
+| Stumm-Uhr laeuft ohne Verbindung weiter | 6 |
+| Stumm-Karenz auf 4 Minuten (unter einem Takt) | 7 |
+| Vorrang in `verbindung_lage()` umgedreht | 1 |
+
+Zwei davon sind es wert, einzeln genannt zu werden:
+
+* Bei **gerechneter statt fortgeschriebener Dauer** lautet der Text nach 49,7
+  Tagen Ausfall **"1 Minute"**. Genau diese Falschauskunft verhindert der Deckel
+  bei 30 Tagen: Sie waere schlimmer als gar keine Angabe, weil sie ausgerechnet
+  nach einem sehr langen Ausfall "alles in Ordnung" behauptet.
+* Die Gegenprobe zum **Vorrang bestand zunaechst** - und das war der
+  aufschlussreiche Fall. Der Vorrang in `verbindung_lage()` war gar nicht
+  geprueft, weil beide Uhren im Betrieb nie gleichzeitig laufen (die
+  Stumm-Uhr wird beim Verbindungsverlust zurueckgesetzt). Die Reihenfolge steht
+  als zweite Sicherung weiter da, fuer den Fall dass jemand das Zuruecksetzen
+  spaeter entfernt; damit sie eine geprueft ist und keine geglaubte, baut der
+  Test den unmoeglichen Zustand jetzt von Hand.
+
+Beim ersten Lauf standen 11 Abweichungen - und vier davon lagen an **den
+Zusicherungen**, nicht am Header: Der Verlustmoment kostet einen
+Nachfuehrschritt (bei 1-s-Schritten also genau eine Sekunde), "1 Tag" kann mit
+den Schwellen gar nicht entstehen, und 30 Tage liegen NICHT unter der halben
+`millis()`-Breite von 24,85 Tagen. Das muessen sie auch nicht - die
+unsigned-Differenz ist bis zur vollen Naht bei 49,7 Tagen eindeutig, und
+zwischen Deckel und Naht bleiben 19 Tage, in denen loop() die Ueberschreitung
+bemerkt. Das ist der eigentliche Wert des Musters: Es zwingt dazu, die Zusage
+auszurechnen statt sie zu schaetzen.
+
+**Was der Test nicht abdeckt:** die Anbindung in `HeishaMon.cpp`
+(`mqtt_client.connected()` als Eingang der Wacht, der Aufruf von
+`verbindung_set_empfangen()` in `mqtt_callback`) und die Anzeige selbst. Beides
+gehoert in den Abnahmetest.
+
+**Merke zur Platzierung des Herzschlags:** Der Aufruf steht in `mqtt_callback()`
+**nach** der `SUBSCRIBE_GRACE`-Pruefung. Der Grund ist genau die
+Wiedereinspielung, wegen der es die Karenzzeit ueberhaupt gibt: Der
+ioBroker-Adapter schickt jedem neuen Abonnenten die gespeicherten Set-Werte -
+auch wenn Node-RED laengst tot ist. Dieser Schwall belegt nur, dass der Broker
+lebt, und den beobachtet bereits die andere Uhr. Vor der Pruefung gestempelt,
+verstummte die Meldung nach jedem Reconnect fuer zwoelf Minuten.
+
+## Der 5-min-Re-Assert kommt bei BEIDEN Stufen an (2026-08-21, H2)
+
+Vorarbeit fuer den Herzschlag (Vorhaben-Notbetrieb-Weboberflaeche.md,
+Abschnitt 11): Kann die Firmware am ausbleibenden `set`-Verkehr erkennen, dass
+die Kaskadenregelung nicht mehr rechnet? Dafuer muss sie im Normalbetrieb
+zuverlaessig Verkehr sehen - und zwar auch die Warmwasserstufe, die keine
+Sollwertkurve bekommt.
+
+Zwei Fragen, beide beantwortet:
+
+1. **Schickt der Verteiler ueberhaupt in jedem Takt?** Im Flow-Code nachgesehen
+   (`Hauptmodus-Verteiler V6.5`, §6): Er sendet je Kanal nur bei Aenderung
+   gegenueber `lastSent` - aber der 5-Minuten-Takt setzt `state.lastSent = {}`
+   zurueck. Danach gelten alle dreizehn Kanaele als geaendert, sechs davon
+   gehen an H2.
+2. **Publiziert der ioBroker-Adapter einen unveraenderten Wert auch?** Das
+   entscheidet der Mitschnitt, nicht der Flow-Code. Passiv, 400 s, nichts
+   gesendet:
+
+```bash
+# roher Telnet-Mitschnitt, zaehlt "Callback from mqtt" (write_telnet_log in
+# mqtt_callback, geht IMMER ins Telnet-Log - unabhaengig von der L-Taste)
+python3 - <<'EOF'
+import socket, time
+s = socket.create_connection(("192.168.2.122", 23), timeout=10); s.settimeout(2.0)
+start = time.time(); puffer = b""
+while time.time() - start < 400:
+    try: puffer += s.recv(4096)
+    except socket.timeout: continue
+    while b"\n" in puffer:
+        z, puffer = puffer.split(b"\n", 1)
+        txt = z.decode("utf-8", "replace").strip()
+        if "Callback from mqtt" in txt: print(f"{time.time()-start:6.1f}s {txt[:80]}")
+EOF
+```
+
+Ergebnis:
+
+```
+13:40:46  6 x "Callback from mqtt" innerhalb von 0,1 s
+13:40:57  1 x "Callback from mqtt"
+13:45:46  6 x "Callback from mqtt" innerhalb von 0,1 s
+13:45:57  1 x "Callback from mqtt"
+```
+
+**Taktabstand exakt 300,0 s, je Takt sieben empfangene Kommandos.** An den
+Sollwerten hatte sich zwischen den beiden Takten nichts geaendert - der zweite
+Takt belegt damit, dass der Adapter auch unveraenderte Werte publiziert. Die
+sechs im Schwall sind die WP2-Kanaele des Verteilers, der siebte zehn Sekunden
+spaeter kommt aus der Waechter-Logik mit ihrem eigenen Takt (`QuietMode`).
+
+Der Mitschnitt ist **vollstaendig passiv** und braucht kein Testfenster: Er
+liest nur den Telnet-Strom und sendet nichts, auch keine Umschalttasten.
+
+## Verbindungsanzeige am Pruefstand (2026-08-21, 3.13.0)
+
+Der Abnahmetest zu 3.13.0 - und der Beleg dafuer, dass er noetig war: Er hat
+einen Fehler gefunden, den kein Hosttest finden konnte.
+
+**Der Pruefstand ist fuer DIESE Funktion wieder taugliches Werkzeug.** Fuer den
+Notbetriebsknopf war er seit der Sperre ausgeschieden (ohne Waermepumpe kein
+TOP101, also bleibt der Knopf gesperrt) - eine Verbindungsanzeige braucht kein
+TOP101. Der ganze Nachweis lief ohne Eingriff an H1/H2 und ohne Testfenster.
+
+### Zwei Kniffe, ohne die es nicht gegangen waere
+
+**1. Der Pruefstand wird von allein stumm.** Er laeuft unter dem Prefix
+`panasonic_heat_pump_test`, und dorthin sendet der Hauptmodus-Verteiler nichts.
+Die Lage 4 ("Steuerung stumm") stellt sich also von selbst ein - der
+Node-RED-Container musste nicht angehalten werden.
+
+**2. Fuer den Broker-Ausfall braucht es einen eigenen Broker.** Ueber
+`/settings` laesst sich die Serveradresse zwar auf eine tote IP stellen, aber
+**jede Aenderung dort startet das Geraet neu** - und danach ist die Lage immer
+3 ("seit dem Neustart nie verbunden"), nie 2. Fuer Lage 2 muss eine BESTEHENDE
+Verbindung abreissen. Den ioBroker der Anlage dafuer anzufassen waere das
+falsche Mittel; stattdessen lief ein minimaler MQTT-Broker auf dem
+Arbeitsrechner (rund 200 Zeilen, nur CONNECT/CONNACK, SUBSCRIBE/SUBACK,
+PUBLISH, PINGREQ/PINGRESP - mehr braucht PubSubClient nicht), auf den der
+Pruefstand fuer die Dauer des Nachweises umgestellt wurde. Als Zugabe zeigt er
+die Logzeilen der Firmware direkt an.
+
+### Was gemessen wurde
+
+Zeit | Pruefung | Erwartet | Gemessen
+:--- | :--- | :--- | :---
+14:23:38 | Stumm-Karenz, 1. Lauf | 14:23:29 | im 20-s-Fenster getroffen
+14:39:26 | Stumm-Karenz, 2. Lauf | 14:39:23 | getroffen
+14:39:49 | Rueckkehr der Vorgaben | Lage 0 + Logzeile | "hat 745 s keine Vorgaben gesendet"
+14:41:05 | Broker gekappt | Lage 1, keine Meldung | ok
+14:46:06 | Broker-Karenz 5 min | 14:46:06 | punktgenau
+14:55:07 | Vorrang | nach 14 min ohne Broker Lage 2 | `...;2;14 Minuten`
+14:55:09 | Rueckkehr des Brokers | Logzeile, Lage 0, keine Stumm-Meldung | "war 850 s nicht erreichbar"
+15:00:58 | Lage 3 | Text ohne Minutenzahl, Dauertext leer | ok
+
+### Der Fehler, den der Lauf gefunden hat
+
+Das erste Kommando an den Pruefstand ging verloren:
+
+```
+14:24:14  Error: Unknown set topic 0Q
+```
+
+Aus `panasonic_heat_pump_test/set/QuietMode` war `0Q` geworden.
+
+**`write_mqtt_log()` ruft `mqtt_client.publish()`, und PubSubClient benutzt fuer
+Senden und Empfangen DENSELBEN Puffer.** Genau dorthin zeigen `topic` und
+`payload` waehrend des Callbacks. Etappe B setzte die Herzschlag-Meldung mitten
+in der Auswertung ab und ueberschrieb damit den Topic-Namen.
+
+**Merke fuer kuenftige Aenderungen an `mqtt_callback()`: dort NICHT loggen.**
+Der bestehende Code haelt sich daran - `write_mqtt_log()` steht nur an Stellen,
+an denen `topic` und `msg` nicht mehr gebraucht werden. Wer eine Meldung
+braucht, merkt sich den Wert und gibt ihn aus `loop()` aus (Muster:
+`wifiOutageSeconds`, seit 3.13.0 auch `stilleBeendetSekunden`).
+
+### Nebenbefund: 34 wiedereingespielte Kommandos bei JEDEM Verbinden
+
+```
+14:11:34  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+14:27:19  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+Der ioBroker-Adapter spielt das dem Pruefstand ein, obwohl unter diesem Prefix
+**niemand steuert**. Das ist der gemessene Beleg dafuer, warum der Herzschlag
+NACH der `SUBSCRIBE_GRACE`-Pruefung gestempelt wird: Davor haetten diese 34
+Nachrichten als "die Steuerung lebt" gezaehlt.
+
 ## Kurven-Set-Kommandos (SET27-SET34)
 
 `kurven_test.py` weist die acht Kurvenbefehle am laufenden Geraet nach, ohne
@@ -851,7 +1071,7 @@ FEHLERpfad, den man an der echten Anlage nicht provozieren will.
 ```
 curl -u admin:heisha http://192.168.2.197/notbetrieb            # Seite
 curl -u admin:heisha -X POST http://192.168.2.197/notbetrieb/start
-curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend
+curl http://192.168.2.197/notbetrieb/status                     # ...;Sperre;Lage;Dauertext (Lage: 0 ok, 2 Broker weg, 4 Steuerung stumm)
 ```
 
 **Ablauf, wie er sein soll:**
