@@ -1285,7 +1285,7 @@ Etappe | Inhalt | Commit
 0 | Tag und Branch | —
 1 | [`src/verbindung.h`](src/verbindung.h) + Hosttest, in der CI | `76002ab`
 2 | Die Anzeige auf beiden Seiten, Knopffarbe, Lauftext | `c38066f`
-3 | Doku und Version 3.13.0 | *dieser Commit*
+3 | Doku und Version 3.13.0 | `05ac412`
 
 ### Die Entscheidungen
 
