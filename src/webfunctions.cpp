@@ -13,7 +13,12 @@ static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5
 
 // CSS is embedded (styles the existing w3-class names): the UI must work
 // without internet access, previously w3.css and jquery came from CDNs
-static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
+// charset MUSS frueh im <head> stehen (in den ersten 1024 Bytes), sonst raet
+// der Browser und macht aus "laeuft" mit Umlaut Kauderwelsch. Bis 3.12.0 war
+// jeder Text der Oberflaeche in ae/oe/ue geschrieben und die Zeile deshalb
+// entbehrlich; die Notbetriebsseite liest im Ernstfall jemand aus der Familie,
+// und dort steht ab 3.13.0 richtiges Deutsch.
+static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
     "*{box-sizing:border-box}body{font-family:Verdana,sans-serif;margin:0}h4{margin:10px 0}"
     ".w3-container{padding:0.01em 16px}.w3-card-4{box-shadow:0 4px 10px 0 rgba(0,0,0,.2)}"
     ".w3-card{box-shadow:0 2px 5px 0 rgba(0,0,0,.2)}.w3-center{text-align:center}.w3-left{float:left}"
@@ -260,6 +265,115 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   Serial.println(WiFi.localIP());
 }
 
+/*****************************************************************************/
+/* Die Saetze der Verbindungsanzeige                                         */
+/*                                                                           */
+/* Owner-Beobachtung 2026-08-21: Waehrend der Broker weg war, heizte die     */
+/* Waermepumpe mit dem zuletzt gesetzten Sollwert einfach weiter - kein      */
+/* Alarm, kein Hinweis, nichts. Wer die Seite oeffnet, soll das sehen.       */
+/*                                                                           */
+/* Der zweite Satz ist der wichtigere: Er beantwortet die Frage, die der     */
+/* erste aufwirft ("ist die Heizung jetzt aus?"). Ohne ihn loest die Meldung */
+/* eine Panik aus, die die Lage nicht hergibt.                               */
+/*****************************************************************************/
+#define VB_TXT_VERBUNDEN "Hausteuerung: verbunden"
+#define VB_TXT_WEG_VOR "Hausteuerung seit "
+#define VB_TXT_WEG_NACH " nicht erreichbar."
+#define VB_TXT_WEG_NEUSTART "Hausteuerung seit dem Neustart dieses Geräts nicht erreichbar."
+#define VB_TXT_FOLGE "Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter. Wird es zu kalt, hilft der Notbetrieb."
+#define VB_TXT_FOLGE_HIER "Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter."
+
+/*****************************************************************************/
+/* Die Verbindungsanzeige - einmal als JavaScript, einmal als C++            */
+/*                                                                           */
+/* Beide Seiten (Startseite und Notbetriebsseite) benutzen dieselben zwei    */
+/* Funktionen. Die Zahlen kommen aus der Statusroute, die Textform der Dauer */
+/* ("14 Minuten", "mehr als 30 Tagen") kommt FERTIG von dort - gerechnet     */
+/* wird sie in src/verbindung.h, also an genau einer Stelle und vom Hosttest */
+/* abgedeckt. Das JavaScript setzt nur den Rahmensatz darum.                 */
+/*                                                                           */
+/* zeigeOk unterscheidet die beiden Seiten: Auf der Notbetriebsseite steht   */
+/* auch im Normalfall eine Zeile ("Hausteuerung: verbunden"), weil dort die  */
+/* Entscheidung "Knopf druecken oder nicht" ansteht und ein ruhiges          */
+/* "verbunden" die haeufigere Fehlentscheidung verhindert. Auf der           */
+/* Startseite steht im Normalfall nichts - sie ist ein Nachschauwerkzeug,    */
+/* keine Statusampel.                                                        */
+/*****************************************************************************/
+static const char verbindungJS[] PROGMEM =
+    "<script>"
+    "function vbSetzen(lage,dauer,zeigeOk){"
+    "var e=document.getElementById('nbverb');if(!e)return;"
+    // Lage 0 = verbunden, 1 = getrennt aber noch in der Karenz. Die Karenz
+    // sieht auf der Seite bewusst aus wie "verbunden": Ein Adapter-Neustart
+    // soll keine Meldung ausloesen, die von selbst wieder verschwindet.
+    "if(lage==0||lage==1){"
+    "if(zeigeOk){e.className='w3-text-grey w3-small';e.innerHTML='<p>" VB_TXT_VERBUNDEN "</p>';}"
+    "else{e.className='';e.innerHTML='';}return;}"
+    // Lage 3 = seit dem Neustart nie verbunden. Dort ist die wahre Dauer
+    // unbekannt, eine Minutenangabe waere gelogen.
+    "var s=(lage==3)?'" VB_TXT_WEG_NEUSTART "':('" VB_TXT_WEG_VOR "'+dauer+'" VB_TXT_WEG_NACH "');"
+    "e.className='w3-panel w3-orange';"
+    "e.innerHTML='<h3>'+s+'</h3><p>'+(zeigeOk?'" VB_TXT_FOLGE_HIER "':'" VB_TXT_FOLGE "')+'</p>';}"
+    // Nachfuehren der Startseite: dieselbe Route wie der Notbetriebsknopf,
+    // aber im 30-s-Takt der Tabelle statt alle zwei Sekunden. Die
+    // Notbetriebsseite ruft vbSetzen aus ihrem eigenen 2-s-Takt heraus auf
+    // und braucht diese Funktion nicht.
+    "function vbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
+    "var p=t.trim().split(';');vbSetzen(parseInt(p[5]),p[6],false);"
+    "}).catch(()=>{}).finally(()=>{setTimeout(vbState,30000)})}"
+    "</script>";
+
+// Nur die Startseite startet das Nachfuehren von sich aus. Die
+// Notbetriebsseite ruft vbSetzen() aus ihrem eigenen 2-s-Takt heraus auf und
+// wuerde die Route sonst doppelt abfragen.
+static const char verbindungStartJS[] PROGMEM =
+    "<script>document.addEventListener('DOMContentLoaded',vbState);</script>";
+
+/*****************************************************************************/
+/* Dieselbe Zeile beim Aufbau der Seite                                      */
+/*                                                                           */
+/* Wer die Seite oeffnet, soll die Lage sofort lesen koennen - auch in der    */
+/* Sekunde vor der ersten Statusabfrage. Gleiche Begruendung wie beim         */
+/* Sperrhinweis des Notbetriebsknopfs darunter.                               */
+/*****************************************************************************/
+static void verbindungszeile(String &out, bool zeigeOk)
+{
+  const VerbindungsLage lage = verbindung_lage(&hausteuerung);
+
+  if (lage == VERBINDUNG_VERBUNDEN || lage == VERBINDUNG_KARENZ)
+  {
+    if (zeigeOk)
+    {
+      out += "<div id='nbverb' class='w3-text-grey w3-small'><p>" VB_TXT_VERBUNDEN "</p></div>";
+    }
+    else
+    {
+      out += "<div id='nbverb'></div>"; // leer, das JavaScript fuellt es bei Bedarf
+    }
+    return;
+  }
+
+  out += "<div id='nbverb' class='w3-panel w3-orange'><h3>";
+  if (lage == VERBINDUNG_GESTOERT_SEIT_NEUSTART)
+  {
+    out += VB_TXT_WEG_NEUSTART;
+  }
+  else
+  {
+    // Der Puffer ist grosszuegig: der laengste Text ist "mehr als 30 Tagen"
+    char dauer[32];
+    verbindung_dauer_text(dauer, sizeof(dauer),
+                          verbindung_ausfall_sekunden(&hausteuerung),
+                          hausteuerung.ueber_deckel);
+    out += VB_TXT_WEG_VOR;
+    out += dauer;
+    out += VB_TXT_WEG_NACH;
+  }
+  out += "</h3><p>";
+  out += zeigeOk ? VB_TXT_FOLGE_HIER : VB_TXT_FOLGE;
+  out += "</p></div>";
+}
+
 void handleRoot(WebServerClass *httpServer)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -267,6 +381,13 @@ void handleRoot(WebServerClass *httpServer)
   httpServer->sendContent_P(webHeader);
   httpServer->sendContent_P(webBodyStart);
   httpServer->sendContent_P(menuJS);
+  httpServer->sendContent_P(verbindungJS);
+  // Die Startseite fuehrt die Verbindungszeile im 30-s-Takt der Tabelle nach,
+  // nicht alle zwei Sekunden wie die Notbetriebsseite: Hier steht keine
+  // Entscheidung an, und der ESP8266 fragt nebenher die Waermepumpe ab.
+  httpServer->sendContent_P(verbindungStartJS);
+  // refreshJS schliesst den <head> und oeffnet den <body> - alles, was in den
+  // Kopf gehoert, muss davor stehen.
   httpServer->sendContent_P(refreshJS);
 
   String httptext = "<div class='w3-sidebar w3-bar-block w3-card w3-animate-left' style='display:none' id='leftMenu'>";
@@ -274,7 +395,14 @@ void handleRoot(WebServerClass *httpServer)
   httpServer->sendContent_P(sidebar);
   httptext = "<hr><div class='w3-text-grey w3-small'>Version: ";
   httptext = httptext + heishamon_version + "<br><a href = 'https://github.com/gregor-samosir/HeishaMonKaskade '>Heishamon</a></div><hr></div>";
-  httptext = httptext + "<br><div class='w3-container'><table class = 'w3-table-all w3-card-4 w3-small'><thead><tr class = 'w3-blue'><th>Topic</th><th>Name</th><th>Value</th><th>Description</th></tr></thead><tbody id =\"heishavalues\"><tr><td>... Loading...</td><td>.</td><td>.</td><td>.</td></tr></tbody></table></div>";
+  // Auf der Startseite steht die Zeile NUR im Stoerfall (zeigeOk = false).
+  // Sie ist ein Nachschauwerkzeug, keine Statusampel - ein dauerhaftes
+  // "verbunden" ueber der Topic-Tabelle waere Rauschen und wuerde nach
+  // kurzer Zeit uebersehen, samt der Stoermeldung an derselben Stelle.
+  httptext += "<br><div class='w3-container'>";
+  verbindungszeile(httptext, false);
+
+  httptext = httptext + "<table class = 'w3-table-all w3-card-4 w3-small'><thead><tr class = 'w3-blue'><th>Topic</th><th>Name</th><th>Value</th><th>Description</th></tr></thead><tbody id =\"heishavalues\"><tr><td>... Loading...</td><td>.</td><td>.</td><td>.</td></tr></tbody></table></div>";
   httpServer->sendContent(httptext);
   httpServer->sendContent_P(webFooter);
   httpServer->sendContent("");
@@ -528,12 +656,16 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 /* Satzes koennten sonst auseinanderlaufen, und ausgerechnet die Notfallseite */
 /* wuerde je nach Zeitpunkt etwas anderes sagen.                              */
 /*                                                                           */
-/* Bewusst ohne Umlaute, wie die uebrige Oberflaeche.                         */
+/* Mit Umlauten seit 3.13.0 (webHeader traegt jetzt ein charset). Diese Seite */
+/* liest im Ernstfall jemand aus der Familie, nicht der Entwickler - "Der    */
+/* Notbetrieb ist nur im Modus Heizen moeglich" ist zwar verstaendlich, aber */
+/* eine Notfallseite sollte nicht aussehen, als sei sie halbfertig. Die      */
+/* uebrigen Seiten (Home, Settings, Firmware) bleiben unveraendert.          */
 /*****************************************************************************/
-#define NB_TXT_NUR_HEIZEN "Der Notbetrieb ist nur im Modus Heizen moeglich"
-#define NB_TXT_HEIZEN_HINWEIS "Bitte den Heiz-/Kuehlschalter im Haus auf Heizen stellen. Der Knopf gibt sich danach von selbst frei, das dauert bis zu 10 Sekunden."
-#define NB_TXT_WERTE_FEHLEN "Der Steuerung fehlen Werte, die sie zum Umschalten braucht. Das passiert, wenn das Geraet neu gestartet ist, waehrend der Server im Keller aus war."
-#define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Waermepumpe weitermachen."
+#define NB_TXT_NUR_HEIZEN "Der Notbetrieb ist nur im Modus Heizen möglich"
+#define NB_TXT_HEIZEN_HINWEIS "Bitte den Heiz-/Kühlschalter im Haus auf Heizen stellen. Der Knopf gibt sich danach von selbst frei, das dauert bis zu 10 Sekunden."
+#define NB_TXT_WERTE_FEHLEN "Der Steuerung fehlen Werte, die sie zum Umschalten braucht. Das passiert, wenn das Gerät neu gestartet ist, während der Server im Keller aus war."
+#define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Wärmepumpe weitermachen."
 
 // Alle zwei Sekunden den Kurzstatus holen und daraus Klartext machen. Die
 // Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" - so kurz wie
@@ -553,10 +685,13 @@ static const char notbetriebJS[] PROGMEM =
     "function nbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
     "var p=t.trim().split(';');var z=parseInt(p[0]);var s=parseInt(p[1]);var n=parseInt(p[2]);"
     "var m=parseInt(p[3]);var sp=parseInt(p[4]);"
+    // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
+    // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
+    "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');"
-    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Laeuft...</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
-    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRUEN</h3><p>Der Notbetrieb ist eingeschaltet. Die Waermepumpe laeuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe fuer den Kompressor - siehe Anleitung.</p>';}"
+    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
+    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist eingeschaltet. Die Wärmepumpe läuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe für den Kompressor - siehe Anleitung.</p>';}"
     "else if(z==3){e.className='w3-panel w3-red';e.innerHTML='<h3>ROT</h3><p>Hat nicht geklappt. " NB_TXT_PLAN_B "</p>';}"
     "else{e.className='';e.innerHTML='';}"
     // Waehrend ein Lauf unterwegs ist und nach GRUEN steht weder Knopf noch
@@ -594,6 +729,11 @@ void handleNotbetrieb(WebServerClass *httpServer)
   httptext += "];</script>";
   httpServer->sendContent(httptext);
 
+  // verbindungJS VOR notbetriebJS: nbState() ruft vbSetzen() auf. Die
+  // Reihenfolge ist hier egal, weil beides Funktionsdeklarationen sind und
+  // erst nach DOMContentLoaded laeuft - sie steht trotzdem so da, damit beim
+  // Lesen keine Frage offen bleibt.
+  httpServer->sendContent_P(verbindungJS);
   httpServer->sendContent_P(notbetriebJS);
   httpServer->sendContent("</head><body>");
 
@@ -608,10 +748,16 @@ void handleNotbetrieb(WebServerClass *httpServer)
   httptext = "<div class='w3-container'>";
   httptext += wasser ? "<h2>Notbetrieb: Warmwasser</h2>" : "<h2>Notbetrieb: Heizen</h2>";
   httptext += wasser
-                  ? "<p>Dieser Knopf stellt die Waermepumpe auf reinen Warmwasserbetrieb "
+                  ? "<p>Dieser Knopf stellt die Wärmepumpe auf reinen Warmwasserbetrieb "
                     "und schaltet sie ein. Sie arbeitet danach ohne die Hausteuerung weiter.</p>"
-                  : "<p>Dieser Knopf stellt die Waermepumpe auf ihre eigene Heizkurve "
+                  : "<p>Dieser Knopf stellt die Wärmepumpe auf ihre eigene Heizkurve "
                     "und schaltet sie ein. Sie heizt danach ohne die Hausteuerung weiter.</p>";
+
+  // Die Verbindungszeile steht GANZ OBEN, vor dem Knopf: Sie ist die Auskunft,
+  // aus der sich die Entscheidung ergibt, ob der Knopf ueberhaupt gebraucht
+  // wird. Auf dieser Seite steht sie auch im Normalfall da (zeigeOk = true) -
+  // ein ruhiges "verbunden" verhindert die haeufigere Fehlentscheidung.
+  verbindungszeile(httptext, true);
   httpServer->sendContent(httptext);
 
   // Knopf und Sperrhinweis stehen BEIDE in der Seite; sichtbar ist immer nur
@@ -622,7 +768,13 @@ void handleNotbetrieb(WebServerClass *httpServer)
   // POST-Handler prueft die Sperre selbst (notbetrieb_starten()).
   httptext = "<form id='nbform' method='POST' action='/notbetrieb/start'";
   httptext += (sperre == NOTBETRIEB_FREI) ? ">" : " style='display:none'>";
-  httptext += "<button class='w3-button w3-red w3-xlarge w3-padding-large' type='submit'>";
+  // BLAU und nicht rot (Owner-Entscheidung 2026-08-21): Auf dieser Seite hiess
+  // Rot bis 3.12.0 zweierlei - der Knopf war rot im Sinne von "druck mich",
+  // das Ergebnisfeld ROT im Sinne von "hat nicht geklappt". Das hat prompt zu
+  // einer Verwechslung gefuehrt. Fuer eine Seite, deren ganze Rueckmeldung aus
+  // einer Ampel besteht, darf Rot nur eines bedeuten. Auffaellig bleibt der
+  // Knopf ueber Groesse und Polsterung, nicht ueber die Farbe.
+  httptext += "<button class='w3-button w3-blue w3-xlarge w3-padding-large' type='submit'>";
   httptext += wasser ? "Warmwasser einschalten" : "Notbetrieb einschalten";
   httptext += "</button></form>";
 
@@ -699,7 +851,33 @@ void handleNotbetriebStart(WebServerClass *httpServer)
 /*****************************************************************************/
 void handleNotbetriebStatus(WebServerClass *httpServer)
 {
-  char status[48];
+  // Puffer grosszuegig: fuenf Zahlen des Notbetriebs plus Lage und Dauertext
+  // ("mehr als 30 Tagen" ist der laengste, 17 Zeichen).
+  char status[96];
   notbetrieb_status(status, sizeof(status));
+
+  // Die Verbindungsfelder haengt DIESE Funktion an, nicht notbetrieb_status():
+  // Der Notbetrieb weiss nichts von der Verbindungswacht und soll es auch
+  // nicht - er funktioniert gerade dann, wenn sie Alarm schlaegt.
+  //
+  // Warum die Startseite dieselbe Route abfragt, obwohl "notbetrieb" darin
+  // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
+  // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere auf
+  // einem ESP8266 der teurere Weg. Format nach der Erweiterung:
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext
+  const size_t used = strlen(status);
+  if (used + 1 < sizeof(status))
+  {
+    char dauer[32] = "";
+    const VerbindungsLage lage = verbindung_lage(&hausteuerung);
+    if (lage == VERBINDUNG_GESTOERT)
+    {
+      verbindung_dauer_text(dauer, sizeof(dauer),
+                            verbindung_ausfall_sekunden(&hausteuerung),
+                            hausteuerung.ueber_deckel);
+    }
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s", (unsigned)lage, dauer);
+  }
+
   httpServer->send(200, "text/plain", status);
 }

@@ -100,6 +100,12 @@ unsigned long mqttReconnectDelay = MQTT_RECONNECT_MIN; // waechst bei Misserfolg
 unsigned long setCommandsIgnoredUntil = 0;
 unsigned int ignoredSetCommands = 0;
 
+// Verbindung zur Hausteuerung (siehe verbindung.h). Sie haengt am MQTT-Client
+// und nicht am WLAN: Der Ausfall, um den es geht, ist der des ioBroker - und
+// der MQTT-Broker IST der ioBroker-Adapter. Das WLAN laeuft dabei weiter,
+// sonst waere auch die Weboberflaeche weg, die diese Auskunft anzeigen soll.
+VerbindungsWacht hausteuerung;
+
 // WLAN-Watchdog (siehe check_wifi)
 bool wifiIsDown = false;
 unsigned long wifiDownSince = 0;
@@ -851,6 +857,11 @@ void setup()
   // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
   notbetrieb_init();
 
+  // Anfangszustand der Verbindungswacht: getrennt und noch nie verbunden.
+  // Muss VOR setupMqtt() stehen - dort faellt die erste Verbindung, und ein
+  // spaeteres init() wuerde sie wieder auf "nie verbunden" zuruecksetzen.
+  verbindung_init(&hausteuerung, millis());
+
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
@@ -895,6 +906,29 @@ void loop()
   // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
   // haengen, der ohnehin nur scheitern kann.
   notbetrieb_loop(actual_data);
+
+  // Verbindungswacht nachfuehren. Sie kostet nichts, wenn sich nichts aendert,
+  // und steht bewusst VOR dem Wiederverbindungsversuch: So meldet sie die
+  // Rueckkehr erst im naechsten Durchlauf, wenn die Verbindung wirklich steht
+  // und die Log-Zeile darunter auch beim Broker ankommt.
+  {
+    // uint32_t und nicht unsigned long: Auf ESP8266 und ESP32 ist beides
+    // 32 Bit, aber die Wacht rechnet durchgaengig in uint32_t (siehe
+    // verbindung.h). Ein Zeigercast zwischen beiden Typen waere genau die
+    // Falle, die dieser Header vermeidet.
+    uint32_t ausfall_s = 0;
+    if (verbindung_nachfuehren(&hausteuerung, mqtt_client.connected(),
+                               (uint32_t)millis(), &ausfall_s))
+    {
+      // Gleiches Muster wie die WLAN-Meldung: waehrend des Ausfalls waere sie
+      // ins Leere gegangen, nach der Rueckkehr kommt sie an. Fuer den
+      // Menschen vor der Weboberflaeche ist sie zu spaet - dafuer steht die
+      // Anzeige auf der Seite. Sie ist die Spur fuer die Nachschau danach.
+      (void)snprintf(log_msg, sizeof(log_msg), "Hausteuerung war %lu s nicht erreichbar",
+                     (unsigned long)ausfall_s);
+      write_mqtt_log(log_msg);
+    }
+  }
 
   if (!mqtt_client.connected())
   {

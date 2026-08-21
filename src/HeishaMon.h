@@ -4,6 +4,7 @@
 #include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 #include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
 #include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
+#include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
 // platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
@@ -135,3 +136,10 @@ NotbetriebSperre notbetrieb_sperre(void);
 extern const NotbetriebRolle notbetriebRolle;
 extern NotbetriebSpeicher notbetriebWerte;
 extern NotbetriebLauf notbetriebLauf;
+
+// Verbindungswacht (verbindung.h). Aus loop() nachgefuehrt, von den
+// Webseiten gelesen: Startseite und Notbetriebsseite melden daraus, ob die
+// Hausteuerung erreichbar ist. Sie haengt an mqtt_client.connected() und
+// nicht am WLAN - der Ausfall, um den es geht, ist der des ioBroker, und
+// der laesst das WLAN unberuehrt.
+extern VerbindungsWacht hausteuerung;
