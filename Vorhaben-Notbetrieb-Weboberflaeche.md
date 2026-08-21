@@ -12,11 +12,17 @@ macht Warmwasser.
 Ist auch das WLAN weg, liegt ein Stromausfall vor — dafür wird hier keine
 Lösung gesucht (Owner-Entscheidung 2026-08-19).
 
-**Stand dieser Datei:** 2026-08-20, Firmware 3.11.0 auf beiden Stufen.
-Alle Grundsatzfragen sind entschieden (Abschnitt 5), **alle drei Messungen sind
-beantwortet** (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen Fehler in
-der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind korrigiert
-(Abschnitt 6a). **Damit kann gebaut werden.**
+**Stand dieser Datei:** 2026-08-21 nachts. **Der Knopf funktioniert an der
+Anlage** — Etappe 5 ist gefahren und grün: gesperrt im Kühlbetrieb, GRÜN nach
+57 s im Heizbetrieb, Rückkehr durch den Re-Assert von allein (Protokoll in
+Abschnitt 10). Alle Grundsatzfragen sind entschieden (Abschnitt 5), alle drei
+Messungen beantwortet (Abschnitt 6). Der Messlauf zu M1 hat zusätzlich einen
+Fehler in der Kurvenspiegelung aufgedeckt; Doku und `kurven_sync.py` sind
+korrigiert (Abschnitt 6a) und im Kurvenbetrieb an der Anlage bestätigt. **Auch Etappe 6 ist gefahren:** Der Knopf schaltet mit
+abgeschaltetem Broker, die Firmware übersteht den Ausfall und holt sich in 52 s
+von allein zurück. **Und der Warmwasserknopf an H2 ist belegt** — GRÜN nach 24 s
+im Kühlbetrieb. Beide Stufen tragen jetzt die Firmware dieses Branches. Offen ist
+nur noch Etappe 7 (Doku, Release 3.12.0).
 
 ---
 
@@ -55,18 +61,116 @@ umsonst.
 
 Schritt | Kommando | Rückgelesen an
 :--- | :--- | :---
-1. Betriebsart auf Kurve | `HeatingMode` (SET35) = 0 | `Heating_Mode` (TOP76) = 0
-2. Vorlauf bei kalt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
-3. Vorlauf bei warm | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
-4. Untere Außentemperatur | `Z1HeatCurveOutsideLowTemp` (SET29) | `Z1_Heat_Curve_Outside_Low_Temp` (TOP32)
-5. Obere Außentemperatur | `Z1HeatCurveOutsideHighTemp` (SET30) | `Z1_Heat_Curve_Outside_High_Temp` (TOP31)
-6. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
+1. Betriebsart auf Heizen | `OperationMode` (SET9) = 0 (Heat only) | `Operating_Mode_State` (TOP4) = 0
+2. Betriebsart auf Kurve | `HeatingMode` (SET35) = 0 | `Heating_Mode` (TOP76) = 0
+3. Vorlauf bei kalt | `Z1HeatCurveTargetHighTemp` (SET27) | `Z1_Heat_Curve_Target_High_Temp` (TOP29)
+4. Vorlauf bei warm | `Z1HeatCurveTargetLowTemp` (SET28) | `Z1_Heat_Curve_Target_Low_Temp` (TOP30)
+5. Untere Außentemperatur | `Z1HeatCurveOutsideLowTemp` (SET29) | `Z1_Heat_Curve_Outside_Low_Temp` (TOP32)
+6. Obere Außentemperatur | `Z1HeatCurveOutsideHighTemp` (SET30) | `Z1_Heat_Curve_Outside_High_Temp` (TOP31)
+7. Anlage einschalten | `Heatpump` (SET1) = 1 | `Heatpump_State` (TOP0) = 1
 
-Die Schritte 2–5 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
+Die Schritte 3–6 sind am 2026-08-20 im Kurvenbetrieb belegt (M1a): alle vier
 Werte in einem Sammelfenster gesendet, alle vier binnen 15 s zurückgelesen. Zu
-Schritt 2 und 3 siehe die Paarungswarnung in Abschnitt 6a — **`TargetHigh`
-gehört zur *unteren* Außentemperatur**, und das steht in der Doku bislang
-falsch herum.
+Schritt 3 und 4 siehe Abschnitt 6a — **`TargetHigh` gehört zur *unteren*
+Außentemperatur**, ist also der Vorlauf bei Kälte. Bis zum 2026-08-20 stand das
+in der Doku falsch herum.
+
+### Schritt 1 kam am 2026-08-20 dazu — sonst kühlt der Notbetrieb
+
+Die Folge fasste die Betriebsart ursprünglich nicht an. Der Ist-Zustand von H1
+an diesem Abend zeigt, warum das nicht trägt: `Operating_Mode_State` (TOP4)
+stand auf **1 = Cool only**. Die Kaskadensteuerung führt die Betriebsart selbst
+über `set/OperationMode` — im 5-min-Re-Assert nachgesehen — und stellt sie im
+Sommer auf Kühlen. Fällt der ioBroker in so einem Moment aus, bleibt genau
+dieser Zustand stehen: Der Knopf hätte alle sechs Schritte bestätigt, GRÜN
+gemeldet und eine Anlage eingeschaltet, die kühlt. Für einen Knopf, dessen
+einziger Zweck es ist, das Auskühlen zu verhindern, ist das der schlechteste
+denkbare Fehler — und er trifft gerade die Übergangszeit, in der ein Ausfall
+ebenso wahrscheinlich ist wie im Januar.
+
+Die Warmwasserseite macht es seit jeher richtig (`OperationMode` = 3); die
+Heizenseite zog nach. Der Schritt steht **vor** dem Moduswechsel: Ob ein
+Wechsel der Betriebsart die Kurvenpunkte ebenfalls anfasst, ist nicht gemessen
+— an erster Stelle kann er keinen bereits geschriebenen Wert mehr zerstören.
+
+Preis: ein Schritt mehr, rund 8 s längere Laufzeit, Gesamtdeckel 140 statt
+120 s.
+
+**Am 2026-08-20 abends an der Anlage gescheitert — und das ist der bisher
+wichtigste Befund des Vorhabens.** Der erste echte Lauf an H1 endete um 21:31:55
+mit ROT in Schritt 1, nach dem vollen Schritt-Timeout von 20 s. Die
+Gegenmessung unmittelbar danach trennt Firmware und Wärmepumpe sauber:
+
+* **Die Firmware hat gesendet.** Ein einzelnes `set/OperationMode 0` über MQTT
+  erscheint im Log der Bridge als `<SUB> SET9 OperationMode: 0` (21:33:16) — es
+  ist also durch Bereichsprüfung, Maskenmerge und Telegramm gegangen.
+* **Die Wärmepumpe hat es verworfen.** 40 s später, über sechs Abfragezyklen
+  hinweg: `Operating_Mode_State` (TOP4) unverändert 1 = Cool, und
+  `Heat_Cool_SW_State` (TOP101) — der *echte* Ist-Zustand aus Byte 110, nicht
+  der zuletzt kommandierte — ebenfalls Cool. Dasselbe stillschweigende
+  Verwerfen wie bei `Z1HeatRequestTemperature` im Kurvenbetrieb (M1c).
+
+**Beantwortet noch am selben Abend durch den Owner:** Der externe Schalter
+(KNX) gibt den Modus vor — **steht die Anlage auf Kühlen, nimmt sie nur
+Kühlmodi an.** Damit ist Hypothese (a) unten die richtige, die Messung zu (b)
+erübrigt sich, und der Notbetrieb Heizen ist im Kühlbetrieb über MQTT
+grundsätzlich nicht schaltbar. Folge für den Bau: Der Knopf gehört gesperrt,
+solange `Heat_Cool_SW_State` (TOP101) auf Cool steht, mit Klartext auf der
+Seite und dem KNX-Taster in der Offline-Anleitung. Die Tabelle bleibt als Beleg
+stehen, wie der Befund entstanden ist:
+
+Hypothese | Prüfung | Folge, falls sie zutrifft
+:--- | :--- | :---
+**(a)** Der KNX-Aktor gibt Heizen/Kühlen vor; im Kühlbetrieb nimmt die Anlage kein „Heat only" per MQTT an | Heiz/Kühl-Schalter auf Heizen stellen, `SET9` wiederholen | Der Notbetrieb Heizen ist im Kühlbetrieb **grundsätzlich nicht schaltbar**. Der Knopf gehört dann gesperrt, solange TOP101 auf Cool steht — mit Klartext, statt jemanden in ein ROT ohne Erklärung laufen zu lassen. Der KNX-Taster gehört in die Offline-Anleitung.
+**(b)** Die Anlage stand aus (`Heatpump_State` = 0) und nimmt im Aus-Zustand keine Betriebsartänderung an | `Heatpump` = 1 senden, dann `SET9` wiederholen | Ein Fehler in der **Schrittfolge**: `Heatpump` = 1 gehört dann nach vorn statt ans Ende. Der Knopf bliebe voll funktionsfähig.
+
+Für (b) spricht, dass die Gegenprobe an H2 (M3, `OperationMode` = 3 aus dem
+Kühlbetrieb heraus) an einer **laufenden** Stufe gemessen wurde — H2 macht
+Warmwasser und ist eingeschaltet. Für (a) spricht Entscheidung 4: Die
+Betriebsart ist die eine Freigabestufe, die nicht über MQTT läuft.
+
+### Gebaut am 2026-08-21: die Sperre
+
+Der Knopf der Rolle Heizen ist freigegeben, **solange `Heat_Cool_SW_State`
+(TOP101) sich sauber als 0 liest** — und sonst nie. Owner-Entscheidung: Alles
+andere gilt als „nicht Heizen", und zwar mit einer Regel für vier Fälle:
+
+Gelesen | bedeutet | Knopf
+:--- | :--- | :---
+`0` | Heizen | **frei**
+`1` | Kühlen | gesperrt
+`2` | unknown (Rohwert b11) | gesperrt
+`-1` | Feld leer geliefert | gesperrt
+`` (leer) | TOP101 nie empfangen | gesperrt
+
+Der letzte Fall trägt die Strenge: Ohne Rückmeldung der Wärmepumpe erreicht sie
+auch kein Kommando. Ein Knopf, der dann zum Drücken einlädt, verspricht etwas,
+das er nicht halten kann. Der Preis ist bezifferbar — **am Prüfstand ohne
+Wärmepumpe ist der Knopf dauerhaft gesperrt**, der Fehlerpfad ist dort nur noch
+über den Hosttest zu prüfen.
+
+Drei Eigenschaften, die zur Sperre gehören:
+
+* **Die Seite gibt sich von selbst frei.** Die Statusroute liefert den
+  Sperrgrund als fünftes Feld mit; die Seite fragt sie ohnehin alle zwei
+  Sekunden ab. Ein Neuladen von Hand wäre hier eine Falle: TOP101 folgt dem
+  KNX-Schalter erst nach bis zu 7,7 s (gemessen 2026-08-16) — wer sofort neu
+  lädt, sähe die Sperre ein zweites Mal und hielte den Schalter für wirkungslos.
+* **Auch mitten im Lauf wird abgebrochen**, sobald die Anlage ausdrücklich `1`
+  meldet. Sonst schaltete die Folge am Ende eine kühlende Anlage ein. Nur die
+  klare 1 bricht ab — ein einzelner Aussetzer darf einen sauber laufenden
+  Vorgang nicht zerreißen und die Anlage halb geschaltet stehen lassen.
+* **Der POST-Handler prüft dieselbe Sperre.** Eine Oberfläche, die nur den Knopf
+  versteckt, ist keine Sperre: `/notbetrieb/start` lässt sich auch ohne die
+  Seite absetzen, und zwischen Seitenaufbau und Klick können Minuten liegen.
+
+**Stufe 2 ist nicht betroffen.** `OperationMode` = 3 trägt im Kühlbetrieb (M3),
+und genau dafür ist der Warmwasserknopf gebaut.
+
+**Was die Sperre nicht kann:** TOP101 ist der zuletzt empfangene Wert. Reißt die
+serielle Verbindung zur Wärmepumpe ab, altert er stumm, und die Sperre merkt es
+nicht. Ein Lauf, der in dieser Lage gestartet wird, scheitert im ersten
+Schritt — dasselbe Ergebnis wie vorher, nur ohne den Gewinn.
 
 **Stufe 2 (H2 / WP2, 192.168.2.122) — Rolle Warmwasser**
 
@@ -192,6 +296,27 @@ gehen nie ungefragt an die Wärmepumpe.
 **Also: Der Zweig `<prefix>/notbetrieb/` wird vor der Karenzprüfung behandelt.**
 Fünf Zeilen in `mqtt_callback()`, und sie sind der Unterschied zwischen einem
 Knopf, der nach jedem Neustart funktioniert, und einem, der es nicht tut.
+Umgesetzt am 2026-08-20 (Etappe 2), abgesichert durch
+[`test/notbetrieb_test.cpp`](test/notbetrieb_test.cpp).
+
+**Der Mechanismus ist am Broker nachgemessen (2026-08-20).** Belegt war die
+Wiedereinspielung bisher nur für den `set`-Zweig; ob der Adapter das auch für
+einen Zweig tut, den er nie zuvor gesehen hat, war offen. Er tut es: Vier Werte
+an `panasonic_heat_pump_test/notbetrieb/*` gesendet, dann mit
+[`test/mqtt_sub.py`](test/mqtt_sub.py) neu verbunden — alle vier kamen von
+allein, ohne dass jemand publizierte. Der Subscriber macht dabei genau das, was
+die Firmware nach einem Neustart tut, deshalb brauchte der Nachweis kein Gerät.
+Die Wiedereinspielung kommt mit **retain=0** — der Schluss daraus, sie sei
+damit nicht von einem echten Kommando zu unterscheiden, war jedoch **falsch und
+ist am 2026-08-20 richtiggestellt**: Ein Live-Publish des Adapters trägt
+**retain=1**, die Wiedereinspielung beim Subscribe **retain=0**. Belegt im
+Adaptercode des ioBroker-MQTT-Adapters (`MQTTServer.js:162` gegen `:331`) und am
+`notbetrieb`-Zweig gemessen — es hängt am **Codepfad**, nicht am Topic-Zweig.
+
+Für den Notbetriebskanal ändert das nichts: Die Trennung läuft hier über den
+eigenen Zweig und braucht das Bit nicht. Es eröffnet aber einen präziseren Weg
+für die Karenzzeit im `set`-Zweig, der heute pauschal alles wegwirft — als
+Folgethema in Abschnitt 9 notiert.
 
 ### Fehlen Werte, bleibt der Knopf gesperrt
 
@@ -200,14 +325,21 @@ der Seite. Lieber gar nicht schalten als auf die Werkskurve.
 
 ## 4. Die Umsetzung — vier Bausteine
 
-**A — Notbetriebswerte annehmen und halten.**
+**A — Notbetriebswerte annehmen und halten. Steht seit 2026-08-20.**
 Neue Pfadwurzel `Topics::NOTBETRIEB` in [`Topics.h`](src/Topics.h)/[`Topics.cpp`](src/Topics.cpp),
 eine kleine Tabelle mit Name und Bereichsgrenzen (dieselben Grenzen wie in
 `setCommands[]`), Abonnement analog `subscribe_set_topics()`, Annahme vor der
 Karenzprüfung. Gehalten wird in wenigen Bytes RAM plus einem
 Vollständigkeits-Flag.
 
-**B — Endpunkt und Seite.**
+*Am Prüfstand belegt (192.168.2.197, D1 mini ohne Wärmepumpe):* Nach einem
+Neustart standen ohne jedes Zutun binnen Sekunden wieder alle vier Werte —
+`Notbetrieb einsatzbereit: alle 4 Werte liegen vor`, und im selben Moment
+`34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen`. Die
+Karenz-Ausnahme wirkt also genau so getrennt, wie sie soll. Einzelheiten und
+die Ablehnungspfade in [`test/README.md`](test/README.md).
+
+**B — Endpunkt und Seite. Steht seit 2026-08-20.**
 `/notbetrieb` mit demselben Auth-Muster wie `/reboot` und `/settings`
 ([`HeishaMon.cpp:196-226`](src/HeishaMon.cpp#L196-L226)), ein Sidebar-Eintrag
 mehr in `sidebar[]`.
@@ -226,7 +358,7 @@ ein Stringvergleich auf den Stufennamen ist ein eigenes Flag in denselben
 Abschnitten, etwa `NOTBETRIEB_ROLLE_HEIZEN` bzw. `NOTBETRIEB_ROLLE_WASSER`.
 Kein neues Konfigurationsfeld, kein Rollenfeld irgendwo auf dem Gerät.
 
-**C — Die Schrittfolge ausführen, ohne einen zweiten Merge-Pfad zu bauen.**
+**C — Die Schrittfolge ausführen, ohne einen zweiten Merge-Pfad zu bauen. Steht seit 2026-08-20.**
 
 Die Kommandos gehen durch `build_heatpump_command()` — **unverändert**. Der
 Handler baut nur den Topic-String:
@@ -243,14 +375,14 @@ vier Prüfungen und überschreibt zusätzlich jedes andere Feld, das in einem
 gerade offenen Sammelfenster steht.
 
 **Die Schritte laufen einzeln, nicht in einem Sammelfenster.** Ein Webhandler,
-der sechs Kommandos hintereinander absetzt, packt sie alle in ein Telegramm
+der sieben Kommandos hintereinander absetzt, packt sie alle in ein Telegramm
 (Deckel 2 s, [`sendwindow.h`](src/sendwindow.h)) — dann konkurriert das
 Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und welcher gewinnt, ist
 unbekannt. Der Notbetrieb wird deshalb ein kleiner Zustandsautomat, der aus
 `loop()` getickt wird: senden → zurücklesen → nächster Schritt. Der
 HTTP-Handler stößt ihn nur an und antwortet sofort.
 
-**D — GRÜN oder ROT, sonst nichts.**
+**D — GRÜN oder ROT, sonst nichts. Steht seit 2026-08-20.**
 
 Keine Zustandstabelle, keine Erklärseite. In dieser Lage hilft eine
 Fehlerbeschreibung niemandem: Entweder es wird GRÜN, oder es gilt Plan B — die
@@ -260,8 +392,47 @@ Bedienung am Panel nach der Offline-Anleitung.
 bedeutet, wäre das wertlose Signal. Die Firmware hält die Rücklesewerte ohnehin
 in `actual_data[]`; jeder Schritt wird gegen sein TOP geprüft (Spalte 3 in den
 Tabellen in Abschnitt 2). Zeitbudget: Die Wärmepumpe übernimmt in 2–8 s
-(KNX-Messung 2026-08-16), der Abfragezyklus liegt bei rund 6 s — Schritt-Timeout
-20 s, Gesamtfenster 60 s, bis dahin zeigt die Seite „läuft…".
+(KNX-Messung 2026-08-16), der Abfragezyklus liegt bei rund 6 s — **Schritt-Timeout
+20 s**, bis dahin zeigt die Seite „läuft…". Ein vollständiger Heizen-Lauf mit
+realistischen 6-s-Antworten braucht 42 s (im Hosttest gemessen; sieben Schritte,
+seit die Betriebsart mitgeschaltet wird).
+
+**Der Gesamtdeckel ist abgeleitet, nicht frei gewählt** (Umsetzung 2026-08-20):
+Schrittzahl × Schritt-Timeout, also 140 s für Heizen und 60 s für Warmwasser.
+Der ursprüngliche Entwurf nannte pauschal 60 s — das wäre bei sechs Schritten
+inkonsistent gewesen: Schon zwei Schritte im Timeout hätten den Deckel gerissen,
+und ob ein Lauf ROT wird, hinge davon ab, welche der beiden Regeln zufällig
+zuerst greift. So bleibt der Deckel das, was er sein soll: ein Notausgang, falls
+der Automat hängt, nicht der normale Weg zu ROT. (Die 120 s des ersten
+Entwurfs wurden zu 140 s, als die Betriebsart als siebter Schritt dazukam — die
+Regel blieb dieselbe, nur die Schrittzahl änderte sich.)
+
+**Eine Regel kam beim Bauen dazu: die Mindestwartezeit.** Ein Schritt gilt
+frühestens 8 s nach seinem Kommando als bestätigt. Ohne das könnte ein
+*veralteter* Rücklesewert einen Schritt sofort abhaken — und der gefährliche
+Fall steckt in der Schrittfolge selbst: Das Umschalten setzt die Kurvenpunkte
+auf die Werksvorgaben zurück. Trüge `actual_data` beim Kurvenschritt noch den
+Kurvenwert von vorher, gälte er als erledigt, und der Werks-Reset überschriebe
+ihn danach. GRÜN, und die Anlage führe die Werkskurve. Der Preis: Ein
+Heizen-Lauf dauert rund 56 statt 42 s.
+
+**Und eine Falle, die am Prüfstand sichtbar wurde:** `actual_data[]` wird über
+den **Zeilenindex** adressiert, nicht über die TOP-Nummer — die Nummerierung hat
+Lücken und reicht bis 104 bei 92 Zeilen. Dafür gibt es jetzt
+`state_topic_index()` in `decode.cpp`. Dazu kommt, dass ein noch nie
+empfangenes TOP als leerer Text dasteht: `atoi("")` ist 0, und der erste Schritt
+der Heizen-Folge hat den Sollwert 0. Ein naiver Vergleich hätte GRÜN gemeldet,
+ohne dass die Wärmepumpe je geantwortet hätte. Beides ist im Hosttest
+abgesichert und am Prüfstand belegt (dort läuft der Fehlerpfad, weil keine
+Wärmepumpe antwortet).
+
+**Ein Ergebnis verfällt nach 15 Minuten** (2026-08-21). GRÜN und ROT blieben
+vorher stehen, bis jemand erneut drückte — wer die Seite am nächsten Tag
+öffnete, sah das ROT von gestern und musste raten, ob gerade etwas schiefgeht.
+Jetzt fällt die Anzeige nach 15 Minuten auf „bereit" zurück und der Knopf steht
+wieder da; im MQTT-Log bleibt der Lauf vollständig nachlesbar. 15 Minuten sind
+länger als jeder Lauf (Deckel 140 s) und kurz genug, dass niemand ein fremdes
+Ergebnis für seines hält.
 
 **Was GRÜN nicht heißt:** dass die Anlage heizt. Die KNX-Freigabe des
 Kompressors ist im Antworttelegramm nicht sichtbar — am 2026-08-15/16 byteweise
@@ -315,6 +486,14 @@ nachführt.
 
 Eine Firmware-Lösung ist verworfen: Ihr Notbetriebs-Zustand läge im RAM, nach
 einem Neustart wüsste sie nichts mehr davon und würde nie zurückschalten.
+
+**Gebaut am 2026-08-20** (Hauptmodus-Verteiler V6.5, neuer Ausgang 15): Der
+5-min-Re-Assert sendet `set/HeatingMode` = 1 mit, sobald ein Herzschlag vorliegt
+(`KK_HeatTarget_long`/`KK_CoolTarget_long`, Fenster 5 min); ohne Puls unterbleibt
+die Zeile. Der Wartungsschalter sperrt den Kanal wie die übrigen zwölf. Am
+Produktivsystem nachgesehen (2026-08-20 19:56): `mqtt.0.panasonic_heat_pump.set.HeatingMode`
+= 1, Zeitstempel keine zwei Minuten alt. **Der Rückweg ist damit scharf** — mit
+Folgen für jeden Testlauf, siehe Abschnitt 7.
 
 **7. Kein Knopf „Notbetrieb aus".** (2026-08-20) Für „zurück auf Direktvorgabe"
 gibt es kein Szenario, das Node-RED nicht besser löst — und im einzigen Fall,
@@ -538,13 +717,41 @@ unkritisch, aber hier nicht getrennt gemessen.
 * **Die Karenzzeit-Ausnahme ist kritisch.** Wird sie vergessen, funktioniert der
   Knopf im Labor und nach jedem Neustart nicht mehr. Gehört in den Hosttest.
 * **Ein Knopf, der schaltet, ist ein Knopf, den jemand versehentlich drückt.**
-  Der Zugangsschutz ist dasselbe Passwort wie für `/firmware`. Keine Rückfrage —
-  aber ein POST-Formular statt eines Links, damit ihn niemand aus Versehen für
-  den Browser mitlädt.
+  Keine Rückfrage — aber ein POST-Formular statt eines Links, damit ihn niemand
+  aus Versehen für den Browser mitlädt. **Seit dem 2026-08-21 hat er einen
+  eigenen Zugang** (Benutzer `notbetrieb`), nicht mehr das Passwort von
+  `/firmware`: Er gehört mit Passwort in die Notfallanleitung, und dasselbe
+  Blatt darf nicht auch den Firmware-Upload öffnen.
 * **Die Bedienung ist für Laien.** „Notbetrieb ein" statt „`HeatingMode` auf 0". Die
   Passwörter und die Schritt-für-Schritt-Anleitung stehen offline bereit.
 * **Ein Neustart ohne Broker sperrt den Knopf.** Bewusst in Kauf genommen
   (Abschnitt 3), aber die Seite muss es sagen statt stumm ROT zu zeigen.
+* **Der Rückweg ist seit dem 2026-08-20 scharf und trifft die Testläufe.**
+  Läuft die Kaskadensteuerung, holt der 5-min-Re-Assert die Anlage mit
+  `set/HeatingMode` = 1 aus dem Notbetrieb zurück — im Ernstfall gewollt, im
+  Versuch aber ein Rennen: Der Knopf-Lauf braucht rund 56 s, danach bleiben
+  höchstens noch gut vier Minuten für Kurvenfoto und Kontrolle. Schlimmer ist
+  der Treffer *während* des Laufs: Fällt der Re-Assert zwischen Schritt 1 und
+  Schritt 7, steht die Betriebsart wieder auf Direktbetrieb, während der Automat
+  noch Kurvenpunkte schreibt.
+
+  **Der Weg dagegen ist ein Ruhefenster, kein Schalter** (2026-08-20). Der
+  naheliegende Gedanke — den Verteiler für die Dauer des Versuchs stilllegen —
+  ist geprüft und verworfen: Der Wartungsmodus der Kaskade schaltet auf seiner
+  AN-Flanke zuerst beide Wärmepumpen aus. Für einen Lauf, der die Anlage
+  *einschalten* soll, ist das das Gegenteil dessen, was gebraucht wird.
+  Einzelheiten in [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md).
+
+  Stattdessen `~/nodered-flows/testfenster.py`: Es liest den Takt aus den
+  Zeitstempeln der set-Datenpunkte (jeder Deploy verschiebt ihn), wartet mit
+  `--warte` auf den Beginn eines ausreichend langen Fensters und bewacht den
+  Lauf mit `--wache`; Exit-Code 2, wenn jemand dazwischenschreibt. **Wachzeit
+  nie größer als die verlangte Ruhe wählen** — `--warte 120 --wache 240` ist ein
+  Widerspruch und meldet zwangsläufig GESTÖRT. Für den Heizen-Lauf samt Foto
+  passt `--warte 240 --wache 200`.
+
+  Zurück kommt die Anlage von allein: Der nächste Re-Assert holt sie in den
+  Direktbetrieb, und das ist zugleich der Nachweis für Testplan-Punkt 6.
 
 ## 8. Testplan
 
@@ -566,27 +773,469 @@ unkritisch, aber hier nicht getrennt gemessen.
 
 ## 9. Nach der Umsetzung nachzuziehen
 
-* [`README.md`](README.md) — Weboberfläche und der neue Endpunkt.
-* [`src/version.h`](src/version.h) — Changelog zu 3.12.0 mit Problem, Nachweis
-  und Größenänderung.
-* [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`.
-* Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
+**Am 2026-08-21 erledigt** (Etappe 7), bis auf die beiden Punkte außerhalb
+dieses Repos, die unten ausdrücklich als offen markiert sind.
+
+* ✔ [`README.md`](README.md) — eigener Abschnitt „Der Notbetrieb ist ein Knopf
+  im Browser (3.12.0)", dazu `notbetrieb.h`/`notbetrieb.cpp` in der Dateitabelle.
+* ✔ [`src/version.h`](src/version.h) — Changelog zu 3.12.0 mit Problem, Regeln,
+  Freigabebedingung, eigenem Zugang und den vier Läufen an der Anlage.
+* ✔ [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`,
+  die Sperre über TOP101 und der eigene Zugang.
+* **OFFEN:** Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
   KNX-Taster für die Kompressorfreigabe, und der Hinweis, dass im Kurvenbetrieb
   „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt. **Dazu der obere
   Kurvenpunkt mit seiner Zahl:** nach dem Umschalten auf Kurve ist
   `TargetHigh` auf 34 °C zu setzen, sonst bleibt die Werksvorgabe 55 °C stehen
   (Abschnitt 6a).
-* `NOTBETRIEB.md` im Node-RED-Projekt — samt der Rückkehr-Zeile im Re-Assert und
-  der Bedingung dazu (Entscheidung 6).
-* **Zu korrigieren, M1 liegt seit 2026-08-20 vor:** Die Gleichsetzung von
+
+  **Und die Reihenfolge ist dabei zwingend (Owner-Befund 2026-08-21):** Das
+  Kurvenmenü am Bedienpanel ist **nur bei ausgeschalteter Wärmepumpe
+  erreichbar**. Der Handweg lautet also: Anlage aus → auf Kurve umschalten und
+  `TargetHigh` setzen → einschalten. Wer zuerst einschaltet, kommt an die Kurve
+  nicht mehr heran, ohne die Anlage wieder auszuschalten.
+
+  Für den Knopf ist das ohne Folgen — er schaltet die Anlage als **letzten**
+  Schritt ein, aus einem anderen Grund (Abschnitt 2), und trifft damit dieselbe
+  Reihenfolge. Es kostet aber das **Kurvenfoto**: Nach einem GRÜN-Lauf läuft die
+  Anlage, das Menü bleibt zu. Das Foto braucht deshalb einen eigenen Termin —
+  Kurvenbetrieb herstellen, dann den **Wartungsmodus** einschalten (der schaltet
+  beide Stufen aus und legt den Re-Assert still, hier also genau richtig),
+  fotografieren, Wartungsmodus wieder aus. Für einen Lauf, der die Anlage
+  einschalten soll, bleibt er das falsche Werkzeug
+  ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
+* **OFFEN:** `NOTBETRIEB.md` im Node-RED-Projekt — §7 beschreibt noch den
+  Handweg am Bedienterminal als einzigen Weg; der Knopf gehört davor, der
+  Handweg bleibt als Rückfall. Die Rückkehr-Zeile im Re-Assert und ihre
+  Herzschlag-Bedingung (Entscheidung 6) stehen dort bereits in §9.
+* ✔ **Erledigt 2026-08-21:** Die Gleichsetzung von
   `Z1HeatRequestTemperature` (SET5) und `Z1HeatCurveTargetHighTemp` (SET27) gilt
   nur im Direktbetrieb. Fundstellen: [`MQTT-Topics.md:468`](MQTT-Topics.md#L468)
   und [`MQTT-Topics.md:537`](MQTT-Topics.md#L537), Fußnote ² in
   [`SET-TOP-Zuordnung.md:125`](SET-TOP-Zuordnung.md#L125), der
   TargetHigh-Abschnitt in [`test/README.md:699`](test/README.md#L699).
-* **Vorrangig zu korrigieren:** die Kurvenpaarung in `MQTT-Topics.md` und
-  `kurven_sync.py` — Abschnitt 6a führt die Stellen einzeln auf. Das ist keine
-  Nacharbeit nach der Umsetzung, sondern eine Vorbedingung für sie.
-* **Zu korrigieren:** Changelog, `SET-TOP-Zuordnung.md` und das GitHub-Release
-  zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
-  fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
+* ✔ **Erledigt am 2026-08-20:** die Kurvenpaarung in `MQTT-Topics.md` und
+  `kurven_sync.py` — Abschnitt 6a führt die Stellen einzeln auf. Am 2026-08-21
+  im Kurvenbetrieb an der Anlage bestätigt (`Main_Target_Temp` 26 °C bei 15 °C
+  außen).
+* ✔ **Erledigt 2026-08-21 im Repo:** Changelog und `SET-TOP-Zuordnung.md`
+  sagten sinngemäß „damit ist der Notbetrieb vollständig fernschaltbar". Das
+  stimmt nur, solange ein Broker erreichbar ist; beide Stellen sind präzisiert,
+  der Changelog zu 3.12.0 greift es auf. **OFFEN bleibt der Text des
+  GitHub-Release zu 3.11.0** — der lässt sich nur dort ändern.
+
+**Folgethema, nicht Teil dieses Vorhabens — niemand merkt den Ausfall.**
+Owner-Beobachtung 2026-08-21, mitten in Etappe 6: Während der Broker weg war,
+heizte die Wärmepumpe einfach weiter, mit dem zuletzt gesetzten Sollwert. Kein
+Alarm, kein Hinweis, nichts. Der Ausfall wirkt sich erst mit Verzögerung aus —
+im Sommer über Tage, im Januar über Stunden, wenn der Sollwert der fallenden
+Außentemperatur nicht mehr nachgeführt wird.
+
+Damit steht der Knopf auf einem stillen Fundament: Er funktioniert, aber jemand
+muss auf die Idee kommen, ihn zu suchen. Nachgesehen und bestätigt: **Die
+Weboberfläche der Bridge zeigt nirgends an, dass die Verbindung zur Hausteuerung
+weg ist** — Startseite, Topic-Tabelle, sonst nichts. Selbst wer gezielt
+nachschaut, sieht es nicht. Die Firmware weiß es (der Reconnect läuft im Backoff
+ins Leere), sie sagt es nur niemandem, außer im MQTT-Log — und das geht in genau
+dieser Lage per Definition ins Leere.
+
+Die naheliegende Form wäre klein: eine Zeile auf der Startseite und auf der
+Notbetriebsseite, „Hausteuerung: seit 14 Minuten nicht erreichbar", aus dem, was
+die Firmware ohnehin kennt. Mit einer Karenz von einigen Minuten, damit ein
+WLAN-Wackler keinen Fehlalarm auslöst. Wer dann die Seite öffnet, weiß sofort,
+ob er den Knopf braucht.
+
+**Kleinigkeit, aber dieselbe Richtung — Rot heißt auf der Seite zweierlei.** Der
+Knopf ist rot eingefärbt („drück mich"), das Ergebnisfeld ROT bedeutet „hat
+nicht geklappt". Am 2026-08-21 hat das prompt zu einer Verwechslung geführt. Für
+eine Seite, deren ganze Rückmeldung aus einer Ampel besteht, ist das die falsche
+Farbsprache; der Knopf sollte blau werden. Zwei Zeichen im Quelltext, noch nicht
+entschieden.
+
+**Folgethema, nicht Teil dieses Vorhabens — die Karenzzeit genauer fassen.**
+`SUBSCRIBE_GRACE` wirft heute für ein Zeitfenster *alles* weg, was nach dem
+Verbinden hereinkommt, also auch echte Kommandos. Seit dem Retain-Befund
+(Abschnitt 3) gibt es einen präziseren Hebel: Die Wiedereinspielung des
+ioBroker-Adapters trägt `retain=0`, ein Live-Publish `retain=1`. Ein Filter auf
+das Bit träfe genau die Wiedereinspielung statt eines Zeitraums.
+
+Nicht ohne eigene Messung umbauen: Belegt ist das bislang am `notbetrieb`-Zweig;
+für den `set`-Zweig ist es aus dem Adaptercode abgeleitet, aber nicht
+nachgemessen. Und der Callback der Firmware müsste das Retain-Flag überhaupt
+erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau den
+55-°C-Vorlauf zurück, wegen dem die Karenzzeit entstanden ist.
+
+---
+
+## 10. Stand der Umsetzung — 2026-08-21, Etappen 5 und 6 erledigt
+
+**Alles committet, Branch `notbetrieb-web`.**
+Rettungsanker: Tag `rettungsanker-vor-notbetrieb-web-2026-08-20` auf `main`.
+
+### Was steht
+
+Etappe | Inhalt | Commit
+:--- | :--- | :---
+0 | Tag, Branch, Arbeitsplan für Node-RED | `e2c81d0`
+1 | [`src/notbetrieb.h`](src/notbetrieb.h) + Hosttest, in der CI | `d367220`
+2 | Baustein A: Werte annehmen und halten | `6eaec46`
+2 | Nachweis Wiedereinspielung am Broker | `39417e9`
+2 | Nachweis am Prüfstand: übersteht den Neustart | `e5f654b`
+3 | Bausteine B, C und D: der Knopf | `17b7621`
+4 | **Node-RED-Seite** — im Nachbarprojekt gebaut und abgenommen | dort
+5a | Erster Lauf an H1: ROT in Schritt 1, Ursache getrennt | `6deeeaf`, `07431f8`
+5b | **Die Sperre über die Betriebsart** samt Anzeigeverfall | `c22c9a5`
+5c | **Etappe 5 an der Anlage: Sperre belegt, GRÜN nach 57 s** | `a6fdafd`
+6 | **Etappe 6: GRÜN ohne Broker, Rückkehr nach 52 s** | `a59955a`
+6a | **Der Warmwasserknopf an H2: GRÜN nach 24 s** | `4676e0e`
+
+Die Bausteine A–D sind vollständig gebaut und am Prüfstand geprüft — dort lief
+mangels Wärmepumpe der **Fehler**pfad (ROT nach 20 s), und genau das war der
+Zweck. Alle zehn Envs bauen, der Hosttest steht bei 159 Zusicherungen.
+
+Mit der Sperre (Abschnitt 2, gebaut am 2026-08-21) ist der Prüfstand als
+Werkzeug für den Knopf ausgeschieden: Ohne Wärmepumpe liefert er kein TOP101,
+und ohne TOP101 bleibt der Knopf gesperrt. Die Regeln sind dafür vollständig im
+Hosttest abgebildet — Freigabe, Abbruch im Lauf und Anzeigeverfall stehen dort
+mit je einem eigenen Abschnitt.
+
+**Etappe 4 ist seit dem 2026-08-20 fertig** (Einzelheiten im Nachbarprojekt
+`nodered-flows`, [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md)
+trägt den Erledigt-Vermerk):
+
+* *Notbetriebswerte-Sender V1.0* speist die vier Kurvenpunkte an H1 und den
+  DHW-Soll an H2, bei Änderung und beim Flow-Start; Werte außerhalb der
+  Firmware-Bereiche werden geloggt statt gesendet.
+* *Hauptmodus-Verteiler V6.5*, Ausgang 15: `set/HeatingMode` = 1 im
+  5-min-Re-Assert, an den Herzschlag gebunden — der Rückweg aus Entscheidung 6.
+* Die Abnahme umfasst auch die Gegenprobe, dass repoweit nichts an
+  `set/Z1HeatCurveTargetHighTemp` schreibt.
+
+**Von hier aus nachgesehen (2026-08-20 19:58, über die simple-api):** Alle fünf
+Werte liegen im Broker — `panasonic_heat_pump/notbetrieb/` mit 34 / 26 / −10 /
+15 und `panasonic_heat_pump2/notbetrieb/DHWTemp` = 48. Die Kreuzzuordnung stimmt
+(`TargetHigh` = 34 am kalten Punkt). Der Knopf an H1 wäre damit freigegeben,
+sobald die Firmware dort läuft.
+
+### Was noch fehlt
+
+1. **Etappe 5 — ERLEDIGT am 2026-08-21. Beide Läufe gefahren, beide grün.**
+   Einzelheiten im Protokoll unten.
+2. **Etappe 6 — ERLEDIGT am 2026-08-21.** Der Knopf schaltet ohne Broker, die
+   Firmware übersteht den Ausfall, und nach GRÜN kommt Wärme. Protokoll unten.
+3. **Etappe 7 — im Repo erledigt am 2026-08-21.** Version 3.12.0, Changelog,
+   README, `MQTT-Topics.md`, `SET-TOP-Zuordnung.md` und die Korrekturen aus
+   Abschnitt 9 stehen. Die Rückkehr ist in beiden Läufen geprüft (Etappe 5 und 6).
+
+   **Neu dazugekommen:** Der Notbetriebsknopf hat einen **eigenen Zugang**
+   (Benutzer `notbetrieb`, Passwort als Build-Flag `HEISHA_NOTBETRIEB_PASSWORD`
+   aus `platformio_user_env.ini`) statt des OTA-Passworts — Owner-Entscheidung
+   2026-08-21. Grund: Der Knopf steht mit Passwort in der ausgedruckten
+   Notfallanleitung; dasselbe Blatt hätte sonst auch den Firmware-Upload und die
+   MQTT-Zugangsdaten geöffnet. Abschnitt 7 („Der Zugangsschutz ist dasselbe
+   Passwort wie für `/firmware`") ist damit überholt.
+
+   **Was noch fehlt, liegt außerhalb dieses Repos:** die Offline-Anleitung der
+   Familie und `NOTBETRIEB.md` §7 im Node-RED-Projekt (beschreibt noch den
+   Handweg am Bedienterminal als einzigen Weg), dazu der Text des GitHub-Release
+   zu 3.11.0.
+
+### Etappe 5 — das Protokoll vom 2026-08-21
+
+Zwei Läufe an H1, nacheinander, mit einer Pause dazwischen, in der der Owner den
+KNX-Schalter umgelegt hat. Firmware dieses Branches per OTA auf H1 (ESP32-S3,
+Env `heishamon_esp32_h1_ota`); die Abnahme gegen die Baseline von 00:52 zeigte
+**keine einzige Abweichung** in 92 Zeilen.
+
+**Lauf A — der Sperr-Nachweis, Anlage auf Kühlen.** Kein Kommando ging an die
+Wärmepumpe.
+
+* `/notbetrieb/status` = `0;1;7;0;2` — bereit, **alle vier Kurvenwerte binnen
+  Sekunden nach dem Neustart wieder da** (Broker-Wiedereinspielung, `fehlend`
+  = 0), gesperrt wegen der Betriebsart.
+* Die Seite trägt den Knopf mit `display:none` und zeigt stattdessen den
+  Klartext.
+* **Der POST auf `/notbetrieb/start` wurde abgewiesen** (303, „nicht bereit"),
+  Log: `Notbetrieb abgelehnt: die Anlage steht nicht auf Heizen (TOP101)`.
+  TOP4, TOP101 und TOP0 standen 30 s später unverändert — die Sperre wirkt
+  serverseitig, nicht nur in der Oberfläche.
+
+**Die Pause — das Entsperren geschieht von selbst.** Sekundengenau
+mitgeschrieben, in beide Richtungen:
+
+Zeit | Status | Auslöser
+:--- | :--- | :---
+00:59:08 | `0;1;7;0;2` | KNX steht auf Kühlen
+**00:59:10** | `0;1;7;0;0` | KNX auf Heizen — **frei ohne Neuladen**
+**01:14:52** | `2;8;7;0;2` | KNX zurück auf Kühlen — **wieder gesperrt**
+**01:17:39** | `0;1;7;0;2` | 15 min nach GRÜN — **Anzeige verfallen**
+
+Die letzte Zeile ist der Nachweis für den Anzeigeverfall: GRÜN fiel um 01:02:38,
+die Anzeige stand um 01:17:34 noch und war um 01:17:39 weg — bei einer Abtastung
+alle 5 s ist das der berechnete Zeitpunkt 01:17:38. Der Knopf stand danach
+wieder da, nur eben gesperrt, weil die Anlage inzwischen auf Kühlen steht.
+
+**Lauf B — der GRÜN-Lauf, Anlage auf Heizen.** Im Ruhefenster (`testfenster.py
+--warte 240`, Fenster 4:43 min ab 01:01:26), bewacht mit `--wache 200`.
+
+```
+01:01:41  +0s   Schritt 1 von 7      01:02:13  +32s  Schritt 5
+01:01:49  +8s   Schritt 2            01:02:22  +41s  Schritt 6
+01:01:57  +16s  Schritt 3            01:02:30  +49s  Schritt 7
+01:02:05  +24s  Schritt 4            01:02:38  +57s  GRUEN
+```
+
+**GRÜN nach 57 s.** Jeder Schritt genau 8 s — das ist die Mindestwartezeit, nicht
+die Antwortzeit der Wärmepumpe. Sie hat also jeden Schritt schon innerhalb
+dieser acht Sekunden zurückgemeldet; die 56 s aus dem Entwurf sind damit auf die
+Sekunde bestätigt.
+
+TOP | vor dem Lauf | nach dem Lauf
+:--- | ---: | ---:
+`Heating_Mode` (76) | 1 = Direkt | **0 = Comp. Curve**
+`Z1_Heat_Curve_Target_High_Temp` (29) | **20** | **34**
+`Z1_Heat_Curve_Target_Low_Temp` (30) | 26 | 26
+`Z1_Heat_Curve_Outside_Low_Temp` (32) | −10 | −10
+`Z1_Heat_Curve_Outside_High_Temp` (31) | 15 | 15
+`Heatpump_State` (0) | 0 = aus | **1 = An**
+`Main_Target_Temp` (7) | 20 | **26**
+
+**Die 34 ist der tragende Beleg.** Diesen Wert schreibt sonst niemand:
+`kurven_sync.py` lässt ihn im Direktbetrieb bewusst aus, und vor dem Lauf stand
+dort eine 20. Er kann nur aus dem RAM der Firmware gekommen sein — über den
+Notbetriebskanal aus Abschnitt 3, der damit end-to-end belegt ist.
+
+**Die Wache bestätigt den Lauf: SAUBER.** In 3:20 min hat niemand die
+Betriebsart, eine Kurve oder Ein/Aus angefasst; die beiden einzigen
+Schreibvorgänge waren `QuietMode` an beiden Stufen, vom Werkzeug selbst als
+unkritisch eingestuft. Das Umschalten kam also vom Knopf, nicht von der
+Kaskadensteuerung.
+
+**Ein Zusatzbefund, der nicht gesucht war:** `Main_Target_Temp` stand im
+Kurvenbetrieb auf **26 °C bei 15 °C Außentemperatur** — genau der Punkt, den die
+am 2026-08-20 korrigierte Kurvenpaarung vorhersagt (TargetLow gilt am oberen
+Außenpunkt). Abschnitt 6a ist damit an der laufenden Anlage im Kurvenbetrieb
+bestätigt, nicht nur aus der Werkskurve abgeleitet.
+
+**Der Rückweg trägt — Testplan-Punkt 6 ist belegt.** Neun Sekunden nach dem
+Re-Assert um 01:06:24 war die Anlage von allein zurück:
+
+```
+01:06:28  Heating_Mode=0  Heatpump_State=1
+01:06:33  Heating_Mode=1  Heatpump_State=0
+```
+
+**Der Werks-Reset beim Zurückschalten, ein drittes Mal reproduziert.** TOP27,
+TOP29, TOP30 und TOP42 sprangen auf 35, TOP32 auf −5, TOP28 und TOP72 auf 10 —
+genau das Muster aus M2. Die Sollwerte holte der nächste Re-Assert um 01:11:24
+von allein zurück (01:11:35: Heat/Cool/Water wieder je 20), die Kurvenpunkte
+stellte `kurven_sync.py` wieder her. **Endkontrolle:** von 92 Zeilen wichen
+zuletzt nur noch die beiden Betriebsart-Zeilen (KNX stand noch auf Heizen) und
+drei laufende Messwerte ab. Kein Rest.
+
+**Was Lauf B nicht belegt:** Schritt 1 (`OperationMode` = 0) fand seinen
+Sollwert bereits vor — die Kaskadensteuerung war dem KNX-Wechsel von selbst
+gefolgt, TOP4 stand schon auf 0. Ob die Wärmepumpe *unser* Kommando angenommen
+hat oder der Wert ohnehin stand, ist aus diesem Lauf nicht zu trennen. Die
+Beweislast tragen die Schritte 2–7, die alle nachweislich anders standen.
+
+### Etappe 6 — der Lauf ohne Broker, 2026-08-21 nachts
+
+**Der eigentliche Nachweis, und er ist erbracht.** Aufbau: KNX auf Heizen,
+Kompressor freigegeben, die Anlage lief bereits im Direktbetrieb mit 26 Hz — die
+realistischere Lage als Etappe 5, denn wenn der ioBroker ausfällt, läuft die
+Anlage meistens. Abgeschaltet wurde die Adapterinstanz `mqtt.0` (Variante A: der
+ioBroker selbst lief weiter, damit die simple-api als Vergleichsquelle erhalten
+blieb).
+
+**Erst der Beweis, dass der Broker wirklich weg war.** Ein Porttest auf 1883
+taugt dafür nicht — ein Docker-Port-Mapping nimmt die TCP-Verbindung auch dann
+an, wenn dahinter niemand horcht; genau darauf bin ich zuerst hereingefallen.
+Tragfähig sind drei andere Belege: `system.adapter.mqtt.0.alive` = false ab
+01:39:06, die Werte im ioBroker eingefroren (Vorlauf 25,5 vom Stand 01:36:00),
+und dieselben Werte am Gerät weiterlaufend (Kompressor 27 → 26, Rücklauf 23,75
+statt der 23,5 im ioBroker).
+
+Nachweis | Ergebnis
+:--- | :---
+Firmware läuft ohne Broker weiter | 2 min Beobachtung, durchgehend HTTP 200, Abfragezyklus zur Wärmepumpe unbeirrt
+Kurvenwerte überleben im RAM | `fehlend = 0` nach vier Minuten ohne Broker
+Der Knopf schaltet ohne MQTT | **GRÜN nach 58 s**, `TargetHigh` 26 → **34**
+Nach GRÜN kommt Wärme | Kompressor **26 → 33 Hz**
+Oberfläche unter Last bedienbar | Browser des Owners und Messskript gleichzeitig, ohne Stocken
+
+**Die 34 ist hier der endgültige Beleg.** Der Broker war seit vier Minuten tot,
+der ioBroker fror bei 01:38:48 ein — der Wert lag im RAM der Bridge, seit dem
+Neustart um 00:54, und ging von dort in die Wärmepumpe. Es gab keine Leitung, aus
+der er sonst hätte kommen können.
+
+**Und der Satz „Was GRÜN nicht heißt: dass die Anlage heizt" ist eingelöst.** Bei
+Etappe 5 blieb der Kompressor auf 0 Hz, weil die KNX-Freigabe fehlte; hier ging
+er auf 33 Hz. Damit ist zum ersten Mal die ganze Kette gezeigt: Knopf → Kurve →
+Wärme.
+
+**Der Rückweg nach dem Wiedereinschalten:**
+
+```
+01:47:23  mqtt.0 wieder gestartet
+01:48:15  H1 meldet sich von allein wieder an, LWT Online   (52 s Backoff)
+01:48:54  Re-Assert holt zurück: Heating_Mode 0 -> 1        (39 s später)
+01:53:40  Re-Assert korrigiert den Sollwert 35 -> 26
+```
+
+Die 52 Sekunden sind der zweite ungemessene Punkt aus Abschnitt 7: Die
+Reconnect-Logik übersteht einen achtminütigen Ausfall und holt sich von allein
+zurück, in der erwarteten Größenordnung des Backoff-Deckels von 60 s.
+
+**Ein Fehler beim Messen, der hierher gehört.** Der erste Wächter las
+`Heating_Mode` aus dem **ioBroker** und meldete eine Rückkehr, die nicht
+stattgefunden hatte: Der Datenpunkt stand seit dem Broker-Stopp eingefroren auf
+dem Wert von *vor* dem Notbetrieb und sah dabei aus wie ein aktueller Wert. Am
+Gerät stand `Heating_Mode` unverändert auf 0. Daraus die Regel: **Im Ausfallfall
+ist der ioBroker keine gültige Messquelle** — dann zählt nur, was die Bridge
+selbst über `/tablerefresh` herausgibt. Das gilt für jede künftige Messung an
+diesem Vorhaben.
+
+**Aufgeräumt.** Sollwerte durch den Re-Assert, Kurvenpunkte durch
+`kurven_sync.py`; die Endkontrolle gegen die Baseline von 01:31 zeigt **keinen
+abweichenden Konfigurationswert**, nur 15 laufende Messwerte. Nachwirkung des
+Laufs: `Heat_Energy_Production` stand danach bei 2400 W statt 200 W, weil der
+Sollwert nach dem Werks-Reset knapp fünf Minuten auf 35 °C stand — das läuft von
+allein aus. Nach dem Zurückschalten auf Kühlen (Modus Nur-DHW) steht H1 wieder
+exakt auf dem Stand von 00:52, vor dem ersten Lauf des Abends.
+
+### Der Warmwasserknopf an H2 — 2026-08-21, 02:19
+
+Bis zu diesem Lauf war die Rolle Warmwasser **nie auf einem Gerät gelaufen**:
+`NOTBETRIEB_ROLLE_WASSER` war gebaut, hosttestbar und im Broker versorgt, aber
+`/notbetrieb` antwortete an H2 mit 404. Ein Release mit einem Knopf, den nie
+jemand gedrückt hat, wäre kein Release gewesen.
+
+**Vorweg ein Fund beim Aufräumen der Rückfallebene:** In `~/HeishaMon-Rollback/`
+fehlte `heishamon_esp32_h2_ota_v3.11.0.bin` — für H1 war es da (vom
+Zurückflashen am Vorabend), für H2 nie entstanden. Es ist aus dem Tag `v3.11.0`
+in einem temporären Worktree gebaut und abgelegt worden, bevor das Produktivgerät
+angefasst wurde. Geprüft über MD5 gegen das H1-Binary und den Stufennamen im
+Abbild: zwei verschiedene Dateien, „Heisha Stufe 2" drin.
+
+**Ausgangszustand:** KNX auf Kühlen, Modus Nur-DHW — der Sommerfall, für den
+Stufe 2 gebaut ist. H2 an, `Operating_Mode_State` = 3, Speicher 64 °C bei
+Sollwert 48, Kompressor 0 Hz. Kein KNX-Eingriff, kein Ladebedarf.
+
+**Der Status nach dem Flashen ist für sich schon ein Nachweis:** `0;1;3;0;0`
+
+* **Drei Schritte statt sieben** — das Rollen-Flag greift, H2 fährt die
+  Warmwasser-Folge.
+* **`fehlend` = 0** — `DHWTemp` war binnen Sekunden nach dem Neustart wieder da.
+  Die Broker-Wiedereinspielung ist damit an einem zweiten Gerät belegt.
+* **Sperre = 0, obwohl `Heat_Cool_SW_State` auf Cool steht.** Das ist der
+  Nachweis, den es nur hier gibt: Die Betriebsart-Sperre gilt für Heizen und
+  **nicht** für Warmwasser. Am selben Abend war H1 im selben Kühlbetrieb
+  gesperrt.
+
+**Der Lauf hatte zunächst gar keinen Beweiswert** — und das ist der lehrreiche
+Teil. Alle drei Schritte fanden ihren Sollwert bereits vor: `OperationMode` = 3,
+`DHWTemp` = 48, `Heatpump` = 1. Der Knopf hätte GRÜN gemeldet, ohne dass sich ein
+Byte ändert. Deshalb wurden im Ruhefenster vorher zwei Werte verstellt und die
+Rückmeldung abgewartet:
+
+```
+02:18:43  set/DHWTemp 45 und set/Heatpump 0   (ein Telegramm, 20 ms Abstand)
+02:18:52  von der Waermepumpe bestaetigt: TOP0=0, TOP9=45
+02:18:52  KNOPF
+02:19:16  GRUEN nach 24 s (drei Schritte a 8 s)
+```
+
+Gesendet | vor dem Knopf | nach dem Lauf
+:--- | ---: | ---:
+`DHW_Target_Temp` (TOP9) | **45** | **48**
+`Heatpump_State` (TOP0) | **0 = aus** | **1 = An**
+`Operating_Mode_State` (TOP4) | 3 | 3
+
+Zwei von drei Schritten tragen damit den Beweis; der dritte ist über M3
+inhaltlich belegt. **Endkontrolle:** von 92 Zeilen weicht genau eine ab —
+`Main_Inlet_Temp` 19,75 → 19,50, ein laufender Messwert.
+
+**Nicht abgedeckt bleibt der Heizmodus.** M3 und dieser Lauf fanden beide im
+Kühlbetrieb statt. Dass `OperationMode` = 3 im Heizbetrieb durchgeht, ist
+plausibel — wenn es sogar im Kühlbetrieb trägt, wo die Anlage Heizmodi ablehnt —
+aber ungemessen. Ein eigener KNX-Wechsel lohnt dafür nicht; der Fall sollte
+mitlaufen, wenn der Schalter ohnehin auf Heizen steht, etwa beim Termin fürs
+Kurvenfoto.
+
+### Der eigene Zugang — am Gerät geprüft (2026-08-21, 02:46)
+
+Acht Abfragen gegen die frisch geflashten Stufen, alle wie erwartet:
+
+Weg | Endpunkt | Ergebnis
+:--- | :--- | :---
+`admin` + OTA-Passwort | `/notbetrieb` | **401** — der alte Weg ist zu
+`admin` + OTA-Passwort | `/notbetrieb/start` | **401**
+`notbetrieb` + falsches Passwort | `/notbetrieb` | **401**
+`notbetrieb` + eigenes Passwort | `/notbetrieb` an H1 | **200**
+`notbetrieb` + eigenes Passwort | `/notbetrieb` an H2 | **200**
+`admin` + OTA-Passwort | `/settings` | **200** — unverändert
+`notbetrieb` + eigenes Passwort | `/settings` | **401** — trennt in beide Richtungen
+ohne Anmeldung | `/notbetrieb/status` | **200** — bewusst offen
+
+Die Trennung wirkt also beidseitig: Mit dem Notbetriebspasswort kommt niemand an
+die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
+
+### Zustand der Geräte
+
+Gerät | Stand
+:--- | :---
+H1 (192.168.2.120) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h1_ota`). Abnahme gegen die Baseline: eine Abweichung, ein laufender Messwert. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2`) |
+H2 (192.168.2.122) | **3.12.0**, per OTA am 2026-08-21 um 02:44 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme ohne Abweichung. Knopf frei (`0;1;3;0;0`) |
+Prüfstand (192.168.2.197) | **stromlos** (2026-08-20 abends nicht erreichbar); Firmware eines älteren Standes dieses Branches, Rolle Heizen. Für den Knopf seit der Sperre ohnehin kein taugliches Werkzeug mehr — ohne Wärmepumpe kein TOP101 |
+
+Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
+läuft normal weiter. Nichts ist aufzuräumen.
+
+Die Testwerte unter dem Prefix `panasonic_heat_pump_test` bleiben im ioBroker —
+sie stören nichts und sparen beim Wiedereinstieg einen Schritt.
+
+### Wiedereinstieg prüfen
+
+**Der nächste Schritt ist Etappe 5**, in den zwei Läufen oben — erst der
+Sperr-Nachweis im Kühlbetrieb, dann der GRÜN-Lauf mit dem KNX-Schalter auf
+Heizen. Beides setzt voraus, dass die Firmware dieses Branches auf H1 liegt.
+
+Beim Sperr-Nachweis ist die Statusroute die Kurzfassung: Das fünfte Feld ist der
+Sperrgrund (0 = frei, 1 = Werte fehlen, 2 = nicht auf Heizen).
+
+```bash
+git switch notbetrieb-web
+c++ -std=c++17 -O2 -Wall -o /tmp/nb_test test/notbetrieb_test.cpp && /tmp/nb_test
+python3 test/css_klassen_test.py
+
+# Testlauf an der Anlage immer im Ruhefenster des Re-Assert:
+cd ~/nodered-flows && ./testfenster.py --warte 240 --wache 200
+
+# Liegen die Notbetriebswerte im Broker? (Knopf bleibt sonst gesperrt)
+curl -s "http://192.168.2.147:8087/getBulk/\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveTargetHighTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveTargetLowTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideLowTemp,\
+mqtt.0.panasonic_heat_pump.notbetrieb.Z1HeatCurveOutsideHighTemp,\
+mqtt.0.panasonic_heat_pump2.notbetrieb.DHWTemp"
+
+# Steht die Anlage auf Heizen? 0 = Heizen, 1 = Kuehlen (alles andere sperrt)
+curl -s "http://192.168.2.147:8087/getPlainValue/mqtt.0.panasonic_heat_pump.state.Heat_Cool_SW_State"
+
+# Zustand;Schritt;Schritte;fehlend;Sperre - Sperre: 0 frei, 1 Werte, 2 Betriebsart
+curl http://192.168.2.120/notbetrieb/status
+```
+
+**Die Versionsnummer steht seit dem 2026-08-21 auf 3.12.0**, gesetzt in
+Etappe 7 zusammen mit dem Changelog — nachdem der Nachweis an der Anlage vorlag
+und nicht davor. Beide Stufen laufen darauf, die Rollback-Binaries liegen in
+`~/HeishaMon-Rollback/`.
+
+**Achtung bei den Binaries:** Ab 3.12.0 steckt neben dem AP-Passwort auch das
+Notbetriebspasswort lesbar in jedem Abbild. Sie gehören damit erst recht nur ins
+private Rollback-Repo, nie in ein öffentliches Release.
+
+**Eine lokale Besonderheit:** Der USB-Port des Prüfstands hat sich auf
+`/dev/cu.usbserial-1110` geändert. Das steht in `platformio_user_env.ini`
+(gitignored) und ist auf einem anderen Rechner erneut anzupassen.

@@ -18,4 +18,10 @@ public:
     static const std::string SET;   // <prefix>/set    - Wurzel der Set-Kommandos
     static const std::string LOG;
     static const std::string WILL;
+
+    // <prefix>/notbetrieb - Werte, die die Firmware fuer den Notbetrieb im RAM
+    // haelt und NIE von sich aus an die Waermepumpe schickt. Eigener Zweig und
+    // nicht etwa ein Sonderfall unter set/, damit die Trennung schon am Topic
+    // sichtbar ist: was hier hereinkommt, wird gemerkt, nicht ausgefuehrt.
+    static const std::string NOTBETRIEB;
 };

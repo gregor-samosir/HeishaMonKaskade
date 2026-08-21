@@ -108,6 +108,46 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 
 Im Detail:
 
+### Der Notbetrieb ist ein Knopf im Browser (3.12.0)
+
+Fällt die übergeordnete Steuerung aus, soll die Wärmepumpe auf ihrer eigenen
+Heizkurve weiterlaufen. Bis 3.11.0 ging das nur über MQTT — und genau das trägt
+im Ernstfall nicht: Der MQTT-Broker *ist* hier der ioBroker-Adapter. Fällt der
+ioBroker aus, fehlt nicht nur der Absender des Kommandos, sondern der
+Übertragungsweg selbst.
+
+Der eigene Webserver der Firmware ist der Weg, der dann noch übrig bleibt.
+Unter **`/notbetrieb`** steht ein Knopf, der die Schrittfolge fährt: Betriebsart
+setzen, auf Kurvenbetrieb umschalten, die vier Kurvenpunkte schreiben, Anlage
+einschalten (Stufe 1), bzw. reiner Warmwasserbetrieb mit Speichersollwert
+(Stufe 2). Welche Rolle eine Stufe hat, entscheidet ein Build-Flag.
+
+Drei Dinge, die dabei tragen:
+
+* **Die Kurvenwerte kennt die Firmware vorher.** Sie kommen über einen eigenen
+  Topic-Zweig `<prefix>/notbetrieb/` herein und werden im RAM gehalten — sie
+  gehen nie an die Wärmepumpe, außer wenn der Knopf gedrückt wird. Nach einem
+  Neustart sind sie binnen Sekunden wieder da, weil der Broker jedem neuen
+  Abonnenten die gespeicherten Werte einspielt. Fehlt auch nur einer, bleibt der
+  Knopf gesperrt: lieber gar nicht schalten als auf die Werkskurve mit 55 °C
+  Vorlauf.
+* **GRÜN heißt zurückgelesen, nicht abgesendet.** Die Schritte laufen einzeln
+  aus `loop()`, jeder wird gegen sein State-Topic geprüft und gilt frühestens
+  8 s nach seinem Kommando als bestätigt — sonst könnte ein veralteter Wert
+  einen Schritt abhaken, den der Werks-Reset des Moduswechsels danach
+  überschreibt.
+* **Die Betriebsart ist die Freigabe.** Steht die Anlage über den externen
+  Schalter auf Kühlen, verwirft sie jeden Heizmodus stillschweigend. Der Knopf
+  ist deshalb gesperrt, solange `Heat_Cool_SW_State` (TOP101) nicht sauber 0
+  meldet — mit Klartext auf der Seite statt einem roten Feld ohne Erklärung.
+
+`/notbetrieb` hat einen **eigenen Zugang** (Benutzer `notbetrieb`, Passwort als
+Build-Flag), nicht den des Firmware-Uploads: Der Knopf steht mit Passwort in der
+Notfallanleitung, und dasselbe Blatt soll nicht auch den Firmware-Upload öffnen.
+
+An beiden Stufen belegt, mit und ohne erreichbaren Broker — Messprotokolle in
+[`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md).
+
 ### Die Ist-Zustände aus Byte 110 (3.7.0)
 
 Byte 110 des Antworttelegramms trägt vier 2-Bit-Felder, die das Original nicht
@@ -270,8 +310,8 @@ Protokollbyte in verschiedenen Bitgruppen:
 Wird das Byte als Ganzes geschrieben, fallen die fremden Felder auf
 `0 = keine Änderung`. Trafen zwei Kommandos im selben 500-ms-Sammelfenster ein,
 löschte das zweite das erste aus — **still**, das Log quittierte beide.
-Ausgerechnet der 5-Minuten-Re-Assert der Kaskade (sechs Kommandos pro Gerät auf
-einmal) trifft diesen Fall zuverlässig.
+Ausgerechnet der 5-Minuten-Re-Assert der Kaskade (mehrere Kommandos pro Gerät
+auf einmal) trifft diesen Fall zuverlässig.
 
 Belegt am Prüfstand und an der laufenden Anlage:
 
@@ -420,11 +460,13 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
 | [`src/webfunctions.cpp`](src/webfunctions.cpp) | Weboberfläche und Einstellungen |
+| [`src/notbetrieb.h`](src/notbetrieb.h) | Regeln des Notbetriebs — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/notbetrieb.cpp`](src/notbetrieb.cpp) | Anbindung ans Gerät: Abonnement, Schrittfolge, Zustand |
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
 | [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — vollständig erledigt in 3.11.0, beide Kommandos am Gerät belegt |
-| [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Entwurf: Notbetrieb per Browser schalten, wenn ioBroker und Broker ausgefallen sind |
+| [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

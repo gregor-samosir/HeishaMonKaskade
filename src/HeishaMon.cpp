@@ -21,6 +21,34 @@ bool serialquerysent = false;
 #endif
 const char *update_path = "/firmware";
 const char *update_username = "admin";
+
+/*****************************************************************************/
+/* Der Zugang zum Notbetriebsknopf - ein EIGENES Passwort                    */
+/*                                                                           */
+/* Bis 3.11.0 haetten /notbetrieb und /notbetrieb/start dasselbe Passwort     */
+/* verlangt wie /firmware und /settings. Das ist genau falsch herum: Den      */
+/* Knopf soll im Ernstfall JEDER aus der Familie druecken koennen, er steht   */
+/* mit Passwort in der ausgedruckten Anleitung. Dasselbe Blatt haette damit   */
+/* auch den Zugang zum Firmware-Upload und zu den MQTT-Zugangsdaten geoeffnet.*/
+/*                                                                           */
+/* Deshalb: eigener Benutzer, eigenes Passwort, einkompiliert aus             */
+/* platformio_user_env.ini (Owner-Entscheidung 2026-08-21). Der Knopf kann    */
+/* nichts weiter als die Schrittfolge ausloesen - wer ihn kennt, kann keine   */
+/* Firmware aufspielen und keine Einstellungen aendern.                       */
+/*                                                                           */
+/* Der Fallback unten ist nur der Notnagel fuer einen Build ohne diese Datei; */
+/* er steht im oeffentlichen Repo und schuetzt entsprechend wenig - dasselbe  */
+/* Muster wie beim Setup-AP in webfunctions.cpp.                              */
+/*****************************************************************************/
+#ifndef HEISHA_NOTBETRIEB_PASSWORD
+#define HEISHA_NOTBETRIEB_PASSWORD "notbetrieb"
+#warning "HEISHA_NOTBETRIEB_PASSWORD nicht gesetzt - der Notbetriebsknopf laeuft mit dem oeffentlich bekannten Fallback (siehe platformio_user_env_sample.ini)"
+#endif
+// Vier Zeichen sind die Untergrenze, unter der ein Passwort keines mehr ist.
+// Der Build bricht hier lieber, als dass es erst an der Waermepumpe auffaellt.
+static_assert(sizeof(HEISHA_NOTBETRIEB_PASSWORD) >= 5, "HEISHA_NOTBETRIEB_PASSWORD braucht mindestens 4 Zeichen");
+const char *notbetrieb_username = "notbetrieb";
+const char *notbetrieb_password = HEISHA_NOTBETRIEB_PASSWORD;
 // Groessen aus webfunctions.h - dort werden die Felder aus der config.json
 // gefuellt, und beide Seiten muessen dieselbe Puffergroesse annehmen
 char wifi_hostname[CONFIG_FIELD_LEN] = HEISHA_HOSTNAME;
@@ -207,6 +235,26 @@ void setupHttp()
       return httpServer.requestAuthentication();
     }
     handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
+  // Notbetrieb: Seite und Ausloeser verlangen einen EIGENEN Zugang, nicht den
+  // des Firmware-Uploads - Begruendung oben bei notbetrieb_password.
+  // Die Statusroute verlangt gar keinen: Sie gibt nur "Schritt 3 von 7" heraus
+  // und wird alle zwei Sekunden abgefragt.
+  httpServer.on("/notbetrieb", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleNotbetrieb(&httpServer); });
+  httpServer.on("/notbetrieb/start", HTTP_POST, []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handleNotbetriebStart(&httpServer); });
+  httpServer.on("/notbetrieb/status", []()
+                { handleNotbetriebStatus(&httpServer); });
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
@@ -286,6 +334,12 @@ bool mqtt_reconnect()
     // stillschweigend hinter der Tabelle zurueckbleiben konnte.
     (void)subscribe_set_topics(mqtt_client);
 
+    // Der Notbetriebszweig wird ebenfalls abonniert. Auf DIESEN Schwall ist
+    // die Firmware angewiesen: Der Adapter spielt jedem neuen Abonnenten die
+    // gespeicherten Werte ein, und nur so sind die Kurvenwerte nach einem
+    // Neustart binnen Sekunden wieder da, ohne dass Node-RED etwas tun muss.
+    (void)notbetrieb_subscribe(mqtt_client);
+
     // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
     // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
     setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
@@ -306,7 +360,30 @@ bool mqtt_reconnect()
 /*****************************************************************************/
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-  // Karenzzeit nach dem Abonnieren, VOR allem anderen: Der ioBroker-Adapter
+  // Payload zuerst kopieren - beide Zweige darunter brauchen ihn als
+  // nullterminierten String, und der Notbetriebszweig kommt VOR der
+  // Karenzpruefung dran.
+  char msg[length + 1];
+  for (unsigned int i = 0; i < length; i++)
+  {
+    msg[i] = (char)payload[i];
+  }
+  msg[length] = '\0';
+
+  // Der Notbetriebszweig wird VOR der Karenzpruefung behandelt, und das sind
+  // die entscheidenden Zeilen dieses Vorhabens: Die Wiedereinspielung des
+  // Brokers ist hier kein Problem, sondern der Mechanismus. Nur weil diese
+  // Werte den Schwall passieren duerfen, sind sie nach jedem Neustart und
+  // jedem Reconnect binnen Sekunden wieder da. Die Gefahr, die zur Karenzzeit
+  // gefuehrt hat, kann hier nicht auftreten - sie gehen nie ungefragt an die
+  // Waermepumpe. Wird diese Ausnahme vergessen, funktioniert der Knopf im
+  // Labor und nach jedem Neustart nicht mehr (Hosttest: notbetrieb_test.cpp).
+  if (notbetrieb_mqtt_annehmen(topic, msg))
+  {
+    return; // abschliessend behandelt, kein Set-Kommando, kein Timer angefasst
+  }
+
+  // Karenzzeit nach dem Abonnieren: Der ioBroker-Adapter
   // schickt einem neuen Abonnenten den gespeicherten Wert jedes Set-Topics.
   // Am 2026-08-13 gemessen, was das an der Anlage anrichtet: ein Kurvenwert
   // vom 10.08. setzte nach jedem Neustart den Vorlauf-Sollwert auf 55 Grad,
@@ -327,12 +404,6 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
 
   Send_Pana_Mainquery_Timer.stop();
   write_telnet_log((char *)"Callback from mqtt");
-  char msg[length + 1];
-  for (unsigned int i = 0; i < length; i++)
-  {
-    msg[i] = (char)payload[i];
-  }
-  msg[length] = '\0';
 
   // on error no command was registered: restart the query cycle,
   // otherwise no timer is running anymore and polling stops forever
@@ -777,6 +848,9 @@ void setup()
   getFreeMemory();
   setupSerial();
 
+  // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
+  notbetrieb_init();
+
   setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
@@ -814,6 +888,13 @@ void loop()
 
   handle_telnetstream();
   check_wifi();
+
+  // Notbetrieb: senden -> zuruecklesen -> naechster Schritt. Laeuft kein
+  // Schaltvorgang, kehrt der Aufruf sofort zurueck. Er steht VOR der
+  // MQTT-Wiederverbindung, weil der Notbetrieb genau dann gebraucht wird,
+  // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
+  // haengen, der ohnehin nur scheitern kann.
+  notbetrieb_loop(actual_data);
 
   if (!mqtt_client.connected())
   {

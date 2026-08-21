@@ -29,6 +29,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
+| `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101 und Anzeigeverfall (bindet `src/notbetrieb.h` direkt ein) | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
@@ -45,6 +46,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
+| `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
 
 ## Pruefstand aufsetzen
@@ -67,7 +69,7 @@ curl -u admin:heisha "http://<ip>/settings?mqtt_server=192.168.2.147"
 
 ## Ausfuehren
 
-Die drei C++-Programme pruefen ihre Ergebnisse selbst und geben bei gebrochener
+Die C++-Programme pruefen ihre Ergebnisse selbst und geben bei gebrochener
 Zusicherung `1` zurueck - die CI bricht dann ab. Vorher (bis 3.5.0) gaben sie
 ihre Zahlen nur aus.
 
@@ -79,6 +81,7 @@ c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
 c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test byte28_test.cpp && /tmp/byte28_test
 c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
 c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindow_test
+c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test notbetrieb_test.cpp && /tmp/notbetrieb_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
 
 ./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
@@ -671,6 +674,231 @@ Gespiegelt wird dadurch `KK_HK_vlLo` (Vorlauf bei niedriger Aussentemperatur)
 in das Feld fuer warmes Wetter. Ohne Wirkung, solange die Anlage im
 Direktbetrieb laeuft - aber der Notbetrieb aktiviert genau diese Kurve. Die
 Korrektur ist im Vorhaben Notbetrieb, Abschnitt 6a, als Vorbedingung notiert.
+
+## Der Notbetriebszweig wird wiedereingespielt (2026-08-20, Broker)
+
+Der Notbetrieb ruht darauf, dass der ioBroker-MQTT-Adapter einem NEUEN
+Abonnenten die gespeicherten Werte einspielt - nur so hat die Firmware ihre
+Kurvenwerte nach einem Neustart binnen Sekunden wieder. Fuer den `set`-Zweig ist
+das belegt (2026-08-13, und dort ist es die Gefahr, gegen die SUBSCRIBE_GRACE
+gebaut wurde). Offen war, ob der Adapter das auch fuer einen Zweig tut, den er
+vorher nie gesehen hat.
+
+**Er tut es.** Nachgewiesen ohne Geraet, weil `mqtt_sub.py` genau das macht, was
+die Firmware nach einem Neustart tut - verbinden, abonnieren, zuhoeren:
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetHighTemp=34 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetLowTemp=26 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=-10 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideHighTemp=15
+
+./test/mqtt_sub.py --host 192.168.2.147 'panasonic_heat_pump_test/notbetrieb/#'
+```
+
+Die zweite Verbindung bekam alle vier Werte, ohne dass jemand publizierte - und
+zwar mit **retain=0**, genau wie beim `set`-Zweig. Ueber das Retain-Bit ist
+diese Wiedereinspielung also auch hier nicht von einem echten Kommando zu
+unterscheiden; die Trennung laeuft allein ueber den Topic-Zweig.
+
+Gelaufen ist das gegen das Test-Prefix `panasonic_heat_pump_test`, auf das kein
+Geraet hoert. Der produktive Zweig blieb leer (Gegenprobe ueber die
+simple-api: 0 Objekte unter `mqtt.0.panasonic_heat_pump.notbetrieb*`). Die vier
+Testobjekte bleiben im ioBroker stehen - sie stoeren nichts und sind der Beleg.
+
+## Der Notbetrieb ueberlebt den Neustart (2026-08-20, Pruefstand)
+
+Am Pruefstand 192.168.2.197 (D1 mini, keine Waermepumpe, Prefix
+`panasonic_heat_pump_test`, Rolle Heizen mangels Rollen-Flag). Der Ablauf ist
+genau der, auf den sich der Notbetrieb verlaesst: Werte hinterlegen, Geraet neu
+starten, und danach sendet **niemand** mehr etwas.
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetHighTemp=34 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveTargetLowTemp=26 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=-10 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideHighTemp=15
+
+./test/mqtt_sub.py --host 192.168.2.147 --dauer 60 \
+    panasonic_heat_pump_test/info/log panasonic_heat_pump_test/info/LWT
+curl -u admin:heisha http://192.168.2.197/reboot
+```
+
+Was nach dem Neustart von allein im Log stand:
+
+```text
+Notbetrieb: Rolle Heizen, 4 Werte erwartet
+Notbetrieb einsatzbereit: alle 4 Werte liegen vor
+34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+**Die dritte Zeile ist die entscheidende.** Im selben Moment, in dem die
+Karenzzeit 34 wiedereingespielte SET-Kommandos wegwirft, kommen die vier
+Notbetriebswerte durch - weil sie vor der Karenzpruefung behandelt werden. Genau
+diese Ausnahme ist der Unterschied zwischen einem Knopf, der nach jedem Neustart
+funktioniert, und einem, der es nicht tut.
+
+### Die Ablehnungspfade, ebenfalls am Geraet
+
+| Gesendet | Im MQTT-Log |
+| --- | --- |
+| `Z1HeatCurveTargetHighTemp=34` | nichts (der Einzelwert laeuft nur ins Telnet-Log) |
+| `Z1HeatCurveTargetHighTemp=99` | `abgelehnt (erlaubt 20..55)` |
+| `Z1HeatCurveTargetLowTemp=abc` | `ist keine Zahl (abc) - verworfen` |
+| `notbetrieb/Quatsch=5` | nichts - das Topic wird gar nicht abonniert |
+
+Die letzte Zeile ist kein Mangel, sondern der Beleg fuer die
+Abonnement-Entscheidung: Die Firmware abonniert nur die Namen ihrer Rolle, kein
+`notbetrieb/#`. Ein Tippfehler im Node-RED-Flow erreicht das Geraet also gar
+nicht erst - er faellt beim Abgleich der Topics auf, nicht erst beim Druck auf
+den Knopf.
+
+### Falls der Pruefstand frisch geflasht ist
+
+Nach dem Flashen kann `mqtt_server` leer sein - dann bleibt das LWT auf
+`Offline` und nichts von alldem passiert:
+
+```
+curl -u admin:heisha "http://192.168.2.197/settings?mqtt_server=192.168.2.147"
+```
+
+### Das Telnet-Log zeigt die Einzelwerte
+
+Jeder angenommene Wert steht dort, auch wenn er nicht ins MQTT-Log geht:
+
+```text
+[2026-08-20 15:59:32] <DBG> Notbetrieb gemerkt: Z1HeatCurveTargetLowTemp = 27
+```
+
+Dafuer ist **kein** `L` noetig: `L` schaltet nur um, wohin `write_mqtt_log()`
+schreibt (MQTT oder Telnet), waehrend `write_telnet_log()` ohnehin auf Telnet
+geht. Was man braucht, ist eine stehende Verbindung zum Zeitpunkt des
+Ereignisses - ein erster Versuch dieses Laufs lief ins Leere, weil die
+Verbindung unmittelbar vor einem Reboot aufgebaut und danach nicht sauber neu
+hergestellt wurde. Wer ueber einen Neustart hinweg mitlesen will, muss
+wiederverbinden; ein Lebenszeichen holt man mit `R` (antwortet nur mit Text und
+aendert nichts).
+
+Fuer Ablaeufe ueber einen Neustart hinweg ist `info/log` mit `mqtt_sub.py`
+trotzdem der bequemere Weg, weil der Broker die Zeilen puffert.
+
+## Der erste Lauf an der Anlage (2026-08-20, WP1) - ROT in Schritt 1
+
+Der erste Druck auf den echten Knopf, H1 mit der Firmware dieses Branches.
+Gefahren im Ruhefenster des 5-min-Re-Assert (`~/nodered-flows/testfenster.py
+--warte 240` meldete 4:35 min Ruhe), damit kein fremdes Kommando dazwischenkommt.
+
+```text
+  Ausgangslage 21:31:17 - /notbetrieb/status = 0;1;7;0
+      TOP0  Heatpump_State                 0     TOP29 Z1_Heat_Curve_Target_High  20
+      TOP4  Operating_Mode_State           1     TOP30 Z1_Heat_Curve_Target_Low   26
+      TOP7  Main_Target_Temp              20     TOP31 Z1_Heat_Curve_Outside_High 15
+      TOP27 Z1_Heat_Request_Temp          20     TOP32 Z1_Heat_Curve_Outside_Low -10
+      TOP76 Heating_Mode                   1
+
+  21:31:34  KNOPF GEDRUECKT - HTTP 200
+  21:31:34  + 0.2s  Status 1;1;7;0   laeuft, Schritt 1 von 7
+  21:31:55  +20.7s  Status 3;1;7;0   ROT, Schritt 1 von 7
+```
+
+Schritt 1 ist `OperationMode` = 0 (Heat only), rueckgelesen an TOP4. Der Wert kam
+nicht zurueck, der Automat brach nach dem vollen Schritt-Timeout ab - **ohne
+weiterzumachen**: Die vier Kurvenpunkte wurden nie geschrieben, `Heatpump` = 1
+nie gesendet, und alle neun beobachteten TOPs standen hinterher exakt wie
+vorher. Genau dafuer ist der Abbruch gebaut.
+
+### Die Gegenmessung trennt Firmware und Waermepumpe
+
+Unmittelbar danach ein einzelnes `set/OperationMode 0` ueber MQTT, ohne den
+Notbetrieb:
+
+```text
+  21:33:16  mqtt_pub.py -> panasonic_heat_pump/set/OperationMode = 0
+  21:33:16  Log der Bridge: <SUB> SET9 OperationMode: 0
+  21:33:56  TOP4   Operating_Mode_State   1  Cool     <- unveraendert
+            TOP101 Heat_Cool_SW_State     1  Cool     <- unveraendert
+```
+
+Die Firmware hat das Kommando also abgesetzt (Bereichspruefung, Merge und
+Telegramm sind durchlaufen), die **Waermepumpe hat es verworfen** - 40 s und
+damit ueber sechs Abfragezyklen lang, und zwar sowohl im kommandierten Wert
+(TOP4) als auch im echten Ist-Zustand aus Byte 110 (TOP101). Dasselbe
+stillschweigende Verwerfen wie bei `Z1HeatRequestTemperature` im Kurvenbetrieb.
+
+### Offen: zwei Hypothesen, noch nicht getrennt
+
+**(a) Der KNX-Aktor gibt Heizen/Kuehlen vor.** Im Kuehlbetrieb nimmt die Anlage
+kein "Heat only" per MQTT an. Pruefung: Heiz/Kuehl-Schalter auf Heizen stellen,
+SET9 wiederholen.
+
+**(b) Die Anlage stand aus** (`Heatpump_State` = 0) und nimmt im Aus-Zustand
+keine Betriebsartaenderung an. Pruefung: `Heatpump` = 1 senden, dann SET9
+wiederholen. Dafuer spricht, dass die Gegenprobe an H2 (`OperationMode` = 3 aus
+dem Kuehlbetrieb heraus) an einer **laufenden** Stufe gemessen wurde.
+
+Trifft (b) zu, ist es ein Fehler in der Schrittfolge - `Heatpump` = 1 gehoert
+dann nach vorn. Trifft (a) zu, ist der Notbetrieb Heizen im Kuehlbetrieb
+grundsaetzlich nicht schaltbar, und der Knopf gehoert gesperrt, solange TOP101
+auf Cool steht.
+
+## Der Knopf am Pruefstand (2026-08-20, Bausteine B-D)
+
+Der Pruefstand hat keine Waermepumpe - und genau deshalb laeuft dort der
+FEHLERpfad, den man an der echten Anlage nicht provozieren will.
+
+```
+curl -u admin:heisha http://192.168.2.197/notbetrieb            # Seite
+curl -u admin:heisha -X POST http://192.168.2.197/notbetrieb/start
+curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend
+```
+
+**Ablauf, wie er sein soll:**
+
+```text
+POST -> HTTP 303 (Umleitung; ein Neuladen wiederholt die Anzeige, nicht das Kommando)
+NOTBETRIEB ausgeloest ueber die Weboberflaeche
+Notbetrieb Schritt 1/6: HeatingMode = 0
+<SUB> SET35 HeatingMode: 0            <- regulaerer Pfad ueber build_heatpump_command()
+Status 1;1;6;0  (LAEUFT, Schritt 1 von 6)  ... 20 s lang
+Notbetrieb ROT: Schritt 1/6 (HeatingMode) kam nicht zurueck
+Status 3;1;6;0  (ROT)
+```
+
+**Der entscheidende Befund ist, was NICHT passiert ist.** Am Pruefstand
+antwortet keine Waermepumpe, `actual_data` fuer TOP76 ist also leer - und der
+Sollwert des ersten Schritts ist 0. Mit einem naiven `atoi(actual_data[...])`
+waere die Folge sofort durchgerauscht und haette GRUEN gemeldet, ohne dass
+irgendetwas geschehen waere. `notbetrieb_rueckgelesen()` faengt genau das ab
+(Hosttest: "LEERER Wert bestaetigt die 0 NICHT").
+
+### Der gesperrte Knopf
+
+Einen Wert ungueltig machen und neu starten - dann fehlt er:
+
+```
+./test/mqtt_pub.py --host 192.168.2.147 \
+    panasonic_heat_pump_test/notbetrieb/Z1HeatCurveOutsideLowTemp=99
+curl -u admin:heisha http://192.168.2.197/reboot
+```
+
+| Pruefung | Ergebnis |
+| --- | --- |
+| Status | `0;1;6;4` - Bit 2 der fehlend-Maske, also Wert Nr. 3 |
+| Seite | "Nicht bereit", nennt `Z1HeatCurveOutsideLowTemp` beim Namen |
+| POST trotzdem | HTTP 303, aber **kein Lauf** - Status bleibt `0` |
+
+Der Knopf ist also nicht nur ausgeblendet, sondern der Ausloeser selbst
+verweigert. Ein zusammengebasteltes POST von aussen startet nichts.
+
+### Anmeldung
+
+| Route | Ohne Anmeldung |
+| --- | --- |
+| `/notbetrieb` | HTTP 401 |
+| `/notbetrieb/start` | HTTP 401 |
+| `/notbetrieb/status` | HTTP 200 - gibt nur "Schritt 3 von 6" heraus und aendert nichts |
 
 ## Umbauten am Dekodierpfad absichern (decode_vergleich.py)
 

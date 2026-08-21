@@ -89,6 +89,13 @@ struct StateTopic
 
 extern const StateTopic stateTopics[NUMBEROFTOPICS];
 
+// Tabellenindex zu einer TOP-Nummer finden. Gebraucht vom Notbetrieb: Seine
+// Schritte nennen das TOP, an dem zurueckgelesen wird - actual_data[] wird
+// aber ueber den ZEILENINDEX adressiert, und der ist nicht die TOP-Nummer
+// (Luecken durch entfallene Topics, hoechste Nummer 104 bei 92 Zeilen).
+// -1, wenn es die Nummer nicht gibt.
+int state_topic_index(unsigned int top_number);
+
 void publish_heatpump_data(uint8_t *, char (*)[MAXVALUELEN], PubSubClient &);
 
 // all decoders write into a caller buffer of MAXVALUELEN bytes:

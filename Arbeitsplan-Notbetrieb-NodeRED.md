@@ -1,7 +1,21 @@
 # Arbeitsplan: Node-RED-Seite des Notbetriebs
 
-*Dieser Plan ist zum Kopieren in eine Session im Projekt `nodered-flows` gedacht
-und setzt dort keinen Vorkontext voraus. Er kann unabhängig von der
+> **Erledigt am 2026-08-20.** Umgesetzt im Projekt `nodered-flows`:
+> *Notbetriebswerte-Sender V1.0* (Teil 1) und *Hauptmodus-Verteiler V6.5*,
+> Ausgang 15 (Teil 2); `NOTBETRIEB.md` dort ist nachgezogen (Teil 3), die vier
+> Abnahmepunkte sind durch. Von hier aus gegengeprüft: Alle fünf Werte liegen im
+> Broker (34 / 26 / −10 / 15 und DHW 48), und `set/HeatingMode` = 1 läuft im
+> 5-min-Takt.
+>
+> **Dieser Plan wird nicht mehr gepflegt** — er bleibt als Auftragsbeleg stehen.
+> Wie der Flow heute aussieht, steht in `NOTBETRIEB.md` im Projekt
+> `nodered-flows`; was die Firmware daraus macht, in
+> [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md).
+> Eine Ergänzung von dort: Der Rückweg ist scharf und trifft jeden Testlauf —
+> siehe Abschnitt 7 des Vorhabens.
+
+*Dieser Plan war zum Kopieren in eine Session im Projekt `nodered-flows` gedacht
+und setzte dort keinen Vorkontext voraus. Er konnte unabhängig von der
 Firmware-Arbeit erledigt werden — die Firmware ignoriert die neuen Topics,
 solange sie sie nicht kennt.*
 

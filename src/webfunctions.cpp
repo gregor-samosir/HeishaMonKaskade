@@ -15,11 +15,19 @@ static const char refreshMeta[] PROGMEM = "<meta http-equiv='refresh' content='5
 // without internet access, previously w3.css and jquery came from CDNs
 static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha monitor</title><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>"
     "*{box-sizing:border-box}body{font-family:Verdana,sans-serif;margin:0}h4{margin:10px 0}"
-    ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
     ".w3-container{padding:0.01em 16px}.w3-card-4{box-shadow:0 4px 10px 0 rgba(0,0,0,.2)}"
     ".w3-card{box-shadow:0 2px 5px 0 rgba(0,0,0,.2)}.w3-center{text-align:center}.w3-left{float:left}"
     ".w3-small{font-size:12px}.w3-medium{font-size:15px}.w3-text-grey{color:#757575}"
+    ".w3-xlarge{font-size:24px}.w3-padding-large{padding:12px 24px}"
+    ".w3-panel{padding:0.01em 16px;margin:16px 0}"
     ".w3-button{border:none;padding:8px 16px;cursor:pointer;background:inherit;display:inline-block}"
+    // Farben NACH .w3-button: dessen background:inherit hat dieselbe
+    // Spezifitaet und wuerde eine vorher stehende Farbe ueberschreiben. Genau
+    // daran war der Notbetriebsknopf grau statt rot - und der Save-Knopf der
+    // Settings-Seite grau statt gruen.
+    ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
+    ".w3-red{background:#f44336;color:#fff}.w3-orange{background:#ff9800;color:#fff}"
+    ".w3-yellow{background:#ffeb3b;color:#000}"
     ".w3-sidebar{position:fixed;top:0;left:0;height:100%;width:200px;background:#fff;z-index:2;overflow:auto}"
     ".w3-bar-block .w3-bar-item{display:block;width:100%;text-align:left;text-decoration:none;color:#000;padding:8px 16px}"
     ".w3-bar-block .w3-bar-item:hover{background:#ccc}"
@@ -42,7 +50,7 @@ static const char menuJS[] PROGMEM = "<script> function openLeftMenu() {var x = 
 // table refresh via native fetch instead of jquery (was loaded from CDN)
 static const char refreshJS[] PROGMEM = "<script>function refreshTable(){fetch('/tablerefresh').then(function(r){return r.text()}).then(function(t){document.getElementById('heishavalues').innerHTML=t}).catch(function(){}).finally(function(){setTimeout(refreshTable,30000)})}document.addEventListener('DOMContentLoaded',refreshTable);</script></head><body>";
 
-static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a><a href='/toggledebug' class='w3-bar-item w3-button w3-small'>Toggle debug log</a>";
+static const char sidebar[] PROGMEM = "<a href='/' class='w3-bar-item w3-button w3-small'>Home</a><a href='/reboot' class='w3-bar-item w3-button w3-small'>Reboot</a><a href='/firmware' class='w3-bar-item w3-button w3-small'>Firmware</a><a href='/settings' class='w3-bar-item w3-button w3-small'>Settings</a><a href='/notbetrieb' class='w3-bar-item w3-button w3-small'>Notbetrieb</a><a href='/togglelog' class='w3-bar-item w3-button w3-small'>Toggle mqtt log</a><a href='/toggledebug' class='w3-bar-item w3-button w3-small'>Toggle debug log</a>";
 
 // callback notifying us of the need to save config
 void saveConfigCallback()
@@ -497,4 +505,201 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   httpServer->sendContent_P(webFooter);
   httpServer->sendContent("");
   httpServer->client().stop();
+}
+
+/*****************************************************************************/
+/* Notbetrieb - die Seite mit dem einen Knopf                                */
+/*                                                                           */
+/* Die Bedienung ist fuer Laien: "Notbetrieb einschalten" statt "HeatingMode  */
+/* auf 0". Wer hier steht, hat einen Ausfall der Kaskadensteuerung vor sich   */
+/* und braucht keine Protokollnamen.                                          */
+/*                                                                           */
+/* Der Knopf ist ein POST-Formular, kein Link: ein Klick, keine Rueckfrage -  */
+/* aber auch kein versehentliches Ausloesen durch Link-Vorschau, Virenscanner */
+/* oder einen Browser, der die Seite aus der History vorlaedt.                */
+/*****************************************************************************/
+
+/*****************************************************************************/
+/* Die Saetze der Seite stehen EINMAL hier                                   */
+/*                                                                           */
+/* Sie werden an zwei Stellen gebraucht: beim Aufbau der Seite (C++) und beim */
+/* Nachfuehren alle zwei Sekunden (JavaScript). Als Makro fuegt der Praepro-  */
+/* zessor denselben Text in beide Literale ein - zwei Fassungen desselben     */
+/* Satzes koennten sonst auseinanderlaufen, und ausgerechnet die Notfallseite */
+/* wuerde je nach Zeitpunkt etwas anderes sagen.                              */
+/*                                                                           */
+/* Bewusst ohne Umlaute, wie die uebrige Oberflaeche.                         */
+/*****************************************************************************/
+#define NB_TXT_NUR_HEIZEN "Der Notbetrieb ist nur im Modus Heizen moeglich"
+#define NB_TXT_HEIZEN_HINWEIS "Bitte den Heiz-/Kuehlschalter im Haus auf Heizen stellen. Der Knopf gibt sich danach von selbst frei, das dauert bis zu 10 Sekunden."
+#define NB_TXT_WERTE_FEHLEN "Der Steuerung fehlen Werte, die sie zum Umschalten braucht. Das passiert, wenn das Geraet neu gestartet ist, waehrend der Server im Keller aus war."
+#define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Waermepumpe weitermachen."
+
+// Alle zwei Sekunden den Kurzstatus holen und daraus Klartext machen. Die
+// Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" - so kurz wie
+// moeglich, weil der ESP8266 nebenher die Waermepumpe abfragt.
+//
+// Die Seite fuehrt Knopf UND Sperrhinweis nach, nicht nur das Ergebnis: Steht
+// die Anlage auf Kuehlen und jemand legt den KNX-Schalter um, gibt sich der
+// Knopf von selbst frei. Ein Neuladen von Hand waere hier eine Falle - TOP101
+// folgt dem Schalter erst nach bis zu 7,7 s (gemessen 2026-08-16), wer sofort
+// neu laedt, saehe die Sperre ein zweites Mal.
+static const char notbetriebJS[] PROGMEM =
+    "<script>"
+    "function nbFehlt(m){var l='';for(var i=0;i<nbNamen.length;i++){if(m&(1<<i))l+='<li>'+nbNamen[i]+'</li>';}return l;}"
+    "function nbSperrtext(sp,m){"
+    "if(sp==2)return '<h3>" NB_TXT_NUR_HEIZEN "</h3><p>" NB_TXT_HEIZEN_HINWEIS "</p>';"
+    "return '<h3>Nicht bereit</h3><p>" NB_TXT_WERTE_FEHLEN "</p><p>Fehlt:</p><ul>'+nbFehlt(m)+'</ul><p>" NB_TXT_PLAN_B "</p>';}"
+    "function nbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
+    "var p=t.trim().split(';');var z=parseInt(p[0]);var s=parseInt(p[1]);var n=parseInt(p[2]);"
+    "var m=parseInt(p[3]);var sp=parseInt(p[4]);"
+    "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
+    "var g=document.getElementById('nbsperre');"
+    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Laeuft...</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
+    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRUEN</h3><p>Der Notbetrieb ist eingeschaltet. Die Waermepumpe laeuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe fuer den Kompressor - siehe Anleitung.</p>';}"
+    "else if(z==3){e.className='w3-panel w3-red';e.innerHTML='<h3>ROT</h3><p>Hat nicht geklappt. " NB_TXT_PLAN_B "</p>';}"
+    "else{e.className='';e.innerHTML='';}"
+    // Waehrend ein Lauf unterwegs ist und nach GRUEN steht weder Knopf noch
+    // Sperrhinweis - dort gibt es nichts zu entscheiden. Nach ROT kommt beides
+    // zurueck: War die Betriebsart der Grund, steht der Grund jetzt darunter.
+    "var zeigen=(z!=1&&z!=2);"
+    "if(!zeigen){f.style.display='none';g.style.display='none';}"
+    "else if(sp==0){g.style.display='none';f.style.display='block';}"
+    "else{f.style.display='none';g.style.display='block';g.innerHTML=nbSperrtext(sp,m);}"
+    "}).catch(()=>{}).finally(()=>{setTimeout(nbState,2000)})}"
+    "document.addEventListener('DOMContentLoaded',nbState);"
+    "</script>";
+
+void handleNotbetrieb(WebServerClass *httpServer)
+{
+  httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  httpServer->send(200, "text/html");
+  httpServer->sendContent_P(webHeader);
+  httpServer->sendContent_P(webBodyStart);
+  httpServer->sendContent_P(menuJS);
+
+  // Die Namen der gehaltenen Werte fuer das Nachfuehren: Die Statusroute
+  // schickt nur eine Bitmaske, damit sie kurz bleibt. Ohne diese Liste koennte
+  // die Seite den fehlenden Wert nicht beim Namen nennen.
+  String httptext = "<script>var nbNamen=[";
+  const unsigned wertanzahl = notbetrieb_wert_anzahl(notbetriebRolle);
+  for (unsigned i = 0; i < wertanzahl; i++)
+  {
+    if (i > 0)
+      httptext += ",";
+    httptext += "'";
+    httptext += notbetrieb_wert_name(notbetriebRolle, i);
+    httptext += "'";
+  }
+  httptext += "];</script>";
+  httpServer->sendContent(httptext);
+
+  httpServer->sendContent_P(notbetriebJS);
+  httpServer->sendContent("</head><body>");
+
+  httptext = "<div class='w3-sidebar w3-bar-block w3-card w3-animate-left' style='display:none' id='leftMenu'>";
+  httpServer->sendContent(httptext);
+  httpServer->sendContent_P(sidebar);
+  httpServer->sendContent("<hr></div>");
+
+  const bool wasser = (notbetriebRolle == NOTBETRIEB_WASSER);
+  const NotbetriebSperre sperre = notbetrieb_sperre();
+
+  httptext = "<div class='w3-container'>";
+  httptext += wasser ? "<h2>Notbetrieb: Warmwasser</h2>" : "<h2>Notbetrieb: Heizen</h2>";
+  httptext += wasser
+                  ? "<p>Dieser Knopf stellt die Waermepumpe auf reinen Warmwasserbetrieb "
+                    "und schaltet sie ein. Sie arbeitet danach ohne die Hausteuerung weiter.</p>"
+                  : "<p>Dieser Knopf stellt die Waermepumpe auf ihre eigene Heizkurve "
+                    "und schaltet sie ein. Sie heizt danach ohne die Hausteuerung weiter.</p>";
+  httpServer->sendContent(httptext);
+
+  // Knopf und Sperrhinweis stehen BEIDE in der Seite; sichtbar ist immer nur
+  // einer. Das Nachfuehren alle zwei Sekunden schaltet zwischen ihnen um -
+  // waere der Knopf gar nicht erst da, koennte die Seite ihn nicht freigeben,
+  // wenn der KNX-Schalter umgelegt wird, und jemand muesste raten, wann ein
+  // Neuladen sich lohnt. Dass er im Quelltext steht, ist keine Luecke: Der
+  // POST-Handler prueft die Sperre selbst (notbetrieb_starten()).
+  httptext = "<form id='nbform' method='POST' action='/notbetrieb/start'";
+  httptext += (sperre == NOTBETRIEB_FREI) ? ">" : " style='display:none'>";
+  httptext += "<button class='w3-button w3-red w3-xlarge w3-padding-large' type='submit'>";
+  httptext += wasser ? "Warmwasser einschalten" : "Notbetrieb einschalten";
+  httptext += "</button></form>";
+
+  // Der Sperrhinweis wird hier schon vollstaendig aufgebaut und nicht dem
+  // JavaScript ueberlassen: Wer die Seite oeffnet, soll den Grund sofort lesen
+  // koennen - auch in der Sekunde vor der ersten Statusabfrage.
+  httptext += "<div id='nbsperre' class='w3-panel w3-orange'";
+  httptext += (sperre == NOTBETRIEB_FREI) ? " style='display:none'>" : ">";
+  if (sperre == NOTBETRIEB_SPERRE_HEIZBETRIEB)
+  {
+    // Der externe KNX-Schalter gibt die Richtung vor. Steht er auf Kuehlen,
+    // verwirft die Waermepumpe jeden Heizmodus stillschweigend - der Lauf
+    // endete am 2026-08-20 nach 20 s in einem ROT ohne Erklaerung.
+    httptext += "<h3>" NB_TXT_NUR_HEIZEN "</h3><p>" NB_TXT_HEIZEN_HINWEIS "</p>";
+  }
+  else if (sperre != NOTBETRIEB_FREI)
+  {
+    // Unvollstaendig heisst gesperrt, mit Klartext. Lieber gar nicht schalten
+    // als auf die Panasonic-Werkskurve - die faehrt bei -5 C aussen 55 C
+    // Vorlauf, weit jenseits der Estrichgrenze einer Fussbodenheizung.
+    httptext += "<h3>Nicht bereit</h3><p>" NB_TXT_WERTE_FEHLEN "</p><p>Fehlt:</p><ul>";
+    for (unsigned i = 0; i < wertanzahl; i++)
+    {
+      if ((notbetriebWerte.gesetzt & (1u << i)) == 0)
+      {
+        httptext += "<li>";
+        httptext += notbetrieb_wert_name(notbetriebRolle, i);
+        httptext += "</li>";
+      }
+    }
+    httptext += "</ul><p>" NB_TXT_PLAN_B "</p>";
+  }
+  httptext += "</div>";
+
+  httptext += "<div id='nbstat'></div></div>";
+  httpServer->sendContent(httptext);
+
+  httpServer->sendContent_P(webFooter);
+  httpServer->sendContent("");
+  httpServer->client().stop();
+}
+
+/*****************************************************************************/
+/* Der POST-Handler: anstossen und sofort antworten                          */
+/*                                                                           */
+/* Hier laeuft nichts Langes ab - die Schrittfolge tickt aus loop(). Ein      */
+/* Handler, der 48 s auf die Waermepumpe wartet, wuerde den Abfragezyklus     */
+/* blockieren und den Browser in einen Timeout laufen lassen.                */
+/*****************************************************************************/
+void handleNotbetriebStart(WebServerClass *httpServer)
+{
+  const bool angestossen = notbetrieb_starten();
+
+  // Nach POST auf die Seite umleiten (303): Ein Neuladen wiederholt damit die
+  // Anzeige, nicht das Kommando.
+  if (!angestossen)
+  {
+    httpServer->sendHeader("Location", "/notbetrieb", true);
+    httpServer->send(303, "text/plain", "nicht bereit");
+    return;
+  }
+  httpServer->sendHeader("Location", "/notbetrieb", true);
+  httpServer->send(303, "text/plain", "gestartet");
+}
+
+/*****************************************************************************/
+/* Die Statusroute - bewusst ohne Anmeldung                                   */
+/*                                                                           */
+/* Sie gibt nur Zustand und Schrittzahl heraus und aendert nichts. Mit        */
+/* Anmeldung muesste die Seite bei jeder Abfrage alle zwei Sekunden erneut    */
+/* authentifizieren, was auf einem ESP8266 spuerbar ist - und wer die Zahl    */
+/* "3 von 6" lesen kann, kann damit nichts anfangen, was er nicht ohnehin     */
+/* auf der Startseite saehe.                                                  */
+/*****************************************************************************/
+void handleNotbetriebStatus(WebServerClass *httpServer)
+{
+  char status[48];
+  notbetrieb_status(status, sizeof(status));
+  httpServer->send(200, "text/plain", status);
 }

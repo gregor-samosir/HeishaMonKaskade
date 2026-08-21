@@ -84,9 +84,23 @@ jobs:
       #                  decode.cpp nebeneinander. Byte 28 trägt zwei Bitfelder;
       #                  ohne bitgenaue Maske schaltet ein Kühl-Kommando die
       #                  Heizung mit um, und genau das prüft die Gegenprobe.
+      # notbetrieb_test: Regeln des Notbetriebs aus 3.12.0 - Vollständigkeit
+      #                  der gehaltenen Werte, Bereichsgrenzen (verwerfen statt
+      #                  klemmen), die Karenzzeit-Ausnahme für den
+      #                  notbetrieb-Zweig und der Zustandsautomat samt
+      #                  millis()-Überlauf. Die Karenz-Ausnahme ist der Grund,
+      #                  warum dieser Test in der CI steht: wird sie vergessen,
+      #                  funktioniert der Knopf im Labor und nach jedem Neustart
+      #                  nicht mehr - auffallen würde das erst im Ernstfall.
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
+      # css_klassen:     Jede benutzte w3-Klasse muss im eingebetteten CSS
+      #                  definiert sein und jede Farbklasse hinter .w3-button
+      #                  stehen. Ein Compiler prüft davon nichts: Die Seite lädt
+      #                  auch mit fehlender Klasse, sie sieht nur anders aus.
+      #                  Am 2026-08-20 war der Notbetriebsknopf deshalb grauer
+      #                  Text statt rotem Knopf, ROT und "Läuft..." farblos.
       - name: Hosttests übersetzen und ausführen
         run: |
           c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
@@ -97,7 +111,10 @@ jobs:
           /tmp/sendwindow_test
           c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test test/byte28_test.cpp
           /tmp/byte28_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
+          /tmp/notbetrieb_test
           ./test/decode_hosttest.sh
+          python3 test/css_klassen_test.py
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
       # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt

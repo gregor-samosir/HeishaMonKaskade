@@ -181,6 +181,31 @@ bool subscribe_set_topics(PubSubClient &mqtt_client)
 }
 
 /*****************************************************************************/
+/* Bereichsgrenzen eines Set-Kommandos nachschlagen                          */
+/*                                                                           */
+/* setCommands[] ist und bleibt die einzige Stelle, an der die erlaubten     */
+/* Wertebereiche stehen. Der Notbetrieb haelt Werte unter denselben Namen im */
+/* RAM und prueft sie beim Annehmen gegen genau diese Grenzen - eine zweite  */
+/* Tabelle waere eine zweite Wahrheit.                                        */
+/*****************************************************************************/
+bool set_command_range(const char *name, int *min_out, int *max_out)
+{
+  if (!name || !min_out || !max_out)
+    return false;
+
+  for (unsigned int i = 0; i < SETCOMMANDCOUNT; i++)
+  {
+    if (strcmp(name, setCommands[i].name) == 0)
+    {
+      *min_out = setCommands[i].min;
+      *max_out = setCommands[i].max;
+      return true;
+    }
+  }
+  return false;
+}
+
+/*****************************************************************************/
 /* Build the heatpump command from an mqtt set message                       */
 /* returns true if a command was registered, false on any error              */
 /* (caller must restart the mainquery timer on false, see mqtt_callback)     */
