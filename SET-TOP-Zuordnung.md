@@ -403,8 +403,13 @@ Rückmeldung.
 
 **Erledigt in 3.11.0: `Heating_Mode` / `Cooling_Mode` als Set-Kommando
 (Byte 28).** SET35 `HeatingMode` und SET36 `CoolingMode`, je 0 = Kurve,
-1 = Direkt. Damit ist der Notbetrieb vollständig fernschaltbar — bis hierher
-musste beim Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
+1 = Direkt. Damit ist der Notbetrieb fernschaltbar — bis hierher musste beim
+Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
+
+**Zu präzisieren (2026-08-21):** „fernschaltbar" hieß hier über MQTT, und der
+Broker *ist* der ioBroker-Adapter. Fällt der ioBroker aus, fehlt auch der
+Übertragungsweg. Diese Lücke schließt erst 3.12.0 mit dem Knopf auf
+`/notbetrieb` in der Weboberfläche der Firmware.
 
 Am 2026-08-19 an Stufe 1 bei stehender Anlage in vier Läufen gemessen, Ablauf
 und Rohdaten in [`test/README.md`](test/README.md):

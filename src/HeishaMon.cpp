@@ -21,6 +21,34 @@ bool serialquerysent = false;
 #endif
 const char *update_path = "/firmware";
 const char *update_username = "admin";
+
+/*****************************************************************************/
+/* Der Zugang zum Notbetriebsknopf - ein EIGENES Passwort                    */
+/*                                                                           */
+/* Bis 3.11.0 haetten /notbetrieb und /notbetrieb/start dasselbe Passwort     */
+/* verlangt wie /firmware und /settings. Das ist genau falsch herum: Den      */
+/* Knopf soll im Ernstfall JEDER aus der Familie druecken koennen, er steht   */
+/* mit Passwort in der ausgedruckten Anleitung. Dasselbe Blatt haette damit   */
+/* auch den Zugang zum Firmware-Upload und zu den MQTT-Zugangsdaten geoeffnet.*/
+/*                                                                           */
+/* Deshalb: eigener Benutzer, eigenes Passwort, einkompiliert aus             */
+/* platformio_user_env.ini (Owner-Entscheidung 2026-08-21). Der Knopf kann    */
+/* nichts weiter als die Schrittfolge ausloesen - wer ihn kennt, kann keine   */
+/* Firmware aufspielen und keine Einstellungen aendern.                       */
+/*                                                                           */
+/* Der Fallback unten ist nur der Notnagel fuer einen Build ohne diese Datei; */
+/* er steht im oeffentlichen Repo und schuetzt entsprechend wenig - dasselbe  */
+/* Muster wie beim Setup-AP in webfunctions.cpp.                              */
+/*****************************************************************************/
+#ifndef HEISHA_NOTBETRIEB_PASSWORD
+#define HEISHA_NOTBETRIEB_PASSWORD "notbetrieb"
+#warning "HEISHA_NOTBETRIEB_PASSWORD nicht gesetzt - der Notbetriebsknopf laeuft mit dem oeffentlich bekannten Fallback (siehe platformio_user_env_sample.ini)"
+#endif
+// Vier Zeichen sind die Untergrenze, unter der ein Passwort keines mehr ist.
+// Der Build bricht hier lieber, als dass es erst an der Waermepumpe auffaellt.
+static_assert(sizeof(HEISHA_NOTBETRIEB_PASSWORD) >= 5, "HEISHA_NOTBETRIEB_PASSWORD braucht mindestens 4 Zeichen");
+const char *notbetrieb_username = "notbetrieb";
+const char *notbetrieb_password = HEISHA_NOTBETRIEB_PASSWORD;
 // Groessen aus webfunctions.h - dort werden die Felder aus der config.json
 // gefuellt, und beide Seiten muessen dieselbe Puffergroesse annehmen
 char wifi_hostname[CONFIG_FIELD_LEN] = HEISHA_HOSTNAME;
@@ -207,19 +235,20 @@ void setupHttp()
       return httpServer.requestAuthentication();
     }
     handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
-  // Notbetrieb: Seite und Ausloeser verlangen Login wie /reboot und /settings.
-  // Die Statusroute nicht - sie gibt nur "Schritt 3 von 6" heraus und wird
-  // alle zwei Sekunden abgefragt.
+  // Notbetrieb: Seite und Ausloeser verlangen einen EIGENEN Zugang, nicht den
+  // des Firmware-Uploads - Begruendung oben bei notbetrieb_password.
+  // Die Statusroute verlangt gar keinen: Sie gibt nur "Schritt 3 von 7" heraus
+  // und wird alle zwei Sekunden abgefragt.
   httpServer.on("/notbetrieb", []()
                 {
-    if (!httpServer.authenticate(update_username, ota_password))
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
     {
       return httpServer.requestAuthentication();
     }
     handleNotbetrieb(&httpServer); });
   httpServer.on("/notbetrieb/start", HTTP_POST, []()
                 {
-    if (!httpServer.authenticate(update_username, ota_password))
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
     {
       return httpServer.requestAuthentication();
     }

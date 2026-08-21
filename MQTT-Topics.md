@@ -487,15 +487,24 @@ external cascade control is unavailable - the values are kept in sync from
 there, and the operator only has to switch the terminal from direct mode to
 curve mode.
 
-**`TargetHigh` is the flow setpoint.** `Z1HeatCurveTargetHighTemp` (SET27,
-byte 75) and `Z1HeatRequestTemperature` (SET5, byte 38) are the same value
-inside the heatpump - the flow setpoint in direct mode, the upper curve point
-in curve mode; the same holds for the cooling pair SET31 / SET6. Writing it
+**`TargetHigh` is the flow setpoint - but only in direct mode.**
+`Z1HeatCurveTargetHighTemp` (SET27, byte 75) and `Z1HeatRequestTemperature`
+(SET5, byte 38) are the same value inside the heatpump **while the circuit is on
+direct mode**; the same holds for the cooling pair SET31 / SET6. Writing it
 therefore changes the setpoint of a running plant, and in direct mode it does
 not hold: the next setpoint write drags it along. That is why `TargetHigh` on
 a plant in direct mode reads back as the current setpoint instead of the
 configured curve point, and why `test/kurven_sync.py` does not mirror it.
 Measured on WP1 on 2026-08-10, details in `test/README.md`.
+
+**In curve mode they are separate storage locations** (WP1, 2026-08-20): SET27
+is the curve point, SET5 is a parallel shift of the whole curve, -5..+5, and
+values outside that range are discarded silently by the heatpump. Measured with
+`Main_Target_Temp` (TOP7) as the referee: at a fixed curve point of 34 it
+followed the shift 26 -> 28 -> 30 while TOP29 stayed at 34. So the curve point
+*can* be written cleanly there - which is exactly what the emergency button
+does after switching to curve mode. Confirmed again on 2026-08-21 during the
+button runs: in curve mode `Z1_Heat_Request_Temp` read 0, the neutral shift.
 
 **The ranges of both `OutsideHigh` parameters were measured on the plant, not
 taken from documentation** - and both published values turned out wrong:
@@ -578,16 +587,26 @@ eigenen Kurve weiterlaufen können, wenn die externe Kaskadensteuerung ausfällt
 Die Werte werden von dort gespiegelt, und der Betreiber muss am Bedienterminal
 nur von Direkt- auf Kurvenbetrieb umschalten.
 
-**`TargetHigh` ist die Vorlauf-Solltemperatur.** `Z1HeatCurveTargetHighTemp`
-(SET27, Byte 75) und `Z1HeatRequestTemperature` (SET5, Byte 38) sind in der
-Wärmepumpe derselbe Wert – im Direktmodus die Vorlauf-Solltemperatur, im
-Kurvenmodus der obere Kurvenpunkt; für das Kühlpaar SET31 / SET6 gilt dasselbe.
+**`TargetHigh` ist die Vorlauf-Solltemperatur – aber nur im Direktbetrieb.**
+`Z1HeatCurveTargetHighTemp` (SET27, Byte 75) und `Z1HeatRequestTemperature`
+(SET5, Byte 38) sind in der Wärmepumpe derselbe Wert, **solange der Kreis auf
+Direktvorgabe steht**; für das Kühlpaar SET31 / SET6 gilt dasselbe.
 Ihn zu schreiben verstellt also den Sollwert einer laufenden Anlage, und im
 Direktbetrieb hält er nicht: Der nächste Sollwert-Schreibvorgang zieht ihn mit.
 Deshalb liest sich `TargetHigh` an einer Anlage im Direktbetrieb als aktueller
 Sollwert statt als konfigurierter Kurvenpunkt, und deshalb überträgt
 `test/kurven_sync.py` ihn nicht. Gemessen an WP1 am 2026-08-10, Einzelheiten in
 `test/README.md`.
+
+**Im Kurvenbetrieb sind es getrennte Speicherstellen** (WP1, 2026-08-20): SET27
+ist dort der Kurvenpunkt, SET5 die Parallelverschiebung der ganzen Kurve um
+−5..+5, und Werte außerhalb dieses Bereichs verwirft die Wärmepumpe
+stillschweigend. Schiedsrichter der Messung war `Main_Target_Temp` (TOP7): Bei
+festem Kurvenpunkt 34 folgte er der Verschiebung 26 → 28 → 30, während TOP29 auf
+34 stehen blieb. Der Kurvenpunkt lässt sich dort also sauber schreiben — genau
+das tut der Notbetriebsknopf nach dem Umschalten. Am 2026-08-21 in den
+Knopf-Läufen erneut bestätigt: Im Kurvenbetrieb meldete
+`Z1_Heat_Request_Temp` den Wert 0, die neutrale Verschiebung.
 
 **Die Bereiche der beiden `OutsideHigh`-Parameter wurden an der Anlage
 ausgemessen** statt aus Dokumentation übernommen – und beide veröffentlichten
@@ -644,6 +663,19 @@ this branch the very same replay is the mechanism: it is what puts the curve
 values back within seconds after a restart, without Node-RED having to do
 anything. The hazard cannot apply here, because these values never reach the
 heatpump unasked.
+
+### The button has its own login (new in 3.12.0)
+
+`/notbetrieb` and `/notbetrieb/start` ask for user **`notbetrieb`** and a
+password compiled in from `platformio_user_env.ini` - deliberately *not* the one
+guarding `/firmware`, `/settings` and `/reboot`. The button is meant to be
+pressed by anyone in the household and therefore appears with its password in a
+printed emergency sheet; the same sheet must not also open the firmware upload
+and the MQTT credentials.
+
+`/notbetrieb/status` needs no login at all. It only returns state and step
+number, is polled every two seconds, and authenticating that on an ESP8266
+would be noticeable.
 
 ### The heating button is locked unless TOP101 reads 0 (new in 3.12.0)
 

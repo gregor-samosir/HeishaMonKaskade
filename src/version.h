@@ -1,5 +1,90 @@
 #pragma once
 // Changelog:
+// 3.12.0 - Der Notbetrieb ist ueber die Weboberflaeche schaltbar. Ein Knopf auf
+//         /notbetrieb stellt die Waermepumpe auf ihre eigene Heizkurve (Stufe 1)
+//         bzw. auf reinen Warmwasserbetrieb (Stufe 2) und schaltet sie ein -
+//         ohne ioBroker, ohne Node-RED, ohne MQTT-Broker.
+//
+//         WARUM DAS NOETIG WAR. Seit 3.11.0 ist die Betriebsart fernschaltbar,
+//         aber nur ueber MQTT - und der Broker IST der ioBroker-Adapter. Faellt
+//         der ioBroker aus, fehlt nicht nur der Absender des Kommandos, sondern
+//         der Uebertragungsweg selbst. Der eigene Webserver der Firmware ist der
+//         Weg, der in diesem Fall noch uebrig bleibt. Die Aussage im Changelog
+//         zu 3.11.0, damit sei der Notbetrieb "vollstaendig fernschaltbar",
+//         galt also nur, solange ein Broker erreichbar war.
+//
+//         WOHER DIE KURVENWERTE KOMMEN. Ueber einen eigenen Topic-Zweig
+//         <prefix>/notbetrieb/, den Node-RED bei Aenderung beschickt und den die
+//         Firmware im RAM haelt. Diese Werte gehen NIE an die Waermepumpe -
+//         ausser wenn der Knopf gedrueckt wird. Keine Datei auf LittleFS: Der
+//         ioBroker-Adapter spielt jedem neuen Abonnenten die gespeicherten Werte
+//         ein, die Werte sind nach einem Neustart also binnen Sekunden wieder da.
+//         Dafuer nimmt der Zweig die SUBSCRIBE_GRACE aus 3.6.1 ausdruecklich aus
+//         - dieselbe Wiedereinspielung, die dort die Gefahr ist, ist hier der
+//         Mechanismus.
+//
+//         GRUEN HEISST ZURUECKGELESEN, NICHT ABGESENDET. Die Schritte laufen
+//         einzeln aus loop() (senden -> zuruecklesen -> naechster Schritt),
+//         nicht in einem Sammelfenster: Sonst konkurriert das Kurvenschreiben
+//         mit dem Werks-Reset des Moduswechsels. Jeder Schritt gilt fruehestens
+//         8 s nach seinem Kommando als bestaetigt, sonst koennte ein veralteter
+//         Ruecklesewert einen Schritt abhaken, den der Werks-Reset danach
+//         ueberschreibt. Schritt-Timeout 20 s, Gesamtdeckel = Schrittzahl x
+//         Timeout. Ein Heizen-Lauf braucht real 57-58 s.
+//
+//         DIE BETRIEBSART IST DIE FREIGABE. Der externe KNX-Schalter gibt die
+//         Richtung vor: Steht die Anlage auf Kuehlen, verwirft sie jeden
+//         Heizmodus stillschweigend - am 2026-08-20 an Stufe 1 gemessen, das
+//         Kommando ging nachweislich durch Bereichspruefung, Maskenmerge und
+//         Telegramm. Der Knopf der Rolle Heizen ist deshalb nur frei, wenn
+//         Heat_Cool_SW_State (TOP101) sich sauber als 0 liest; alles andere
+//         (1, 2, -1, nie empfangen) sperrt mit Klartext auf der Seite. Meldet
+//         die Anlage mitten im Lauf ausdruecklich Kuehlen, bricht die Folge ab.
+//         Stufe 2 ist nicht betroffen: OperationMode 3 traegt auch im
+//         Kuehlbetrieb.
+//
+//         EIGENER ZUGANG STATT DES OTA-PASSWORTS. /notbetrieb und
+//         /notbetrieb/start verlangen Benutzer "notbetrieb" und ein eigenes,
+//         einkompiliertes Passwort (HEISHA_NOTBETRIEB_PASSWORD aus
+//         platformio_user_env.ini). Der Knopf steht mit Passwort in der
+//         ausgedruckten Notfallanleitung der Familie - dasselbe Blatt haette
+//         sonst auch den Firmware-Upload und die MQTT-Zugangsdaten geoeffnet.
+//         Die Statusroute /notbetrieb/status bleibt bewusst ohne Anmeldung: Sie
+//         gibt nur Zustand und Schrittzahl heraus und wird alle zwei Sekunden
+//         abgefragt.
+//
+//         AN DER ANLAGE BELEGT, NICHT NUR IM HOSTTEST. In der Nacht zum
+//         2026-08-21 an beiden Stufen:
+//           - Stufe 1 im Kuehlbetrieb: Knopf gesperrt, POST abgewiesen, kein
+//             Kommando an die Waermepumpe.
+//           - Stufe 1 im Heizbetrieb: GRUEN nach 57 s, Heating_Mode 1 -> 0,
+//             Z1_Heat_Curve_Target_High_Temp 20 -> 34, Heatpump 0 -> 1.
+//           - Stufe 1 OHNE erreichbaren Broker (mqtt.0 gestoppt): GRUEN nach
+//             58 s, TargetHigh 26 -> 34 aus dem RAM, Kompressor 26 -> 33 Hz.
+//             Danach meldete sich die Bridge 52 s nach dem Broker-Start von
+//             allein wieder an.
+//           - Stufe 2 im Kuehlbetrieb: GRUEN nach 24 s, DHWTemp 45 -> 48,
+//             Heatpump 0 -> 1, Sperre bleibt frei (Rollentrennung).
+//         Die Rueckkehr macht Node-RED: eine Zeile set/HeatingMode 1 im
+//         5-min-Re-Assert, an einen Herzschlag gebunden. Ein Knopf
+//         "Notbetrieb aus" waere die falsche Aktion - beim Zurueckschalten
+//         uebernimmt der Sollwert den unteren Kurvenpunkt.
+//
+//         GROESSE. ESP32-S3 RAM +72 B, Flash +9236 B; ESP8266 RAM +2536 B,
+//         Flash +8120 B (je gegen 3.11.0, Stufe 1). Der RAM-Zuwachs auf dem
+//         ESP8266 faellt auf und hat einen bekannten Grund: Die Tabellen in
+//         notbetrieb.h sind "static const" im Header und liegen damit einmal je
+//         Uebersetzungseinheit im RAM - der ESP8266 legt const-Zeigerarrays
+//         nicht von selbst ins Flash. 59,4 % statt 56,3 % ist verkraftbar, der
+//         ESP8266 ist ohnehin nur die Rueckfallebene; auf den produktiven
+//         ESP32-Boards spielt es keine Rolle.
+//
+//         REGELN HOSTTESTBAR. src/notbetrieb.h ist arduino-frei wie
+//         sendwindow.h und telegram.h; test/notbetrieb_test.cpp bindet es
+//         direkt ein und steht bei 159 Zusicherungen (Vollstaendigkeit,
+//         Bereichsgrenzen, Karenz-Ausnahme, Schrittfolge, Zustandsautomat,
+//         millis()-Ueberlauf, Freigabe ueber TOP101, Anzeigeverfall).
+//
 // 3.11.0 - Zwei neue Set-Kommandos: SET35 HeatingMode und SET36 CoolingMode
 //         (Byte 28, je 0 = Kompensationskurve, 1 = Direktvorgabe). Damit ist
 //         die Betriebsart erstmals fernschaltbar; bisher ging das nur am
@@ -808,4 +893,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.11.0";
+static const char* heishamon_version = "3.12.0";

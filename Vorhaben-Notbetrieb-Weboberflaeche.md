@@ -717,9 +717,11 @@ unkritisch, aber hier nicht getrennt gemessen.
 * **Die Karenzzeit-Ausnahme ist kritisch.** Wird sie vergessen, funktioniert der
   Knopf im Labor und nach jedem Neustart nicht mehr. Gehört in den Hosttest.
 * **Ein Knopf, der schaltet, ist ein Knopf, den jemand versehentlich drückt.**
-  Der Zugangsschutz ist dasselbe Passwort wie für `/firmware`. Keine Rückfrage —
-  aber ein POST-Formular statt eines Links, damit ihn niemand aus Versehen für
-  den Browser mitlädt.
+  Keine Rückfrage — aber ein POST-Formular statt eines Links, damit ihn niemand
+  aus Versehen für den Browser mitlädt. **Seit dem 2026-08-21 hat er einen
+  eigenen Zugang** (Benutzer `notbetrieb`), nicht mehr das Passwort von
+  `/firmware`: Er gehört mit Passwort in die Notfallanleitung, und dasselbe
+  Blatt darf nicht auch den Firmware-Upload öffnen.
 * **Die Bedienung ist für Laien.** „Notbetrieb ein" statt „`HeatingMode` auf 0". Die
   Passwörter und die Schritt-für-Schritt-Anleitung stehen offline bereit.
 * **Ein Neustart ohne Broker sperrt den Knopf.** Bewusst in Kauf genommen
@@ -771,11 +773,16 @@ unkritisch, aber hier nicht getrennt gemessen.
 
 ## 9. Nach der Umsetzung nachzuziehen
 
-* [`README.md`](README.md) — Weboberfläche und der neue Endpunkt.
-* [`src/version.h`](src/version.h) — Changelog zu 3.12.0 mit Problem, Nachweis
-  und Größenänderung.
-* [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`.
-* Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
+**Am 2026-08-21 erledigt** (Etappe 7), bis auf die beiden Punkte außerhalb
+dieses Repos, die unten ausdrücklich als offen markiert sind.
+
+* ✔ [`README.md`](README.md) — eigener Abschnitt „Der Notbetrieb ist ein Knopf
+  im Browser (3.12.0)", dazu `notbetrieb.h`/`notbetrieb.cpp` in der Dateitabelle.
+* ✔ [`src/version.h`](src/version.h) — Changelog zu 3.12.0 mit Problem, Regeln,
+  Freigabebedingung, eigenem Zugang und den vier Läufen an der Anlage.
+* ✔ [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`,
+  die Sperre über TOP101 und der eigene Zugang.
+* **OFFEN:** Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
   KNX-Taster für die Kompressorfreigabe, und der Hinweis, dass im Kurvenbetrieb
   „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt. **Dazu der obere
   Kurvenpunkt mit seiner Zahl:** nach dem Umschalten auf Kurve ist
@@ -797,20 +804,25 @@ unkritisch, aber hier nicht getrennt gemessen.
   fotografieren, Wartungsmodus wieder aus. Für einen Lauf, der die Anlage
   einschalten soll, bleibt er das falsche Werkzeug
   ([`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md)).
-* `NOTBETRIEB.md` im Node-RED-Projekt — samt der Rückkehr-Zeile im Re-Assert und
-  der Bedingung dazu (Entscheidung 6).
-* **Zu korrigieren, M1 liegt seit 2026-08-20 vor:** Die Gleichsetzung von
+* **OFFEN:** `NOTBETRIEB.md` im Node-RED-Projekt — §7 beschreibt noch den
+  Handweg am Bedienterminal als einzigen Weg; der Knopf gehört davor, der
+  Handweg bleibt als Rückfall. Die Rückkehr-Zeile im Re-Assert und ihre
+  Herzschlag-Bedingung (Entscheidung 6) stehen dort bereits in §9.
+* ✔ **Erledigt 2026-08-21:** Die Gleichsetzung von
   `Z1HeatRequestTemperature` (SET5) und `Z1HeatCurveTargetHighTemp` (SET27) gilt
   nur im Direktbetrieb. Fundstellen: [`MQTT-Topics.md:468`](MQTT-Topics.md#L468)
   und [`MQTT-Topics.md:537`](MQTT-Topics.md#L537), Fußnote ² in
   [`SET-TOP-Zuordnung.md:125`](SET-TOP-Zuordnung.md#L125), der
   TargetHigh-Abschnitt in [`test/README.md:699`](test/README.md#L699).
-* **Vorrangig zu korrigieren:** die Kurvenpaarung in `MQTT-Topics.md` und
-  `kurven_sync.py` — Abschnitt 6a führt die Stellen einzeln auf. Das ist keine
-  Nacharbeit nach der Umsetzung, sondern eine Vorbedingung für sie.
-* **Zu korrigieren:** Changelog, `SET-TOP-Zuordnung.md` und das GitHub-Release
-  zu 3.11.0 sagen sinngemäß „damit ist der Notbetrieb vollständig
-  fernschaltbar". Das stimmt nur, solange ein Broker erreichbar ist.
+* ✔ **Erledigt am 2026-08-20:** die Kurvenpaarung in `MQTT-Topics.md` und
+  `kurven_sync.py` — Abschnitt 6a führt die Stellen einzeln auf. Am 2026-08-21
+  im Kurvenbetrieb an der Anlage bestätigt (`Main_Target_Temp` 26 °C bei 15 °C
+  außen).
+* ✔ **Erledigt 2026-08-21 im Repo:** Changelog und `SET-TOP-Zuordnung.md`
+  sagten sinngemäß „damit ist der Notbetrieb vollständig fernschaltbar". Das
+  stimmt nur, solange ein Broker erreichbar ist; beide Stellen sind präzisiert,
+  der Changelog zu 3.12.0 greift es auf. **OFFEN bleibt der Text des
+  GitHub-Release zu 3.11.0** — der lässt sich nur dort ändern.
 
 **Folgethema, nicht Teil dieses Vorhabens — niemand merkt den Ausfall.**
 Owner-Beobachtung 2026-08-21, mitten in Etappe 6: Während der Broker weg war,
@@ -911,10 +923,22 @@ sobald die Firmware dort läuft.
    Einzelheiten im Protokoll unten.
 2. **Etappe 6 — ERLEDIGT am 2026-08-21.** Der Knopf schaltet ohne Broker, die
    Firmware übersteht den Ausfall, und nach GRÜN kommt Wärme. Protokoll unten.
-3. **Etappe 7 — Rückkehr prüfen, Doku, Release 3.12.0.** Die Nacharbeiten
-   stehen in Abschnitt 9. Dazu gehört auch `NOTBETRIEB.md` §7 im Nachbarprojekt:
-   Es beschreibt noch den Handweg am Bedienterminal statt den Knopf (dort als
-   TODO 1.6 eingetragen).
+3. **Etappe 7 — im Repo erledigt am 2026-08-21.** Version 3.12.0, Changelog,
+   README, `MQTT-Topics.md`, `SET-TOP-Zuordnung.md` und die Korrekturen aus
+   Abschnitt 9 stehen. Die Rückkehr ist in beiden Läufen geprüft (Etappe 5 und 6).
+
+   **Neu dazugekommen:** Der Notbetriebsknopf hat einen **eigenen Zugang**
+   (Benutzer `notbetrieb`, Passwort als Build-Flag `HEISHA_NOTBETRIEB_PASSWORD`
+   aus `platformio_user_env.ini`) statt des OTA-Passworts — Owner-Entscheidung
+   2026-08-21. Grund: Der Knopf steht mit Passwort in der ausgedruckten
+   Notfallanleitung; dasselbe Blatt hätte sonst auch den Firmware-Upload und die
+   MQTT-Zugangsdaten geöffnet. Abschnitt 7 („Der Zugangsschutz ist dasselbe
+   Passwort wie für `/firmware`") ist damit überholt.
+
+   **Was noch fehlt, liegt außerhalb dieses Repos:** die Offline-Anleitung der
+   Familie und `NOTBETRIEB.md` §7 im Node-RED-Projekt (beschreibt noch den
+   Handweg am Bedienterminal als einzigen Weg), dazu der Text des GitHub-Release
+   zu 3.11.0.
 
 ### Etappe 5 — das Protokoll vom 2026-08-21
 
