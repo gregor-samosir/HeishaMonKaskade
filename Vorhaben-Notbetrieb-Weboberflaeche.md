@@ -30,7 +30,10 @@ ist, und der Notbetriebsknopf ist blau statt rot. Dazu **Etappe B**: Sie
 unterscheidet zwei Ausfälle, den weggefallenen Broker und die stumme Steuerung
 (Broker da, aber der 5-Minuten-Re-Assert bleibt aus). Einzelheiten,
 Entscheidungen und der Prüfplan stehen in **Abschnitt 11**; der Nachweis am Gerät
-steht noch aus und läuft am Prüfstand, ohne Eingriff an der Anlage.
+ist am 2026-08-21 am Prüfstand erbracht — alle sechs Lagen, ohne Eingriff an der
+Anlage. **Dabei ist ein Fehler in Etappe B aufgefallen und behoben worden**
+(eine Log-Zeile im MQTT-Callback zerstörte das eintreffende Kommando). Offen ist
+nur noch der OTA-Rollout auf H1 und H2.
 
 ---
 
@@ -1290,6 +1293,8 @@ Etappe | Inhalt | Commit
 3 | Doku und Version 3.13.0 | `05ac412`
 3a | Nachweis: der Re-Assert kommt bei beiden Stufen an | `67d8d8e`
 4 | **Etappe B — der Herzschlag der Steuerung** | `a499fcd`
+5 | Fix: Logzeile aus dem MQTT-Callback nach loop() | `ff56532`
+6 | Nachweis am Prüfstand, alle sechs Lagen | *dieser Commit*
 
 ### Die Entscheidungen
 
@@ -1372,8 +1377,9 @@ gehört in den Abnahmetest.
 
 **Der Prüfstand ist dafür wieder das richtige Werkzeug.** Für den Notbetriebsknopf
 war er seit der Sperre ausgeschieden (ohne Wärmepumpe kein TOP101); eine
-Verbindungsanzeige braucht kein TOP101. Der ganze Nachweis läuft damit **ohne
-Eingriff an H1 oder H2 und ohne Testfenster**.
+Verbindungsanzeige braucht kein TOP101. Der ganze Nachweis lief damit **ohne
+Eingriff an H1 oder H2 und ohne Testfenster** — und er hat sich gelohnt: Genau
+in dieser nicht hosttestbaren Anbindung steckte ein Fehler (Protokoll unten).
 
 ### Prüfplan
 
@@ -1480,9 +1486,108 @@ beim Verbindungsverlust zurückgesetzt wird. Die Reihenfolge dort ist also eine
 das Zurücksetzen entfernt. Sie bleibt stehen, aber der Test baut den im Betrieb
 unmöglichen Zustand jetzt von Hand, damit sie geprüft ist und nicht geglaubt.
 
+### Das Protokoll vom 2026-08-21, 14:08–15:02 — alles am Prüfstand
+
+**Gefahren, ohne H1 oder H2 anzufassen und ohne Testfenster.** Der Prüfstand
+(192.168.2.197, Env `d1_mini_test`) ist für diese Funktion wieder das richtige
+Werkzeug: Eine Verbindungsanzeige braucht kein TOP101 und damit keine
+Wärmepumpe.
+
+**Ein Glücksfall im Aufbau:** Der Prüfstand läuft unter dem Prefix
+`panasonic_heat_pump_test`, und dorthin sendet der Hauptmodus-Verteiler nichts.
+Er wird also **von allein stumm** — der Herzschlag ließ sich nachweisen, ohne
+den Node-RED-Container anzuhalten.
+
+Für den Broker-Ausfall brauchte es einen Broker, der sich abschalten lässt, ohne
+den ioBroker der Anlage anzurühren. Über `/settings` geht das nicht: Jede
+Änderung dort startet das Gerät neu, und danach ist die Lage immer 3 („nie
+verbunden"), nie 2. Also lief für die zweite Hälfte ein **minimaler
+MQTT-Broker** auf dem Arbeitsrechner (192.168.2.145), auf den der Prüfstand
+umgestellt wurde — er kann nur, was PubSubClient braucht, und zeigt die
+Log-Zeilen der Firmware direkt an.
+
+Zeit | Prüfung | Erwartet | Gemessen
+:--- | :--- | :--- | :---
+14:11 | Ausgangslage verbunden | Startseite leer, Notbetriebsseite „verbunden" | beides ✓
+14:23:38 | **Stumm-Karenz, 1. Lauf** | 14:23:29 (Verbindung 14:11:29 + 12 min) | im 20-s-Fenster getroffen ✓
+14:39:26 | **Stumm-Karenz, 2. Lauf** | 14:39:23 (letztes Kommando 14:27:23 + 12 min) | ✓
+14:39:49 | Rückkehr der Vorgaben | Lage sofort 0, Log mit der Stille-Dauer | „Hausteuerung hat **745 s** keine Vorgaben gesendet" (14:27:23 → 14:39:48) ✓
+14:41:05 | Broker gekappt | Lage 1 = Karenz, **keine** Störmeldung | ✓
+14:46:06 | **Broker-Karenz** | 14:46:06 (Abriss ~14:41:06 + 5 min) | punktgenau ✓
+14:55:07 | **Vorrang** | nach 14 min ohne Broker weiterhin Lage 2 | `0;1;7;15;1;**2**;14 Minuten` ✓
+14:55:09 | **Rückkehr des Brokers** | Log mit Dauer, Lage 0, **keine** Stumm-Meldung | „Hausteuerung war **850 s** nicht erreichbar", Lage 0 ✓
+15:00:58 | **Lage 3 „nie verbunden"** | Text ohne Minutenzahl | „Hausteuerung seit dem Neustart dieses Geräts nicht erreichbar", Dauertext **leer** ✓
+
+**Die beiden Seiten sagen wirklich Verschiedenes** — im selben Störfall:
+
+* Startseite: „… Die Wärmepumpe läuft mit dem zuletzt gesetzten Sollwert weiter.
+  **Wird es zu kalt, hilft der Notbetrieb.**"
+* Notbetriebsseite: derselbe Satz **ohne** den Verweis — wer dort steht, braucht
+  den Hinweis auf den Notbetrieb nicht mehr.
+
+Die Umlaute kommen über das neue `charset` korrekt an („Wärmepumpe läuft"),
+der Knopf ist blau.
+
+### Der Fehler, den dieser Lauf gefunden hat
+
+**Das erste Kommando an den Prüfstand ging verloren.** Statt `SET3 QuietMode: 0`
+meldete die Firmware:
+
+```
+14:24:14  Error: Unknown set topic 0Q
+```
+
+Aus `panasonic_heat_pump_test/set/QuietMode` war `0Q` geworden.
+
+**Ursache:** `write_mqtt_log()` ruft `mqtt_client.publish()`, und **PubSubClient
+benutzt für Senden und Empfangen denselben Puffer**. Genau in diesen Puffer
+zeigen `topic` und `payload` während des Callbacks. Etappe B setzte die
+Herzschlag-Meldung mitten in der Auswertung ab und überschrieb damit den
+Topic-Namen. Der bestehende Code war nie betroffen: Dort steht
+`write_mqtt_log()` nur an Stellen, an denen `topic` und `msg` nicht mehr
+gebraucht werden.
+
+**Was das im Betrieb bedeutet hätte:** Jedes Mal, wenn die Stumm-Meldung endet,
+wäre genau das erste Kommando danach verschluckt worden — ausgerechnet das, das
+die Rückkehr der Steuerung anzeigt.
+
+**Behoben** (`ff56532`): Der Callback merkt sich nur noch die Dauer, geloggt wird
+aus `loop()`, wenn der Puffer frei ist — dasselbe Muster wie `wifiOutageSeconds`
+beim WLAN-Ausfall. Gegenprobe am Gerät: dasselbe Kommando meldet jetzt
+`<SUB> SET3 QuietMode: 0`.
+
+Das ist genau die Lücke, die im Changelog als „gehört in den Abnahmetest" steht —
+die Anbindung in `HeishaMon.cpp`, die kein Hosttest abdecken kann. Sie ist damit
+auch der Beleg, dass der Abnahmetest nötig war.
+
+### Ein Nebenbefund, der die Platzierung des Herzschlags bestätigt
+
+Zweimal im Log, nach jedem Verbindungsaufbau:
+
+```
+14:11:34  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+14:27:19  34 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+**34 Set-Kommandos** spielt der ioBroker-Adapter dem Prüfstand beim Verbinden
+ein — obwohl unter dem Prefix `panasonic_heat_pump_test` niemand steuert, weder
+Node-RED noch sonst wer. Hätte der Herzschlag wie ursprünglich geplant *vor* der
+Karenzprüfung gestempelt, wären diese 34 Nachrichten als „die Steuerung lebt"
+durchgegangen — und die Stumm-Meldung wäre nach jedem Reconnect zwölf Minuten
+lang unterdrückt worden, ohne dass irgendetwas rechnet. Aus dem Adaptercode
+abgeleitet war das vorher schon; jetzt ist es gemessen.
+
+### Zustand nach dem Lauf
+
+Der Prüfstand steht wieder auf `192.168.2.147:1883`, Status `0;1;7;0;2;0;` —
+Notbetriebswerte vollständig, Lage 0, Sperre 2 (mangels Wärmepumpe kein TOP101,
+wie erwartet). Der Minibroker ist beendet, Port 1883 auf dem Arbeitsrechner
+wieder frei. An H1 und H2 wurde nichts angefasst.
+
 ### Prüfplan-Ergänzung für Etappe B
 
-Am Prüfstand, im Anschluss an die Schritte oben:
+**Alle erledigt am 2026-08-21, Protokoll oben.** Der ursprüngliche Plan stand so
+da:
 
 8. Broker wieder erreichbar, dann **den Node-RED-Flow anhalten** (oder den
    Container stoppen) und 12 Minuten warten. Die Seite muss von „verbunden" auf
