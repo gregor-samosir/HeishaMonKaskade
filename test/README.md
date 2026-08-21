@@ -425,6 +425,60 @@ auszurechnen statt sie zu schaetzen.
 (`mqtt_client.connected()` als Eingang der Wacht) und die Anzeige selbst. Beides
 gehoert in den Abnahmetest - siehe unten, "Verbindungsanzeige am Pruefstand".
 
+## Der 5-min-Re-Assert kommt bei BEIDEN Stufen an (2026-08-21, H2)
+
+Vorarbeit fuer den Herzschlag (Vorhaben-Notbetrieb-Weboberflaeche.md,
+Abschnitt 11): Kann die Firmware am ausbleibenden `set`-Verkehr erkennen, dass
+die Kaskadenregelung nicht mehr rechnet? Dafuer muss sie im Normalbetrieb
+zuverlaessig Verkehr sehen - und zwar auch die Warmwasserstufe, die keine
+Sollwertkurve bekommt.
+
+Zwei Fragen, beide beantwortet:
+
+1. **Schickt der Verteiler ueberhaupt in jedem Takt?** Im Flow-Code nachgesehen
+   (`Hauptmodus-Verteiler V6.5`, §6): Er sendet je Kanal nur bei Aenderung
+   gegenueber `lastSent` - aber der 5-Minuten-Takt setzt `state.lastSent = {}`
+   zurueck. Danach gelten alle dreizehn Kanaele als geaendert, sechs davon
+   gehen an H2.
+2. **Publiziert der ioBroker-Adapter einen unveraenderten Wert auch?** Das
+   entscheidet der Mitschnitt, nicht der Flow-Code. Passiv, 400 s, nichts
+   gesendet:
+
+```bash
+# roher Telnet-Mitschnitt, zaehlt "Callback from mqtt" (write_telnet_log in
+# mqtt_callback, geht IMMER ins Telnet-Log - unabhaengig von der L-Taste)
+python3 - <<'EOF'
+import socket, time
+s = socket.create_connection(("192.168.2.122", 23), timeout=10); s.settimeout(2.0)
+start = time.time(); puffer = b""
+while time.time() - start < 400:
+    try: puffer += s.recv(4096)
+    except socket.timeout: continue
+    while b"\n" in puffer:
+        z, puffer = puffer.split(b"\n", 1)
+        txt = z.decode("utf-8", "replace").strip()
+        if "Callback from mqtt" in txt: print(f"{time.time()-start:6.1f}s {txt[:80]}")
+EOF
+```
+
+Ergebnis:
+
+```
+13:40:46  6 x "Callback from mqtt" innerhalb von 0,1 s
+13:40:57  1 x "Callback from mqtt"
+13:45:46  6 x "Callback from mqtt" innerhalb von 0,1 s
+13:45:57  1 x "Callback from mqtt"
+```
+
+**Taktabstand exakt 300,0 s, je Takt sieben empfangene Kommandos.** An den
+Sollwerten hatte sich zwischen den beiden Takten nichts geaendert - der zweite
+Takt belegt damit, dass der Adapter auch unveraenderte Werte publiziert. Die
+sechs im Schwall sind die WP2-Kanaele des Verteilers, der siebte zehn Sekunden
+spaeter kommt aus der Waechter-Logik mit ihrem eigenen Takt (`QuietMode`).
+
+Der Mitschnitt ist **vollstaendig passiv** und braucht kein Testfenster: Er
+liest nur den Telnet-Strom und sendet nichts, auch keine Umschalttasten.
+
 ## Kurven-Set-Kommandos (SET27-SET34)
 
 `kurven_test.py` weist die acht Kurvenbefehle am laufenden Geraet nach, ohne

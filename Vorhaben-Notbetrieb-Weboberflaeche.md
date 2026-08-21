@@ -1404,15 +1404,33 @@ zu klären; einer ist es jetzt:
   `Z1HeatRequestTemperature`, `Z1CoolRequestTemperature`, `Heatpump`,
   `OperationMode`, `WaterPump`, `WaterPumpSpeed`). Beide Stufen bekommen also in
   jedem Takt Verkehr; ein Herzschlag trüge an beiden.
-  **Restunschärfe:** Das ist der Schreibvorgang in den ioBroker-Datenpunkt. Ob
-  der MQTT-Adapter einen *unveränderten* Wert auch als Publish an die Firmware
-  weiterreicht, ist damit noch nicht belegt — das entscheidet ein passiver
-  Telnet-Mitschnitt über einen vollen Takt (Zeilen „Callback from mqtt").
+  **Und es kommt auch wirklich an — am 2026-08-21 an H2 gemessen.** Ein
+  passiver Telnet-Mitschnitt über 400 s (nichts gesendet, nur mitgelesen) fing
+  zwei volle Takte:
+
+  ```
+  13:40:46  6 × "Callback from mqtt" innerhalb von 0,1 s
+  13:40:57  1 × "Callback from mqtt"
+  13:45:46  6 × "Callback from mqtt" innerhalb von 0,1 s
+  13:45:57  1 × "Callback from mqtt"
+  ```
+
+  Taktabstand exakt 300,0 s, je Takt sieben empfangene Kommandos. Damit ist
+  auch die Restfrage beantwortet: **Der ioBroker-MQTT-Adapter publiziert auch
+  unveränderte Werte** — sonst wäre der zweite Takt leer geblieben, denn an den
+  Sollwerten hatte sich zwischen 13:40 und 13:45 nichts geändert. Die sechs im
+  Schwall sind die WP2-Kanäle des Verteilers; der siebte zehn Sekunden später
+  kommt aus der Wächter-Logik mit ihrem eigenen Takt (`QuietMode`).
+
+  Der Herzschlag ist damit an beiden Stufen tragfähig, und der Takt ist keine
+  Annahme mehr, sondern gemessen.
 * **Die Zeitmarke muss VOR der Karenzprüfung gesetzt werden** ([`HeishaMon.cpp`
   in `mqtt_callback`](src/HeishaMon.cpp)) — empfangen ist empfangen, auch wenn
   das Kommando als Wiedereinspielung verworfen wird. Sonst zählt ausgerechnet
   der Schwall nach einem Reconnect nicht als Lebenszeichen.
 
 Die Karenz für den Herzschlag muss deutlich über der Verbindungskarenz liegen:
-Der Takt ist fünf Minuten, ein einzelner ausgefallener Takt ist noch kein
-Ausfall. Vorschlag: 12 Minuten, also mehr als zwei verpasste Takte.
+Der Takt ist gemessene 300,0 s, ein einzelner ausgefallener Takt ist noch kein
+Ausfall. Vorschlag: **12 Minuten**, also mehr als zwei verpasste Takte — und
+damit weit genug vom Takt entfernt, dass eine verzögerte Auslieferung keinen
+Fehlalarm auslöst.
