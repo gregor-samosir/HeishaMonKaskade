@@ -105,8 +105,50 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 | Empfangenes Telegramm | Prüfsumme entscheidet allein | zusätzlich Typ (0x71) und Länge (203) |
 | WLAN-Ausfall | keine Prüfung im Betrieb | Watchdog: Reconnect nach 30 s, Neustart nach 5 min |
 | Byte 110 | nicht dekodiert | vier Topics mit den Ist-Zuständen (heizt/kühlt tatsächlich) |
+| Broker weg | nur eine Zeile im MQTT-Log, die niemanden erreicht | die Weboberfläche sagt es: „Hausteuerung seit 14 Minuten nicht erreichbar" |
 
 Im Detail:
+
+### Die Weboberfläche sagt, wenn die Hausteuerung weg ist (3.13.0)
+
+Ein Ausfall der übergeordneten Steuerung fällt nicht auf. Die Wärmepumpe heizt
+mit dem zuletzt gesetzten Sollwert einfach weiter — kein Alarm, kein Hinweis,
+nichts. Erst mit Verzögerung wirkt sich der Ausfall aus: im Sommer über Tage, im
+Januar über Stunden, wenn der Sollwert der fallenden Außentemperatur nicht mehr
+nachgeführt wird. Am 2026-08-21 im Betrieb beobachtet.
+
+Damit stand der Notbetriebsknopf aus 3.12.0 auf einem stillen Fundament: Er
+funktioniert, aber jemand muss auf die Idee kommen, ihn zu suchen. Die Firmware
+**weiß** von dem Ausfall — der Reconnect läuft im Backoff ins Leere —, sagte es
+aber nur im MQTT-Log, und das geht in genau dieser Lage per Definition ins Leere.
+
+Seit 3.13.0 steht es auf der Seite:
+
+* Auf der **Notbetriebsseite** immer eine Zeile. Im Normalfall grau und klein
+  („Hausteuerung: verbunden"), im Störfall orange mit Dauer. Dort steht die
+  Entscheidung an, ob der Knopf gedrückt werden muss — und ein ruhiges
+  „verbunden" verhindert die häufigere Fehlentscheidung.
+* Auf der **Startseite** nur der Störfall. Sie ist ein Nachschauwerkzeug, keine
+  Statusampel; ein dauerhaftes „verbunden" über der Topic-Tabelle würde nach
+  kurzer Zeit übersehen — samt der Störmeldung an derselben Stelle.
+
+Drei Regeln stecken dahinter, alle in [`src/verbindung.h`](src/verbindung.h) und
+vom Hosttest abgedeckt:
+
+* **Karenz von 5 Minuten.** Ein Neustart des ioBroker-Adapters dauert ein bis
+  zwei Minuten. Eine Störmeldung, die von selbst wieder verschwindet, erzieht
+  dazu, sie zu übersehen — und dann wird auch die echte übersehen.
+* **„Seit dem Neustart" statt einer Zahl**, wenn seit dem Einschalten nie eine
+  Verbindung bestand. Dort ist die wahre Ausfalldauer unbekannt: Der Broker kann
+  seit Tagen weg sein, das Gerät ist nur gerade neu gestartet.
+* **Deckel bei 30 Tagen.** `millis()` läuft nach 49,7 Tagen über. Ohne Deckel
+  stünde dort nach einem sehr langen Ausfall wieder „seit 3 Minuten" — eine Lüge
+  genau in dem Moment, in dem die Anzeige zählt.
+
+Gemessen wird die **MQTT-Verbindung**, nicht das WLAN: Der Ausfall, um den es
+geht, ist der des ioBroker, und ohne WLAN wäre auch die Weboberfläche weg, die
+die Auskunft anzeigen soll. Der Fall „Broker läuft, aber die Kaskadenregelung
+rechnet nicht mehr" ist damit noch nicht abgedeckt.
 
 ### Der Notbetrieb ist ein Knopf im Browser (3.12.0)
 
@@ -460,6 +502,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
 | [`src/webfunctions.cpp`](src/webfunctions.cpp) | Weboberfläche und Einstellungen |
+| [`src/verbindung.h`](src/verbindung.h) | Karenz und Ausfalldauer der Verbindung zur Hausteuerung — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.h`](src/notbetrieb.h) | Regeln des Notbetriebs — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.cpp`](src/notbetrieb.cpp) | Anbindung ans Gerät: Abonnement, Schrittfolge, Zustand |
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |

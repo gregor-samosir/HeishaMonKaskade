@@ -1,5 +1,91 @@
 #pragma once
 // Changelog:
+// 3.13.0 - Die Weboberflaeche sagt, wenn die Hausteuerung nicht erreichbar ist.
+//         Dazu zwei Korrekturen an der Notbetriebsseite: der Knopf ist blau
+//         statt rot, und "Laeuft..." heisst jetzt "Konfiguration Notbetrieb
+//         laeuft".
+//
+//         WARUM. Owner-Beobachtung 2026-08-21, mitten im Nachweis zu 3.12.0:
+//         Waehrend der Broker weg war, heizte die Waermepumpe einfach weiter,
+//         mit dem zuletzt gesetzten Sollwert. Kein Alarm, kein Hinweis,
+//         nichts. Der Ausfall wirkt sich erst mit Verzoegerung aus - im
+//         Sommer ueber Tage, im Januar ueber Stunden, wenn der Sollwert der
+//         fallenden Aussentemperatur nicht mehr nachgefuehrt wird. Damit
+//         stand der Notbetriebsknopf aus 3.12.0 auf einem stillen Fundament:
+//         Er funktioniert, aber jemand muss auf die Idee kommen, ihn zu
+//         suchen. Nachgesehen und bestaetigt: Die Oberflaeche zeigte den
+//         Ausfall NIRGENDS an - weder auf der Startseite noch sonstwo. Selbst
+//         wer gezielt nachschaute, sah ihn nicht. Die Firmware wusste es (der
+//         Reconnect laeuft im Backoff ins Leere), sie sagte es nur niemandem
+//         ausser im MQTT-Log - und das geht in genau dieser Lage ins Leere.
+//
+//         WAS ANGEZEIGT WIRD. "Hausteuerung seit 14 Minuten nicht
+//         erreichbar", dazu der Satz, was die Waermepumpe gerade tut. Der
+//         zweite Satz ist der wichtigere: Er beantwortet die Frage, die der
+//         erste aufwirft. Auf der NOTBETRIEBSSEITE steht auch im Normalfall
+//         eine Zeile ("Hausteuerung: verbunden", grau und klein) - dort steht
+//         die Entscheidung an, ob der Knopf gedrueckt werden muss, und ein
+//         ruhiges "verbunden" verhindert die haeufigere Fehlentscheidung. Auf
+//         der STARTSEITE steht nur der Stoerfall; sie ist ein
+//         Nachschauwerkzeug, keine Statusampel.
+//
+//         KARENZ VON 5 MINUTEN. Unterhalb davon wird nichts gemeldet. Der
+//         Grund ist nicht der WLAN-Wackler allein: Ein Neustart des
+//         ioBroker-Adapters oder des Containers auf der Synology dauert
+//         regelmaessig ein bis zwei Minuten. Eine Stoermeldung, die von
+//         selbst wieder verschwindet, erzieht die Familie dazu, sie zu
+//         uebersehen - und dann wird auch die echte uebersehen. Der
+//         Reconnect-Backoff (5 s bis 60 s) liegt vollstaendig darunter.
+//
+//         GEMESSEN WIRD DIE MQTT-VERBINDUNG, nicht das WLAN. Der Ausfall, um
+//         den es geht, ist der des ioBroker - und der MQTT-Broker IST der
+//         ioBroker-Adapter. Ohne WLAN waere auch die Weboberflaeche weg, die
+//         diese Auskunft anzeigen soll. Der Fall "Broker laeuft, aber die
+//         Kaskadenregelung rechnet nicht mehr" ist damit NICHT abgedeckt; er
+//         ist als eigener Schritt vorgesehen (Herzschlag ueber den 5-min-
+//         Re-Assert) und im Vorhaben festgehalten.
+//
+//         DER SONDERFALL "NIE VERBUNDEN". Hatte die Firmware seit dem
+//         Einschalten nie eine Verbindung, ist die wahre Ausfalldauer
+//         unbekannt - der Broker kann seit Tagen weg sein, das Geraet ist nur
+//         gerade neu gestartet. Die Seite schreibt dann "seit dem Neustart
+//         dieses Geraets" statt einer Minutenzahl, die gelogen waere.
+//
+//         DER KNOPF IST BLAU. Rot hiess auf der Notbetriebsseite zweierlei -
+//         der Knopf im Sinne von "druck mich", das Ergebnisfeld ROT im Sinne
+//         von "hat nicht geklappt". Am 2026-08-21 hat das prompt zu einer
+//         Verwechslung gefuehrt. Fuer eine Seite, deren ganze Rueckmeldung
+//         aus einer Ampel besteht, darf Rot nur eines bedeuten. Auffaellig
+//         bleibt der Knopf ueber Groesse und Polsterung.
+//
+//         DIE SEITE SPRICHT DEUTSCH. webHeader traegt jetzt ein charset, und
+//         die Texte der Notbetriebsseite haben Umlaute. Diese eine Seite
+//         liest im Ernstfall jemand aus der Familie, nicht der Entwickler.
+//         Die uebrigen Seiten (Home, Settings, Firmware) bleiben unberuehrt.
+//
+//         STATUSROUTE ERWEITERT. /notbetrieb/status liefert zwei Felder mehr:
+//         Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext. Die
+//         Textform der Dauer kommt fertig von dort - gerechnet wird sie in
+//         verbindung.h, also an einer Stelle und vom Hosttest abgedeckt. Die
+//         Startseite fragt dieselbe Route im 30-s-Takt der Tabelle ab; eine
+//         zweite Route fuer zwei Felder waere auf einem ESP8266 der teurere
+//         Weg.
+//
+//         GROESSE. ESP32-S3 RAM +16 B, Flash +2284 B; ESP8266 RAM +512 B
+//         (59,5 % -> 60,1 %), Flash +2304 B (je gegen 3.12.0, Stufe 1).
+//
+//         REGELN HOSTTESTBAR. src/verbindung.h ist arduino-frei wie
+//         sendwindow.h, telegram.h und notbetrieb.h;
+//         test/verbindung_test.cpp bindet es direkt ein und steht bei 62
+//         Zusicherungen. Die Gegenprobe ist gefahren: Karenz auf 1 min
+//         verstellt = 6 Abweichungen; die Dauer bei jeder Abfrage gerechnet
+//         statt fortgeschrieben = 6 Abweichungen, und der Text lautet dort
+//         nach 49,7 Tagen Ausfall "1 Minute" - also genau die Falschauskunft
+//         am millis()-Ueberlauf, die der Deckel bei 30 Tagen verhindert.
+//         NICHT abgedeckt vom Hosttest: die Anbindung in HeishaMon.cpp
+//         (mqtt_client.connected() als Eingang) und die Anzeige selbst. Beide
+//         gehoeren in den Abnahmetest.
+//
 // 3.12.0 - Der Notbetrieb ist ueber die Weboberflaeche schaltbar. Ein Knopf auf
 //         /notbetrieb stellt die Waermepumpe auf ihre eigene Heizkurve (Stufe 1)
 //         bzw. auf reinen Warmwasserbetrieb (Stufe 2) und schaltet sie ein -
@@ -893,4 +979,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.12.0";
+static const char* heishamon_version = "3.13.0";

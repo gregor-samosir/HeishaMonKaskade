@@ -374,6 +374,57 @@ Abweichungen durch. **Was er nicht abdeckt**, sind die Zustandsuebergaenge in
 `HeishaMon.cpp` selbst (Ticker, Serial, Flags) - die sind ohne die halbe
 Arduino-Welt nicht uebersetzbar und bleiben Sache des Abnahmetests.
 
+## Verbindungswacht (verbindung_test.cpp, 3.13.0)
+
+Dasselbe Muster: Die Regeln stehen in `src/verbindung.h`, Firmware und Hosttest
+binden dieselbe Datei ein. Geprueft wird, seit wann die Verbindung zur
+Hausteuerung weg ist und wie die Weboberflaeche das formuliert.
+
+Der Anlass steht im Vorhaben: Waehrend eines Broker-Ausfalls am 2026-08-21 heizte
+die Waermepumpe mit dem zuletzt gesetzten Sollwert einfach weiter, und die
+Oberflaeche zeigte davon nichts. Vier Dinge muessen stimmen, damit die Anzeige
+nicht schlimmer ist als keine - und alle vier sind am Geraet schlecht bis gar
+nicht nachweisbar:
+
+* **Die Karenz von 5 Minuten**, auf die Sekunde. Geprueft wird die Grenze
+  selbst: eine Sekunde davor darf nichts stehen, auf der Grenze muss die
+  Meldung da sein. Ein Test, der nur "nach 10 Minuten steht es da" prueft,
+  wuerde eine um Faktor zwei falsche Karenz nicht bemerken.
+* **Der Sonderfall "seit dem Neustart nie verbunden"** muss sich vom normalen
+  Ausfall unterscheiden lassen. Dort ist die wahre Dauer unbekannt: Der Broker
+  kann seit Tagen weg sein, das Geraet ist nur gerade neu gestartet.
+* **Der `millis()`-Ueberlauf nach 49,7 Tagen.** Der Test trifft dabei bewusst
+  einen boesartigen Zeitpunkt - eine Ausfalldauer knapp ueber der Naht, an der
+  die naive Differenz UNTER der Karenz liegt. Nur so ist belegt, dass die
+  Stoermeldung dort nicht verschwindet, statt dass der Fall bloss zufaellig
+  nicht auftrat.
+* **Die Textform** ("14 Minuten", "1 Stunde", "2 Tagen", "mehr als 30 Tagen")
+  samt der Schwellen: Bis 89 Minuten wird in Minuten gezaehlt, bis 47 Stunden
+  in Stunden - "seit 90 Minuten" ist die genauere Auskunft als "seit 1 Stunde".
+
+62 Zusicherungen. **Gegenprobe gemacht**, zweimal:
+
+* Karenz auf 1 Minute verstellt -> 6 Abweichungen.
+* Die Dauer bei jeder Abfrage aus `(now - getrennt_seit)` gerechnet statt
+  fortgeschrieben -> 6 Abweichungen, und der Text lautet dort nach 49,7 Tagen
+  Ausfall **"1 Minute"**. Genau diese Falschauskunft verhindert der Deckel bei
+  30 Tagen: Sie waere schlimmer als gar keine Angabe, weil sie ausgerechnet
+  nach einem sehr langen Ausfall "alles in Ordnung" behauptet.
+
+Beim ersten Lauf standen 11 Abweichungen - und vier davon lagen an **den
+Zusicherungen**, nicht am Header: Der Verlustmoment kostet einen
+Nachfuehrschritt (bei 1-s-Schritten also genau eine Sekunde), "1 Tag" kann mit
+den Schwellen gar nicht entstehen, und 30 Tage liegen NICHT unter der halben
+`millis()`-Breite von 24,85 Tagen. Das muessen sie auch nicht - die
+unsigned-Differenz ist bis zur vollen Naht bei 49,7 Tagen eindeutig, und
+zwischen Deckel und Naht bleiben 19 Tage, in denen loop() die Ueberschreitung
+bemerkt. Das ist der eigentliche Wert des Musters: Es zwingt dazu, die Zusage
+auszurechnen statt sie zu schaetzen.
+
+**Was der Test nicht abdeckt:** die Anbindung in `HeishaMon.cpp`
+(`mqtt_client.connected()` als Eingang der Wacht) und die Anzeige selbst. Beides
+gehoert in den Abnahmetest - siehe unten, "Verbindungsanzeige am Pruefstand".
+
 ## Kurven-Set-Kommandos (SET27-SET34)
 
 `kurven_test.py` weist die acht Kurvenbefehle am laufenden Geraet nach, ohne
@@ -851,7 +902,7 @@ FEHLERpfad, den man an der echten Anlage nicht provozieren will.
 ```
 curl -u admin:heisha http://192.168.2.197/notbetrieb            # Seite
 curl -u admin:heisha -X POST http://192.168.2.197/notbetrieb/start
-curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend
+curl http://192.168.2.197/notbetrieb/status                     # Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext
 ```
 
 **Ablauf, wie er sein soll:**

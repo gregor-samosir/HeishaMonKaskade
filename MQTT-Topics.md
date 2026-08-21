@@ -677,6 +677,33 @@ and the MQTT credentials.
 number, is polled every two seconds, and authenticating that on an ESP8266
 would be noticeable.
 
+### `/notbetrieb/status` also carries the connection state (new in 3.13.0)
+
+The route grew two fields. Full format:
+
+```
+Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext
+```
+
+`Lage` is the state of the connection to the house control: **0** connected,
+**1** disconnected but still inside the five-minute grace period, **2**
+disconnected past the grace period, **3** never connected since this device
+booted. `Dauertext` is the outage duration already formatted for display
+("14 Minuten", "mehr als 30 Tagen") and is empty unless `Lage` is 2 — the
+formatting rule lives in `src/verbindung.h` so that firmware, web page and host
+test share one truth.
+
+The **home page** polls this same route, at the 30-second interval of the topic
+table. That the path says "notbetrieb" is deliberate: it is the device's only
+status route, it is reachable without a login, and a second route for two
+fields would be the more expensive option on an ESP8266.
+
+What is measured is the **MQTT connection**, not the WLAN. The outage this is
+about is the ioBroker going down — and the MQTT broker *is* the ioBroker
+adapter. Without WLAN the web interface itself would be gone. The case "broker
+alive, cascade control no longer computing" is therefore **not** covered; that
+needs a heartbeat on the five-minute re-assert and is not built yet.
+
 ### The heating button is locked unless TOP101 reads 0 (new in 3.12.0)
 
 Having the values is not enough. On stage 1 the button is only released while
