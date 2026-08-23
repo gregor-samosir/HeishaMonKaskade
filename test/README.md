@@ -630,16 +630,16 @@ Nur laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt.
 
 Messung 2026-08-10 an WP1 (Panasonic WH-MDC05H3E5, 5 kW Monoblock):
 
-| Parameter | gemessener Bereich | Anmerkung |
-| --- | --- | --- |
-| Z1HeatCurveTargetHighTemp | 20 .. 55 | = Vorlauf-Sollwert, s. Abschnitt unten |
-| Z1HeatCurveTargetLowTemp | 20 .. 55 | haltbar |
-| Z1HeatCurveOutsideLowTemp | -15 .. 15 | haltbar |
-| Z1HeatCurveOutsideHighTemp | **-15 .. 15** | frueher 15..35 angenommen - falsche Seite |
-| Z1CoolCurveTargetHighTemp | 5 .. 20 | = Vorlauf-Sollwert, s. Abschnitt unten |
-| Z1CoolCurveTargetLowTemp | 5 .. 20 | haltbar |
-| Z1CoolCurveOutsideLowTemp | 20 .. 30 | haltbar |
-| Z1CoolCurveOutsideHighTemp | **15 .. 30** | frueher 20..30 bzw. 30..40 angenommen |
+| Parameter | Etikett | gemessener Bereich | Anmerkung |
+| --- | --- | --- | --- |
+| Z1HeatCurveTargetHighTemp | VL kalt | 20 .. 55 | = Vorlauf-Sollwert, s. Abschnitt unten |
+| Z1HeatCurveTargetLowTemp | VL warm | 20 .. 55 | haltbar |
+| Z1HeatCurveOutsideLowTemp | AT kalt | -15 .. 15 | haltbar |
+| Z1HeatCurveOutsideHighTemp | AT warm | **-15 .. 15** | frueher 15..35 angenommen - falsche Seite |
+| Z1CoolCurveTargetHighTemp | VL kuehl | 5 .. 20 | = Vorlauf-Sollwert, s. Abschnitt unten |
+| Z1CoolCurveTargetLowTemp | VL heiss | 5 .. 20 | haltbar |
+| Z1CoolCurveOutsideLowTemp | AT kuehl | 20 .. 30 | haltbar |
+| Z1CoolCurveOutsideHighTemp | AT heiss | **15 .. 30** | frueher 20..30 bzw. 30..40 angenommen |
 
 Die beiden fett markierten Bereiche wurden mit einer Firmware ausgemessen,
 deren Grenzen zum Test geweitet waren:
@@ -881,10 +881,12 @@ ein Eingriff.
 Bei 28 C draussen, Kurve 34/26 und Aussenpunkten -10/+15 meldete
 `Main_Target_Temp` (TOP7) **26** - also TargetLow. Damit ist die Paarung:
 
-| Wert | gehoert zu | gilt bei |
-| --- | --- | --- |
-| `Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter |
-| `Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter |
+| Wert | gehoert zu | gilt bei | im ioBroker-Baum | Etikett |
+| --- | --- | --- | --- | --- |
+| `Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter | `KK_HK_vlLo` | **VL kalt** |
+| `Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter | `KK_HK_vlHi` | **VL warm** |
+| `Z1HeatCurveOutsideLowTemp` (SET29, TOP32) | `TargetHigh` (SET27, TOP29) | **kaltem** Wetter | `KK_HK_atLo` | **AT kalt** |
+| `Z1HeatCurveOutsideHighTemp` (SET30, TOP31) | `TargetLow` (SET28, TOP30) | **warmem** Wetter | `KK_HK_atHi` | **AT warm** |
 
 Die Werkskurve bestaetigt es: 55 C bei -5 C, 35 C bei +15 C. Eine Heizkurve
 faellt mit steigender Aussentemperatur.
@@ -894,6 +896,11 @@ Gespiegelt wird dadurch `KK_HK_vlLo` (Vorlauf bei niedriger Aussentemperatur)
 in das Feld fuer warmes Wetter. Ohne Wirkung, solange die Anlage im
 Direktbetrieb laeuft - aber der Notbetrieb aktiviert genau diese Kurve. Die
 Korrektur ist im Vorhaben Notbetrieb, Abschnitt 6a, als Vorbedingung notiert.
+
+*Nachtrag 2026-08-23: beide Stellen sind seit dem 2026-08-20 korrigiert. Damit
+die Kreuzung nicht wieder untergeht, fuehren Werkzeugausgaben und Tabellen seit
+diesem Tag ein Etikett mit (VL kalt / VL warm / AT kalt / AT warm), das keiner
+der beiden Namenskonventionen folgt.*
 
 ## Der Notbetriebszweig wird wiedereingespielt (2026-08-20, Broker)
 

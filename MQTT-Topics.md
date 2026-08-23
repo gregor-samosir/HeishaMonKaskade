@@ -67,10 +67,10 @@ TOP25 | DHW_Holiday_Shift_Temp | DHW Holiday shift temperature  (-15 to +15)
 TOP26 | Defrosting_State | Defrost state (0=off, 1=on)
 TOP27 | Z1_Heat_Request_Temp | Zone 1 Heat Requested shift temp (-5 to 5) or direct heat temp (20 to max)
 TOP28 | Z1_Cool_Request_Temp | Zone 1 Cool Requested shift temp (-5 to 5) or direct cool temp (5 to 20)
-TOP29 | Z1_Heat_Curve_Target_High_Temp | Flow target at the **lower** outside temperature of the heating curve, paired with Outside_Low (°C)
-TOP30 | Z1_Heat_Curve_Target_Low_Temp | Flow target at the **upper** outside temperature of the heating curve, paired with Outside_High (°C)
-TOP31 | Z1_Heat_Curve_Outside_High_Temp | Upper outside temperature of the heating curve, paired with Target_**Low** (°C)
-TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Lower outside temperature of the heating curve, paired with Target_**High** (°C)
+TOP29 | Z1_Heat_Curve_Target_High_Temp | Heating curve, flow target **when it is cold** (°C) - paired with Outside_Low, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP30 | Z1_Heat_Curve_Target_Low_Temp | Heating curve, flow target **when it is warm** (°C) - paired with Outside_High, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP31 | Z1_Heat_Curve_Outside_High_Temp | Heating curve, **warm** end of the outside axis (°C) - paired with Target_Low, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP32 | Z1_Heat_Curve_Outside_Low_Temp | Heating curve, **cold** end of the outside axis (°C) - paired with Target_High, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
 TOP33 | Room_Thermostat_Temp | Remote control thermostat temp (°C)
 TOP36 | Z1_Water_Temp | Zone 1 Water outlet temperature (°C)
 TOP38 | Cool_Energy_Production | Thermal cooling power production (Watt)
@@ -105,10 +105,10 @@ TOP68 | Force_Heater_State | Force heater status (0=inactive, 1=active)
 TOP69 | sdC/Sterilization_State | Sterilisation State (0=inactive, 1=active)
 TOP70 | sdC/Sterilization_Temp | Sterilisation Temperature (°C)
 TOP71 | sdC/Sterilization_Max_Time | Sterilisation maximum time (minutes)
-TOP72 | Z1_Cool_Curve_Target_High_Temp | Flow target at the **lower** outside temperature of the cooling curve, paired with Outside_Low (°C)
-TOP73 | Z1_Cool_Curve_Target_Low_Temp | Flow target at the **upper** outside temperature of the cooling curve, paired with Outside_High (°C)
-TOP74 | Z1_Cool_Curve_Outside_High_Temp | Upper outside temperature of the cooling curve, paired with Target_**Low** (°C)
-TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Lower outside temperature of the cooling curve, paired with Target_**High** (°C)
+TOP72 | Z1_Cool_Curve_Target_High_Temp | Cooling curve, flow target **when it is cool** (°C) - paired with Outside_Low, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP73 | Z1_Cool_Curve_Target_Low_Temp | Cooling curve, flow target **when it is hot** (°C) - paired with Outside_High, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP74 | Z1_Cool_Curve_Outside_High_Temp | Cooling curve, **hot** end of the outside axis (°C) - paired with Target_Low, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
+TOP75 | Z1_Cool_Curve_Outside_Low_Temp | Cooling curve, **cool** end of the outside axis (°C) - paired with Target_High, see [curve naming](#zone-1-heating-and-cooling-curve-set27---set34)
 TOP76 | Heating_Mode | Compensation / Direct mode for heat (0 = compensation curve, 1 = direct)
 TOP77 | Heating_Off_Outdoor_Temp | Above this outdoor temperature all heating is turned off(5 to 35 °C)
 TOP78 | Heater_On_Outdoor_Temp | Below this temperature the backup heater is allowed to be used by heatpump heating logic(-15 to 20 °C)
@@ -388,14 +388,14 @@ SET23 | SGReadyCapacity1DHW | 71 | SG Ready capacity 1, DHW (%) | 0 - 254
 SET24 | SGReadyCapacity2Heat | 74 | SG Ready capacity 2, heating (%) | 0 - 254
 SET25 | SGReadyCapacity2DHW | 73 | SG Ready capacity 2, DHW (%) | 0 - 254
 SET26 | DHWRoomMaxTime | 97 | DHW/room max time (steps of 30 min) | 0 - 254
-SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target at the **lower** outside temperature | 20 - 55
-SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target at the **upper** outside temperature | 20 - 55
-SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: lower outside temperature | -15 to 15
-SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: upper outside temperature | -15 to 15
-SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target at the **lower** outside temperature | 5 - 20
-SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target at the **upper** outside temperature | 5 - 20
-SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: lower outside temperature | 20 - 30
-SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: upper outside temperature | 15 - 30
+SET27 | Z1HeatCurveTargetHighTemp | 75 | Heating curve: flow target **when it is cold** (pairs with OutsideLow) | 20 - 55
+SET28 | Z1HeatCurveTargetLowTemp | 76 | Heating curve: flow target **when it is warm** (pairs with OutsideHigh) | 20 - 55
+SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: **cold** end of the outside axis (pairs with TargetHigh) | -15 to 15
+SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: **warm** end of the outside axis (pairs with TargetLow) | -15 to 15
+SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target **when it is cool** (pairs with OutsideLow) | 5 - 20
+SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target **when it is hot** (pairs with OutsideHigh) | 5 - 20
+SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: **cool** end of the outside axis (pairs with TargetHigh) | 20 - 30
+SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: **hot** end of the outside axis (pairs with TargetLow) | 15 - 30
 SET35 | HeatingMode | 28 | Heating operation mode | 0=compensation curve, 1=direct
 SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=direct
 
@@ -443,10 +443,22 @@ SET34 Z1CoolCurveOutsideHighTemp | TOP74 Z1_Cool_Curve_Outside_High_Temp
 names outside temperatures, the `Target_*` pair names flow temperatures, and
 they cross over: **`Target_High` is the flow temperature at `Outside_Low`.**
 
-Value | pairs with | applies when
-:--- | :--- | :---
-`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | it is **cold**
-`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | it is **warm**
+Value | pairs with | applies when | in the ioBroker tree | label
+:--- | :--- | :--- | :--- | :---
+`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | it is **cold** | `KK_HK_vlLo` | **VL kalt**
+`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | it is **warm** | `KK_HK_vlHi` | **VL warm**
+`Z1HeatCurveOutsideLowTemp` (SET29, TOP32) | `TargetHigh` (SET27, TOP29) | it is **cold** | `KK_HK_atLo` | **AT kalt**
+`Z1HeatCurveOutsideHighTemp` (SET30, TOP31) | `TargetLow` (SET28, TOP30) | it is **warm** | `KK_HK_atHi` | **AT warm**
+
+The ioBroker tree uses a convention of its own: there, `Hi`/`Lo` always refers to
+the outside temperature, for all four values - so `vlHi` is the flow at the
+*high* outside temperature and lands in `TargetLow`. The two conventions cross
+over, which is why the four labels in the last column exist. They are kept in
+German because that is how they read in the ioBroker tree and in the Node-RED
+flow (`VL` = Vorlauf, flow; `AT` = Aussentemperatur, outside). They are the
+project-wide vocabulary: every tool output, table and comment that puts a
+Panasonic name next to a number or an ioBroker name carries the matching label,
+and the words `lower`/`upper` are never used to describe a `Target_*` field.
 
 A plant running the heating curve 34 &deg;C at -10 &deg;C outside and 26 &deg;C
 at +15 &deg;C therefore has to be configured as:
@@ -543,10 +555,21 @@ Das `Outside_*`-Paar benennt Außentemperaturen, das `Target_*`-Paar
 Vorlauftemperaturen, und sie sind über Kreuz zugeordnet: **`Target_High` ist
 der Vorlauf bei `Outside_Low`.**
 
-Wert | gehört zu | gilt bei
-:--- | :--- | :---
-`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter
-`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter
+Wert | gehört zu | gilt bei | im ioBroker-Baum | Etikett
+:--- | :--- | :--- | :--- | :---
+`Z1HeatCurveTargetHighTemp` (SET27, TOP29) | `OutsideLow` (SET29, TOP32) | **kaltem** Wetter | `KK_HK_vlLo` | **VL kalt**
+`Z1HeatCurveTargetLowTemp` (SET28, TOP30) | `OutsideHigh` (SET30, TOP31) | **warmem** Wetter | `KK_HK_vlHi` | **VL warm**
+`Z1HeatCurveOutsideLowTemp` (SET29, TOP32) | `TargetHigh` (SET27, TOP29) | **kaltem** Wetter | `KK_HK_atLo` | **AT kalt**
+`Z1HeatCurveOutsideHighTemp` (SET30, TOP31) | `TargetLow` (SET28, TOP30) | **warmem** Wetter | `KK_HK_atHi` | **AT warm**
+
+Der ioBroker-Baum benutzt eine eigene Konvention: Dort bezieht sich `Hi`/`Lo`
+bei allen vier Werten immer auf die Außentemperatur – `vlHi` ist also der
+Vorlauf bei *hoher* Außentemperatur und gehört nach `TargetLow`. Weil die
+beiden Konventionen über Kreuz liegen, gibt es die vier Etiketten der letzten
+Spalte. Sie sind das projektweite Vokabular: Jede Werkzeugausgabe, jede Tabelle
+und jeder Kommentar, der einen Panasonic-Namen neben eine Zahl oder einen
+ioBroker-Namen stellt, führt das passende Etikett mit – und die Wörter
+`lower`/`upper` bzw. „untere/obere" beschreiben nie ein `Target_*`-Feld.
 
 Eine Anlage, die die Heizkurve mit 34 °C bei −10 °C außen und 26 °C bei +15 °C
 fährt, muss demnach so konfiguriert sein:
@@ -635,21 +658,22 @@ down, the firmware loses both the sender of a command and the transport itself
 — so it has to know the heating curve *beforehand*. Background and the full
 reasoning: `Vorhaben-Notbetrieb-Weboberflaeche.md`.
 
-Stage | Topic | Source in ioBroker | Range
-:--- | :--- | :--- | :---
-1 (heat) | `notbetrieb/Z1HeatCurveTargetHighTemp` | `KK_Heizkurve.KK_HK_vlLo` | 20 - 55
-1 (heat) | `notbetrieb/Z1HeatCurveTargetLowTemp` | `KK_Heizkurve.KK_HK_vlHi` | 20 - 55
-1 (heat) | `notbetrieb/Z1HeatCurveOutsideLowTemp` | `KK_Heizkurve.KK_HK_atLo` | -15 - 15
-1 (heat) | `notbetrieb/Z1HeatCurveOutsideHighTemp` | `KK_Heizkurve.KK_HK_atHi` | -15 - 15
-2 (DHW) | `notbetrieb/DHWTemp` | `KK_Warmwasser.DHW_Target_Temp` | 40 - 75
+Stage | Topic | Label | Source in ioBroker | Range
+:--- | :--- | :--- | :--- | :---
+1 (heat) | `notbetrieb/Z1HeatCurveTargetHighTemp` | **VL kalt** | `KK_Heizkurve.KK_HK_vlLo` | 20 - 55
+1 (heat) | `notbetrieb/Z1HeatCurveTargetLowTemp` | **VL warm** | `KK_Heizkurve.KK_HK_vlHi` | 20 - 55
+1 (heat) | `notbetrieb/Z1HeatCurveOutsideLowTemp` | **AT kalt** | `KK_Heizkurve.KK_HK_atLo` | -15 - 15
+1 (heat) | `notbetrieb/Z1HeatCurveOutsideHighTemp` | **AT warm** | `KK_Heizkurve.KK_HK_atHi` | -15 - 15
+2 (DHW) | `notbetrieb/DHWTemp` | Warmwasser | `KK_Warmwasser.DHW_Target_Temp` | 40 - 75
 
 The names are identical to the matching set commands on purpose: the ranges are
 looked up in `setCommands[]` (`set_command_range()`), so there is exactly one
 place where they are defined. **Values outside the range are discarded, not
 clamped** — a silently corrected curve point would go unnoticed in an emergency.
 
-Note the crossover in the source column: `vlLo` (flow at the *low* outside
-temperature) feeds `TargetHigh`. See the curve section above.
+Note the crossover in the source column: `vlLo` - the flow **when it is cold** -
+feeds `TargetHigh`. The label column is what the two sides have in common; see
+the curve section above.
 
 Each stage only subscribes to the topics of its own role, chosen by a build
 flag (`NOTBETRIEB_ROLLE_WASSER`, otherwise heating). Stage 2 does not listen for

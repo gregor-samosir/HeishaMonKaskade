@@ -33,14 +33,17 @@ from mqtt_pub import build_connect, build_publish  # noqa: E402
 
 # Set-Topic -> (state-Topic zum Rueckvergleich, Byte im Telegramm)
 KURVE = [
-    ("Z1HeatCurveTargetHighTemp",  "Z1_Heat_Curve_Target_High_Temp",  75),
-    ("Z1HeatCurveTargetLowTemp",   "Z1_Heat_Curve_Target_Low_Temp",   76),
-    ("Z1HeatCurveOutsideLowTemp",  "Z1_Heat_Curve_Outside_Low_Temp",  77),
-    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", 78),
-    ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  86),
-    ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   87),
-    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  88),
-    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 89),
+    # High/Low bezieht sich bei Target_* auf die VORLAUF-, bei Outside_* auf die
+    # AUSSENtemperatur - die beiden Paare liegen ueber Kreuz. Die Etiketten
+    # sagen, bei welchem Wetter der Wert gilt (s. MQTT-Topics.md).
+    ("Z1HeatCurveTargetHighTemp",  "Z1_Heat_Curve_Target_High_Temp",  75),  # VL kalt
+    ("Z1HeatCurveTargetLowTemp",   "Z1_Heat_Curve_Target_Low_Temp",   76),  # VL warm
+    ("Z1HeatCurveOutsideLowTemp",  "Z1_Heat_Curve_Outside_Low_Temp",  77),  # AT kalt
+    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", 78),  # AT warm
+    ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  86),  # VL kuehl
+    ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   87),  # VL heiss
+    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  88),  # AT kuehl
+    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 89),  # AT heiss
 ]
 
 

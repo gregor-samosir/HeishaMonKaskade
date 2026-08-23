@@ -47,12 +47,18 @@ die Firmware dieselbe Bereichsprüfung anwenden kann.
 
 **Stufe 1 — `panasonic_heat_pump` (192.168.2.120), Rolle Heizen:**
 
-| Topic | Quelle (ioBroker) | Wert heute | Bereich |
-| --- | --- | ---: | --- |
-| `panasonic_heat_pump/notbetrieb/Z1HeatCurveTargetHighTemp` | `0_userdata.0.kaskade.Konfiguration.KK_Heizkurve.KK_HK_vlLo` | 34 | 20..55 |
-| `panasonic_heat_pump/notbetrieb/Z1HeatCurveTargetLowTemp` | `…KK_Heizkurve.KK_HK_vlHi` | 26 | 20..55 |
-| `panasonic_heat_pump/notbetrieb/Z1HeatCurveOutsideLowTemp` | `…KK_Heizkurve.KK_HK_atLo` | −10 | −15..15 |
-| `panasonic_heat_pump/notbetrieb/Z1HeatCurveOutsideHighTemp` | `…KK_Heizkurve.KK_HK_atHi` | 15 | −15..15 |
+| Topic | Etikett | Quelle (ioBroker) | Wert heute | Bereich |
+| --- | --- | --- | ---: | --- |
+| `panasonic_heat_pump/notbetrieb/Z1HeatCurveTargetHighTemp` | **VL kalt** | `0_userdata.0.kaskade.Konfiguration.KK_Heizkurve.KK_HK_vlLo` | 34 | 20..55 |
+| `panasonic_heat_pump/notbetrieb/Z1HeatCurveTargetLowTemp` | **VL warm** | `…KK_Heizkurve.KK_HK_vlHi` | 26 | 20..55 |
+| `panasonic_heat_pump/notbetrieb/Z1HeatCurveOutsideLowTemp` | **AT kalt** | `…KK_Heizkurve.KK_HK_atLo` | −10 | −15..15 |
+| `panasonic_heat_pump/notbetrieb/Z1HeatCurveOutsideHighTemp` | **AT warm** | `…KK_Heizkurve.KK_HK_atHi` | 15 | −15..15 |
+
+Die Etikettspalte ist die Brücke zwischen den beiden Namenskonventionen: Im
+ioBroker-Baum meint `Hi`/`Lo` immer die Außentemperatur, bei Panasonic nur in
+den `Outside_*`-Feldern – die `Target_*`-Felder benennen die Vorlaufhöhe. Beide
+Paare liegen deshalb über Kreuz (`vlLo` → `TargetHigh`). Einzelheiten und der
+Messnachweis in `MQTT-Topics.md`, Abschnitt „Zone 1 Heiz- und Kühlkurve".
 
 **Stufe 2 — `panasonic_heat_pump2` (192.168.2.122), Rolle Warmwasser:**
 

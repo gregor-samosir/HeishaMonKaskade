@@ -103,6 +103,8 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 26, 111, "Defrosting_State",                 getBit5and6,          nullptr,                   DisabledEnabled},
     { 27,  38, "Z1_Heat_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
     { 28,  39, "Z1_Cool_Request_Temp",             getIntMinus128,       nullptr,                   Celsius},
+    // Target_High is the flow when it is COLD ("VL kalt"), Target_Low the flow
+    // when it is WARM ("VL warm") - the two pairs cross over, see MQTT-Topics.md.
     { 29,  75, "Z1_Heat_Curve_Target_High_Temp",   getIntMinus128,       nullptr,                   Celsius},
     { 30,  76, "Z1_Heat_Curve_Target_Low_Temp",    getIntMinus128,       nullptr,                   Celsius},
     { 31,  78, "Z1_Heat_Curve_Outside_High_Temp",  getIntMinus128,       nullptr,                   Celsius},

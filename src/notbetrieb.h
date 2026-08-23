@@ -137,10 +137,10 @@ struct NotbetriebSchritt
 /* denselben Zahlen waeren zwei Tabellen, die auseinanderlaufen koennen.     */
 /*****************************************************************************/
 static const char *const NOTBETRIEB_WERTE_HEIZEN[] = {
-    "Z1HeatCurveTargetHighTemp", // Vorlauf bei KAELTE - gehoert zu OutsideLow
-    "Z1HeatCurveTargetLowTemp",  // Vorlauf bei WAERME - gehoert zu OutsideHigh
-    "Z1HeatCurveOutsideLowTemp",
-    "Z1HeatCurveOutsideHighTemp"};
+    "Z1HeatCurveTargetHighTemp", // "VL kalt" - Vorlauf bei KAELTE, zu OutsideLow
+    "Z1HeatCurveTargetLowTemp",  // "VL warm" - Vorlauf bei WAERME, zu OutsideHigh
+    "Z1HeatCurveOutsideLowTemp", // "AT kalt"
+    "Z1HeatCurveOutsideHighTemp"}; // "AT warm"
 
 static const char *const NOTBETRIEB_WERTE_WASSER[] = {
     "DHWTemp"};
@@ -178,10 +178,10 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {"OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only, zuerst
     {"HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
-    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve
-    {"Z1HeatCurveTargetLowTemp", 30, 1, 0},
-    {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},
-    {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},
+    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve: "VL kalt"
+    {"Z1HeatCurveTargetLowTemp", 30, 1, 0},          // "VL warm"
+    {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
+    {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
     {"Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
 
 /*****************************************************************************/
