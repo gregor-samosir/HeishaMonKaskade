@@ -8,9 +8,9 @@ dabei ein neuer Fallstrick?
 
 **Endergebnis (2026-08-23): keines der beiden Relais wird gebraucht.** Der
 Kompressorkontakt ist in dieser Kaskade funktionslos — die Abschaltung läuft
-über `set/Heatpump`; der Heat/Cool-Kontakt bleibt nötig, wird im Notbetriebsfall
-aber vom KNX-Taster bedient, weil bei einem ioBroker-Ausfall der KNX-Bus
-weiterläuft. **Abschnitt 12 führt das aus und ersetzt die Empfehlung in 8.4.**
+über `set/Heatpump`. Der Heat/Cool-Kontakt bleibt nötig und bleibt am KNX: Der
+Notbetrieb ist bewusst auf den Winter beschränkt, im Kühlbetrieb soll er nicht
+schalten. **Abschnitt 12 führt das aus und ersetzt die Empfehlung in 8.4.**
 
 **Ursprüngliche Kurzantwort:** Die Idee trägt, aber nicht als *ein* Vorhaben.
 Die beiden Relais sind zwei völlig verschiedene Fälle mit gegenläufigem
@@ -132,6 +132,11 @@ bereits.
 ---
 
 ## 4. Fall B — Relais 2 auf den Heat/Cool-Schalter
+
+> **Überholt durch 12.2** (Owner-Entscheidung 2026-08-23): Der Notbetrieb ist
+> bewusst auf den Winter beschränkt. Die Sperre im Kühlbetrieb ist damit kein
+> zu öffnender Pfad, sondern die gewollte Auslegung — der unten beschriebene
+> „Gewinn" ist keiner.
 
 **Hier liegt der größere Gewinn, und er steht nicht in der Ausgangsfrage.**
 Der Notbetriebsknopf der Rolle Heizen ist heute gesperrt, sobald TOP101 nicht
@@ -802,35 +807,50 @@ nicht zufällig — beide Größen kommen aus derselben Tabelle. Ein Blick auf
 dieselbe Auswertung im Winter kostet fünf Minuten und wäre die saubere
 Gegenprobe, bevor der Draht dauerhaft verschwindet.
 
-### 12.2 Und Relais 2? Der KNX-Taster erledigt es auch
+### 12.2 Und Relais 2? Es löst ein Problem, das keines ist
 
 Der Heat/Cool-Kontakt ist **nicht** redundant — anders als beim Kompressor ist
 seine Wirkung gemessen: Am 2026-08-20 verwarf die Wärmepumpe `SET9 = Heat`,
-solange der Kontakt auf Kühlen stand. Er bestimmt, welche Betriebsart überhaupt
-angenommen wird, und genau daraus entsteht die Sperre des Notbetriebsknopfes
-im Kühlbetrieb.
+solange der Kontakt auf Kühlen stand. Er bestimmt, welche Betriebsart
+überhaupt angenommen wird, und genau daraus entsteht die Sperre des
+Notbetriebsknopfes im Kühlbetrieb.
 
-**Trotzdem braucht es dafür kein Relais**, und der Grund liegt im Szenario
-selbst: Der Notbetriebsfall ist der Ausfall des ioBroker — **der KNX-Bus lebt
-dabei weiter.** Ein physischer KNX-Taster auf den Heat/Cool-Kanal spricht den
-Aktor direkt an, ohne ioBroker, ohne Node-RED, ohne Bridge. Er leistet damit
-exakt das, was Relais 2 leisten sollte, und braucht dafür weder NVS noch
-Karenzentscheidung noch Re-Assert noch eine Zeile Firmware.
+**Owner-Entscheidung 2026-08-23: Diese Sperre bleibt, und sie ist gewollt.**
+Der Notbetrieb ist für den Winter gebaut. Steht die Anlage auf Kühlen, gibt es
+keinen Notbetrieb der Rolle Heizen — im Sommer ist es auch ohne Notbetrieb und
+ohne Kühlung auszuhalten.
 
-Der Taster ist ohnehin in Arbeit. Was sich ändert, ist nur, worauf er zeigt:
-Nicht mehr auf die Kompressorfreigabe (die verschwindet), sondern auf
-**Heat/Cool**.
+**Damit fällt der ganze Fall B in sich zusammen**, und zwar nicht an der
+Technik, sondern am Ziel. Abschnitt 4 nannte das Freimachen des
+Kühlbetriebs den „größeren Gewinn" von Relais 2. Das war eine Annahme über den
+Zweck des Notbetriebs, und sie war falsch: Ein Knopf, der im Sommer nicht
+schaltet, ist kein verschlossener Pfad, sondern die Auslegung. Damit hat
+Relais 2 keinen Zweck mehr, den es erfüllen könnte.
+
+Ebenfalls verworfen: Was Relais 2 leisten sollte, könnte auch ein physischer
+KNX-Taster auf dem Heat/Cool-Kanal — bei einem ioBroker-Ausfall läuft der
+KNX-Bus weiter, der Taster spräche den Aktor direkt an. Auch dafür gibt es
+keinen Bedarf, aus demselben Grund. Der geplante Taster entfällt ersatzlos,
+statt auf einen anderen Kanal zu wandern.
+
+**Was im Sommer bleibt, ist mehr als nichts:** Der Warmwasserknopf an H2
+schaltet in jeder Stellung, auch im Kühlbetrieb — am 2026-08-20 an der Anlage
+belegt (M3, `OperationMode` = 3) und am 2026-08-21 mit dem GRÜN-Lauf an H2
+bestätigt. Ein Sommerausfall des ioBroker heißt also nicht „kein Notbetrieb",
+sondern „kein Heiz-Notbetrieb". Für die Heizseite bleibt in dieser Lage der
+Handweg am Bedienterminal (`NOTBETRIEB.md` §7b).
 
 ### 12.3 Ergebnis: nichts bauen
 
-**Die Empfehlung aus 8.4 ist damit hinfällig.** Der Weg, der übrig bleibt,
-kommt ohne Lötkolben, ohne Firmware und ohne Node-RED-Umbau aus:
+**Die Empfehlung aus 8.4 ist damit hinfällig.** Übrig bleibt ein einziger
+Schritt, und der kommt ohne Lötkolben, ohne Firmware, ohne Node-RED-Umbau und
+ohne neues Bedienteil aus:
 
 Schritt | Was | Wirkung
 :--- | :--- | :---
-1 | Kompressorkontakt stilllegen | Der Notbetrieb verliert seine letzte Fremdabhängigkeit — die Freigabe, die Entscheidung 4 des Notbetriebsvorhabens fordert, gibt es dann nicht mehr.
-2 | KNX-Taster auf **Heat/Cool** legen statt auf die Freigabe | Der Notbetriebsknopf lässt sich auch im Kühlbetrieb freimachen, ohne ioBroker.
-3 | Heat/Cool-Aktorkanal bleibt, wie er ist | Die Verriegelung in `Modus Parameter Logik V4.2` behält ihre unabhängige Quelle (8.3), TOP101 bleibt Messung statt Selbstbestätigung.
+**1** | **Kompressorkontakt stilllegen** | Der Notbetrieb verliert seine letzte Fremdabhängigkeit — die Freigabe, die Entscheidung 4 des Notbetriebsvorhabens fordert, gibt es dann nicht mehr.
+— | Heat/Cool-Aktorkanal bleibt unverändert | Die Verriegelung in `Modus Parameter Logik V4.2` behält ihre unabhängige Quelle (8.3), TOP101 bleibt Messung statt Selbstbestätigung.
+— | Kein KNX-Taster, keine Relais, keine Firmwareänderung | Siehe 12.2.
 
 Zu Schritt 1 gibt es zwei Wege. **Drahtbrücke** (Kontakt dauerhaft
 geschlossen) ist reversibel und braucht keinen Menüeingriff; **im
