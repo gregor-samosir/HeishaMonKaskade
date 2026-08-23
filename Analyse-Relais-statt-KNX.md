@@ -10,7 +10,7 @@ dabei ein neuer Fallstrick?
 Relais sind zwei völlig verschiedene Fälle mit gegenläufigem Risiko, und der
 Gewinn liegt woanders, als die Ausgangsfrage vermutet.
 
-> **⚠ Abschnitt 10 ist der aktuelle Stand.** Die Handbuchangabe zur
+> **⚠ Die Abschnitte 10 bis 12 sind der aktuelle Stand.** Die Handbuchangabe zur
 > Kontaktlogik des Kompressorschalters ist an dieser Anlage **falsch herum**
 > (Owner-Messung 2026-08-23). Überall, wo unten „offen = Kompressor frei"
 > steht, gilt das Gegenteil. Die Verdrahtungsempfehlung ändert sich dadurch
@@ -564,10 +564,10 @@ Revisionsunterschied, oder eine Menüoption — ist offen und für die
 Entscheidung ohne Belang. Fünf Jahre Betrieb und die Gegenprobe am Aktor
 schlagen jede Handbuchzeile.
 
-**Für den Heat/Cool SW gilt die Umkehrung nicht ohne Weiteres.** Es wäre
-naheliegend und falsch, vom einen auf den anderen Eingang zu schließen. Ein
-Hinweis aus den Livedaten spricht sogar dafür, dass das Handbuch dort recht
-hat — am 2026-08-23 um 14:40 UTC gelesen:
+**Für den Heat/Cool SW gilt die Umkehrung nicht** — nachgeprüft, siehe 10.5.
+Es wäre naheliegend und falsch gewesen, vom einen auf den anderen Eingang zu
+schließen. Der erste Hinweis kam aus den Livedaten, am 2026-08-23 um
+14:40 UTC gelesen:
 
 Datenpunkt | Wert
 :--- | :---
@@ -577,9 +577,7 @@ Datenpunkt | Wert
 
 Ist auch dieser Aktorkanal ein Schließer mit derselben Konvention, war der
 Kontakt offen und die Wärmepumpe meldete Heizen — also **offen = Heizen**, wie
-im Handbuch. **Beweis ist das keiner**, weil die Kanalart nicht geprüft ist.
-Sie ist am Aktor genauso abzulesen wie beim Kompressorkanal; bis dahin bleibt
-die Zeile eine Annahme, und die Verdrahtung von Relais 2 wartet darauf.
+im Handbuch. **Am selben Tag vom Owner am Aktor bestätigt**, siehe 10.5.
 
 ### 10.2 Was sich dadurch ändert
 
@@ -590,7 +588,7 @@ jedes beteiligten Bauteils in Richtung „darf heizen" fällt.
 Relais | Eingang | Gewünschter Ruhezustand | **Klemme** | Spule bestromt, wenn
 :--- | :--- | :--- | :--- | :---
 1 | External comp. SW | Kompressor frei | **COM + NC** | gesperrt
-2 | Heat/Cool SW | Heizen | **COM + NO** (Annahme, siehe 10.1) | Kühlen
+2 | Heat/Cool SW | Heizen | **COM + NO** (bestätigt, siehe 10.5) | Kühlen
 
 Die beiden Relais werden also **unterschiedlich** angeklemmt. Das ist keine
 Unsauberkeit, sondern die Folge davon, dass die Wärmepumpe die beiden Eingänge
@@ -638,6 +636,34 @@ folgt für die Inbetriebnahme eine Regel, die vorher nicht nötig schien:
 darauf gebaut wird** — den Heat/Cool-Kontakt gegen TOP101 (das kostet nichts,
 das Feld meldet den Ist-Zustand binnen Sekunden), den Kompressorkontakt gegen
 `Compressor_Freq` bei laufender Anforderung. Nicht gegen das Handbuch.
+
+**Für beide Eingänge ist dieser Nachweis inzwischen erbracht** — für den
+Kompressor in 10.1, für Heat/Cool in 10.5.
+
+### 10.5 Heat/Cool nachgeprüft: dort stimmt das Handbuch
+
+Owner-Auskunft vom 2026-08-23, nach demselben Verfahren wie beim
+Kompressorkanal: **Auch der Heat/Cool-Aktorkanal ist ein Schließer, und
+gesendet wird True zum Schließen für Kühlung.** Kontakt geschlossen = Kühlen,
+offen = Heizen — **wie im Handbuch**. Die Livedaten oben passen dazu genau:
+Kanal `false`, Kontakt offen, TOP101 = 0 = Heizen.
+
+**Damit ist die Verdrahtung beider Relais festgelegt** (Tabelle in 10.2):
+Relais 1 an COM + NC, Relais 2 an COM + NO.
+
+**Und der Befund aus 10.1 wird belastbarer, statt fragwürdiger.** Beide
+KNX-Kanäle sind gleich aufgebaut — Schließer, True schließt. Der Unterschied
+im Verhalten kann also nicht aus einer übersehenen Invertierung in der
+KNX-Konfiguration stammen; die wäre bei zwei identisch konfigurierten Kanälen
+aufgefallen. Er sitzt an der Wärmepumpe selbst oder in der Handbuchzeile.
+
+Zugleich fällt damit die bequemste Erklärung weg: Es ist **kein systematischer
+Fehler** im Handbuchkapitel, der sich mit „alles umgekehrt lesen" abhaken
+ließe, sondern eine **Einzelabweichung bei genau einem Eingang**. Für die
+Praxis heißt das: Die Beschriftung an der Klemme ist wichtiger, nicht weniger
+wichtig — die beiden Relais werden gegenläufig angeklemmt, und es gibt keine
+Merkregel, die das abkürzt. Sollte ein dritter Kontakteingang dazukommen, ist
+er wieder einzeln nachzuweisen.
 
 ---
 

@@ -202,10 +202,20 @@ has been running correctly for five years; the actuator itself was checked
 again for this note. Whether that is an error in the manual, a model
 difference or a menu option is unknown. Since there is no status byte, nothing
 in the telegram contradicts a wrong assumption here - so verify the contact
-against `Compressor_Freq` under load rather than against the manual. The
-Heat/Cool switch is a *separate* question and must not be inferred from this
-one; on this installation it appears to follow the manual (*open = heat*), but
-that is not yet proven.
+against `Compressor_Freq` under load rather than against the manual.
+
+**The Heat/Cool switch is a separate question, and there the manual is
+right.** Checked the same way on 2026-08-23: that KNX channel is also a
+normally-open contact, driven true to close for cooling - so *open = heat,
+short = cool*, exactly as documented. Live values agree (channel `false`,
+TOP101 = 0 = heat on both units).
+
+Both KNX channels are therefore built identically, which rules out a missed
+inversion on the KNX side and makes the compressor finding more solid, not
+less. It also means this is **not** a blanket error in that manual chapter
+that could be handled by reading everything backwards - it is a single input
+behaving differently. Verify each contact input on its own before relying on
+it.
 
 *Deutsch: Die vier Topics melden, was die Wärmepumpe tatsächlich TUT - nicht,
 was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
