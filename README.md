@@ -246,6 +246,10 @@ Notfallanleitung, und dasselbe Blatt soll nicht auch den Firmware-Upload öffnen
 An beiden Stufen belegt, mit und ohne erreichbaren Broker — Messprotokolle in
 [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md).
 
+Wer wissen will, was zwischen dem Klick und dem GRÜN tatsächlich abläuft — und
+was passiert, wenn die Kaskadensteuerung zurückkommt: beide Abläufe stehen
+Schritt für Schritt mit Zeiten in [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md).
+
 ### Die Ist-Zustände aus Byte 110 (3.7.0)
 
 Byte 110 des Antworttelegramms trägt vier 2-Bit-Felder, die das Original nicht
@@ -566,6 +570,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
 | [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — vollständig erledigt in 3.11.0, beide Kommandos am Gerät belegt |
 | [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
+| [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

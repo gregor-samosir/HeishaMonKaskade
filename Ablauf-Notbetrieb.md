@@ -1,0 +1,226 @@
+# Ablauf des Notbetriebs — die Schritte mit Zeiten
+
+Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
+passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
+Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
+
+**Stand:** 2026-08-24, Firmware 3.14.1 (seit dem 2026-08-23 auf beiden Stufen).
+Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
+[`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
+und die Messläufe vom 2026-08-21, protokolliert in
+[`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md)
+Abschnitt 10.
+
+**Zwei Arten von Zeitangaben stehen hier nebeneinander**, und die Unterscheidung
+trägt das ganze Dokument:
+
+* **Regelzeit** — so steht sie in der Firmware und gilt bei jedem Lauf. Die
+  Schrittabstände von 8 s sind Regelzeit: die Mindestwartezeit, nicht die
+  Antwortzeit der Wärmepumpe. Die hat jeden Schritt schon vorher zurückgemeldet.
+* **Messzeit** — an der Anlage beobachtet, im Text immer als „gemessen"
+  gekennzeichnet. Sie belegt die Regelzeit, ersetzt sie aber nicht.
+
+## Übersicht
+
+Ereignis | Dauer | Wer treibt den Ablauf
+:--- | ---: | :---
+Notbetrieb einschalten, Stufe 1 (Heizen) | **56 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 2 (Warmwasser) | **24 s** | die Firmware, Schritt für Schritt
+Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
+
+---
+
+# 1. Notbetrieb einschalten — Stufe 1, Rolle Heizen
+
+Sieben Schritte, t = 0 ist der Klick auf den Knopf.
+
+## Phase 1 — Auslösen (t = 0)
+
+Alles in dieser Phase passiert im selben Moment. Der HTTP-Handler stößt nur an
+und antwortet sofort; er wartet auf nichts.
+
+t | Was passiert | Wo
+:--- | :--- | :---
+0 s | `POST /notbetrieb/start` trifft ein | [`webfunctions.cpp:893`](src/webfunctions.cpp#L893)
+0 s | **Sperre serverseitig geprüft.** Fehlen gehaltene Werte, oder steht TOP101 nicht sauber auf 0, endet der Ablauf hier: Logzeile, 303 zurück auf die Seite, kein Kommando an die Wärmepumpe | [`notbetrieb.cpp:423`](src/notbetrieb.cpp#L423)
+0 s | Zustand BEREIT → LÄUFT, Schrittzähler auf 1, Lauf- und Schrittuhr gestartet, das Ergebnis des vorigen Laufs verworfen | `notbetrieb_start()`
+0 s | MQTT-Log: „NOTBETRIEB ausgeloest ueber die Weboberflaeche" |
+0 s | Schritt 1 abgesetzt, dann 303 zurück auf `/notbetrieb`. Alles Weitere tickt aus `loop()` | [`notbetrieb.cpp:289`](src/notbetrieb.cpp#L289)
+
+Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
+versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
+Aufbau der Seite und dem Klick können Minuten liegen.
+
+## Phase 2 — Die Schrittfolge (0 bis 56 s)
+
+### Der Rhythmus eines einzelnen Schritts
+
+Jeder der sieben Schritte durchläuft dieselben Stationen. Die Zeitangaben sind
+relativ zum Beginn des Schritts.
+
+Zeit im Schritt | Was passiert
+:--- | :---
+0 ms | Kommando durch `build_heatpump_command()` — Bereichsprüfung, Maskenmerge in `mainCommand`, Sammelfenster geöffnet
++0,5 s | Telegramm geht an die Wärmepumpe (`COMMANDTIMER`). Läuft gerade ein Lesefenster, wird je Runde um 0,5 s verschoben, höchstens viermal
++2 bis 8 s | Die Wärmepumpe übernimmt das Kommando (KNX-Messung 2026-08-16); der Abfragezyklus liest den zugehörigen TOP alle 5 bis 6 s zurück
+laufend | `notbetrieb_loop()` vergleicht den zurückgelesenen TOP mit dem Sollwert — leerer Text zählt dabei **nicht** als Bestätigung
+**+8 s** | Frühestens jetzt gilt der Schritt als erledigt und der nächste geht raus. Die Mindestwartezeit verhindert, dass ein Rückgabewert von *vor* dem Kommando den Schritt bestätigt
++20 s | Kam der Wert bis dahin nicht zurück: ROT, sofortiger Abbruch
+
+Die Schritte laufen **einzeln** und nicht in einem Sammelfenster. Ein Handler,
+der sieben Kommandos hintereinander absetzt, packt sie alle in *ein* Telegramm —
+dann konkurriert das Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und
+welcher gewinnt, ist unbekannt.
+
+### Die sieben Schritte
+
+Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
+---: | ---: | :--- | ---: | :---
+1 | 0 s | `OperationMode` = 0 (Heat only) | 4 | **Zuerst**, sonst schaltet der Knopf am Ende eine Anlage ein, die auf Kühlen steht
+2 | +8 s | `HeatingMode` = 0 (Comp. Curve) | 76 | Der Moduswechsel setzt die Kurvenpunkte auf die Panasonic-Werksvorgaben zurück — deshalb **vor** der Kurve
+3 | +16 s | `Z1HeatCurveTargetHighTemp` („VL kalt") | 29 | Erst jetzt hält die Kurve; vorher geschrieben wäre sie umsonst
+4 | +24 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
+5 | +32 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
+6 | +40 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
+7 | +48 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Betriebsart und Kurve stehen, darf die Anlage anlaufen
+— | **+56 s** | **GRÜN** | | alle sieben Werte zurückgelesen
+
+Legt jemand den KNX-Schalter mitten im Lauf auf Kühlen, bricht der Lauf sofort
+ab — noch vor jeder anderen Prüfung. Ein bestätigter Schritt ist in einer
+kühlenden Anlage nichts wert.
+
+## Phase 3 — Ergebnis und Verfall
+
+t | Was passiert
+:--- | :---
++56 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
+alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort — auch die Sperre, der Knopf gibt sich also von selbst frei
+GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
+danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
+
+**GRÜN heißt zurückgelesen, nicht „es wird warm".** Fehlt die KNX-Freigabe für
+den Kompressor, meldet der Knopf GRÜN und die Anlage bleibt bei 0 Hz — genau so
+beobachtet in Etappe 5. Erst Etappe 6 hat mit freigegebenem Kompressor die ganze
+Kette gezeigt: Knopf → Kurve → Wärme.
+
+---
+
+# 2. Notbetrieb einschalten — Stufe 2, Rolle Warmwasser
+
+Derselbe Automat, dieselben Regelzeiten, nur eine kürzere Folge: Warmwasser
+braucht keine Kurve.
+
+Nr | t ab Klick | Kommando | TOP | Anmerkung
+---: | ---: | :--- | ---: | :---
+1 | 0 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
+2 | +8 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
+3 | +16 s | `Heatpump` = 1 | 0 |
+— | **+24 s** | **GRÜN** | |
+
+**Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
+Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
+die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
+liegt hier bei 60 s statt 140 s, weil er sich aus der Schrittzahl ableitet.
+
+---
+
+# 3. Rückkehr der übergeordneten Steuerung
+
+**Die Firmware schaltet nichts zurück.** Es gibt keinen Knopf „Notbetrieb aus"
+und keinen Rückschaltpfad im Code (Entscheidung 7, dreifach an der Anlage
+belegt). Zurück holt die Anlage der 5-Minuten-Re-Assert der Kaskadensteuerung.
+Was HeishaMon in diesem Ablauf tut, ist ausschließlich: sich wieder verbinden
+und die eintreffenden Kommandos weiterreichen.
+
+t = 0 ist der Moment, in dem der Broker wieder läuft. **War der Broker nie weg**
+und nur Node-RED still, entfällt Phase 1 und der Ablauf beginnt bei Phase 2.
+
+## Phase 1 — Die Firmware verbindet sich wieder (0 bis 60 s)
+
+t | Was passiert
+:--- | :---
+0 s | `mqtt.0` läuft wieder — die Firmware merkt davon zunächst nichts
+0 bis 60 s | Reconnect-Backoff: erster Versuch 5 s nach dem Abriss, danach Verdopplung bis zum Deckel von 60 s. **Gemessen: 52 s**
+**T** | `connect()` mit LWT, „Online" retained veröffentlicht, die 32 Set-Topics und der Notbetriebszweig abonniert
+T | Karenzfenster auf T + 5 s gesetzt (`SUBSCRIBE_GRACE`)
+T | Der Broker-Ausfall gilt als beendet. Lag er über der Karenz von 5 min: Log „Hausteuerung war X s nicht erreichbar", die Störmeldung auf der Seite verschwindet. Die Stumm-Uhr startet **jetzt erst**
+T bis T+5 s | **Der Wiedereinspiel-Schwall.** Der Adapter schickt jedem neuen Abonnenten die gespeicherten Werte: `notbetrieb/*` wird angenommen — die Kurvenwerte sind binnen Sekunden wieder im RAM —, alle `set/*` werden verworfen und gezählt. **Gemessen: 34 verworfene Kommandos**
+T + 5 s | Log: „N wiedereingespielte Set-Kommandos nach dem Verbinden verworfen"
+
+Dass der Notbetriebszweig die Karenz **passieren** darf, ist kein Versehen,
+sondern der Mechanismus: Nur so sind die Kurvenwerte nach jedem Neustart und
+jedem Reconnect ohne Zutun von Node-RED wieder da.
+
+## Phase 2 — Die Steuerung übernimmt (bis 5 min später)
+
+t ab Reconnect | Akteur | Was passiert
+:--- | :--- | :---
+0 bis 5 min | **Node-RED** | Der erste echte Re-Assert (Takt 300,0 s, an H2 gemessen). **Gemessen: 39 s**
++0 ms | Firmware | Herzschlag vermerkt (Stumm-Uhr läuft neu), Abfragetimer gestoppt, alle Kommandos des Takts in **ein** Sammelfenster
++0,5 bis 2,5 s | Firmware | Ein Telegramm mit `HeatingMode` = 1, `OperationMode`, `Heatpump` und den Sollwerten
++4 bis 9 s | Wärmepumpe | Zurück im Direktbetrieb: TOP76 0 → 1, TOP0 1 → 0
++4 s nach dem Moduswechsel | Wärmepumpe | **Werks-Reset ein zweites Mal** — TOP27/29/30/42 springen auf 35, TOP32 auf −5, TOP28/72 auf 10
+
+Der Werks-Reset läuft in **beide** Richtungen, beim Hin- wie beim
+Zurückschalten. Er ist der Grund, warum die Anlage nach der Rückkehr noch einige
+Minuten mit falschen Sollwerten läuft.
+
+## Phase 3 — Aufräumen (bis rund 10 min)
+
+t ab Reconnect | Akteur | Was passiert
+:--- | :--- | :---
++ ein weiterer Takt (bis 5 min) | **Node-RED** | Sollwerte zurückgeholt. Gemessen: 01:11:35 (Etappe 5) und 01:53:40 (Etappe 6)
+danach | [`test/kurven_sync.py`](test/kurven_sync.py) | Kurvenpunkte wiederhergestellt — **nicht** durch die Firmware
+GRÜN + 15 min | Firmware | Die Anzeige fällt auf BEREIT. Das ist der **einzige** Vorgang, mit dem HeishaMon den Notbetrieb selbst „beendet"
+
+---
+
+# 4. Die Messbelege
+
+Alle Läufe an der Anlage, protokolliert in
+[`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md)
+Abschnitt 10.
+
+Lauf | Datum | Was er belegt | Ergebnis
+:--- | :--- | :--- | :---
+Etappe 5, Lauf A | 2026-08-21 | Die Sperre wirkt serverseitig | POST abgewiesen, TOP4/TOP101/TOP0 30 s später unverändert
+Etappe 5, Lauf B | 2026-08-21 | Die Schrittfolge an H1 | **GRÜN nach 57 s**, jeder Schritt genau 8 s
+Etappe 5, Rückweg | 2026-08-21 | Die Rückkehr durch den Re-Assert | 9 s nach dem Takt von 01:06:24 war die Anlage von allein zurück
+Etappe 6 | 2026-08-21 | Der Knopf **ohne Broker** | **GRÜN nach 58 s**, Kompressor 26 → 33 Hz
+Etappe 6, Rückweg | 2026-08-21 | Reconnect nach 8 min Ausfall | 52 s Backoff, Re-Assert 39 s später, Sollwerte nach 6:17 min
+Warmwasser an H2 | 2026-08-21 | Die kurze Folge im Kühlbetrieb | **GRÜN nach 24 s**
+
+**Der tragende Beleg ist in beiden Läufen die 34.** Diesen Kurvenwert schreibt
+sonst niemand — `kurven_sync.py` lässt ihn im Direktbetrieb bewusst aus, und vor
+dem Lauf stand dort eine 20. Er kann nur aus dem RAM der Firmware gekommen sein.
+In Etappe 6 war der Broker dabei seit vier Minuten tot; es gab keine Leitung,
+aus der er sonst hätte kommen können.
+
+**Eine Regel fürs Messen, die aus Etappe 6 stammt:** Im Ausfallfall ist der
+ioBroker **keine gültige Messquelle**. Sein Datenpunkt stand seit dem
+Broker-Stopp eingefroren auf dem Wert von *vor* dem Notbetrieb und sah dabei aus
+wie ein aktueller Wert. Dann zählt nur, was die Bridge selbst über
+`/tablerefresh` herausgibt.
+
+---
+
+# 5. Was das für den Betrieb heißt
+
+**Kommt die Steuerung kurz nach dem Notbetrieb zurück, läuft der Werks-Reset
+mit.** Zwischen GRÜN und dem ersten Re-Assert steht die Anlage im Kurvenbetrieb;
+das Zurückschalten setzt den Sollwert auf 35 °C, und dort bleibt er bis zum
+übernächsten Takt — knapp fünf Minuten. In Etappe 6 war das als
+`Heat_Energy_Production` von 2400 W statt 200 W sichtbar. Es läuft von allein
+aus, aber wer in dieser Zeit auf die Werte schaut, sollte wissen, woher sie
+kommen.
+
+**GRÜN steht nach dem Ende noch bis zu 15 Minuten da.** Die Anzeige ist an
+dieser Stelle bewusst kein Abbild des Anlagenzustands: Sie sagt „dieser Lauf ist
+durchgelaufen", nicht „der Notbetrieb ist gerade aktiv". Die Anlage kann längst
+wieder in Steuerungshand sein, während auf der Seite noch GRÜN steht. Wer wissen
+will, was gerade gilt, liest `Heating_Mode` (TOP76) auf der Startseite.
+
+**Im Sommer schaltet Stufe 1 nicht.** Der Notbetrieb der Rolle Heizen ist auf
+den Winter beschränkt (Owner-Entscheidung 2026-08-23): TOP101 muss sauber auf 0
+stehen, sonst bleibt der Knopf gesperrt. Im Sommer trägt Stufe 2 mit Warmwasser,
+und die läuft auch im Kühlbetrieb.
