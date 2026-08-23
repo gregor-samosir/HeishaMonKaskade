@@ -489,6 +489,13 @@ Relaistreibers, ob das Relais während des Bootens sauber abgefallen bleibt
 oder undefiniert flattert. Dazu sagt keine Espressif-Doku etwas, und für die
 HeishaMon-Platine gibt es keinen veröffentlichten Schaltplan.
 
+> **Beantwortet am 2026-08-23 durch den Platinenentwickler:** „when heishamon
+> is without power (or booting), this side will do what it says (normally
+> means, not engaged, no power)." Das Relais bleibt beim Booten also
+> abgefallen — die Erwartung ist damit belegt statt vermutet. Der
+> Durchgangstest unten bleibt trotzdem die Gegenprobe von fünf Minuten; er
+> kostet nichts und deckt zugleich ab, was das Datasheet offenlässt.
+
 **Das ist aber in fünf Minuten messbar, ohne Wärmepumpe:** Board über USB
 versorgen, Durchgangsprüfer an COM und NO, Reset drücken. Bleibt der
 Durchgang aus (bzw. das Relais still), ist ein Pulldown vorhanden und die
@@ -631,3 +638,88 @@ folgt für die Inbetriebnahme eine Regel, die vorher nicht nötig schien:
 darauf gebaut wird** — den Heat/Cool-Kontakt gegen TOP101 (das kostet nichts,
 das Feld meldet den Ist-Zustand binnen Sekunden), den Kompressorkontakt gegen
 `Compressor_Freq` bei laufender Anforderung. Nicht gegen das Handbuch.
+
+---
+
+## 11. Nachtrag 2026-08-23 — der Retain-Vorschlag des Platinenentwicklers
+
+Der Entwickler der großen Platine hat auf Nachfrage zwei Dinge geantwortet.
+Das erste bestätigt die Analyse, das zweite passt an dieser Anlage nicht — und
+zwar aus einem Grund, der nichts mit seiner Firmware zu tun hat.
+
+### 11.1 Bestätigt: das Bootverhalten der Kontakte
+
+> „when heishamon is without power (or booting), this side will do what it
+> says (normally means, not engaged, no power). So for example if you use the
+> 'normally open' the port isn't connect to the 'common' port when booting."
+
+Deckt sich mit Abschnitt 9.2 und schließt dort die offene Schicht 3: Das
+Relais bleibt beim Booten abgefallen. Zusammen mit dem Befund aus Abschnitt 10
+heißt das für Relais 1 unverändert **COM + NC** — nur so ist der Kompressor
+beim Booten frei.
+
+### 11.2 Nicht übertragbar: den letzten Zustand über Retain wiederherstellen
+
+> „if you want heishamon to switch the relais to the last known state, you
+> just send a 'retained' mqtt message for the gpio message instead of a normal
+> message. This means that heishamon after booting will read this message
+> again and put the relais in that last retained state."
+
+**Für die offizielle Firmware an einem gewöhnlichen Broker ist das genau
+richtig** — es ist der Grund, warum die Original-Firmware ohne jede Persistenz
+auskommt (Abschnitt 1). Hier trägt es nicht, aus drei voneinander unabhängigen
+Gründen.
+
+**Erstens: Der Broker ist genau das, was im Zielszenario fehlt.** Der
+MQTT-Broker dieser Anlage *ist* der ioBroker-MQTT-Adapter
+(`Vorhaben-Notbetrieb-Weboberflaeche.md`, Abschnitt 1). Fällt der ioBroker aus,
+fällt der Broker mit. Ein Neustart der Bridge in dieser Lage findet niemanden,
+der irgendetwas wiedereinspielen könnte — und das ist die einzige Lage, für
+die der ganze Umbau gemacht wird. Retain löst den Normalfall und lässt den
+Notfall offen. NVS löst beide.
+
+**Zweitens: Die Karenzzeit wirft die Wiedereinspielung weg — mit gutem
+Grund.** Der Adapter schickt jedem neuen Abonnenten die gespeicherten Werte,
+und zwar unmittelbar nach dem SUBACK, also mitten in `SUBSCRIBE_GRACE`. Diese
+Sperre ist nicht vorsorglich, sondern eine Reaktion auf gemessenen Schaden:
+Am 2026-08-13 setzte ein wiedereingespielter Kurvenwert vom Vortag nach jedem
+Neustart den Vorlauf-Sollwert auf 55 °C. Damit der Retain-Weg funktionierte,
+müsste der Relaiszweig von der Karenz ausgenommen werden — wie der
+Notbetriebszweig. Der darf das, weil seine Werte **nie ungefragt an die
+Wärmepumpe gehen**. Für ein Relais gilt das Gegenteil: Es wirkt sofort auf
+Hardware. Ein alter Wert würde nicht gespeichert, sondern geschaltet.
+
+**Drittens: Das Retain-Bit trägt hier nicht die Bedeutung, die der Vorschlag
+voraussetzt.** Am 2026-08-20 am Adaptercode belegt und am `notbetrieb`-Zweig
+gemessen: Beim ioBroker-Adapter trägt die **Wiedereinspielung beim Subscribe
+`retain=0`**, ein **Live-Publish `retain=1`** — also genau andersherum, als der
+Vorschlag annimmt. Und die Wiedereinspielung passiert ohnehin, auch für Topics,
+die nie retained gesendet wurden: Vier Werte an einen Zweig, den der Adapter
+nie zuvor gesehen hatte, kamen beim nächsten Verbinden von allein zurück.
+Etwas „retained" zu senden ändert an diesem Verhalten also nichts — der Effekt
+ist hier ohnehin da, er ist nur unerwünscht. Dazu kommt: PubSubClient reicht
+das Retain-Flag gar nicht an den Callback durch, die Firmware könnte die
+beiden Fälle heute nicht einmal unterscheiden.
+
+### 11.3 Der Vergleich, auf den es hinausläuft
+
+Lage | Retain (Vorschlag) | NVS (Empfehlung)
+:--- | :--- | :---
+Reboot, Broker läuft | Zustand zurück, aber erst nach WLAN **und** MQTT-Connect — Sekunden bis Minuten | Zustand nach ~300 ms, noch vor dem WLAN
+**Reboot, Broker weg** | **gar nicht** | Zustand da
+Karenzzeit | muss für den Relaiszweig aufgegeben werden | unberührt
+Board war lange aus | Broker-Wert ist der aktuellere | NVS-Wert evtl. veraltet, Re-Assert korrigiert in 5 min
+
+Die vorletzte Zeile ist der eigentliche Preis, die letzte der einzige Punkt,
+an dem Retain besser wäre — und der ist durch den 5-min-Re-Assert (8.4
+Punkt 2) ohnehin abgedeckt.
+
+Für Relais 2 kommt die Zeit aus der ersten Zeile dazu: Zwischen Boot und
+MQTT-Connect stünde der Heat/Cool-Kontakt auf „Heizen", und zwar nicht
+Millisekunden, sondern die volle Netzanlaufzeit — im Sommer also genau der
+Moduswechsel, den Abschnitt 4 vermeiden will. Mit NVS in der ersten Zeile von
+`setup()` schrumpft das auf die Bootlücke.
+
+**Ergebnis: Es bleibt bei NVS, Retain wird nicht zusätzlich genutzt.** Ein
+zweiter Weg, der denselben Zustand herstellt, bringt hier keine Redundanz —
+er bringt eine zweite Stelle, an der ein alter Wert hereinkommen kann.
