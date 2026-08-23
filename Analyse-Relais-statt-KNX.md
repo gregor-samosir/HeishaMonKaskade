@@ -6,9 +6,15 @@ comp. SW* und den *Heat/Cool SW* der beiden Wärmepumpen bedient, durch die
 zwei Relais auf der HeishaMon-ESP32-Platine ersetzt werden — und entsteht
 dabei ein neuer Fallstrick?
 
-**Kurzantwort:** Die Idee trägt, aber nicht als *ein* Vorhaben. Die beiden
-Relais sind zwei völlig verschiedene Fälle mit gegenläufigem Risiko, und der
-Gewinn liegt woanders, als die Ausgangsfrage vermutet.
+**Endergebnis (2026-08-23): keines der beiden Relais wird gebraucht.** Der
+Kompressorkontakt ist in dieser Kaskade funktionslos — die Abschaltung läuft
+über `set/Heatpump`; der Heat/Cool-Kontakt bleibt nötig, wird im Notbetriebsfall
+aber vom KNX-Taster bedient, weil bei einem ioBroker-Ausfall der KNX-Bus
+weiterläuft. **Abschnitt 12 führt das aus und ersetzt die Empfehlung in 8.4.**
+
+**Ursprüngliche Kurzantwort:** Die Idee trägt, aber nicht als *ein* Vorhaben.
+Die beiden Relais sind zwei völlig verschiedene Fälle mit gegenläufigem
+Risiko, und der Gewinn liegt woanders, als die Ausgangsfrage vermutet.
 
 > **⚠ Die Abschnitte 10 bis 12 sind der aktuelle Stand.** Die Handbuchangabe zur
 > Kontaktlogik des Kompressorschalters ist an dieser Anlage **falsch herum**
@@ -372,6 +378,10 @@ tatsächlich gewirkt hat, und wird sogar besser: Der Weg wird kürzer und
 verliert das KNX-Gateway.
 
 ### 8.4 Korrigierte Empfehlung
+
+> **Überholt durch Abschnitt 12** (2026-08-23): Relais 1 ist funktionslos,
+> Relais 2 wird vom KNX-Taster erledigt. Der Abschnitt bleibt stehen, weil die
+> Bauvorschriften darin gelten, falls doch je ein Relais geschaltet wird.
 
 **Beide Relais bauen, Menü-Abschaltung nicht.**
 
@@ -749,3 +759,104 @@ Moduswechsel, den Abschnitt 4 vermeiden will. Mit NVS in der ersten Zeile von
 **Ergebnis: Es bleibt bei NVS, Retain wird nicht zusätzlich genutzt.** Ein
 zweiter Weg, der denselben Zustand herstellt, bringt hier keine Redundanz —
 er bringt eine zweite Stelle, an der ein alter Wert hereinkommen kann.
+
+---
+
+## 12. Nachtrag 2026-08-23 — der Kompressorkontakt wird gar nicht gebraucht
+
+Der Owner hat probiert, ob die Flows auch ohne den External comp. SW laufen.
+Sie tun es. **Die Verlaufsdaten sagen dasselbe, und zwar deutlicher, als der
+Versuch es kann.**
+
+### 12.1 Der Beleg aus 15 Tagen
+
+Gegenübergestellt: `openknx.0.Kaskade.WP1_Compressor_Freigabe` (der Kontakt)
+und `0_userdata.0.kaskade.legacy.WP1_Heatpump` (der Ein/Aus-Befehl über MQTT),
+2026-08-09 bis 2026-08-23, gut 21000 Stichproben je Reihe:
+
+Heatpump-Befehl | Kontakt | Stichproben | Bedeutung
+:--- | :--- | ---: | :---
+aus | offen | 8637 | beide sperren, doppelt gemoppelt
+aus | geschlossen | 5445 | **abgeschaltet wird über MQTT, der Kontakt gibt frei**
+ein | geschlossen | 7019 | Normalbetrieb
+**ein** | **offen** | **3** | **der einzige Fall, in dem der Kontakt etwas Eigenes täte**
+
+Die drei Ausreißer der letzten Zeile dauern **alle unter zwei Minuten** — es
+sind Umschaltflanken, weil die beiden Signale nicht in derselben Sekunde
+geschrieben werden. **In 15 Tagen hat der Kontakt kein einziges Mal gesperrt,
+während die Steuerung die Wärmepumpe eingeschaltet haben wollte.**
+
+Die zweite Zeile ist der eigentliche Beweis: In gut einem Viertel der Zeit
+steht der Kontakt auf „frei", während die Anlage aus ist. Abgeschaltet wird
+also über `set/Heatpump`, und der Kontakt läuft nur mit. Das passt zur
+Struktur: `wpEin` und `heatpump` stammen aus derselben Zustandstabelle in
+`Modus Parameter Logik V4.2` bzw. im Hauptmodus-Verteiler — sie können gar
+nicht auseinanderlaufen.
+
+**Damit entfällt Relais 1 ersatzlos**, und mit ihm der schwächere der beiden
+Fälle: der ohne Statusbyte, der im Notbetrieb ein blinder Schritt geblieben
+wäre (Abschnitt 3).
+
+Grenze des Belegs: Es sind 15 Sommertage. Die Kopplung ist aber strukturell,
+nicht zufällig — beide Größen kommen aus derselben Tabelle. Ein Blick auf
+dieselbe Auswertung im Winter kostet fünf Minuten und wäre die saubere
+Gegenprobe, bevor der Draht dauerhaft verschwindet.
+
+### 12.2 Und Relais 2? Der KNX-Taster erledigt es auch
+
+Der Heat/Cool-Kontakt ist **nicht** redundant — anders als beim Kompressor ist
+seine Wirkung gemessen: Am 2026-08-20 verwarf die Wärmepumpe `SET9 = Heat`,
+solange der Kontakt auf Kühlen stand. Er bestimmt, welche Betriebsart überhaupt
+angenommen wird, und genau daraus entsteht die Sperre des Notbetriebsknopfes
+im Kühlbetrieb.
+
+**Trotzdem braucht es dafür kein Relais**, und der Grund liegt im Szenario
+selbst: Der Notbetriebsfall ist der Ausfall des ioBroker — **der KNX-Bus lebt
+dabei weiter.** Ein physischer KNX-Taster auf den Heat/Cool-Kanal spricht den
+Aktor direkt an, ohne ioBroker, ohne Node-RED, ohne Bridge. Er leistet damit
+exakt das, was Relais 2 leisten sollte, und braucht dafür weder NVS noch
+Karenzentscheidung noch Re-Assert noch eine Zeile Firmware.
+
+Der Taster ist ohnehin in Arbeit. Was sich ändert, ist nur, worauf er zeigt:
+Nicht mehr auf die Kompressorfreigabe (die verschwindet), sondern auf
+**Heat/Cool**.
+
+### 12.3 Ergebnis: nichts bauen
+
+**Die Empfehlung aus 8.4 ist damit hinfällig.** Der Weg, der übrig bleibt,
+kommt ohne Lötkolben, ohne Firmware und ohne Node-RED-Umbau aus:
+
+Schritt | Was | Wirkung
+:--- | :--- | :---
+1 | Kompressorkontakt stilllegen | Der Notbetrieb verliert seine letzte Fremdabhängigkeit — die Freigabe, die Entscheidung 4 des Notbetriebsvorhabens fordert, gibt es dann nicht mehr.
+2 | KNX-Taster auf **Heat/Cool** legen statt auf die Freigabe | Der Notbetriebsknopf lässt sich auch im Kühlbetrieb freimachen, ohne ioBroker.
+3 | Heat/Cool-Aktorkanal bleibt, wie er ist | Die Verriegelung in `Modus Parameter Logik V4.2` behält ihre unabhängige Quelle (8.3), TOP101 bleibt Messung statt Selbstbestätigung.
+
+Zu Schritt 1 gibt es zwei Wege. **Drahtbrücke** (Kontakt dauerhaft
+geschlossen) ist reversibel und braucht keinen Menüeingriff; **im
+Installateurmenü abschalten** ist sauberer, weil kein toter Draht
+zurückbleibt, den in fünf Jahren jemand für aktiv hält. Beides ist vertretbar
+— wichtig ist nur, dass es dokumentiert wird, denn der Eingang bleibt
+physisch vorhanden und seine Kontaktlogik ist die aus Abschnitt 10, also
+gegen das Handbuch.
+
+### 12.4 War die Analyse damit umsonst?
+
+Nein, und das ist keine Schönfärberei. Sie hat den Weg zu „nichts bauen" erst
+freigelegt und dabei drei Dinge ausgeräumt, die unabhängig vom Relais
+weiterwirken:
+
+* **Die Handbuchangabe zum Kompressoreingang ist falsch** (Abschnitt 10) — ein
+  Befund, der ohne die Verdrahtungsfrage nie gestellt worden wäre und der jetzt
+  in `MQTT-Topics.md` steht, auch für andere HeishaMon-Nutzer.
+* **`External_Heat_Cool_Control` im Menü abzuschalten wäre ein Fehler
+  gewesen** (8.3): Es hätte die Verriegelung Heizen/Kühlen von einer Messung in
+  eine Selbstbestätigung verwandelt.
+* **Die Kompressorfreigabe kann bis zu 48 Stunden ohne Flanke stehen**
+  (10.3) — eine Zahl, die für jede künftige ereignisgesteuerte Übertragung an
+  die Bridge gilt, nicht nur für Relais.
+
+Und der Notbetrieb steht am Ende besser da als vorher: Sein letzter offener
+Punkt aus Abschnitt 9 des Vorhabens — „der KNX-Taster für die
+Kompressorfreigabe" — löst sich nicht durch Hardware, sondern dadurch, dass
+die Freigabe verschwindet.
