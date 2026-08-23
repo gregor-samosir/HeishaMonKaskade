@@ -52,6 +52,18 @@ NotbetriebSperre notbetrieb_sperre(void)
 }
 
 /*****************************************************************************/
+/* Sieht die gehaltene Kurve plausibel aus?                                  */
+/*                                                                           */
+/* Anders als die Sperre wird das NICHT zwischengespeichert: Die Pruefung ist */
+/* ein Vergleich von vier ints, die Statusroute fragt sie alle zwei Sekunden  */
+/* ab, und ein zweiter Zustand waere ein zweiter Ort, der veralten kann.      */
+/*****************************************************************************/
+NotbetriebKurvenWarnung notbetrieb_kurvenwarnung(void)
+{
+  return notbetrieb_kurve_pruefen(&notbetriebWerte, notbetriebRolle);
+}
+
+/*****************************************************************************/
 /* Der Rohtext von TOP101 (Heat_Cool_SW_State) aus actual_data[]             */
 /*                                                                           */
 /* Leerer Text heisst "nie empfangen" und gilt als NICHT Heizen - siehe die   */
@@ -228,6 +240,37 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
                    "Notbetrieb einsatzbereit: alle %u Werte liegen vor",
                    notbetrieb_wert_anzahl(notbetriebRolle));
   write_mqtt_log(log_line);
+  }
+
+  // Die Kurve wird nach JEDER Aenderung neu beurteilt, nicht nur beim
+  // Vollstaendigwerden: Ein spaeter nachgereichter Wert kann eine plausible
+  // Kurve verdrehen. Gemeldet wird nur der WECHSEL - nach jedem Reconnect
+  // spielt der Broker alle Werte erneut ein, und eine Zeile je Wert wuerde das
+  // MQTT-Log fluten. Die Zahlen stehen mit in der Meldung: Wer sie liest, soll
+  // nicht erst die vier Topics nachschlagen muessen.
+  static NotbetriebKurvenWarnung letzte_warnung = NOTBETRIEB_KURVE_OK;
+  const NotbetriebKurvenWarnung warnung =
+      notbetrieb_kurve_pruefen(&notbetriebWerte, notbetriebRolle);
+  if (warnung != letzte_warnung)
+  {
+  if (warnung == NOTBETRIEB_KURVE_VORLAUF_VERDREHT)
+  {
+    (void)snprintf(log_line, sizeof(log_line),
+                     "Notbetrieb: Kurve prueft nicht - VL kalt %d liegt unter VL warm %d",
+                     notbetriebWerte.werte[0], notbetriebWerte.werte[1]);
+  }
+  else if (warnung == NOTBETRIEB_KURVE_AUSSEN_VERDREHT)
+  {
+    (void)snprintf(log_line, sizeof(log_line),
+                     "Notbetrieb: Kurve prueft nicht - AT kalt %d liegt nicht unter AT warm %d",
+                     notbetriebWerte.werte[2], notbetriebWerte.werte[3]);
+  }
+  else
+  {
+    (void)snprintf(log_line, sizeof(log_line), "Notbetrieb: Kurve wieder plausibel");
+  }
+  write_mqtt_log(log_line);
+  letzte_warnung = warnung;
   }
   return true;
 }

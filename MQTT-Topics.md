@@ -703,10 +703,10 @@ would be noticeable.
 
 ### `/notbetrieb/status` also carries the connection state (new in 3.13.0)
 
-The route grew two fields. Full format:
+The route grew two fields. Full format (an eighth followed in 3.14.0):
 
 ```
-Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext
+Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung
 ```
 
 `Lage` is the state of the connection to the house control: **0** connected,
@@ -717,6 +717,17 @@ cascade control is no longer computing. `Dauertext` is the outage duration
 already formatted for display ("14 Minuten", "mehr als 30 Tagen") and is empty
 unless `Lage` is 2 or 4 — the formatting rule lives in `src/verbindung.h` so that
 firmware, web page and host test share one truth.
+
+`Kurvenwarnung` (new in 3.14.0) says whether the four held curve values are
+plausible: **0** fine or nothing to check, **1** the flow values are swapped
+(VL kalt below VL warm), **2** the two outside points are swapped or equal. It
+**warns and never locks** - the button stays usable, because an emergency run
+on a twisted curve still beats no emergency run. The rule itself is in
+`src/notbetrieb.h` (`notbetrieb_kurve_pruefen()`) and is covered by the host
+test; the reason it exists is the crossover described under "Zone 1 heating and
+cooling curve": all four values can sit inside their ranges and still describe a
+curve that rises with the outside temperature. The field is appended at the end
+so the connection fields keep indices 5 and 6, which the home page reads.
 
 The **home page** polls this same route, at the 30-second interval of the topic
 table. That the path says "notbetrieb" is deliberate: it is the device's only

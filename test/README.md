@@ -29,13 +29,13 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
-| `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101 und Anzeigeverfall (bindet `src/notbetrieb.h` direkt ein) | nein |
+| `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101, Anzeigeverfall und die Plausibilitaet der Kurve (bindet `src/notbetrieb.h` direkt ein) | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
 | `kurven_test.py` | Kurven-Kommandos SET27-SET34 nachweisen (schreibt die Ist-Werte zurueck, veraendert nichts) | Produktivgeraet |
-| `kurven_sync.py` | Heiz-/Kuehlkurve aus dem ioBroker-Konfigurationsbaum in die WPs spiegeln (`--dry-run`) | Produktivgeraet |
+| `kurven_sync.py` | Heiz-/Kuehlkurve aus dem ioBroker-Konfigurationsbaum in die WPs spiegeln (`--dry-run`); bricht bei verdrehter Kurve ab (`--kurve-ignorieren`) | Produktivgeraet |
 | `kurven_grenzen.py` | Ermitteln, welche Kurvenwerte die WP wirklich annimmt (veraendert Werte, stellt sie zurueck) | Produktivgeraet |
 | `decode_vergleich.py` | Dekodierpfad zweier Codestaende gegeneinander laufen lassen, auf dem Mac | nein |
 | `frame_diff.py` | Rohtelegramme eines Mitschnitts ueber alle 203 Bytes vergleichen, angereichert aus `ProtocolByteDecrypt.md` | nein |
@@ -901,6 +901,30 @@ Korrektur ist im Vorhaben Notbetrieb, Abschnitt 6a, als Vorbedingung notiert.
 die Kreuzung nicht wieder untergeht, fuehren Werkzeugausgaben und Tabellen seit
 diesem Tag ein Etikett mit (VL kalt / VL warm / AT kalt / AT warm), das keiner
 der beiden Namenskonventionen folgt.*
+
+### Die Kurve wird auf ihre Richtung geprueft (seit 3.14.0)
+
+Ein Etikett macht die Verwechslung sichtbar, verhindert sie aber nicht. Deshalb
+liegt seit 3.14.0 eine Regel daneben - `notbetrieb_kurve_pruefen()` in
+`src/notbetrieb.h`, vom Hosttest abgedeckt:
+
+| Fall | Beurteilung |
+| --- | --- |
+| VL kalt >= VL warm | in Ordnung (Gleichheit erlaubt: flache Kurve) |
+| VL kalt < VL warm | **Vorlaeufe vertauscht** |
+| AT kalt < AT warm | in Ordnung |
+| AT kalt >= AT warm | **Aussenpunkte vertauscht oder gleich** |
+
+Kein Bereichstest kann diese Faelle finden: 26 und 34 sind beide gueltig, es
+kommt allein auf ihr Verhaeltnis an. Die Regel WARNT und sperrt nicht - der
+Notbetriebsknopf bleibt bedienbar, und ein Lauf auf verdrehter Kurve ist immer
+noch besser als keiner. Sichtbar wird sie auf der Notbetriebsseite (blassgelbes
+Feld), im MQTT-Log beim Wechsel der Beurteilung und im achten Feld von
+`/notbetrieb/status`.
+
+`kurven_sync.py` prueft dasselbe VOR dem Senden und bricht dann ab - dort waere
+die verdrehte Kurve nicht nur ein Hinweis, sondern der Zustand, den die Anlage
+im Notbetrieb faehrt. `--kurve-ignorieren` hebt den Abbruch auf.
 
 ## Der Notbetriebszweig wird wiedereingespielt (2026-08-20, Broker)
 

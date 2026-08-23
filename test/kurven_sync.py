@@ -111,6 +111,53 @@ def hole(iobroker, ids):
         return {e.get("id"): e.get("val") for e in json.load(r)}
 
 
+def als_zahl(roh):
+    """Konfigurationswert als int, oder None wenn er fehlt/keine Zahl ist."""
+    try:
+        return int(roh)
+    except (TypeError, ValueError):
+        return None
+
+
+def kurve_pruefen(konf):
+    """Zeigen die Kurven in die richtige Richtung?
+
+    Dieselbe Regel wie notbetrieb_kurve_pruefen() in src/notbetrieb.h: Eine
+    Kurve faellt mit steigender Aussentemperatur, also VL kalt >= VL warm.
+    Gleichheit ist erlaubt (flache Vorgabe), die Aussenpunkte muessen dagegen
+    echt auseinanderliegen - zwei Stuetzpunkte auf derselben Temperatur ergeben
+    keine Kurve.
+
+    Der Sinn: Alle vier Werte koennen einzeln im erlaubten Bereich liegen und
+    trotzdem eine verdrehte Kurve ergeben - genau das ist bis zum 2026-08-20
+    passiert, weil vlHi/vlLo und Panasonics TargetHigh/Low ueber Kreuz liegen.
+    Kein Bereichstest kann das finden.
+
+    Rueckgabe: Liste von Klartextmeldungen, leer wenn alles plausibel ist.
+    Fehlende Werte werden uebersprungen - sie sind schon in der Tabelle darueber
+    als FEHLER gemeldet.
+    """
+    meldungen = []
+    for gruppe, vl_bez, at_bez in (("KK_Heizkurve", ("VL kalt", "VL warm"),
+                                    ("AT kalt", "AT warm")),
+                                   ("KK_Kühlkurve", ("VL kuehl", "VL heiss"),
+                                    ("AT kuehl", "AT heiss"))):
+        vl_kalt = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_vlLo"))
+        vl_warm = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_vlHi"))
+        at_kalt = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_atLo"))
+        at_warm = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_atHi"))
+
+        if vl_kalt is not None and vl_warm is not None and vl_kalt < vl_warm:
+            meldungen.append(
+                f"{gruppe}: {vl_bez[0]} ({vl_kalt}) liegt unter {vl_bez[1]} "
+                f"({vl_warm}) - sind KK_HK_vlLo und KK_HK_vlHi vertauscht?")
+        if at_kalt is not None and at_warm is not None and at_kalt >= at_warm:
+            meldungen.append(
+                f"{gruppe}: {at_bez[0]} ({at_kalt}) liegt nicht unter "
+                f"{at_bez[1]} ({at_warm})")
+    return meldungen
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--iobroker", default="192.168.2.147")
@@ -120,14 +167,19 @@ def main():
                          "(Vorgabe: beide Stufen)")
     ap.add_argument("--dry-run", action="store_true",
                     help="nur anzeigen, nichts senden")
+    ap.add_argument("--kurve-ignorieren", action="store_true",
+                    help="trotz unplausibler Kurve senden (siehe kurve_pruefen)")
     args = ap.parse_args()
     prefixe = args.prefix or ["panasonic_heat_pump", "panasonic_heat_pump2"]
 
-    # Konfiguration lesen. KK_HK_vlLo steht nicht im MAPPING (TargetHigh wird
-    # nicht gespiegelt), wird aber mitgelesen, damit der Schlusshinweis den
-    # nachzutragenden Wert beziffern kann statt nur auf ihn zu verweisen.
+    # Konfiguration lesen. Die beiden KK_HK_vlLo stehen nicht im MAPPING
+    # (TargetHigh wird nicht gespiegelt), werden aber mitgelesen: Der
+    # Schlusshinweis beziffert damit den nachzutragenden Wert statt nur auf ihn
+    # zu verweisen, und kurve_pruefen() braucht beide Kurvenpunkte, um die
+    # Richtung ueberhaupt beurteilen zu koennen.
     ids = [f"{KONFIG}.{g}.{k}" for g, k, *_ in MAPPING]
     ids.append(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
+    ids.append(f"{KONFIG}.KK_Kühlkurve.KK_HK_vlLo")
     konf = hole(args.iobroker, ids)
     vorlauf_kalt = konf.get(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
 
@@ -162,6 +214,22 @@ def main():
         print("\nAbbruch: mindestens ein Wert fehlt oder liegt ausserhalb des "
               "erlaubten Bereichs.")
         return 1
+
+    # Bereiche sagen nur, ob ein Wert erlaubt ist - nicht, ob die vier
+    # zusammen eine sinnvolle Kurve ergeben. Deshalb hier der Richtungstest.
+    unplausibel = kurve_pruefen(konf)
+    if unplausibel:
+        print("\nDie Kurve sieht verdreht aus:")
+        for zeile in unplausibel:
+            print(f"  - {zeile}")
+        if not args.kurve_ignorieren:
+            print("\nAbbruch. Eine verdrehte Kurve gespiegelt heisst: Die "
+                  "Anlage faehrt im")
+            print("Notbetrieb nach der falschen Kurve. Wenn das so gewollt "
+                  "ist, mit")
+            print("--kurve-ignorieren erneut starten.")
+            return 1
+        print("\n--kurve-ignorieren: wird trotzdem gesendet.")
     if args.dry_run:
         print("\n--dry-run: nichts gesendet.")
         return 0
