@@ -1658,9 +1658,28 @@ unverändert, an H2 zusätzlich `DHW_Target_Temp` 48.
 
 Das **achte Feld ist an beiden Stufen 0**: Die gehaltene Kurve ist plausibel
 (VL kalt 34 ≥ VL warm 26, AT kalt −10 < AT warm 15), und an H2 gibt es als
-Rolle Warmwasser ohnehin nichts zu prüfen. Die Gegenprobe — dass die Warnung
-auch wirklich anschlägt — ist am Gerät noch offen; sie verlangt einen verdrehten
-Wert im `notbetrieb/`-Zweig. Im Hosttest ist sie über neun Fälle abgedeckt.
+Rolle Warmwasser ohnehin nichts zu prüfen.
+
+### Die Gegenprobe an H1, 2026-08-23 — die Warnung schlägt wirklich an
+
+Dass sie im Normalbetrieb ausbleibt, sagt für sich genommen wenig. Deshalb beide
+Fälle am laufenden Gerät ausgelöst, jeweils über den `notbetrieb/`-Zweig (die
+Werte gehen dort nicht an die Wärmepumpe, sie liegen nur im RAM der Firmware):
+
+Gesendet | Statusroute | MQTT-Log (`info/log`)
+:--- | :--- | :---
+`TargetHighTemp=20` (unter VL warm 26) | `0;1;7;0;0;0;;1` | –
+`TargetHighTemp=34` (zurück) | `0;1;7;0;0;0;;0` | „Notbetrieb: Kurve wieder plausibel"
+`OutsideLowTemp=15` (gleich AT warm) | `0;1;7;0;0;0;;2` | „Notbetrieb: Kurve prueft nicht - AT kalt 15 liegt nicht unter AT warm 15"
+`OutsideLowTemp=-10` (zurück) | `0;1;7;0;0;0;;0` | –
+
+Beide Codes kommen also durch, die Meldung nennt die Zahlen, und **das fünfte
+Feld blieb durchgehend 0**: Die Warnung hat den Knopf nie gesperrt — genau das
+war die Absicht. Die Notbetriebsseite trägt das Hinweisfeld
+(`id='nbwarn'`, blassgelb) und hält es im plausiblen Fall auf `display:none`.
+
+Der Notbetriebssatz steht danach wieder auf 34 / 26 / −10 / 15, nachgelesen im
+ioBroker. Im Hosttest ist dieselbe Regel über neun Fälle abgedeckt.
 
 Dass die MQTT-Seite weiterläuft, ist über den ioBroker gegengeprüft: frische
 Zeitstempel an `Heatpump_State` beider Stufen und an
