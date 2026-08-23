@@ -16,6 +16,11 @@ VORLAUFtemperatur. Beide Paare sind deshalb ueber Kreuz zugeordnet:
   atLo -> OutsideLow     vlLo (Vorlauf bei Kaelte) -> TargetHIGH
   atHi -> OutsideHigh    vlHi (Vorlauf bei Waerme) -> TargetLOW
 
+Weil die Namen allein diese Kreuzung nicht zeigen, fuehrt jede Zeile der
+Ausgabe ein Etikett mit, das keiner der beiden Konventionen folgt: VL kalt,
+VL warm, AT kalt, AT warm (Kuehlseite: VL kuehl/heiss, AT kuehl/heiss). Es ist
+dasselbe Vokabular wie in MQTT-Topics.md und im Node-RED-Sender.
+
 Bis zum 2026-08-20 stand es hier andersherum, und die Kurve wurde entsprechend
 verdreht gespiegelt. Belegt an WP1: bei 26-28 C aussen, also weit oberhalb
 OutsideHigh, folgte Main_Target_Temp (TOP7) dem TargetLow - auch mit
@@ -71,24 +76,26 @@ KONFIG = "0_userdata.0.kaskade.Konfiguration"
 # heute von Hand am Bedienterminal auf Kurve umschaltet, muss ihn dort
 # nachtragen; sonst bleibt die Panasonic-Werksvorgabe von 55 C stehen.
 
-# (Konfig-Gruppe, Konfig-Schluessel) -> (Set-Topic, state-Topic, min, max)
+# (Konfig-Gruppe, Konfig-Schluessel, Etikett) -> (Set-Topic, state-Topic, min, max)
+# Das Etikett steht in jeder Ausgabezeile und sagt, bei welchem Wetter der Wert
+# gilt - es ueberbrueckt die Kreuzung zwischen Konfigbaum und Panasonic-Namen.
 MAPPING = [
     # vlHi = Vorlauf bei HOHER Aussentemperatur -> Panasonics TargetLOW.
-    ("KK_Heizkurve", "KK_HK_vlHi", "Z1HeatCurveTargetLowTemp",
+    ("KK_Heizkurve", "KK_HK_vlHi", "VL warm", "Z1HeatCurveTargetLowTemp",
      "Z1_Heat_Curve_Target_Low_Temp", 20, 55),
-    ("KK_Heizkurve", "KK_HK_atLo", "Z1HeatCurveOutsideLowTemp",
+    ("KK_Heizkurve", "KK_HK_atLo", "AT kalt", "Z1HeatCurveOutsideLowTemp",
      "Z1_Heat_Curve_Outside_Low_Temp", -15, 15),
-    ("KK_Heizkurve", "KK_HK_atHi", "Z1HeatCurveOutsideHighTemp",
+    ("KK_Heizkurve", "KK_HK_atHi", "AT warm", "Z1HeatCurveOutsideHighTemp",
      "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
-    ("KK_Kühlkurve", "KK_HK_vlHi", "Z1CoolCurveTargetLowTemp",
+    ("KK_Kühlkurve", "KK_HK_vlHi", "VL heiss", "Z1CoolCurveTargetLowTemp",
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
-    ("KK_Kühlkurve", "KK_HK_atLo", "Z1CoolCurveOutsideLowTemp",
+    ("KK_Kühlkurve", "KK_HK_atLo", "AT kuehl", "Z1CoolCurveOutsideLowTemp",
      "Z1_Cool_Curve_Outside_Low_Temp", 20, 30),
     # Bereiche der beiden OutsideHigh-Parameter an der Anlage ausgemessen
     # (s. kurven_grenzen.py): Heat -15..15, Cool 15..30. Werte darueber oder
     # darunter klemmt die WP still. Ein Konfigurationswert ausserhalb wird
     # hier deshalb als "AUSSERHALB" gemeldet statt wirkungslos gesendet.
-    ("KK_Kühlkurve", "KK_HK_atHi", "Z1CoolCurveOutsideHighTemp",
+    ("KK_Kühlkurve", "KK_HK_atHi", "AT heiss", "Z1CoolCurveOutsideHighTemp",
      "Z1_Cool_Curve_Outside_High_Temp", 15, 30),
 ]
 
@@ -104,6 +111,53 @@ def hole(iobroker, ids):
         return {e.get("id"): e.get("val") for e in json.load(r)}
 
 
+def als_zahl(roh):
+    """Konfigurationswert als int, oder None wenn er fehlt/keine Zahl ist."""
+    try:
+        return int(roh)
+    except (TypeError, ValueError):
+        return None
+
+
+def kurve_pruefen(konf):
+    """Zeigen die Kurven in die richtige Richtung?
+
+    Dieselbe Regel wie notbetrieb_kurve_pruefen() in src/notbetrieb.h: Eine
+    Kurve faellt mit steigender Aussentemperatur, also VL kalt >= VL warm.
+    Gleichheit ist erlaubt (flache Vorgabe), die Aussenpunkte muessen dagegen
+    echt auseinanderliegen - zwei Stuetzpunkte auf derselben Temperatur ergeben
+    keine Kurve.
+
+    Der Sinn: Alle vier Werte koennen einzeln im erlaubten Bereich liegen und
+    trotzdem eine verdrehte Kurve ergeben - genau das ist bis zum 2026-08-20
+    passiert, weil vlHi/vlLo und Panasonics TargetHigh/Low ueber Kreuz liegen.
+    Kein Bereichstest kann das finden.
+
+    Rueckgabe: Liste von Klartextmeldungen, leer wenn alles plausibel ist.
+    Fehlende Werte werden uebersprungen - sie sind schon in der Tabelle darueber
+    als FEHLER gemeldet.
+    """
+    meldungen = []
+    for gruppe, vl_bez, at_bez in (("KK_Heizkurve", ("VL kalt", "VL warm"),
+                                    ("AT kalt", "AT warm")),
+                                   ("KK_Kühlkurve", ("VL kuehl", "VL heiss"),
+                                    ("AT kuehl", "AT heiss"))):
+        vl_kalt = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_vlLo"))
+        vl_warm = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_vlHi"))
+        at_kalt = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_atLo"))
+        at_warm = als_zahl(konf.get(f"{KONFIG}.{gruppe}.KK_HK_atHi"))
+
+        if vl_kalt is not None and vl_warm is not None and vl_kalt < vl_warm:
+            meldungen.append(
+                f"{gruppe}: {vl_bez[0]} ({vl_kalt}) liegt unter {vl_bez[1]} "
+                f"({vl_warm}) - sind KK_HK_vlLo und KK_HK_vlHi vertauscht?")
+        if at_kalt is not None and at_warm is not None and at_kalt >= at_warm:
+            meldungen.append(
+                f"{gruppe}: {at_bez[0]} ({at_kalt}) liegt nicht unter "
+                f"{at_bez[1]} ({at_warm})")
+    return meldungen
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--iobroker", default="192.168.2.147")
@@ -113,38 +167,46 @@ def main():
                          "(Vorgabe: beide Stufen)")
     ap.add_argument("--dry-run", action="store_true",
                     help="nur anzeigen, nichts senden")
+    ap.add_argument("--kurve-ignorieren", action="store_true",
+                    help="trotz unplausibler Kurve senden (siehe kurve_pruefen)")
     args = ap.parse_args()
     prefixe = args.prefix or ["panasonic_heat_pump", "panasonic_heat_pump2"]
 
-    # Konfiguration lesen. KK_HK_vlLo steht nicht im MAPPING (TargetHigh wird
-    # nicht gespiegelt), wird aber mitgelesen, damit der Schlusshinweis den
-    # nachzutragenden Wert beziffern kann statt nur auf ihn zu verweisen.
+    # Konfiguration lesen. Die beiden KK_HK_vlLo stehen nicht im MAPPING
+    # (TargetHigh wird nicht gespiegelt), werden aber mitgelesen: Der
+    # Schlusshinweis beziffert damit den nachzutragenden Wert statt nur auf ihn
+    # zu verweisen, und kurve_pruefen() braucht beide Kurvenpunkte, um die
+    # Richtung ueberhaupt beurteilen zu koennen.
     ids = [f"{KONFIG}.{g}.{k}" for g, k, *_ in MAPPING]
     ids.append(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
+    ids.append(f"{KONFIG}.KK_Kühlkurve.KK_HK_vlLo")
     konf = hole(args.iobroker, ids)
     vorlauf_kalt = konf.get(f"{KONFIG}.KK_Heizkurve.KK_HK_vlLo")
 
     plan = []
     fehler = False
-    print(f"{'Konfiguration':<32}{'Wert':>6}   {'-> Set-Topic':<32}{'Bereich':>12}")
-    print("-" * 86)
-    for gruppe, schluessel, set_topic, _state, lo, hi in MAPPING:
+    print(f"{'Konfiguration':<32}{'Wert':>6}   {'gilt bei':<10}"
+          f"{'-> Set-Topic':<32}{'Bereich':>12}")
+    print("-" * 96)
+    for gruppe, schluessel, etikett, set_topic, _state, lo, hi in MAPPING:
         roh = konf.get(f"{KONFIG}.{gruppe}.{schluessel}")
         if roh is None:
-            print(f"{gruppe+'.'+schluessel:<32}{'fehlt':>6}   FEHLER: nicht gefunden")
+            print(f"{gruppe+'.'+schluessel:<32}{'fehlt':>6}   {etikett:<10}"
+                  f"FEHLER: nicht gefunden")
             fehler = True
             continue
         try:
             wert = int(roh)
         except (TypeError, ValueError):
-            print(f"{gruppe+'.'+schluessel:<32}{str(roh):>6}   FEHLER: keine ganze Zahl")
+            print(f"{gruppe+'.'+schluessel:<32}{str(roh):>6}   {etikett:<10}"
+                  f"FEHLER: keine ganze Zahl")
             fehler = True
             continue
         ok = lo <= wert <= hi
         marker = "" if ok else "   AUSSERHALB!"
         if not ok:
             fehler = True
-        print(f"{gruppe+'.'+schluessel:<32}{wert:>6}   {set_topic:<32}"
+        print(f"{gruppe+'.'+schluessel:<32}{wert:>6}   {etikett:<10}{set_topic:<32}"
               f"{str(lo)+'..'+str(hi):>12}{marker}")
         plan.append((set_topic, wert))
 
@@ -152,6 +214,22 @@ def main():
         print("\nAbbruch: mindestens ein Wert fehlt oder liegt ausserhalb des "
               "erlaubten Bereichs.")
         return 1
+
+    # Bereiche sagen nur, ob ein Wert erlaubt ist - nicht, ob die vier
+    # zusammen eine sinnvolle Kurve ergeben. Deshalb hier der Richtungstest.
+    unplausibel = kurve_pruefen(konf)
+    if unplausibel:
+        print("\nDie Kurve sieht verdreht aus:")
+        for zeile in unplausibel:
+            print(f"  - {zeile}")
+        if not args.kurve_ignorieren:
+            print("\nAbbruch. Eine verdrehte Kurve gespiegelt heisst: Die "
+                  "Anlage faehrt im")
+            print("Notbetrieb nach der falschen Kurve. Wenn das so gewollt "
+                  "ist, mit")
+            print("--kurve-ignorieren erneut starten.")
+            return 1
+        print("\n--kurve-ignorieren: wird trotzdem gesendet.")
     if args.dry_run:
         print("\n--dry-run: nichts gesendet.")
         return 0
@@ -177,14 +255,14 @@ def main():
     gesamt_ok = True
     for prefix in prefixe:
         print(f"\n{prefix}:")
-        ids = [f"mqtt.0.{prefix}.state.{st}" for *_, st, _lo, _hi
-               in [(g, k, s, st, lo, hi) for g, k, s, st, lo, hi in MAPPING]]
+        ids = [f"mqtt.0.{prefix}.state.{state_topic}"
+               for _g, _k, _e, _s, state_topic, _lo, _hi in MAPPING]
         ist = hole(args.iobroker, ids)
-        for (_g, _k, set_topic, state_topic, _lo, _hi), (_st, soll) in zip(MAPPING, plan):
+        for (_g, _k, etikett, _set, state_topic, _lo, _hi), (_st, soll) in zip(MAPPING, plan):
             wert = ist.get(f"mqtt.0.{prefix}.state.{state_topic}")
             ok = str(wert) == str(soll)
             gesamt_ok &= ok
-            print(f"  {state_topic:<34}{str(wert):>6}   "
+            print(f"  {state_topic:<34}{str(wert):>6}   {etikett:<10}"
                   f"{'ok' if ok else 'erwartet ' + str(soll)}")
     print("\n" + "-" * 60)
     print("Alle Kurvenwerte uebernommen." if gesamt_ok
@@ -192,7 +270,7 @@ def main():
     # Der fehlende vierte Wert wird beziffert, nicht nur benannt - wer im
     # Notfall vor dem Bedienterminal steht, braucht die Zahl, nicht den Hinweis.
     kalt = f"{vorlauf_kalt} C" if vorlauf_kalt is not None else "KK_HK_vlLo"
-    print("\nHinweis: TargetHigh - der Vorlauf bei KAELTE - wird bewusst nicht")
+    print("\nHinweis: TargetHigh - das ist 'VL kalt' - wird bewusst nicht")
     print("uebertragen. Im Direktbetrieb teilt er sich mit der Vorlauf-")
     print("Solltemperatur eine Speicherstelle und traegt daher immer den")
     print("zuletzt gesendeten Direktwert.")

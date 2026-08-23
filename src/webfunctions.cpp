@@ -691,6 +691,19 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_WERTE_FEHLEN "Der Steuerung fehlen Werte, die sie zum Umschalten braucht. Das passiert, wenn das Gerät neu gestartet ist, während der Server im Keller aus war."
 #define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Wärmepumpe weitermachen."
 
+/*****************************************************************************/
+/* Die Kurvenwarnung - ein Hinweis, keine Sperre                             */
+/*                                                                           */
+/* Die Regel steht in notbetrieb.h: Eine Heizkurve faellt mit steigender     */
+/* Aussentemperatur. Sind "VL kalt" und "VL warm" vertauscht, liegen die     */
+/* Werte trotzdem alle im erlaubten Bereich - kein Bereichstest schlaegt an. */
+/* Deshalb dieser Hinweis, und deshalb NUR ein Hinweis: Der Knopf bleibt     */
+/* bedienbar, weil ein Notbetrieb mit verdrehter Kurve immer noch besser ist */
+/* als keiner. Die Sperrfarbe (orange) bleibt der echten Sperre vorbehalten. */
+/*****************************************************************************/
+#define NB_TXT_KURVE_VORLAUF "Die Heizkurve sieht vertauscht aus: Der Vorlauf bei Kälte müsste höher sein als der bei Wärme. Der Knopf funktioniert trotzdem - bitte die vier Werte in der Hausteuerung nachsehen."
+#define NB_TXT_KURVE_AUSSEN "Die beiden Außentemperaturen der Heizkurve passen nicht zusammen: Die kalte müsste unter der warmen liegen. Der Knopf funktioniert trotzdem - bitte die vier Werte in der Hausteuerung nachsehen."
+
 // Alle zwei Sekunden den Kurzstatus holen und daraus Klartext machen. Die
 // Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" - so kurz wie
 // moeglich, weil der ESP8266 nebenher die Waermepumpe abfragt.
@@ -709,11 +722,15 @@ static const char notbetriebJS[] PROGMEM =
     "function nbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
     "var p=t.trim().split(';');var z=parseInt(p[0]);var s=parseInt(p[1]);var n=parseInt(p[2]);"
     "var m=parseInt(p[3]);var sp=parseInt(p[4]);"
+    // Feld 7: Plausibilitaet der Kurve (0 = ok, 1 = Vorlauf, 2 = Aussenpunkte).
+    // Es haengt HINTEN an, damit die Felder 5 und 6 stehen bleiben - die
+    // Startseite liest sie ueber dieselbe Route (verbindungJS).
+    "var kw=parseInt(p[7]);"
     // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
     // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
     "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
-    "var g=document.getElementById('nbsperre');"
+    "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
     "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist eingeschaltet. Die Wärmepumpe läuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe für den Kompressor - siehe Anleitung.</p>';}"
     "else if(z==3){e.className='w3-panel w3-red';e.innerHTML='<h3>ROT</h3><p>Hat nicht geklappt. " NB_TXT_PLAN_B "</p>';}"
@@ -725,6 +742,11 @@ static const char notbetriebJS[] PROGMEM =
     "if(!zeigen){f.style.display='none';g.style.display='none';}"
     "else if(sp==0){g.style.display='none';f.style.display='block';}"
     "else{f.style.display='none';g.style.display='block';g.innerHTML=nbSperrtext(sp,m);}"
+    // Der Hinweis haengt nicht an der Sperre: Er gilt auch dann, wenn der Knopf
+    // frei ist - das ist sogar sein wichtigster Fall.
+    "if(zeigen&&kw>0){k.style.display='block';"
+    "k.innerHTML='<h3>Kurve prüfen</h3><p>'+(kw==1?'" NB_TXT_KURVE_VORLAUF "':'" NB_TXT_KURVE_AUSSEN "')+'</p>';}"
+    "else{k.style.display='none';}"
     "}).catch(()=>{}).finally(()=>{setTimeout(nbState,2000)})}"
     "document.addEventListener('DOMContentLoaded',nbState);"
     "</script>";
@@ -833,6 +855,22 @@ void handleNotbetrieb(WebServerClass *httpServer)
   }
   httptext += "</div>";
 
+  // Auch dieser Hinweis wird serverseitig fertig aufgebaut - gleiche
+  // Begruendung wie beim Sperrhinweis darueber: Wer die Seite oeffnet, soll
+  // ihn sofort sehen und nicht erst nach der ersten Statusabfrage.
+  const NotbetriebKurvenWarnung kurvenwarnung = notbetrieb_kurvenwarnung();
+  httptext += "<div id='nbwarn' class='w3-panel w3-pale-yellow'";
+  httptext += (kurvenwarnung == NOTBETRIEB_KURVE_OK) ? " style='display:none'>" : ">";
+  if (kurvenwarnung != NOTBETRIEB_KURVE_OK)
+  {
+    httptext += "<h3>Kurve prüfen</h3><p>";
+    httptext += (kurvenwarnung == NOTBETRIEB_KURVE_VORLAUF_VERDREHT)
+                    ? NB_TXT_KURVE_VORLAUF
+                    : NB_TXT_KURVE_AUSSEN;
+    httptext += "</p>";
+  }
+  httptext += "</div>";
+
   httptext += "<div id='nbstat'></div></div>";
   httpServer->sendContent(httptext);
 
@@ -888,7 +926,7 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
   // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere auf
   // einem ESP8266 der teurere Weg. Format nach der Erweiterung:
-  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))
   {
@@ -903,7 +941,11 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
                             verbindung_ausfall_sekunden(&hausteuerung),
                             verbindung_ueber_deckel(&hausteuerung));
     }
-    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s", (unsigned)lage, dauer);
+    // Die Kurvenwarnung haengt hinten an und nicht bei den Notbetriebsfeldern:
+    // Die Startseite liest Lage und Dauer ueber dieselbe Route an den Indizes 5
+    // und 6, ein Einschub in der Mitte haette beide Seiten verschoben.
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u",
+                   (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung());
   }
 
   httpServer->send(200, "text/plain", status);

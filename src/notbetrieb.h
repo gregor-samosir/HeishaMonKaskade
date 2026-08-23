@@ -137,10 +137,10 @@ struct NotbetriebSchritt
 /* denselben Zahlen waeren zwei Tabellen, die auseinanderlaufen koennen.     */
 /*****************************************************************************/
 static const char *const NOTBETRIEB_WERTE_HEIZEN[] = {
-    "Z1HeatCurveTargetHighTemp", // Vorlauf bei KAELTE - gehoert zu OutsideLow
-    "Z1HeatCurveTargetLowTemp",  // Vorlauf bei WAERME - gehoert zu OutsideHigh
-    "Z1HeatCurveOutsideLowTemp",
-    "Z1HeatCurveOutsideHighTemp"};
+    "Z1HeatCurveTargetHighTemp", // "VL kalt" - Vorlauf bei KAELTE, zu OutsideLow
+    "Z1HeatCurveTargetLowTemp",  // "VL warm" - Vorlauf bei WAERME, zu OutsideHigh
+    "Z1HeatCurveOutsideLowTemp", // "AT kalt"
+    "Z1HeatCurveOutsideHighTemp"}; // "AT warm"
 
 static const char *const NOTBETRIEB_WERTE_WASSER[] = {
     "DHWTemp"};
@@ -178,10 +178,10 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {"OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only, zuerst
     {"HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
-    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve
-    {"Z1HeatCurveTargetLowTemp", 30, 1, 0},
-    {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},
-    {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},
+    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve: "VL kalt"
+    {"Z1HeatCurveTargetLowTemp", 30, 1, 0},          // "VL warm"
+    {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
+    {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
     {"Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
 
 /*****************************************************************************/
@@ -303,6 +303,59 @@ inline bool notbetrieb_vollstaendig(const NotbetriebSpeicher *sp, NotbetriebRoll
     const unsigned n = notbetrieb_wert_anzahl(rolle);
     const uint8_t voll = (uint8_t)((1u << n) - 1u);
     return (sp->gesetzt & voll) == voll;
+}
+
+/*****************************************************************************/
+/* Plausibilitaet der Kurve: zeigt sie in die richtige Richtung?             */
+/*                                                                           */
+/* Die vier Werte koennen einzeln im erlaubten Bereich liegen und trotzdem   */
+/* eine unsinnige Kurve ergeben - genau dann, wenn "VL kalt" und "VL warm"   */
+/* vertauscht sind. Der Fall ist nicht konstruiert: Panasonics Target_High/  */
+/* Low benennt die VORLAUFhoehe, der ioBroker-Konfigbaum benennt mit Hi/Lo   */
+/* die AUSSENtemperatur, und beide Paare liegen ueber Kreuz (vlLo ->         */
+/* TargetHigh). Bis zum 2026-08-20 spiegelte kurven_sync.py die Kurve        */
+/* deshalb verdreht, und niemandem fiel es auf - die Werte waren ja gueltig. */
+/*                                                                           */
+/* Eine Heizkurve faellt mit steigender Aussentemperatur, also VL kalt >=    */
+/* VL warm. GLEICHHEIT IST ERLAUBT: Eine flache Vorgabe ist zulaessig - die  */
+/* Kuehlkurve dieser Anlage faehrt genau so (20 C bei 20 wie bei 30 C).      */
+/*                                                                           */
+/* Das Ergebnis WARNT, es sperrt nicht. Ein Notbetrieb mit verdrehter Kurve  */
+/* ist immer noch besser als keiner, und diese Regel kennt die Absicht des   */
+/* Betreibers nicht. Gesperrt wird nur, was nachweislich nicht funktioniert: */
+/* fehlende Werte und der Kuehlbetrieb (notbetrieb_sperrgrund()).            */
+/*                                                                           */
+/* Unvollstaendige Saetze und die Rolle Warmwasser melden OK - dort gibt es  */
+/* nichts zu pruefen, und eine Warnung neben "Nicht bereit" waere Laerm.     */
+/*****************************************************************************/
+enum NotbetriebKurvenWarnung
+{
+    NOTBETRIEB_KURVE_OK = 0,               // plausibel, oder nichts zu pruefen
+    NOTBETRIEB_KURVE_VORLAUF_VERDREHT = 1, // VL kalt < VL warm
+    NOTBETRIEB_KURVE_AUSSEN_VERDREHT = 2   // AT kalt >= AT warm
+};
+
+inline NotbetriebKurvenWarnung notbetrieb_kurve_pruefen(const NotbetriebSpeicher *sp,
+                                                        NotbetriebRolle rolle)
+{
+    if (rolle == NOTBETRIEB_WASSER || !notbetrieb_vollstaendig(sp, rolle))
+        return NOTBETRIEB_KURVE_OK;
+
+    // Reihenfolge wie in NOTBETRIEB_WERTE_HEIZEN - die Indizes stehen nur hier
+    // und in jener Tabelle, deshalb die Namen daneben.
+    const int vl_kalt = sp->werte[0]; // Z1HeatCurveTargetHighTemp
+    const int vl_warm = sp->werte[1]; // Z1HeatCurveTargetLowTemp
+    const int at_kalt = sp->werte[2]; // Z1HeatCurveOutsideLowTemp
+    const int at_warm = sp->werte[3]; // Z1HeatCurveOutsideHighTemp
+
+    // Der Vorlauf zuerst: Das ist der Verwechslungsfall, um den es geht.
+    if (vl_kalt < vl_warm)
+        return NOTBETRIEB_KURVE_VORLAUF_VERDREHT;
+    // Zwei Stuetzpunkte auf derselben Aussentemperatur ergeben keine Kurve -
+    // anders als beim Vorlauf ist Gleichheit hier bereits entartet.
+    if (at_kalt >= at_warm)
+        return NOTBETRIEB_KURVE_AUSSEN_VERDREHT;
+    return NOTBETRIEB_KURVE_OK;
 }
 
 /*****************************************************************************/

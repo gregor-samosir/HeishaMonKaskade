@@ -1,5 +1,58 @@
 #pragma once
 // Changelog:
+// 3.14.0 - Die Weboberflaeche und das Kurvenwerkzeug melden eine VERDREHTE
+//         Heizkurve. Neue Regel notbetrieb_kurve_pruefen() in notbetrieb.h,
+//         hosttestbar wie alles dort.
+//
+//         WARUM. Die vier Kurvenwerte koennen einzeln im erlaubten Bereich
+//         liegen und trotzdem eine unsinnige Kurve ergeben. Der Grund ist die
+//         Ueberkreuzung der Namen: Panasonics Target_High/Low benennt die
+//         VORLAUFhoehe, der ioBroker-Konfigbaum benennt mit Hi/Lo die
+//         AUSSENtemperatur - "vlLo" gehoert also nach "TargetHigh". Bis zum
+//         2026-08-20 spiegelte kurven_sync.py die Kurve deshalb verdreht, und
+//         kein Bereichstest konnte das finden: 26 und 34 sind beide gueltig.
+//         Owner-Rueckfrage 2026-08-23: Genau diese Namensgebung fuehrt beim
+//         Lesen zuverlaessig in die Irre. Beschriftet ist sie seither
+//         durchgaengig (VL kalt / VL warm / AT kalt / AT warm); diese Version
+//         legt die Pruefung daneben, weil Beschriftung eine Verwechslung
+//         sichtbar macht, aber nicht verhindert.
+//
+//         DIE REGEL. Eine Heizkurve faellt mit steigender Aussentemperatur,
+//         also VL kalt >= VL warm. Gleichheit ist erlaubt - eine flache
+//         Vorgabe ist zulaessig, die Kuehlkurve dieser Anlage faehrt genau so
+//         (20 C bei 20 wie bei 30 C). Die Aussenpunkte muessen dagegen echt
+//         auseinanderliegen: Zwei Stuetzpunkte auf derselben Temperatur
+//         ergeben keine Kurve. Unvollstaendige Saetze und die Rolle
+//         Warmwasser melden OK - dort gibt es nichts zu pruefen.
+//
+//         WARNEN, NICHT SPERREN. Der Knopf bleibt bedienbar. Ein Notbetrieb
+//         auf verdrehter Kurve ist immer noch besser als keiner, und die
+//         Regel kennt die Absicht des Betreibers nicht. Gesperrt wird
+//         weiterhin nur, was nachweislich nicht funktioniert: fehlende Werte
+//         und der Kuehlbetrieb. Die Sperrfarbe orange bleibt der echten
+//         Sperre vorbehalten, der Hinweis ist blassgelb.
+//
+//         WO ER AUFTAUCHT. Auf der Notbetriebsseite als eigenes Feld ueber
+//         dem Statusbereich - serverseitig fertig aufgebaut und im 2-s-Takt
+//         nachgefuehrt, gleiche Machart wie der Sperrhinweis. Im MQTT-Log
+//         beim WECHSEL der Beurteilung, mit den Zahlen in der Zeile; nur beim
+//         Wechsel, weil der Broker nach jedem Reconnect alle Werte erneut
+//         einspielt. Und in test/kurven_sync.py, das eine verdrehte Kurve
+//         jetzt gar nicht erst spiegelt (--kurve-ignorieren hebt das auf).
+//
+//         STATUSROUTE. /notbetrieb/status liefert ein achtes Feld:
+//         Zustand;Schritt;Schritte;fehlend;Sperre;Lage;Dauertext;
+//         Kurvenwarnung. 0 in Ordnung, 1 Vorlaeufe vertauscht, 2
+//         Aussenpunkte vertauscht oder gleich. Es haengt HINTEN an, damit
+//         Lage und Dauertext auf den Indizes 5 und 6 stehen bleiben - die
+//         Startseite liest dieselbe Route.
+//
+//         GROESSE. ESP8266 RAM +648 B (60,4 % -> 61,2 %), Flash +1464 B;
+//         ESP32-S3 RAM +8 B, Flash +1500 B (je gegen 3.13.0, Stufe 1).
+//
+//         NICHT GEAENDERT. Keine Zuordnung, kein Topic-Name, keine
+//         Schrittfolge. Wer 3.13.0 fahren will, verliert nur den Hinweis.
+//
 // 3.13.0 - Die Weboberflaeche sagt, wenn die Hausteuerung ausgefallen ist -
 //         und sie unterscheidet dabei ZWEI Ausfaelle: Broker weg, und Broker
 //         da, aber die Kaskadenregelung rechnet nicht mehr. Dazu zwei
@@ -1045,4 +1098,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.13.0";
+static const char* heishamon_version = "3.14.0";

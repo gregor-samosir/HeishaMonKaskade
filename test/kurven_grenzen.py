@@ -47,14 +47,16 @@ from mqtt_pub import build_connect, build_publish  # noqa: E402
 
 # Set-Topic, state-Topic, min, max (Bereiche aus commands.cpp)
 PARAMETER = [
-    ("Z1HeatCurveTargetHighTemp",  "Z1_Heat_Curve_Target_High_Temp",  20, 55),
-    ("Z1HeatCurveTargetLowTemp",   "Z1_Heat_Curve_Target_Low_Temp",   20, 55),
-    ("Z1HeatCurveOutsideLowTemp",  "Z1_Heat_Curve_Outside_Low_Temp",  -15, 15),
-    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", -15, 15),
-    ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  5, 20),
-    ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   5, 20),
-    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  20, 30),
-    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 15, 30),
+    # Etiketten wie in MQTT-Topics.md: Target_* benennt die Vorlaufhoehe,
+    # Outside_* die Aussentemperatur - die Paare liegen ueber Kreuz.
+    ("Z1HeatCurveTargetHighTemp",  "Z1_Heat_Curve_Target_High_Temp",  20, 55),  # VL kalt
+    ("Z1HeatCurveTargetLowTemp",   "Z1_Heat_Curve_Target_Low_Temp",   20, 55),  # VL warm
+    ("Z1HeatCurveOutsideLowTemp",  "Z1_Heat_Curve_Outside_Low_Temp",  -15, 15), # AT kalt
+    ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", -15, 15), # AT warm
+    ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  5, 20),   # VL kuehl
+    ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   5, 20),   # VL heiss
+    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  20, 30),  # AT kuehl
+    ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 15, 30),  # AT heiss
 ]
 
 

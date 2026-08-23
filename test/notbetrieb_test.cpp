@@ -770,6 +770,98 @@ static void test_anzeigeverfall()
          "und faellt auch dort punktgenau weg");
 }
 
+/*****************************************************************************/
+/* 12. Plausibilitaet der Kurve - warnen, nicht sperren                      */
+/*                                                                           */
+/* Die Regel faengt den Verwechslungsfall ab, der am 2026-08-20 wirklich     */
+/* passiert ist: VL kalt und VL warm vertauscht gespiegelt, alle vier Werte  */
+/* einzeln im erlaubten Bereich. Die Sperre bleibt davon unberuehrt - dieser */
+/* Test haelt beides auseinander.                                            */
+/*****************************************************************************/
+static void test_kurvenplausibilitaet()
+{
+  printf("\n== Plausibilitaet der Kurve ==\n");
+
+  // die echte Hauskurve: 34 C bei -10 C, 26 C bei +15 C
+  NotbetriebSpeicher sp;
+  notbetrieb_speicher_leeren(&sp);
+  annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34);
+  annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 26);
+  annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10);
+  annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15);
+  pruefe(notbetrieb_kurve_pruefen(&sp, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_OK,
+         "die Hauskurve 34/26 bei -10/+15 ist plausibel");
+
+  // genau die Verdrehung, die kurven_sync.py bis zum 2026-08-20 gespiegelt hat
+  NotbetriebSpeicher v;
+  notbetrieb_speicher_leeren(&v);
+  annehmen(&v, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 26);
+  annehmen(&v, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 34);
+  annehmen(&v, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10);
+  annehmen(&v, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15);
+  pruefe(notbetrieb_kurve_pruefen(&v, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_VORLAUF_VERDREHT,
+         "VL kalt 26 unter VL warm 34 wird gemeldet");
+
+  // ... und sie bleibt trotzdem startbar: warnen ist nicht sperren
+  pruefe(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &v, "0") == NOTBETRIEB_FREI,
+         "die verdrehte Kurve sperrt den Knopf NICHT");
+
+  // flache Kurve: zulaessige Vorgabe, keine Warnung (so faehrt die Kuehlseite)
+  NotbetriebSpeicher f;
+  notbetrieb_speicher_leeren(&f);
+  annehmen(&f, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 30);
+  annehmen(&f, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 30);
+  annehmen(&f, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10);
+  annehmen(&f, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15);
+  pruefe(notbetrieb_kurve_pruefen(&f, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_OK,
+         "gleiche Vorlaeufe sind erlaubt");
+
+  // die Aussenachse verdreht - der Vorlauf stimmt, die Stuetzpunkte nicht
+  NotbetriebSpeicher a;
+  notbetrieb_speicher_leeren(&a);
+  annehmen(&a, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34);
+  annehmen(&a, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 26);
+  annehmen(&a, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", 15);
+  annehmen(&a, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", -10);
+  pruefe(notbetrieb_kurve_pruefen(&a, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_AUSSEN_VERDREHT,
+         "AT kalt 15 ueber AT warm -10 wird gemeldet");
+
+  // zwei Stuetzpunkte auf derselben Aussentemperatur sind ebenfalls entartet
+  NotbetriebSpeicher g;
+  notbetrieb_speicher_leeren(&g);
+  annehmen(&g, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34);
+  annehmen(&g, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 26);
+  annehmen(&g, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", 15);
+  annehmen(&g, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15);
+  pruefe(notbetrieb_kurve_pruefen(&g, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_AUSSEN_VERDREHT,
+         "AT kalt gleich AT warm wird gemeldet");
+
+  // der Vorlauf wird zuerst gemeldet: er ist der Verwechslungsfall
+  NotbetriebSpeicher b;
+  notbetrieb_speicher_leeren(&b);
+  annehmen(&b, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 26);
+  annehmen(&b, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 34);
+  annehmen(&b, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", 15);
+  annehmen(&b, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", -10);
+  pruefe(notbetrieb_kurve_pruefen(&b, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_VORLAUF_VERDREHT,
+         "sind beide verdreht, nennt die Meldung den Vorlauf");
+
+  // unvollstaendig: die Sperre greift ohnehin, hier gibt es nichts zu warnen
+  NotbetriebSpeicher u;
+  notbetrieb_speicher_leeren(&u);
+  annehmen(&u, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 26);
+  annehmen(&u, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 34);
+  pruefe(notbetrieb_kurve_pruefen(&u, NOTBETRIEB_HEIZEN) == NOTBETRIEB_KURVE_OK,
+         "unvollstaendiger Satz meldet keine Warnung");
+
+  // Warmwasser hat keine Kurve
+  NotbetriebSpeicher w;
+  notbetrieb_speicher_leeren(&w);
+  annehmen(&w, NOTBETRIEB_WASSER, "DHWTemp", 48);
+  pruefe(notbetrieb_kurve_pruefen(&w, NOTBETRIEB_WASSER) == NOTBETRIEB_KURVE_OK,
+         "Warmwasser meldet nie eine Kurvenwarnung");
+}
+
 int main()
 {
   printf("Hosttest Notbetrieb (src/notbetrieb.h)\n");
@@ -784,6 +876,7 @@ int main()
   test_ruecklesen();
   test_freigabe();
   test_anzeigeverfall();
+  test_kurvenplausibilitaet();
 
   printf("\n%s (%d Fehler)\n", fehler == 0 ? "ALLE PRUEFUNGEN BESTANDEN" : "FEHLGESCHLAGEN", fehler);
   return fehler == 0 ? 0 : 1;

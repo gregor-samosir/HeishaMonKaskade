@@ -109,6 +109,11 @@ static const SetCommand setCommands[] = {
     // with the flow target at that point. Kept in sync from Node-RED so the
     // heatpump can run on its own curve if the cascade control is unavailable.
     // Read back via TOP29/TOP30/TOP32/TOP31 respectively.
+    //
+    // High/Low does NOT refer to the same axis in both pairs: Outside_* names
+    // outside temperatures, Target_* names flow temperatures, and they cross
+    // over - TargetHigh is the flow when it is COLD ("VL kalt"), TargetLow the
+    // flow when it is WARM ("VL warm"). Measured 2026-08-20, see MQTT-Topics.md.
     {27, 75, 0xFF, CONV_ADD,     "Z1HeatCurveTargetHighTemp",    20,  55, 128},
     {28, 76, 0xFF, CONV_ADD,     "Z1HeatCurveTargetLowTemp",     20,  55, 128},
     {29, 77, 0xFF, CONV_ADD,     "Z1HeatCurveOutsideLowTemp",   -15,  15, 128},

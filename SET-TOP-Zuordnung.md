@@ -85,14 +85,14 @@ SET23 | `SGReadyCapacity1DHW` | 71 | ganz | TOP94 | `SGReady_Capacity1_DHW` | vo
 SET24 | `SGReadyCapacity2Heat` | 74 | ganz | TOP95 | `SGReady_Capacity2_Heat` | voll
 SET25 | `SGReadyCapacity2DHW` | 73 | ganz | TOP96 | `SGReady_Capacity2_DHW` | voll
 SET26 | `DHWRoomMaxTime` | 97 | ganz | TOP98 | `DHW_Room_Max_Time` | voll ⁴
-SET27 | `Z1HeatCurveTargetHighTemp` | 75 | ganz | TOP29 | `Z1_Heat_Curve_Target_High_Temp` | voll ²
-SET28 | `Z1HeatCurveTargetLowTemp` | 76 | ganz | TOP30 | `Z1_Heat_Curve_Target_Low_Temp` | voll
-SET29 | `Z1HeatCurveOutsideLowTemp` | 77 | ganz | TOP32 | `Z1_Heat_Curve_Outside_Low_Temp` | voll
-SET30 | `Z1HeatCurveOutsideHighTemp` | 78 | ganz | TOP31 | `Z1_Heat_Curve_Outside_High_Temp` | voll
-SET31 | `Z1CoolCurveTargetHighTemp` | 86 | ganz | TOP72 | `Z1_Cool_Curve_Target_High_Temp` | voll ²
-SET32 | `Z1CoolCurveTargetLowTemp` | 87 | ganz | TOP73 | `Z1_Cool_Curve_Target_Low_Temp` | voll
-SET33 | `Z1CoolCurveOutsideLowTemp` | 88 | ganz | TOP75 | `Z1_Cool_Curve_Outside_Low_Temp` | voll
-SET34 | `Z1CoolCurveOutsideHighTemp` | 89 | ganz | TOP74 | `Z1_Cool_Curve_Outside_High_Temp` | voll
+SET27 | `Z1HeatCurveTargetHighTemp` (VL kalt) | 75 | ganz | TOP29 | `Z1_Heat_Curve_Target_High_Temp` | voll ²
+SET28 | `Z1HeatCurveTargetLowTemp` (VL warm) | 76 | ganz | TOP30 | `Z1_Heat_Curve_Target_Low_Temp` | voll
+SET29 | `Z1HeatCurveOutsideLowTemp` (AT kalt) | 77 | ganz | TOP32 | `Z1_Heat_Curve_Outside_Low_Temp` | voll
+SET30 | `Z1HeatCurveOutsideHighTemp` (AT warm) | 78 | ganz | TOP31 | `Z1_Heat_Curve_Outside_High_Temp` | voll
+SET31 | `Z1CoolCurveTargetHighTemp` (VL kühl) | 86 | ganz | TOP72 | `Z1_Cool_Curve_Target_High_Temp` | voll ²
+SET32 | `Z1CoolCurveTargetLowTemp` (VL heiß) | 87 | ganz | TOP73 | `Z1_Cool_Curve_Target_Low_Temp` | voll
+SET33 | `Z1CoolCurveOutsideLowTemp` (AT kühl) | 88 | ganz | TOP75 | `Z1_Cool_Curve_Outside_Low_Temp` | voll
+SET34 | `Z1CoolCurveOutsideHighTemp` (AT heiß) | 89 | ganz | TOP74 | `Z1_Cool_Curve_Outside_High_Temp` | voll
 SET35 | `HeatingMode` | 28 | 7+8 | TOP76 | `Heating_Mode` | voll ⁶
 SET36 | `CoolingMode` | 28 | 5+6 | TOP81 | `Cooling_Mode` | voll ⁶
 

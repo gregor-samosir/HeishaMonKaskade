@@ -131,6 +131,9 @@ void notbetrieb_status(char *out, size_t len);     // Zustand;Schritt;Schritte;f
 // und den gehaltenen Werten bestimmt, weil die Webhandler kein actual_data
 // haben. NOTBETRIEB_FREI heisst: der Knopf darf gedrueckt werden.
 NotbetriebSperre notbetrieb_sperre(void);
+// Plausibilitaet der gehaltenen Kurve (nur Rolle Heizen). WARNT, sperrt nicht -
+// die Regel steht in notbetrieb.h, der Text auf der Seite in webfunctions.cpp.
+NotbetriebKurvenWarnung notbetrieb_kurvenwarnung(void);
 
 // Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
 extern const NotbetriebRolle notbetriebRolle;
