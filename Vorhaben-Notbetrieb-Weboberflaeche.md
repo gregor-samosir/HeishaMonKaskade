@@ -1219,8 +1219,8 @@ die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **3.13.0**, per OTA am 2026-08-21 um 15:08 (Env `heishamon_esp32_h1_ota`). Abnahme grün, vier laufende Messwerte. Anlage steht, Direktbetrieb, Betriebsart Cool, Knopf gesperrt (`0;1;7;0;2;0;`) |
-H2 (192.168.2.122) | **3.13.0**, per OTA am 2026-08-21 um 15:16 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme grün, zwei laufende Messwerte. Knopf frei (`0;1;3;0;0;0;`) |
+H1 (192.168.2.120) | **3.14.0**, per OTA am 2026-08-23 um 14:05 (Env `heishamon_esp32_h1_ota`). Abnahme grün, ein laufender Messwert. Knopf frei, Kurve plausibel (`0;1;7;0;0;0;;0`) |
+H2 (192.168.2.122) | **3.14.0**, per OTA am 2026-08-23 um 14:09 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme grün, drei laufende Messwerte. Knopf frei (`0;1;3;0;0;0;;0`) |
 Prüfstand (192.168.2.197) | **3.13.0**, per USB am 2026-08-21 um 14:27, Rolle Heizen, Broker wieder auf 192.168.2.147. Für den Notbetriebsknopf weiterhin untauglich (ohne Wärmepumpe kein TOP101), für die **Verbindungsanzeige** dagegen genau richtig — dort ist der ganze Nachweis zu 3.13.0 gelaufen |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
@@ -1636,9 +1636,40 @@ Normalfall.
 Die Anzeige selbst an H1 im Normalbetrieb: Notbetriebsseite „Hausteuerung:
 verbunden" (grau, klein), Startseite leer.
 
+### Der Rollout, 2026-08-23 — beide Stufen auf 3.14.0
+
+**H1 um 14:05, H2 um 14:09**, wieder nacheinander mit Abnahme dazwischen.
+Gegenstand: die Plausibilitätsregel für die Heizkurve (warnt, sperrt nicht) und
+das achte Feld der Statusroute.
+
+ | H1 (192.168.2.120) | H2 (192.168.2.122)
+:--- | :--- | :---
+Version | 3.14.0 ✓ | 3.14.0 ✓
+Statusroute | `0;1;7;0;0;0;;0` | `0;1;3;0;0;0;;0`
+Tabellenstruktur | 92 Topics, identisch ✓ | identisch ✓
+Abweichungen zur Baseline | 1 laufender Messwert | 3 laufende Messwerte
+Sollwerte über den Reboot | unverändert ✓ | unverändert ✓
+
+Die Abweichungen bewegen sich ohnehin: an H1 der Verdampferauslauf (30 → 31 °C),
+an H2 Speichertemperatur (53 → 54 °C, die Anlage machte gerade Warmwasser),
+Außenrohr und Hochdruck. **Kein Sollwert hat sich verstellt** — an beiden Stufen
+`Quiet_Mode_Level` 0, `Z1_Heat_Request_Temp` 20, die vier Kurvenwerte
+unverändert, an H2 zusätzlich `DHW_Target_Temp` 48.
+
+Das **achte Feld ist an beiden Stufen 0**: Die gehaltene Kurve ist plausibel
+(VL kalt 34 ≥ VL warm 26, AT kalt −10 < AT warm 15), und an H2 gibt es als
+Rolle Warmwasser ohnehin nichts zu prüfen. Die Gegenprobe — dass die Warnung
+auch wirklich anschlägt — ist am Gerät noch offen; sie verlangt einen verdrehten
+Wert im `notbetrieb/`-Zweig. Im Hosttest ist sie über neun Fälle abgedeckt.
+
+Dass die MQTT-Seite weiterläuft, ist über den ioBroker gegengeprüft: frische
+Zeitstempel an `Heatpump_State` beider Stufen und an
+`Z1_Heat_Curve_Target_Low_Temp`.
+
 ### Rollback
 
-`~/HeishaMon-Rollback/` trägt alle vier produktiven Abbilder als `v3.13.0`
+`~/HeishaMon-Rollback/` trägt seit dem 2026-08-23 auch beide ESP32-Abbilder als
+`v3.14.0`; die vier produktiven Abbilder als `v3.13.0`
 (beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
 3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout
 erneut mit `strings` nachgeprüft. Die Binaries gehören nur an die Releases des

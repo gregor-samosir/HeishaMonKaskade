@@ -170,6 +170,40 @@ Sekunde nachgemessen. Zwei Regeln halten das zusammen:
   zum Server schicken, um dort nach dem falschen Fehler zu suchen. Die Uhr für
   die stumme Steuerung läuft deshalb nur bei stehender Verbindung.
 
+### Eine verdrehte Heizkurve wird gemeldet (3.14.0)
+
+Die vier Kurvenwerte können einzeln alle im erlaubten Bereich liegen und
+trotzdem eine unsinnige Kurve ergeben. Der Grund ist eine Überkreuzung der
+Namen: Panasonics `Target_High`/`Target_Low` benennt die **Vorlaufhöhe**, der
+Konfigurationsbaum der Hausteuerung benennt mit `Hi`/`Lo` die
+**Außentemperatur** — der Vorlauf bei Kälte (`vlLo`) gehört also nach
+`TargetHigh`. Bis zum 2026-08-20 spiegelte das Kurvenwerkzeug die Heizkurve
+deshalb verdreht, und kein Bereichstest konnte das finden: 26 und 34 sind beide
+gültig, es kommt allein auf ihr Verhältnis an.
+
+Seit 3.14.0 prüft die Firmware das Verhältnis mit
+(`notbetrieb_kurve_pruefen()` in [`src/notbetrieb.h`](src/notbetrieb.h),
+hosttestbar wie alle Regeln dort):
+
+* **Vorlauf:** VL kalt ≥ VL warm — eine Heizkurve fällt mit steigender
+  Außentemperatur. Gleichheit ist erlaubt, eine flache Vorgabe ist zulässig.
+* **Außenpunkte:** AT kalt < AT warm — zwei Stützpunkte auf derselben
+  Temperatur ergeben keine Kurve.
+
+Die Regel **warnt und sperrt nicht.** Der Notbetriebsknopf bleibt bedienbar: Ein
+Notbetrieb auf verdrehter Kurve ist immer noch besser als keiner, und die Regel
+kennt die Absicht des Betreibers nicht. Gesperrt wird weiterhin nur, was
+nachweislich nicht funktioniert — fehlende Werte und der Kühlbetrieb. Sichtbar
+wird der Hinweis auf der Notbetriebsseite (blassgelb, die Sperrfarbe Orange
+bleibt der echten Sperre vorbehalten), im MQTT-Log beim Wechsel der Beurteilung
+und im achten Feld von `/notbetrieb/status`.
+
+Dazu durchgängig beschriftet: Überall dort, wo ein Panasonic-Name neben einer
+Zahl oder einem Namen aus der Hausteuerung steht, trägt er jetzt dasselbe
+Etikett — **VL kalt / VL warm / AT kalt / AT warm**. Es folgt keiner der beiden
+Namenskonventionen und lässt sich deshalb nicht mit `High`/`Low` verwechseln.
+Die Zuordnung im Einzelnen steht in [`MQTT-Topics.md`](MQTT-Topics.md).
+
 ### Der Notbetrieb ist ein Knopf im Browser (3.12.0)
 
 Fällt die übergeordnete Steuerung aus, soll die Wärmepumpe auf ihrer eigenen
