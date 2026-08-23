@@ -10,7 +10,13 @@ dabei ein neuer Fallstrick?
 Relais sind zwei völlig verschiedene Fälle mit gegenläufigem Risiko, und der
 Gewinn liegt woanders, als die Ausgangsfrage vermutet.
 
-> **Abschnitt 8 ist der aktuelle Stand.** Die Owner-Antworten vom 2026-08-22
+> **⚠ Abschnitt 10 ist der aktuelle Stand.** Die Handbuchangabe zur
+> Kontaktlogik des Kompressorschalters ist an dieser Anlage **falsch herum**
+> (Owner-Messung 2026-08-23). Überall, wo unten „offen = Kompressor frei"
+> steht, gilt das Gegenteil. Die Verdrahtungsempfehlung ändert sich dadurch
+> von COM+NO auf **COM+NC**.
+>
+> **Abschnitt 8 war der Stand davor.** Die Owner-Antworten vom 2026-08-22
 > haben drei der hier genannten Fallstricke erledigt und einen neuen
 > aufgedeckt, der die Empfehlung zu Heat/Cool umkehrt. Die Abschnitte 1–7
 > bleiben unverändert stehen, weil sie zeigen, wie der Befund entstanden ist.
@@ -66,7 +72,7 @@ Aus dem Panasonic-Servicehandbuch, Abschnitt zum Anschluss externer Geräte
 
 Eingang | Kontaktlogik | Ist-Zustand im Telegramm?
 :--- | :--- | :---
-External comp. SW | offen = Kompressor EIN, geschlossen = Kompressor AUS | **nein**
+External comp. SW | offen = Kompressor EIN, geschlossen = Kompressor AUS **← an dieser Anlage falsch herum, siehe Abschnitt 10** | **nein**
 Heat/Cool SW | offen = Heizen, geschlossen = Kühlen | **ja — TOP101**
 
 Beide sind trockene Kontakte, und beide brauchen die Freigabe im
@@ -90,10 +96,16 @@ Kompressorfreigabe über KNX kommen muss und dass dafür ein physischer
 KNX-Taster vorgesehen ist — ein Gerät, das es noch nicht gibt (Abschnitt 9
 führt es als OFFEN). Ein Relais erledigt das ohne neue Hardware im Haus.
 
-**Der Ausfall zeigt in die richtige Richtung.** Relais stromlos → Schließer
-offen → Kompressor **frei**. Reset, Absturz, OTA, Stromausfall des Boards:
-alle enden in „darf laufen". Für einen Notbetrieb, dessen einziger Zweck es
-ist, das Auskühlen zu verhindern, ist das die gewünschte Fehlerrichtung.
+**Der Ausfall zeigt in die richtige Richtung** — sofern der Kontakt richtig
+gewählt wird. Relais stromlos → Kompressor **frei**. Reset, Absturz, OTA,
+Stromausfall des Boards: alle enden in „darf laufen". Für einen Notbetrieb,
+dessen einziger Zweck es ist, das Auskühlen zu verhindern, ist das die
+gewünschte Fehlerrichtung.
+
+> **Korrigiert am 2026-08-23:** Hier stand „Relais stromlos → Schließer offen
+> → Kompressor frei". Das gilt an dieser Anlage nicht — offen sperrt. Die
+> Fehlerrichtung stimmt weiterhin, aber nur über den **NC**-Kontakt
+> (Abschnitt 10).
 
 **Der Preis:** Dieselbe Eigenschaft macht die *Sperre* unzuverlässig. Ein
 Reboot hebt sie auf, und die Firmware merkt es nicht, weil es kein Statusbyte
@@ -278,10 +290,10 @@ behalten bleibt eine Fleißaufgabe fürs Inbetriebnehmen, keine Vorbedingung.
 KNX-Aktor wird für diese Kanäle abgeklemmt, und die übergeordnete Node-RED-
 Steuerung schaltet im Normalbetrieb dieselben Relais. Es gibt dann nur noch
 **eine** Quelle, keine zwei Kontakte, die sich widersprechen können. Damit
-erledigt sich auch der mechanische Handschalter: Der Ruhezustand des
-Schließers ist offen, und offen heißt „Kompressor frei" — fällt die Bridge
-komplett aus, ist die Freigabe da, und die Wärmepumpe lässt sich am
-Bedienfeld bedienen. Der in Abschnitt 9 des Notbetriebsvorhabens noch offene
+erledigt sich auch der mechanische Handschalter: Über den NC-Kontakt ist der
+Ruhezustand geschlossen, und geschlossen heißt an dieser Anlage „Kompressor
+frei" (Abschnitt 10) — fällt die Bridge komplett aus, ist die Freigabe da, und
+die Wärmepumpe lässt sich am Bedienfeld bedienen. Der in Abschnitt 9 des Notbetriebsvorhabens noch offene
 **physische KNX-Taster wird damit ersatzlos gegenstandslos.**
 
 **Rückfallebene D1 mini (6.3).** Entfällt. Zwei weitere große Platinen sind
@@ -365,8 +377,8 @@ verliert das KNX-Gateway.
 
 Relais | Zweck | Fehlerrichtung bei Reset | Rückmeldung
 :--- | :--- | :--- | :---
-1 | External comp. SW | offen = Kompressor frei | keine, indirekt über `Compressor_Freq`
-2 | Heat/Cool SW | offen = Heizen | **TOP101, vollwertig**
+1 | External comp. SW | **geschlossen** = Kompressor frei → **COM+NC** (korrigiert, Abschnitt 10) | keine, indirekt über `Compressor_Freq`
+2 | Heat/Cool SW | offen = Heizen → COM+NO | **TOP101, vollwertig**
 
 Reihenfolge:
 
@@ -411,21 +423,22 @@ Auf dem Produktfoto sind **NO, COM, NC** herausgeführt. Damit ist der Punkt
 „Kontakttyp" aus 6.4 erledigt, und es entsteht ein Freiheitsgrad: Welcher
 Zustand bei stromlosem Relais gilt, entscheidet die Klemmenwahl.
 
+> **Die Tabelle unten war nach der Handbuchangabe gerechnet und ist für den
+> Kompressor falsch.** Die richtige Fassung steht in Abschnitt 10.2; das
+> Prinzip — die Klemmenwahl entscheidet über die Fehlerrichtung — gilt
+> unverändert.
+
 Verdrahtung | Relais stromlos | Kompressor (Relais 1) | Heat/Cool (Relais 2)
 :--- | :--- | :--- | :---
-**COM + NO** | Kontakt offen | frei | Heizen
-COM + NC | Kontakt geschlossen | gesperrt | Kühlen
+**COM + NO** | Kontakt offen | ~~frei~~ **gesperrt** | Heizen
+COM + NC | Kontakt geschlossen | ~~gesperrt~~ **frei** | Kühlen
 
-**Empfehlung: COM + NO für beide**, und zwar aus einem Grund, der über die
-Fehlerrichtung hinausgeht: Damit ist die Spule **im Heizbetrieb stromlos**.
-Der Dauerzustand der kalten Jahreszeit — also genau der, in dem ein Ausfall
-weh tut — braucht dann kein einziges Bauteil, das funktionieren muss. Ein
-Defekt an Spule, Treiber oder Versorgung fällt in Richtung „darf heizen", und
-zwar unabhängig von Firmware und Persistenz.
-
-Der Preis steht im Sommer: Beide Relais sind dann über Monate dauerbestromt,
-zusammen etwa 60–80 mA aus den 250 mA der 12-V-Ader. Das passt, verkleinert
-aber die Reserve — beim Inbetriebnehmen einmal nachmessen.
+**Das Auswahlkriterium bleibt:** Die Spule soll in dem Zustand stromlos sein,
+der im Winter gilt. Der Dauerzustand der kalten Jahreszeit — also genau der,
+in dem ein Ausfall weh tut — braucht dann kein einziges Bauteil, das
+funktionieren muss. Ein Defekt an Spule, Treiber oder Versorgung fällt in
+Richtung „darf heizen", und zwar unabhängig von Firmware und Persistenz.
+Welche Klemme das leistet, sagt Abschnitt 10.2.
 
 **Eine echte Kontaktrückmeldung geben die Wechsler nicht her.** Es gibt nur
 ein COM je Relais, und das liegt an der Wärmepumpe; NC bleibt zwar frei, ist
@@ -512,3 +525,109 @@ Chipbezeichnung steht in der Bootausgabe auf der USB-Konsole und im
 `esptool`-Kopf beim USB-Flashen der beiden neu bestellten Boards. Kostet
 nichts, wenn man beim Erstflash ohnehin hinschaut — und erspart die Suche
 nach einem Relais, das grundlos nicht anzieht.
+
+---
+
+## 10. Nachtrag 2026-08-23 — die Handbuchangabe stimmt nicht
+
+**Das ist der wichtigste Befund dieser Analyse, und er kam beim Einrichten des
+KNX-Tasters heraus.** Er ändert die Verdrahtung von Relais 1.
+
+### 10.1 Der Befund
+
+Das Panasonic-Handbuch gibt für den External comp. SW an: offen = Kompressor
+EIN, geschlossen = Kompressor AUS. **An dieser Anlage ist es genau umgekehrt.**
+
+Owner-Messung vom 2026-08-23, dreifach abgesichert:
+
+* Der KNX-Aktorkanal ist ein **Schließer**.
+* Gesendet wird **True, wenn der Kompressor freigegeben ist** — der Kontakt
+  ist bei Freigabe also **geschlossen**.
+* Am Aktor selbst gegengeprüft, und die Anlage läuft seit fünf Jahren so.
+
+Damit gilt hier:
+
+Kontakt | Kompressor
+:--- | :---
+**geschlossen** | **frei**
+offen | gesperrt
+
+Woher die Abweichung kommt — Fehler im Handbuch, Modell- oder
+Revisionsunterschied, oder eine Menüoption — ist offen und für die
+Entscheidung ohne Belang. Fünf Jahre Betrieb und die Gegenprobe am Aktor
+schlagen jede Handbuchzeile.
+
+**Für den Heat/Cool SW gilt die Umkehrung nicht ohne Weiteres.** Es wäre
+naheliegend und falsch, vom einen auf den anderen Eingang zu schließen. Ein
+Hinweis aus den Livedaten spricht sogar dafür, dass das Handbuch dort recht
+hat — am 2026-08-23 um 14:40 UTC gelesen:
+
+Datenpunkt | Wert
+:--- | :---
+`openknx.0.Kaskade.WP1_Heat-Cool` | `false`
+`openknx.0.Kaskade.WP2_Heat-Cool` | `false`
+`Heat_Cool_SW_State` (TOP101), beide Stufen | `0` = Heizen
+
+Ist auch dieser Aktorkanal ein Schließer mit derselben Konvention, war der
+Kontakt offen und die Wärmepumpe meldete Heizen — also **offen = Heizen**, wie
+im Handbuch. **Beweis ist das keiner**, weil die Kanalart nicht geprüft ist.
+Sie ist am Aktor genauso abzulesen wie beim Kompressorkanal; bis dahin bleibt
+die Zeile eine Annahme, und die Verdrahtung von Relais 2 wartet darauf.
+
+### 10.2 Was sich dadurch ändert
+
+**Nur die Klemme, nicht die Begründung.** Das Kriterium aus 9.1 bleibt: Die
+Spule soll in dem Zustand stromlos sein, der im Winter gilt, damit der Ausfall
+jedes beteiligten Bauteils in Richtung „darf heizen" fällt.
+
+Relais | Eingang | Gewünschter Ruhezustand | **Klemme** | Spule bestromt, wenn
+:--- | :--- | :--- | :--- | :---
+1 | External comp. SW | Kompressor frei | **COM + NC** | gesperrt
+2 | Heat/Cool SW | Heizen | **COM + NO** (Annahme, siehe 10.1) | Kühlen
+
+Die beiden Relais werden also **unterschiedlich** angeklemmt. Das ist keine
+Unsauberkeit, sondern die Folge davon, dass die Wärmepumpe die beiden Eingänge
+gegenläufig auslegt — und genau deshalb gehört es beschriftet, an der Klemme
+wie in der Notfallanleitung.
+
+**Zwei Folgen, die man leicht übersieht:**
+
+* **Der Ausfall der ganzen Bridge bleibt gutmütig** — aber nur über NC. Mit
+  COM+NO an Relais 1 wäre jeder Reset, jedes OTA und jeder Stromausfall des
+  Boards eine Kompressorsperre. Bei einem Gerät, dessen Zweck es ist, das
+  Auskühlen zu verhindern, wäre das die Umkehrung des Vorhabens.
+* **Die Kontaktqualität wird wichtiger** (6.4). Mit der richtigen Klemme ist
+  der Kontakt im Freigabezustand geschlossen; ein Kontakt, der nicht mehr
+  sauber schließt, heißt jetzt „keine Freigabe" statt „Sperre wirkt nicht" —
+  die Fehlerrichtung des *Kontakts* dreht sich also mit. Entwarnung kommt aus
+  den Verlaufsdaten weiter unten: Der Kontakt wird täglich mehrfach bewegt und
+  steht nicht monatelang still.
+
+### 10.3 Was die Verlaufsdaten über diesen Kanal sagen
+
+Nachgesehen am 2026-08-23 über die simple-api, `openknx.0.Kaskade.WP1_Compressor_Freigabe`,
+Zeitraum 2026-08-09 bis 2026-08-23 (21114 Punkte, 54 Flanken):
+
+Größe | Wert | Bedeutung für den Umbau
+:--- | :--- | :---
+Flanken | 3,7 pro Tag, rund **1350 im Jahr** | Für ein Kleinrelais unkritisch. Der Kontakt bleibt in Bewegung — das entschärft die Oxidationssorge aus 6.4 spürbar.
+Anteil Freigabe = true | **59 %** (207 h von 351 h) | Die Spule wäre über NC also im August zu 41 % bestromt, im Winter deutlich seltener. Innerhalb der 250 mA, siehe 9.1.
+**Längste Pause ohne Flanke** | **48 h** (08-09 06:13 bis 08-11 06:11), zweitlängste 33 h | **Der harte Beleg für 6.1.**
+
+Die letzte Zeile ist der eigentliche Ertrag dieser Abfrage. Die Freigabe wird
+rein ereignisgesteuert geschrieben, und zwischen zwei Ereignissen können
+**zwei Tage** liegen. Fällt ein Reconnect in so eine Pause, verwirft die
+Karenzzeit die Wiedereinspielung, und ohne zyklischen Re-Assert stünde das
+Relais bis zu zwei Tage falsch — im ungünstigen Fall zwei Tage lang gesperrt.
+Der 5-min-Re-Assert aus 8.4 Punkt 2 ist damit keine Vorsichtsmaßnahme mehr,
+sondern Voraussetzung.
+
+### 10.4 Prüfschritt, der vor die Verdrahtung gehört
+
+Beim Kompressoreingang hat sich die Handbuchangabe als falsch erwiesen. Daraus
+folgt für die Inbetriebnahme eine Regel, die vorher nicht nötig schien:
+
+**Jeden der beiden Kontakte einmal einzeln nachweisen, bevor die Steuerung
+darauf gebaut wird** — den Heat/Cool-Kontakt gegen TOP101 (das kostet nichts,
+das Feld meldet den Ist-Zustand binnen Sekunden), den Kompressorkontakt gegen
+`Compressor_Freq` bei laufender Anforderung. Nicht gegen das Handbuch.

@@ -193,6 +193,20 @@ byte with `test/frame_diff.py`). So the obvious approach - diff the frames
 while flipping the switch - is exhausted; finding it would need a different
 angle.
 
+**Careful with the service manual on that input.** It documents the external
+compressor switch as *open = compressor ON, short = compressor OFF*. **On this
+installation it is the other way round** - closed releases the compressor,
+open blocks it. Verified three ways on 2026-08-23: the KNX actuator channel is
+a normally-open contact, it is driven true to release the compressor, and that
+has been running correctly for five years; the actuator itself was checked
+again for this note. Whether that is an error in the manual, a model
+difference or a menu option is unknown. Since there is no status byte, nothing
+in the telegram contradicts a wrong assumption here - so verify the contact
+against `Compressor_Freq` under load rather than against the manual. The
+Heat/Cool switch is a *separate* question and must not be inferred from this
+one; on this installation it appears to follow the manual (*open = heat*), but
+that is not yet proven.
+
 *Deutsch: Die vier Topics melden, was die Wärmepumpe tatsächlich TUT - nicht,
 was ihr zuletzt befohlen wurde. Byte 110 ist im Original-HeishaMon nicht
 dekodiert; die Bitzuordnung stammt aus `ProtocolByteDecrypt.md` und ist am
