@@ -1,5 +1,23 @@
 #pragma once
 // Changelog:
+// 3.14.1 - Der Kurvenhinweis aus 3.14.0 hatte keine Farbe. Die Klasse
+//         w3-pale-yellow stand im HTML, aber nicht im mitgelieferten CSS -
+//         das Feld waere auf dem Geraet ohne Hintergrund erschienen.
+//         Nachgetragen als ".w3-pale-yellow{background:#ffffcc;color:#000}",
+//         hinter .w3-button wie alle Farbklassen (dessen background:inherit
+//         hat dieselbe Spezifitaet und wuerde eine vorher stehende Farbe
+//         ueberschreiben).
+//
+//         GEFUNDEN HAT ES DIE CI, nicht der Blick auf die Seite:
+//         test/css_klassen_test.py vergleicht die benutzten Klassen gegen die
+//         definierten. Der Test lief vor dem Rollout von 3.14.0 nicht mit -
+//         die Firmware war da schon auf beiden Stufen. Lehre fuer den
+//         naechsten Rollout: die Hosttests der CI vorher vollstaendig lokal
+//         fahren, nicht nur die des angefassten Bereichs.
+//
+//         Die neue Klasse steht ausserdem in FARBKLASSEN des Tests, damit
+//         auch fuer sie geprueft wird, dass sie hinter .w3-button liegt.
+//
 // 3.14.0 - Die Weboberflaeche und das Kurvenwerkzeug melden eine VERDREHTE
 //         Heizkurve. Neue Regel notbetrieb_kurve_pruefen() in notbetrieb.h,
 //         hosttestbar wie alles dort.
@@ -1098,4 +1116,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.14.0";
+static const char* heishamon_version = "3.14.1";

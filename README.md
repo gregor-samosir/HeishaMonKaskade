@@ -196,7 +196,9 @@ kennt die Absicht des Betreibers nicht. Gesperrt wird weiterhin nur, was
 nachweislich nicht funktioniert — fehlende Werte und der Kühlbetrieb. Sichtbar
 wird der Hinweis auf der Notbetriebsseite (blassgelb, die Sperrfarbe Orange
 bleibt der echten Sperre vorbehalten), im MQTT-Log beim Wechsel der Beurteilung
-und im achten Feld von `/notbetrieb/status`.
+und im achten Feld von `/notbetrieb/status`. Die Farbe selbst kam mit 3.14.1
+nach — in 3.14.0 fehlte die CSS-Klasse, gefunden hat es
+[`test/css_klassen_test.py`](test/css_klassen_test.py) in der CI.
 
 Dazu durchgängig beschriftet: Überall dort, wo ein Panasonic-Name neben einer
 Zahl oder einem Namen aus der Hausteuerung steht, trägt er jetzt dasselbe

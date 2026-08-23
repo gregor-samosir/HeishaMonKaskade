@@ -1219,8 +1219,8 @@ die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **3.14.0**, per OTA am 2026-08-23 um 14:05 (Env `heishamon_esp32_h1_ota`). Abnahme grün, ein laufender Messwert. Knopf frei, Kurve plausibel (`0;1;7;0;0;0;;0`) |
-H2 (192.168.2.122) | **3.14.0**, per OTA am 2026-08-23 um 14:09 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme grün, drei laufende Messwerte. Knopf frei (`0;1;3;0;0;0;;0`) |
+H1 (192.168.2.120) | **3.14.1**, per OTA am 2026-08-23 um 14:31 (Env `heishamon_esp32_h1_ota`). Abnahme zeilengleich, Knopf frei, Kurve plausibel (`0;1;7;0;0;0;;0`) |
+H2 (192.168.2.122) | **3.14.1**, per OTA am 2026-08-23 um 14:34 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme zeilengleich, Knopf frei (`0;1;3;0;0;0;;0`) |
 Prüfstand (192.168.2.197) | **3.13.0**, per USB am 2026-08-21 um 14:27, Rolle Heizen, Broker wieder auf 192.168.2.147. Für den Notbetriebsknopf weiterhin untauglich (ohne Wärmepumpe kein TOP101), für die **Verbindungsanzeige** dagegen genau richtig — dort ist der ganze Nachweis zu 3.13.0 gelaufen |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
@@ -1685,10 +1685,26 @@ Dass die MQTT-Seite weiterläuft, ist über den ioBroker gegengeprüft: frische
 Zeitstempel an `Heatpump_State` beider Stufen und an
 `Z1_Heat_Curve_Target_Low_Temp`.
 
+### Nachzügler 3.14.1 — der Hinweis hatte keine Farbe
+
+Die CI hat nach dem Rollout von 3.14.0 einen echten Fehler gemeldet:
+`w3-pale-yellow` stand im HTML, aber nicht im mitgelieferten CSS — das
+Hinweisfeld wäre auf dem Gerät ohne Hintergrund erschienen.
+`test/css_klassen_test.py` prüft genau das, lief aber vor dem Rollout nicht mit;
+lokal waren nur die Tests des angefassten Bereichs gelaufen. **Lehre für den
+nächsten Rollout: die Hosttests der CI vorher vollständig lokal fahren.**
+
+3.14.1 trägt die Klasse nach (`background:#ffffcc`, hinter `.w3-button` wie alle
+Farbklassen) und nimmt sie in die Farbliste des Tests auf. Am 2026-08-23 um
+14:31 (H1) und 14:34 (H2) ausgerollt: **beide Tabellen zeilengleich zur
+Baseline**, kein einziger abweichender Wert, Statusroute unverändert
+(`0;1;7;0;0;0;;0` bzw. `0;1;3;0;0;0;;0`). Die Farbe im ausgelieferten CSS an
+beiden Stufen nachgesehen.
+
 ### Rollback
 
-`~/HeishaMon-Rollback/` trägt seit dem 2026-08-23 auch beide ESP32-Abbilder als
-`v3.14.0`; die vier produktiven Abbilder als `v3.13.0`
+`~/HeishaMon-Rollback/` trägt seit dem 2026-08-23 alle vier Abbilder als
+`v3.14.1` und beide ESP32-Abbilder als `v3.14.0`; die vier produktiven Abbilder als `v3.13.0`
 (beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
 3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout
 erneut mit `strings` nachgeprüft. Die Binaries gehören nur an die Releases des

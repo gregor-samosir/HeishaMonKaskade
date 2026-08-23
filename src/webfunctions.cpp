@@ -33,6 +33,10 @@ static const char webHeader[] PROGMEM = "<!DOCTYPE html><html><title>Heisha moni
     ".w3-theme,.w3-blue{background:#2196F3;color:#fff}.w3-green{background:#4CAF50;color:#fff}"
     ".w3-red{background:#f44336;color:#fff}.w3-orange{background:#ff9800;color:#fff}"
     ".w3-yellow{background:#ffeb3b;color:#000}"
+    // Blassgelb fuer den Kurvenhinweis (3.14.1): ein Hinweis, keine Sperre -
+    // Orange bleibt der Sperre vorbehalten, das kraeftige Gelb dem laufenden
+    // Vorgang. Beides daneben zu stellen, waere ein drittes Warnsignal.
+    ".w3-pale-yellow{background:#ffffcc;color:#000}"
     ".w3-sidebar{position:fixed;top:0;left:0;height:100%;width:200px;background:#fff;z-index:2;overflow:auto}"
     ".w3-bar-block .w3-bar-item{display:block;width:100%;text-align:left;text-decoration:none;color:#000;padding:8px 16px}"
     ".w3-bar-block .w3-bar-item:hover{background:#ccc}"

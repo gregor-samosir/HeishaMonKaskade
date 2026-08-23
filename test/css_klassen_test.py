@@ -39,7 +39,8 @@ AUSNAHMEN = {"w3-animate-left"}
 
 # Klassen, die eine Hintergrundfarbe setzen und deshalb NACH .w3-button stehen
 # muessen (siehe Kopfkommentar).
-FARBKLASSEN = {"w3-blue", "w3-green", "w3-red", "w3-orange", "w3-yellow", "w3-theme"}
+FARBKLASSEN = {"w3-blue", "w3-green", "w3-red", "w3-orange", "w3-yellow", "w3-theme",
+               "w3-pale-yellow"}
 
 KLASSE = re.compile(r"w3-[a-z0-9-]+")
 
