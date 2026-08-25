@@ -1,5 +1,28 @@
 #pragma once
 // Changelog:
+// 3.14.2 - Der Kuehlkurven-Aussenpunkt Z1CoolCurveOutsideLowTemp (SET33) war
+//         auf 20..30 begrenzt. Richtig ist 15..30. Die Firmware wies 15 mit
+//         "Value 15 out of range [20..30]" ab, bevor das Kommando ueberhaupt
+//         zur WP ging - ein Wert, den die Anlage annimmt, kam so nie an.
+//
+//         DER NACHWEIS kommt vom Geraet selbst: Am Bedienterminal laesst sich
+//         der untere Punkt der Kuehlkurve auf 15 C stellen, die WP uebernimmt
+//         und zeigt ihn (pictures/Kuehlen_Kurve.png, 2026-08-25). Die X-Achse
+//         des Kurvendialogs nennt 15..30 - genau die Unschaerfe, die in
+//         test/README.md seit dem 2026-08-11 als offen vermerkt war.
+//
+//         WARUM DIE MESSUNG SIE NICHT FAND. kurven_grenzen.py prueft von der
+//         hinterlegten Grenze aus nach aussen. Ein zu ENG gesetzter Bereich
+//         faellt dabei grundsaetzlich nicht auf, weil unterhalb der Annahme
+//         nie geschrieben wird. Bei zu WEIT gesetzten Bereichen (3.2.x, Heat/
+//         Cool OutsideHigh) hat dieselbe Messung die Fehler gefunden. Lehre:
+//         Die Bereichsangabe des Bedienterminals schlaegt die Klemm-Messung,
+//         wenn beide auseinandergehen.
+//
+//         MITGEZOGEN: test/kurven_sync.py und test/kurven_grenzen.py (beide
+//         halten denselben Bereich als Spiegel von commands.cpp), sowie
+//         MQTT-Topics.md und test/README.md.
+//
 // 3.14.1 - Der Kurvenhinweis aus 3.14.0 hatte keine Farbe. Die Klasse
 //         w3-pale-yellow stand im HTML, aber nicht im mitgelieferten CSS -
 //         das Feld waere auf dem Geraet ohne Hintergrund erschienen.
@@ -1116,4 +1139,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.14.1";
+static const char* heishamon_version = "3.14.2";

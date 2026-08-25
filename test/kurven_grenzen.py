@@ -55,7 +55,7 @@ PARAMETER = [
     ("Z1HeatCurveOutsideHighTemp", "Z1_Heat_Curve_Outside_High_Temp", -15, 15), # AT warm
     ("Z1CoolCurveTargetHighTemp",  "Z1_Cool_Curve_Target_High_Temp",  5, 20),   # VL kuehl
     ("Z1CoolCurveTargetLowTemp",   "Z1_Cool_Curve_Target_Low_Temp",   5, 20),   # VL heiss
-    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  20, 30),  # AT kuehl
+    ("Z1CoolCurveOutsideLowTemp",  "Z1_Cool_Curve_Outside_Low_Temp",  15, 30),  # AT kuehl
     ("Z1CoolCurveOutsideHighTemp", "Z1_Cool_Curve_Outside_High_Temp", 15, 30),  # AT heiss
 ]
 

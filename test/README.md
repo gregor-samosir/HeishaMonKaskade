@@ -638,7 +638,7 @@ Messung 2026-08-10 an WP1 (Panasonic WH-MDC05H3E5, 5 kW Monoblock):
 | Z1HeatCurveOutsideHighTemp | AT warm | **-15 .. 15** | frueher 15..35 angenommen - falsche Seite |
 | Z1CoolCurveTargetHighTemp | VL kuehl | 5 .. 20 | = Vorlauf-Sollwert, s. Abschnitt unten |
 | Z1CoolCurveTargetLowTemp | VL heiss | 5 .. 20 | haltbar |
-| Z1CoolCurveOutsideLowTemp | AT kuehl | 20 .. 30 | haltbar |
+| Z1CoolCurveOutsideLowTemp | AT kuehl | 15 .. 30 | Untergrenze berichtigt 2026-08-25, s. u. |
 | Z1CoolCurveOutsideHighTemp | AT heiss | **15 .. 30** | frueher 20..30 bzw. 30..40 angenommen |
 
 Die beiden fett markierten Bereiche wurden mit einer Firmware ausgemessen,
@@ -673,18 +673,44 @@ Direktwert-Dialogen (Zeile `Bereich:`). Beides stimmt mit der Tabelle ueberein:
 | Kuehlbetr. Wassertemp, X-Achse | 15 .. 30 | passt |
 
 Belege in `pictures/`: `IMG_4887` (Heizkurve), `IMG_4889` (Kuehlkurve),
-`IMG_4894` / `IMG_4892` (Direktwert-Dialoge heizen/kuehlen).
+`IMG_4894` / `IMG_4892` (Direktwert-Dialoge heizen/kuehlen). Ein zweites
+Foto der Kuehlkurve mit auf 15 C gesetztem unteren Punkt:
+`Kuehlen_Kurve.png` (2026-08-25).
 
 Schrittweite laut Terminal ±1 Grad, wie in `commands.cpp` angenommen. Damit
 sind besonders die beiden fett markierten Korrekturen aus 3.2.x vom Geraet
 selbst bestaetigt: `Z1HeatCurveOutsideHighTemp` reicht BIS 15, und
 `Z1CoolCurveOutsideHighTemp` beginnt bei 15.
 
-Eine Unschaerfe bleibt: Die Kuehl-X-Achse spannt 15 .. 30 auf, waehrend fuer
-`Z1CoolCurveOutsideLowTemp` 20 .. 30 hinterlegt ist. Die Achse zeigt
-vermutlich nur den weiteren der beiden Punkte - die Klemm-Messung sagte 20.
-Kein Widerspruch, aber auch kein Beweis; ein Schreibversuch mit 15 auf SET33
-wuerde es klaeren. Bisher nicht gemessen, weil es fuer den Betrieb egal ist.
+### Die letzte Unschaerfe aufgeloest (2026-08-25, WP2)
+
+Offen geblieben war ein Widerspruch: Die Kuehl-X-Achse spannt am Terminal
+15 .. 30 auf, waehrend fuer `Z1CoolCurveOutsideLowTemp` 20 .. 30 hinterlegt
+war. Die Vermutung damals lautete, die Achse zeige nur den weiteren der
+beiden Punkte, und die Klemm-Messung mit ihrer Untergrenze 20 habe recht.
+
+**Sie hatte nicht recht.** Am Bedienterminal laesst sich der untere Punkt der
+Kuehlkurve auf 15 C stellen, die WP nimmt ihn an und zeigt ihn an
+(`pictures/Kuehlen_Kurve.png`). Der Bereich lautet also 15 .. 30 wie die
+Achse, nicht 20 .. 30 wie die Messung.
+
+Die Messung vom 2026-08-10 hat den Fehler nicht verursacht, sondern nur nicht
+aufgedeckt: Sie prueft von der hinterlegten Grenze aus nach aussen und kann
+einen zu eng gesetzten Bereich deshalb gar nicht finden - unterhalb von 20
+wurde nie geschrieben. Wer eine Untergrenze bestaetigen will, muss unter ihr
+ansetzen, nicht auf ihr.
+
+Bis 3.14.1 wies die Firmware 15 selbst ab, bevor das Kommando zur WP ging:
+
+```text
+Error: Value 15 out of range [20..30] for topic Z1CoolCurveOutsideLowTemp
+```
+
+Seit 3.14.2 steht 15 als Untergrenze in `commands.cpp`, in `kurven_sync.py`
+und in `kurven_grenzen.py`. Lehre fuer kuenftige Bereichsmessungen: Die
+Angaben des Bedienterminals schlagen die Klemm-Messung, wenn beide
+auseinandergehen - das Terminal nennt den erlaubten Bereich, die Messung nur
+das Verhalten innerhalb des angenommenen.
 
 ## Betriebsart Kurve/Direkt schalten (Byte 28, 2026-08-19, WP1)
 

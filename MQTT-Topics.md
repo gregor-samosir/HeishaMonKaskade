@@ -418,7 +418,7 @@ SET29 | Z1HeatCurveOutsideLowTemp | 77 | Heating curve: **cold** end of the outs
 SET30 | Z1HeatCurveOutsideHighTemp | 78 | Heating curve: **warm** end of the outside axis (pairs with TargetLow) | -15 to 15
 SET31 | Z1CoolCurveTargetHighTemp | 86 | Cooling curve: flow target **when it is cool** (pairs with OutsideLow) | 5 - 20
 SET32 | Z1CoolCurveTargetLowTemp | 87 | Cooling curve: flow target **when it is hot** (pairs with OutsideHigh) | 5 - 20
-SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: **cool** end of the outside axis (pairs with TargetHigh) | 20 - 30
+SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: **cool** end of the outside axis (pairs with TargetHigh) | 15 - 30
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: **hot** end of the outside axis (pairs with TargetLow) | 15 - 30
 SET35 | HeatingMode | 28 | Heating operation mode | 0=compensation curve, 1=direct
 SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=direct

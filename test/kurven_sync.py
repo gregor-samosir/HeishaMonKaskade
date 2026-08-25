@@ -90,7 +90,7 @@ MAPPING = [
     ("KK_Kühlkurve", "KK_HK_vlHi", "VL heiss", "Z1CoolCurveTargetLowTemp",
      "Z1_Cool_Curve_Target_Low_Temp", 5, 20),
     ("KK_Kühlkurve", "KK_HK_atLo", "AT kuehl", "Z1CoolCurveOutsideLowTemp",
-     "Z1_Cool_Curve_Outside_Low_Temp", 20, 30),
+     "Z1_Cool_Curve_Outside_Low_Temp", 15, 30),
     # Bereiche der beiden OutsideHigh-Parameter an der Anlage ausgemessen
     # (s. kurven_grenzen.py): Heat -15..15, Cool 15..30. Werte darueber oder
     # darunter klemmt die WP still. Ein Konfigurationswert ausserhalb wird

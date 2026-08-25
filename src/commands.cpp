@@ -125,7 +125,11 @@ static const SetCommand setCommands[] = {
     // Zone 1 cooling curve, same idea. Read back via TOP72/TOP73/TOP75/TOP74.
     {31, 86, 0xFF, CONV_ADD,     "Z1CoolCurveTargetHighTemp",     5,  20, 128},
     {32, 87, 0xFF, CONV_ADD,     "Z1CoolCurveTargetLowTemp",      5,  20, 128},
-    {33, 88, 0xFF, CONV_ADD,     "Z1CoolCurveOutsideLowTemp",    20,  30, 128},
+    // 15..30, Untergrenze berichtigt 2026-08-25: die Klemm-Messung vom
+    // 2026-08-10 hatte hier 20 ergeben, das Bedienterminal nennt aber 15 -
+    // und genau 15 nimmt die WP am Terminal auch an. Bis 3.14.1 wies die
+    // Firmware den Wert selbst ab, bevor das Kommando zur WP ging.
+    {33, 88, 0xFF, CONV_ADD,     "Z1CoolCurveOutsideLowTemp",    15,  30, 128},
     // 15..30, ebenfalls ausgemessen: darueber klemmt die WP auf 30,
     // darunter auf 15 - beides ohne jede Rueckmeldung. Genau die Art
     // stiller Verluste, die mit 3.1.0 beseitigt wurde.
