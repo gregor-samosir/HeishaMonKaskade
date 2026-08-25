@@ -1219,8 +1219,8 @@ die Einstellungen, und mit dem Firmware-Passwort niemand an den Knopf.
 
 Gerät | Stand
 :--- | :---
-H1 (192.168.2.120) | **3.14.1**, per OTA am 2026-08-23 um 14:31 (Env `heishamon_esp32_h1_ota`). Abnahme zeilengleich, Knopf frei, Kurve plausibel (`0;1;7;0;0;0;;0`) |
-H2 (192.168.2.122) | **3.14.1**, per OTA am 2026-08-23 um 14:34 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme zeilengleich, Knopf frei (`0;1;3;0;0;0;;0`) |
+H1 (192.168.2.120) | **3.14.2**, per OTA am 2026-08-25 um 13:56 (Env `heishamon_esp32_h1_ota`). Abnahme zeilengleich. Zuvor 3.14.1 seit dem 2026-08-23 |
+H2 (192.168.2.122) | **3.14.2**, per OTA am 2026-08-25 um 13:57 (Env `heishamon_esp32_h2_ota`, Rolle Warmwasser). Abnahme zeilengleich bis auf `DHW_Temp` 42 → 41 (laufender Messwert). Zuvor 3.14.1 seit dem 2026-08-23 |
 Prüfstand (192.168.2.197) | **3.13.0**, per USB am 2026-08-21 um 14:27, Rolle Heizen, Broker wieder auf 192.168.2.147. Für den Notbetriebsknopf weiterhin untauglich (ohne Wärmepumpe kein TOP101), für die **Verbindungsanzeige** dagegen genau richtig — dort ist der ganze Nachweis zu 3.13.0 gelaufen |
 
 Die Anlage ist nach dem Lauf zeilengleich mit dem Zustand davor; der Re-Assert
@@ -1701,9 +1701,39 @@ Baseline**, kein einziger abweichender Wert, Statusroute unverändert
 (`0;1;7;0;0;0;;0` bzw. `0;1;3;0;0;0;;0`). Die Farbe im ausgelieferten CSS an
 beiden Stufen nachgesehen.
 
+### Nachzügler 3.14.2 — die Kühlkurve war zu eng begrenzt
+
+Ein Set-Versuch aus dem Kurvenwerkzeug lief am 2026-08-25 in die Firmware-Sperre:
+
+```text
+Error: Value 15 out of range [20..30] for topic Z1CoolCurveOutsideLowTemp
+```
+
+Der hinterlegte Bereich war falsch, nicht der Wert — am Bedienterminal nimmt die
+WP für denselben Punkt 15 C an und zeigt ihn (`pictures/Kuehlen_Kurve.png`).
+Damit ist die seit dem 2026-08-11 in `test/README.md` vermerkte Unschärfe
+zwischen X-Achse (15..30) und hinterlegtem Bereich (20..30) aufgelöst, und zwar
+zugunsten der Achse. `kurven_grenzen.py` konnte den Fehler nicht finden: Es
+prüft von der hinterlegten Grenze aus nach außen, unterhalb von 20 wurde also
+nie geschrieben — zu weite Bereiche findet die Messung, zu enge nicht.
+
+Vor dem Rollout die **vollständige** Hosttestliste der CI lokal gefahren (acht
+Tests plus alle zehn Envs) — die Lehre aus 3.14.0 angewandt.
+
+Am 2026-08-25 um 13:56 (H1) und 13:57 (H2) ausgerollt. **H1 zeilengleich zur
+Baseline, H2 mit einer einzigen Abweichung** (`DHW_Temp` 42 → 41, laufender
+Messwert). Beide melden `Version: 3.14.2`, der ioBroker bekommt von beiden
+Stufen frische Werte.
+
+**Gegenprobe über den Set-Pfad an H1**, mit Telnet-Mitschnitt: `SET33 = 15`
+gesendet, TOP75 meldet 15 zurück, keine Fehlerzeile im Log — genau der Wert, den
+die Firmware vorher selbst abgewiesen hatte. Anschließend auf den
+Ausgangswert 20 zurückgestellt und nachgesehen.
+
 ### Rollback
 
-`~/HeishaMon-Rollback/` trägt seit dem 2026-08-23 alle vier Abbilder als
+`~/HeishaMon-Rollback/` trägt seit dem 2026-08-25 beide ESP32-Abbilder als
+`v3.14.2`, seit dem 2026-08-23 alle vier Abbilder als
 `v3.14.1` und beide ESP32-Abbilder als `v3.14.0`; die vier produktiven Abbilder als `v3.13.0`
 (beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
 3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout

@@ -707,7 +707,10 @@ Error: Value 15 out of range [20..30] for topic Z1CoolCurveOutsideLowTemp
 ```
 
 Seit 3.14.2 steht 15 als Untergrenze in `commands.cpp`, in `kurven_sync.py`
-und in `kurven_grenzen.py`. Lehre fuer kuenftige Bereichsmessungen: Die
+und in `kurven_grenzen.py`. **Gegenprobe ueber den Set-Pfad an WP1 nach dem
+Rollout** (2026-08-25, Firmware 3.14.2, Kuehlkreis auf Direktvorgabe): `SET33 =
+15` gesendet, TOP75 meldet 15 zurueck, im Telnet-Mitschnitt keine Fehlerzeile.
+Danach auf den Ausgangswert 20 zurueckgestellt. Lehre fuer kuenftige Bereichsmessungen: Die
 Angaben des Bedienterminals schlagen die Klemm-Messung, wenn beide
 auseinandergehen - das Terminal nennt den erlaubten Bereich, die Messung nur
 das Verhalten innerhalb des angenommenen.
