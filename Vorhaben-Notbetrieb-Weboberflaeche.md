@@ -1730,10 +1730,20 @@ gesendet, TOP75 meldet 15 zurück, keine Fehlerzeile im Log — genau der Wert, 
 die Firmware vorher selbst abgewiesen hatte. Anschließend auf den
 Ausgangswert 20 zurückgestellt und nachgesehen.
 
+Veröffentlicht als Release `v3.14.2` im öffentlichen Repo (ohne Binaries) und im
+privaten `HeishaMon-Rollback` (alle vier Abbilder).
+
+**Falle beim vorgeschriebenen Passwort-Check:** Die Flags in
+`platformio_user_env.ini` stehen dort **gequotet** (`-D HEISHA_AP_PASSWORD=\"…\"`).
+Wer den Wert roh aus der Datei liest und im Abbild sucht, findet ihn nicht und
+hält das Abbild fälschlich für sauber. Vor dem Vergleich die Escapes und
+Anführungszeichen abstreifen — dann stecken beide Passwörter wie erwartet im
+Klartext in jedem der vier Abbilder.
+
 ### Rollback
 
-`~/HeishaMon-Rollback/` trägt seit dem 2026-08-25 beide ESP32-Abbilder als
-`v3.14.2`, seit dem 2026-08-23 alle vier Abbilder als
+`~/HeishaMon-Rollback/` trägt seit dem 2026-08-25 alle vier Abbilder als
+`v3.14.2` (auch am gleichnamigen Release des privaten Repos), seit dem 2026-08-23 alle vier Abbilder als
 `v3.14.1` und beide ESP32-Abbilder als `v3.14.0`; die vier produktiven Abbilder als `v3.13.0`
 (beide ESP32-Stufen, beide D1-mini-Rückfallebenen). **Weiterhin gilt seit
 3.12.0:** Das Notbetriebspasswort steckt lesbar in jedem Abbild — beim Rollout
