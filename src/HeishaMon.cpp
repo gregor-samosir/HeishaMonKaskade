@@ -58,6 +58,20 @@ char mqtt_port[CONFIG_PORT_LEN] = "1883";
 char mqtt_username[CONFIG_FIELD_LEN];
 char mqtt_password[CONFIG_FIELD_LEN];
 
+/*****************************************************************************/
+/* Die Adresse des Hydraulik-Switch (seit 3.15.0)                            */
+/*                                                                           */
+/* Der Tasmota-Schalter, der die Hydraulik zwischen 1- und 2-stufig umlegt.  */
+/* Er gehoert zu den Einstellungen und NICHT fest in den Code: Er steht in   */
+/* derselben Groessenordnung wie der MQTT-Broker und wird sich irgendwann    */
+/* aendern.                                                                  */
+/*                                                                           */
+/* Leer heisst "nicht eingerichtet". Der Notbetrieb bricht dann im ersten    */
+/* Schritt ab, statt loszulaufen und die Hydraulik ungeprueft zu lassen -    */
+/* siehe notbetrieb.cpp.                                                     */
+/*****************************************************************************/
+char hydraulik_switch[CONFIG_FIELD_LEN] = "";
+
 // log and debug
 bool outputMqttLog = true;   // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true; // enable/disable telnet DEBUG
@@ -245,7 +259,7 @@ void setupHttp()
     {
       return httpServer.requestAuthentication();
     }
-    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password); });
+    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch); });
   // Notbetrieb: Seite und Ausloeser verlangen einen EIGENEN Zugang, nicht den
   // des Firmware-Uploads - Begruendung oben bei notbetrieb_password.
   // Die Statusroute verlangt gar keinen: Sie gibt nur "Schritt 3 von 7" heraus
@@ -898,7 +912,7 @@ void setup()
   // spaeteres init() wuerde sie wieder auf "nie verbunden" zuruecksetzen.
   verbindung_init(&hausteuerung, millis());
 
-  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password);
+  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch);
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
   if (MDNS.begin(wifi_hostname))

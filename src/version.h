@@ -1,5 +1,116 @@
 #pragma once
 // Changelog:
+// 3.15.0 - DER NOTBETRIEB STELLT DIE HYDRAULIK SELBST AUF 1-STUFIG. Neuer
+//         Schritt 1 in BEIDEN Schrittfolgen: Die Firmware legt den
+//         Tasmota-Switch der Hydraulik auf AUS und bricht ab, wenn das nicht
+//         gelingt. Vorhaben-Hydraulik-Notbetrieb.md.
+//
+//         WARUM. Der Notbetrieb setzt hydraulisch 1-stufigen Betrieb voraus,
+//         und bisher stellte das niemand sicher. Steht die Hydraulik auf
+//         2-stufig, waehrend eine Stufe im Warmwasser-Notbetrieb laeuft,
+//         schiebt der Warmwasserbetrieb bis zu 57 C in den Heizkreis - die
+//         Fussbodenheizung vertraegt das nicht (Owner, 2026-08-26). Das ist
+//         kein Randfall, sondern der Regelfall des Notbetriebs an Stufe 2:
+//         Der Warmwasserknopf ist der, der im Sommer traegt, und der, den
+//         jemand aus der Familie im Ernstfall druecken soll. Im Normalbetrieb
+//         schaltet die Kaskadensteuerung den Switch - und genau die ist im
+//         Notbetriebsfall weg.
+//
+//         GANZ VORN, vor OperationMode. Zwei Gruende: Bricht der Schritt ab,
+//         steht die Waermepumpe genau so da wie vorher (kein Kommando
+//         abgesetzt, kein Sammelfenster offen, kein halber Notbetrieb zum
+//         Aufraeumen). Und die 90 s der beiden Stellantriebe laufen ab dem
+//         fruehestmoeglichen Moment, parallel zur restlichen Schrittfolge.
+//
+//         DIE 90 s ERZWINGEN KEINE WARTEZEIT. Die Waermepumpe braucht nach
+//         dem Einschalten rund drei Minuten bis zum Kompressor; zunaechst
+//         laeuft nur die Umwaelzpumpe (Owner, 2026-08-26). Der Beleg ist der
+//         Normalbetrieb selbst: Dort gehen Switch- und WP-Kommandos
+//         GLEICHZEITIG raus, seit jeher und ohne Schaden. Der Notbetrieb hat
+//         zwischen beiden sogar 16 s (Wasser) bzw. 48 s (Heizen) Vorsprung.
+//
+//         ABBRUCH STATT WARNUNG. Antwortet der Switch nicht, meldet er
+//         weiterhin ON oder etwas Undeutbares, endet der Lauf in ROT - mit
+//         einer eigenen Meldung, die den Schalter im Waschraum nennt und
+//         nicht auf das Bedienfeld der Waermepumpe verweist (dort ist nichts
+//         verstellt worden). Der Knopf steht nach ROT sofort wieder da: Wer
+//         den Schalter von Hand legt und wiederkommt, drueckt erneut, der
+//         Lesevorgang meldet dann OFF, und die Folge laeuft durch.
+//
+//         ERST LESEN, DANN NUR BEI BEDARF SCHALTEN. Ein einzelnes "Power Off"
+//         wuerde beide Faelle abdecken (Tasmota antwortet auch dann mit OFF,
+//         wenn der Schalter schon aus war). Der Unterschied steht trotzdem im
+//         Log - nur so ist nachlesbar, ob tatsaechlich umgeschaltet wurde.
+//
+//         DER BLOCKIERENDE REQUEST ist Absicht. HTTPClient::GET() haelt
+//         loop() an, bis die Antwort da ist oder das Timeout greift (1,5 s
+//         statt der voreingestellten 5 s). Genau deshalb steht der Schritt
+//         vorn: Es ist kein Kommando an die Waermepumpe unterwegs und kein
+//         Sammelfenster offen, die Blockade trifft nur den Abfragezyklus, der
+//         ohnehin nur liest. Hoechstens ein Timeout je Lauf, kein
+//         Wiederholungsversuch - der Mensch vor der Seite ist der bessere.
+//         Eine asynchrone Loesung ist verworfen: Nebenlaeufigkeit in einem
+//         Automaten, der vollstaendig aus loop() getrieben wird, gegen 1,5 s
+//         in einem Fall, der ohnehin im Abbruch endet.
+//
+//         GEMESSEN AM ECHTEN SWITCH (2026-08-27, Tasmota 12.0.2): Die Antwort
+//         auf /cm?cmnd=Power kommt CHUNKED, ohne Content-Length. Das hat drei
+//         naheliegende Zeilen ausgeschlossen. getSize() liefert -1, also gibt
+//         es kein "lies so viele Byte wie angekuendigt". readBytes(puffer, 63)
+//         wartet, bis 63 Byte da sind oder das Timeout ablaeuft - bei einer
+//         15 Byte langen Antwort saesse jeder Lauf die vollen 1,5 s ab, auch
+//         wenn alles klappt. Und getString() loest die Chunks zwar sauber auf,
+//         allokiert aber in der Groesse der Antwort auf dem Heap; zeigt die
+//         eingetragene Adresse versehentlich auf einen richtigen Webserver,
+//         waere das eine ganze HTML-Seite auf einem ESP8266 mit rund 30 kB
+//         freiem Heap. Gelesen wird deshalb byteweise in einen festen Puffer,
+//         mit harter Frist (300 ms) und Schluss, sobald "OFF" oder "ON"
+//         dasteht. Die Chunk-Laengen im rohen Strom stoeren dabei nicht.
+//
+//         DER ERSTE SCHRITT GEHT JETZT AUS loop() RAUS, nicht mehr aus dem
+//         POST-Handler. Bis 3.14.2 setzte notbetrieb_starten() das erste
+//         Kommando selbst ab - fuer ein Set-Kommando eine Sache von
+//         Mikrosekunden, fuer einen HTTP-Request von bis zu 1,5 s eine
+//         haengende Seite. NotbetriebLauf bekommt dafuer das Feld
+//         schritt_gesendet; ohne es koennte ein TOP, das den Sollwert
+//         zufaellig schon traegt, einen nie abgesetzten Schritt bestaetigen.
+//
+//         NEU AUF DER SEITE: Der Abbruchgrund. Feld 9 des Statusstrings,
+//         hinten angehaengt - die Felder 5 bis 8 muessen stehen bleiben, weil
+//         die Startseite dieselbe Route liest. Aus ihm macht die Seite bei
+//         Hydraulik-Abbruechen den Satz aus Abschnitt 8 des Vorhabens statt
+//         des generischen "Hat nicht geklappt".
+//
+//         NEUE EINSTELLUNG: hydraulik_switch (IP oder Hostname des Tasmota).
+//         Sie gehoert NICHT fest in den Code - sie steht in derselben
+//         Groessenordnung wie der MQTT-Broker und wird sich irgendwann
+//         aendern. Leeres Feld heisst "nicht eingerichtet": Der Notbetrieb
+//         bricht dann im ersten Schritt ab, statt die Hydraulik ungeprueft zu
+//         lassen. Das JSON-Dokument der Settings-Seite waechst dafuer von 512
+//         auf 1024 Byte - mit dem siebten Feld haetten 512 nicht mehr sicher
+//         gereicht, und ein Ueberlauf schriebe die config.json still
+//         unvollstaendig.
+//
+//         ZURUECK SCHALTET WEITERHIN NIEMAND IN DER FIRMWARE (Entscheidung 7).
+//         Das macht der Re-Assert der Kaskadensteuerung, seit dem 2026-08-26
+//         mit einer Frische-Bedingung: Ein Schaltbefehl an den Switch geht nur
+//         raus, wenn der Betriebsmodus von Stufe 2 nicht aelter als zwoelf
+//         Minuten ist. Der Grund ist, dass Wärmepumpen- und Switch-Kommandos
+//         den ioBroker ueber VERSCHIEDENE Adapter verlassen (mqtt 1883 gegen
+//         sonoff 1886) - faellt der eine aus, laeuft der andere weiter und
+//         legte die Hydraulik mitten im Notbetrieb zurueck auf 2-stufig.
+//
+//         GROESSE (.elf, text/data/bss gegen 3.14.2):
+//           esp32_h1_ota  1018319/221386/2192879 -> 1034715/225330/2192919
+//           esp32_h2_ota  1017983/221018/2192879 -> 1034371/225042/2192919
+//           d1_mini_h1    469923/2440/31216      -> 476267/2440/31272
+//         Der Zuwachs von rund 20 kB (ESP32) bzw. 6 kB (ESP8266) Flash ist
+//         fast vollstaendig der HTTPClient; im RAM sind es 40 bzw. 56 Byte.
+//
+//         MITGEZOGEN: test/notbetrieb_test.cpp (neuer Abschnitt 9a, alle
+//         Schrittindizes um eins verschoben), Ablauf-Notbetrieb.md und
+//         README.md.
+//
 // 3.14.2 - Der Kuehlkurven-Aussenpunkt Z1CoolCurveOutsideLowTemp (SET33) war
 //         auf 20..30 begrenzt. Richtig ist 15..30. Die Firmware wies 15 mit
 //         "Value 15 out of range [20..30]" ab, bevor das Kommando ueberhaupt
@@ -1139,4 +1250,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.14.2";
+static const char* heishamon_version = "3.15.0";

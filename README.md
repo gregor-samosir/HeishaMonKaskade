@@ -110,6 +110,44 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 
 Im Detail:
 
+### Der Notbetrieb stellt die Hydraulik selbst um (3.15.0)
+
+Der Notbetriebsknopf setzt hydraulisch **1-stufigen** Betrieb voraus — und bis
+3.14.2 stellte das niemand sicher. Das ist kein Randfall: Steht die Hydraulik
+auf 2-stufig, während eine Stufe im Warmwasser-Notbetrieb läuft, schiebt der
+Warmwasserbetrieb **bis zu 57 °C in den Heizkreis.** Die Fußbodenheizung
+verträgt das nicht. Im Normalbetrieb schaltet die Kaskadensteuerung den
+zuständigen Tasmota-Switch — und genau die ist im Notbetriebsfall weg.
+
+Seit 3.15.0 macht es die Firmware, als **Schritt 1 beider Schrittfolgen**: Sie
+liest den Switch, legt ihn bei Bedarf auf AUS und **bricht ab, wenn das nicht
+gelingt.** Kein Notbetrieb ohne bestätigte 1-stufige Hydraulik.
+
+Drei Entscheidungen dahinter:
+
+* **Ganz vorn, vor allem anderen.** Bricht der Schritt ab, steht die Wärmepumpe
+  genau so da wie vorher: kein Kommando abgesetzt, kein halber Notbetrieb, den
+  jemand aufräumen müsste. Die Seite nennt dann den Schalter im Haus statt des
+  Bedienfelds der Wärmepumpe — dort ist nichts verstellt worden.
+* **Abbruch statt Weiterlaufen mit Warnung.** Ein Notbetrieb, der die
+  Fußbodenheizung beschädigt, ist keiner. Der Mensch steht ohnehin vor dem
+  Browser und kann den Schalter von Hand legen; danach steht der Knopf sofort
+  wieder da und die Folge läuft durch.
+* **Die 90 s der Stellantriebe erzwingen keine Wartezeit.** Die Wärmepumpe
+  braucht nach dem Einschalten rund drei Minuten bis zum Kompressor. Der Beleg
+  ist der Normalbetrieb selbst: Dort gehen Switch- und Wärmepumpenkommandos seit
+  jeher gleichzeitig raus.
+
+Der Request blockiert `loop()` bis zu 1,5 s — auch das ist der Grund, warum der
+Schritt vorn steht: In diesem Moment ist kein Kommando an die Wärmepumpe
+unterwegs, die Blockade trifft nur den Abfragezyklus, der ohnehin nur liest.
+Die Adresse des Switch steht in den Einstellungen, nicht im Code.
+
+Zurück auf 2-stufig schaltet weiterhin **die Kaskadensteuerung** und nicht die
+Firmware. Der Ablauf mit allen Zeiten und Fehlerfällen steht in
+[`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md), die Begründungen in
+[`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md).
+
 ### Die Weboberfläche sagt, wenn die Hausteuerung weg ist (3.13.0)
 
 Ein Ausfall der übergeordneten Steuerung fällt nicht auf. Die Wärmepumpe heizt
@@ -572,6 +610,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
 | [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
+| [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

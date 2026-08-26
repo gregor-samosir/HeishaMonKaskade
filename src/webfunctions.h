@@ -10,11 +10,11 @@
 #define CONFIG_FIELD_LEN 40 // Hostname, Passwoerter, Server, Benutzername
 #define CONFIG_PORT_LEN 6   // Portnummer als Text ("65535" + Terminator)
 
-void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password);
+void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch);
 void handleRoot(WebServerClass *httpServer);
 void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUELEN]);
 void handleReboot(WebServerClass *httpServer);
-void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password);
+void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch);
 
 // Notbetrieb (Baustein B). Die Seite mit dem einen Knopf, der POST-Handler
 // dahinter und die Statusroute, die die Seite alle zwei Sekunden abfragt.

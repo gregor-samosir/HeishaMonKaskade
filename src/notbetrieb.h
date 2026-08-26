@@ -40,8 +40,8 @@ enum NotbetriebRolle
 /*                                                                           */
 /* Die Waermepumpe uebernimmt ein Kommando in 2-8 s (KNX-Messung 2026-08-16),*/
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
-/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf braucht real etwa 42 s     */
-/* (sieben Schritte, seit die Betriebsart mitgeschaltet wird).               */
+/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.15.0 64 s    */
+/* (acht Schritte, davon der erste die Hydraulik).                           */
 /*                                                                           */
 /* Der Gesamtdeckel ist ABGELEITET (Schrittzahl * Schritt-Timeout) und nicht */
 /* frei gewaehlt. Ein kleinerer Deckel wuerde einen Lauf abbrechen, den die  */
@@ -65,10 +65,9 @@ enum NotbetriebRolle
 /* -5 C.                                                                      */
 /*                                                                            */
 /* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
-/* Reserve ab. Damit dauert ein Heizen-Lauf rund 56 statt 42 s - das ist der  */
-/* Preis dafuer, dass GRUEN wirklich "zurueckgelesen" heisst. Der             */
-/* Gesamtdeckel folgt der Schrittzahl und liegt damit bei 140 s (Heizen)      */
-/* bzw. 60 s (Wasser).                                                        */
+/* Reserve ab. Das ist der Preis dafuer, dass GRUEN wirklich "zurueckgelesen" */
+/* heisst. Der Gesamtdeckel folgt der Schrittzahl und liegt seit 3.15.0 bei   */
+/* 160 s (Heizen, acht Schritte) bzw. 80 s (Wasser, vier).                    */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -81,7 +80,7 @@ enum NotbetriebRolle
 /* faellt die Anzeige deshalb auf BEREIT zurueck und der Knopf steht wieder   */
 /* da; im MQTT-Log bleibt der Lauf vollstaendig nachlesbar.                   */
 /*                                                                           */
-/* 15 Minuten sind laenger als jeder Lauf (Deckel 140 s) und kurz genug, dass */
+/* 15 Minuten sind laenger als jeder Lauf (Deckel 160 s) und kurz genug, dass */
 /* niemand ein fremdes Ergebnis fuer seines haelt.                            */
 /*****************************************************************************/
 #define NOTBETRIEB_ANZEIGE_VERFALL_MS 900000u
@@ -107,9 +106,33 @@ enum NotbetriebRolle
 #define NOTBETRIEB_TOP_HEIZ_KUEHL 101
 
 /*****************************************************************************/
+/* Was fuer eine Art Schritt ist das? (seit 3.15.0)                          */
+/*                                                                           */
+/* Bis 3.14.2 war jeder Schritt ein Set-Kommando an die Waermepumpe, das an  */
+/* einem TOP zurueckgelesen wird. Der Hydraulikschritt ist der erste, der    */
+/* etwas ANDERES tut: Er legt einen Tasmota-Switch im Hausnetz auf AUS und   */
+/* bekommt seine Bestaetigung aus dessen HTTP-Antwort, nicht aus             */
+/* actual_data[].                                                           */
+/*                                                                          */
+/* Der Automat kennt trotzdem nur "Schritt vom Typ X, bestaetigt ja/nein" - */
+/* der Netzzugriff steht ausschliesslich in notbetrieb.cpp. Nur so bleibt    */
+/* dieser Header arduino-frei und im Hosttest pruefbar.                      */
+/*****************************************************************************/
+enum NotbetriebSchrittTyp
+{
+    NB_SCHRITT_SET = 0,      // Set-Kommando an die WP, Ruecklesung ueber den TOP
+    NB_SCHRITT_HYDRAULIK = 1 // Tasmota-Switch auf AUS = Hydraulik 1-stufig
+};
+
+/*****************************************************************************/
 /* Ein Schritt der Folge                                                     */
 /*                                                                           */
+/* typ       - siehe oben. Bei NB_SCHRITT_HYDRAULIK sind top, wert_index und */
+/*             fester_wert BEDEUTUNGSLOS (top = -1, damit ein versehentliches */
+/*             Nachschlagen in stateTopics[] auffaellt statt Zeile 0 zu      */
+/*             lesen).                                                       */
 /* set_name  - Topic-Name unter <prefix>/set/, wird an Topics::SET gehaengt  */
+/*             Beim Hydraulikschritt ist es nur der Name fuer die Logzeile.  */
 /* top       - TOP-Nummer, an der zurueckgelesen wird. GRUEN heisst          */
 /*             zurueckgelesen, nicht abgesendet - ein GRUEN, das nur         */
 /*             "gesendet" bedeutet, waere in dieser Lage wertlos.            */
@@ -120,11 +143,21 @@ enum NotbetriebRolle
 
 struct NotbetriebSchritt
 {
+    uint8_t typ;
     const char *set_name;
     int top;
     int wert_index;
     int fester_wert;
 };
+
+/*****************************************************************************/
+/* Der Name des Hydraulikschritts - fuer Logzeilen und die Seite             */
+/*                                                                           */
+/* Er steht hier und nicht als Zeichenkette in der Tabelle, weil ihn auch    */
+/* der Hosttest kennt: Nur so ist pruefbar, dass der Schritt an Position 1   */
+/* steht, ohne die Zeichenkette ein zweites Mal hinzuschreiben.              */
+/*****************************************************************************/
+#define NOTBETRIEB_HYDRAULIK_NAME "Hydraulik 1-stufig"
 
 /*****************************************************************************/
 /* Die gehaltenen Werte je Rolle                                             */
@@ -174,15 +207,34 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* Sie steht VOR dem Moduswechsel und damit vor der Kurve: Ob ein Wechsel    */
 /* der Betriebsart die Kurvenpunkte ebenfalls anfasst, ist nicht gemessen -  */
 /* an dieser Stelle kann er keinen geschriebenen Wert mehr zerstoeren.       */
+/*                                                                          */
+/* DIE HYDRAULIK STEHT SEIT 3.15.0 GANZ VORN, vor der Betriebsart. Zwei      */
+/* Gruende (Vorhaben-Hydraulik-Notbetrieb.md, Abschnitt 4):                  */
+/*                                                                          */
+/*  - Es ist noch nichts verstellt. Bricht der Schritt ab, steht die         */
+/*    Waermepumpe genau so da wie vorher: kein Kommando abgesetzt, kein      */
+/*    Sammelfenster offen, kein halber Notbetrieb zum Aufraeumen.            */
+/*  - Die 90 s Laufzeit der beiden Stellantriebe beginnen im frueheste-      */
+/*    moeglichen Moment und laufen parallel zur restlichen Schrittfolge ab.  */
+/*                                                                          */
+/* WARUM UEBERHAUPT: Steht die Hydraulik auf 2-stufig, waehrend eine Stufe   */
+/* im Warmwasser-Notbetrieb laeuft, schiebt der Warmwasserbetrieb bis zu     */
+/* 57 C in den Heizkreis. Die Fussbodenheizung vertraegt das nicht (Owner,   */
+/* 2026-08-26). Im Normalbetrieb stellt die Kaskadensteuerung den Switch -   */
+/* und genau die ist im Notbetriebsfall weg.                                 */
+/*                                                                          */
+/* Der Schritt steht in BEIDEN Folgen: Welchen Knopf jemand zuerst drueckt,  */
+/* weiss niemand, und ein doppeltes AUS schadet nicht.                       */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
-    {"OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only, zuerst
-    {"HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
-    {"Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve: "VL kalt"
-    {"Z1HeatCurveTargetLowTemp", 30, 1, 0},          // "VL warm"
-    {"Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
-    {"Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
-    {"Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
+    {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
+    {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only
+    {NB_SCHRITT_SET, "HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
+    {NB_SCHRITT_SET, "Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve: "VL kalt"
+    {NB_SCHRITT_SET, "Z1HeatCurveTargetLowTemp", 30, 1, 0},          // "VL warm"
+    {NB_SCHRITT_SET, "Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
+    {NB_SCHRITT_SET, "Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
+    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
 
 /*****************************************************************************/
 /* Warmwasser braucht keine Kurve - der Knopf dort ist deutlich einfacher.   */
@@ -191,9 +243,10 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
 /* an Stufe 2 ueberhaupt gedacht ist (gemessen 2026-08-20 an H2, M3).        */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
-    {"OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
-    {"DHWTemp", 9, 0, 0},
-    {"Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}};
+    {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
+    {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
+    {NB_SCHRITT_SET, "DHWTemp", 9, 0, 0},
+    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}};
 
 static const unsigned NOTBETRIEB_SCHRITTE_HEIZEN_N =
     sizeof(NOTBETRIEB_SCHRITTE_HEIZEN) / sizeof(NOTBETRIEB_SCHRITTE_HEIZEN[0]);
@@ -547,10 +600,64 @@ enum NotbetriebAktion
     NOTBETRIEB_ABBRUCH_KUEHLEN = 4 // gerade ROT geworden: die Anlage meldet Kuehlen
 };
 
+/*****************************************************************************/
+/* WARUM ein Lauf abgebrochen wurde (seit 3.15.0)                            */
+/*                                                                           */
+/* Bis 3.14.2 zeigte die Seite bei ROT immer denselben Satz "Hat nicht       */
+/* geklappt". Das reicht nicht mehr, seit der erste Schritt die Hydraulik    */
+/* stellt: Dort fuehrt der Weg zurueck ueber einen Schalter im Waschraum,    */
+/* und wer das nicht weiss, kann den Notbetrieb nicht retten. Der Grund      */
+/* wandert deshalb ueber den Statusstring auf die Seite.                     */
+/*                                                                           */
+/* Er steht im Lauf und nicht im Rueckgabewert des Ticks: Die Seite fragt    */
+/* alle zwei Sekunden nach, der Tick liefert seine Aktion aber genau einmal. */
+/*****************************************************************************/
+enum NotbetriebAbbruchgrund
+{
+    NOTBETRIEB_GRUND_KEINER = 0,   // laeuft noch, oder GRUEN
+    NOTBETRIEB_GRUND_TIMEOUT = 1,  // ein Schritt kam nicht zurueck
+    NOTBETRIEB_GRUND_KUEHLEN = 2,  // die Anlage meldet Kuehlbetrieb (TOP101)
+    NOTBETRIEB_GRUND_HYDRAULIK = 3 // der Switch liess sich nicht auf AUS legen
+};
+
+/*****************************************************************************/
+/* Welcher Abbruchgrund gehoert zu einem Schritt, der nicht zurueckkam?      */
+/*                                                                           */
+/* Eine Stelle fuer beide Zeitgrenzen (Schritt-Timeout und Gesamtdeckel):    */
+/* Zwei Regeln fuer dieselbe Frage waeren zwei Stellen, an denen derselbe    */
+/* Schritt einmal so und einmal anders gemeldet wird.                        */
+/*****************************************************************************/
+inline NotbetriebAbbruchgrund notbetrieb_grund_fuer_schritt(NotbetriebRolle rolle,
+                                                            unsigned schritt)
+{
+    const NotbetriebSchritt *s = notbetrieb_schritt(rolle, schritt);
+    if (s && s->typ == NB_SCHRITT_HYDRAULIK)
+        return NOTBETRIEB_GRUND_HYDRAULIK;
+    return NOTBETRIEB_GRUND_TIMEOUT;
+}
+
+/*****************************************************************************/
+/* Der laufende Vorgang                                                      */
+/*                                                                           */
+/* schritt_gesendet unterscheidet "der Schritt ist abgesetzt und wartet auf  */
+/* seine Bestaetigung" von "er steht noch aus". Seit 3.15.0 wird das         */
+/* gebraucht: Bis 3.14.2 setzte der POST-Handler den ersten Schritt selbst   */
+/* ab, was fuer ein Set-Kommando in Mikrosekunden erledigt ist. Der          */
+/* Hydraulikschritt macht daraus einen HTTP-Request von bis zu 1,5 s - so    */
+/* lange darf kein Webhandler haengen. Also setzt ihn jetzt der Tick aus     */
+/* loop() ab, und dieses Flag sagt ihm, dass noch etwas aussteht.            */
+/*                                                                           */
+/* Ohne das Flag haette der Tick zwei Moeglichkeiten, und beide waeren       */
+/* falsch: entweder nie senden (jeder Lauf liefe in den Timeout) oder blind  */
+/* auf die Ruecklesung schauen - dann koennte ein TOP, das den Sollwert      */
+/* zufaellig schon traegt, einen nie abgesetzten Schritt bestaetigen.        */
+/*****************************************************************************/
 struct NotbetriebLauf
 {
     uint8_t zustand;
     uint8_t schritt;
+    uint8_t schritt_gesendet; // ist der aktuelle Schritt schon abgesetzt?
+    uint8_t grund;            // NotbetriebAbbruchgrund, gueltig bei ROT
     uint32_t schritt_start;
     uint32_t lauf_start;
     uint32_t ende; // Zeitpunkt von GRUEN/ROT, fuer den Anzeigeverfall
@@ -562,6 +669,8 @@ inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
         return;
     lauf->zustand = NOTBETRIEB_BEREIT;
     lauf->schritt = 0;
+    lauf->schritt_gesendet = 0;
+    lauf->grund = NOTBETRIEB_GRUND_KEINER;
     lauf->schritt_start = 0;
     lauf->lauf_start = 0;
     lauf->ende = 0;
@@ -575,12 +684,18 @@ inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
 /* entstanden ist, und ein ROT bliebe entweder ewig stehen oder verschwaende  */
 /* sofort. Die Firmware hat mehrere Abbruchstellen (notbetrieb.cpp), deshalb  */
 /* steht das hier und nicht nur im Tick.                                      */
+/*                                                                            */
+/* Der Grund ist seit 3.15.0 ein PFLICHTARGUMENT und hat bewusst keinen       */
+/* Vorgabewert: Jede Abbruchstelle soll sich entscheiden muessen, was auf der */
+/* Seite steht. Bei GRUEN ist NOTBETRIEB_GRUND_KEINER der richtige Wert.      */
 /*****************************************************************************/
-inline void notbetrieb_abschluss(NotbetriebLauf *lauf, NotbetriebZustand zustand, uint32_t jetzt)
+inline void notbetrieb_abschluss(NotbetriebLauf *lauf, NotbetriebZustand zustand,
+                                 uint32_t jetzt, NotbetriebAbbruchgrund grund)
 {
     if (!lauf)
         return;
     lauf->zustand = (uint8_t)zustand;
+    lauf->grund = (uint8_t)grund;
     lauf->ende = jetzt;
 }
 
@@ -634,6 +749,12 @@ static_assert(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS
 /* dort liegen die Rueckmeldungen der Waermepumpe. Ein Automat, der stumm    */
 /* nichts tut, waere schwerer zu deuten als ein gesperrter Knopf mit         */
 /* Klartext.                                                                 */
+/*                                                                          */
+/* NOTBETRIEB_SENDEN heisst hier "Schritt 1 ist abzusetzen" - ABGESETZT wird */
+/* er seit 3.15.0 aber nicht mehr vom Aufrufer, sondern vom naechsten Tick   */
+/* aus loop() (siehe schritt_gesendet oben). Der Rueckgabewert bleibt, weil  */
+/* er die einzige Auskunft ist, ob der Klick ueberhaupt einen Lauf angestos- */
+/* sen hat.                                                                  */
 /*****************************************************************************/
 inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
 {
@@ -641,6 +762,8 @@ inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
         return NOTBETRIEB_TU_NICHTS;
     lauf->zustand = NOTBETRIEB_LAEUFT;
     lauf->schritt = 0;
+    lauf->schritt_gesendet = 0; // der Tick setzt ihn ab, nicht der Webhandler
+    lauf->grund = NOTBETRIEB_GRUND_KEINER;
     lauf->schritt_start = jetzt;
     lauf->lauf_start = jetzt;
     lauf->ende = 0; // das Ergebnis des vorigen Laufs gilt nicht mehr
@@ -659,8 +782,9 @@ inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
 /* ueberstehen. uint32_t und nicht unsigned long: auf dem Mac waere das      */
 /* 64 Bit, der Hosttest wuerde den Ueberlauf dann gegen nichts pruefen.      */
 /*                                                                           */
-/* Reihenfolge der Pruefungen: Erst der Kuehl-Abbruch, dann die Bestaetigung,*/
-/* dann die Zeitgrenzen. Der Kuehl-Abbruch steht vorn, weil ein bestaetigter */
+/* Reihenfolge der Pruefungen: Erst der Kuehl-Abbruch, dann das Absetzen     */
+/* eines noch ausstehenden Schritts, dann die Bestaetigung, dann die         */
+/* Zeitgrenzen. Der Kuehl-Abbruch steht vorn, weil ein bestaetigter          */
 /* Schritt in einer kuehlenden Anlage nichts wert ist - die Folge duerfte     */
 /* dann keinesfalls bis zum letzten Schritt laufen und die Anlage             */
 /* einschalten. Bestaetigung vor Timeout: Trifft die Rueckmeldung in          */
@@ -682,8 +806,20 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     // kuehlende Anlage einzuschalten; genau das soll der Knopf verhindern.
     if (notbetrieb_kuehlbetrieb_gemeldet(rolle, heiz_kuehl_text))
     {
-        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt, NOTBETRIEB_GRUND_KUEHLEN);
         return NOTBETRIEB_ABBRUCH_KUEHLEN;
+    }
+
+    // Der aktuelle Schritt steht noch aus - das ist die Lage unmittelbar nach
+    // dem Klick, seit der Webhandler den ersten Schritt nicht mehr selbst
+    // absetzt (siehe schritt_gesendet). Die Schrittuhr laeuft ab HIER und
+    // nicht ab dem Klick: Sonst zaehlte die Mindestwartezeit schon, bevor das
+    // Kommando ueberhaupt unterwegs war.
+    if (!lauf->schritt_gesendet)
+    {
+        lauf->schritt_gesendet = 1;
+        lauf->schritt_start = jetzt;
+        return NOTBETRIEB_SENDEN;
     }
 
     // Schritt geschafft? Erst nach der Mindestwartezeit - vorher koennte die
@@ -695,17 +831,19 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
         lauf->schritt++;
         if (lauf->schritt >= notbetrieb_schritt_anzahl(rolle))
         {
-            notbetrieb_abschluss(lauf, NOTBETRIEB_GRUEN, jetzt);
+            notbetrieb_abschluss(lauf, NOTBETRIEB_GRUEN, jetzt, NOTBETRIEB_GRUND_KEINER);
             return NOTBETRIEB_FERTIG;
         }
         lauf->schritt_start = jetzt;
+        lauf->schritt_gesendet = 1; // dieser Tick erteilt den Auftrag mit
         return NOTBETRIEB_SENDEN;
     }
 
     // Notausgang: der Automat haengt (siehe Zeitregeln oben)
     if ((uint32_t)(jetzt - lauf->lauf_start) >= notbetrieb_gesamtdeckel_ms(rolle))
     {
-        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt,
+                             notbetrieb_grund_fuer_schritt(rolle, lauf->schritt));
         return NOTBETRIEB_ABBRUCH;
     }
 
@@ -714,7 +852,8 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     // nicht, sind die Kurvenwerte danach sinnlos.
     if ((uint32_t)(jetzt - lauf->schritt_start) >= NOTBETRIEB_SCHRITT_TIMEOUT_MS)
     {
-        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt);
+        notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt,
+                             notbetrieb_grund_fuer_schritt(rolle, lauf->schritt));
         return NOTBETRIEB_ABBRUCH;
     }
 
@@ -726,6 +865,11 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
 /*                                                                           */
 /* Rueckgabe false, wenn der Schritt einen gehaltenen Wert braucht, der      */
 /* nicht vorliegt - dann darf nicht gesendet werden.                         */
+/*                                                                           */
+/* ACHTUNG: Ein Hydraulikschritt liefert IMMER false - er hat keinen Wert,   */
+/* den man senden koennte. Wer ihn hier hineinreicht, hat den Typ nicht      */
+/* geprueft; das ist ein Fehler und soll wie einer aussehen, statt still     */
+/* eine 0 zu liefern. notbetrieb.cpp verzweigt vorher nach Typ.              */
 /*****************************************************************************/
 inline bool notbetrieb_schritt_wert(const NotbetriebLauf *lauf, NotbetriebRolle rolle,
                                     const NotbetriebSpeicher *sp, int *wert_out)
@@ -735,6 +879,8 @@ inline bool notbetrieb_schritt_wert(const NotbetriebLauf *lauf, NotbetriebRolle 
     const NotbetriebSchritt *s = notbetrieb_schritt(rolle, lauf->schritt);
     if (!s)
         return false;
+    if (s->typ == NB_SCHRITT_HYDRAULIK)
+        return false; // kein Set-Kommando, kein Wert - siehe Kommentar oben
 
     if (s->wert_index == NOTBETRIEB_FESTER_WERT)
     {

@@ -119,7 +119,7 @@ static void loadConfigValue(char *dst, size_t dstsize, JsonDocument &jsonDoc, co
 static_assert(sizeof(HEISHA_AP_PASSWORD) >= 9, "HEISHA_AP_PASSWORD braucht mindestens 8 Zeichen (WPA2)");
 static_assert(sizeof(HEISHA_AP_PASSWORD) <= 64, "HEISHA_AP_PASSWORD darf hoechstens 63 Zeichen haben (WPA2)");
 
-void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
+void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
 {
   // Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
@@ -163,6 +163,10 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
           loadConfigValue(mqtt_port, CONFIG_PORT_LEN, jsonDoc, "mqtt_port");
           loadConfigValue(mqtt_username, CONFIG_FIELD_LEN, jsonDoc, "mqtt_username");
           loadConfigValue(mqtt_password, CONFIG_FIELD_LEN, jsonDoc, "mqtt_password");
+          // Fehlt der Schluessel (config.json von vor 3.15.0), bleibt das Feld
+          // leer - loadConfigValue laesst den Standardwert stehen. Genau dafuer
+          // ist es gebaut, siehe Kommentar dort.
+          loadConfigValue(hydraulik_switch, CONFIG_FIELD_LEN, jsonDoc, "hydraulik_switch");
         }
         else
         {
@@ -194,6 +198,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, CONFIG_PORT_LEN - 1);
   WiFiManagerParameter custom_mqtt_username("username", "mqtt username", mqtt_username, CONFIG_FIELD_LEN - 1);
   WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_text3("<p>Hydraulik switch (Tasmota, IP or hostname)</p>");
+  WiFiManagerParameter custom_hydraulik_switch("hydraulik_switch", "hydraulik switch", hydraulik_switch, CONFIG_FIELD_LEN - 1);
 
   // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -207,6 +213,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_mqtt_username);
   wifiManager.addParameter(&custom_mqtt_password);
+  wifiManager.addParameter(&custom_text3);
+  wifiManager.addParameter(&custom_hydraulik_switch);
 
   wifiManager.setConfigPortalTimeout(180);
   wifiManager.setConnectTimeout(10);
@@ -230,6 +238,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   (void)strlcpy(mqtt_port, custom_mqtt_port.getValue(), CONFIG_PORT_LEN);
   (void)strlcpy(mqtt_username, custom_mqtt_username.getValue(), CONFIG_FIELD_LEN);
   (void)strlcpy(mqtt_password, custom_mqtt_password.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(hydraulik_switch, custom_hydraulik_switch.getValue(), CONFIG_FIELD_LEN);
 
   // Set hostname on wifi rather than ESP_xxxxx
 #if defined(ESP32)
@@ -252,6 +261,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     jsonDoc["mqtt_port"] = mqtt_port;
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
+    jsonDoc["hydraulik_switch"] = hydraulik_switch;
 
     File configFile = LittleFS.open("/config.json", "w");
     if (!configFile)
@@ -533,7 +543,7 @@ void handleReboot(WebServerClass *httpServer)
   ESP.restart();
 }
 
-void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password)
+void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -549,13 +559,21 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   // check if POST was made with save settings, if yes then save and reboot
   if (httpServer->args())
   {
-    DynamicJsonDocument jsonDoc(512);
+    // 1024 statt der frueheren 512 (seit 3.15.0): Mit dem siebten Feld
+    // (hydraulik_switch) reichten 512 Byte nicht mehr sicher. Die Werte
+    // kommen als String aus arg() und werden ins Dokument KOPIERT - je Feld
+    // bis zu 40 Byte plus Verwaltung. Laeuft das Dokument ueber, schreibt
+    // serializeJson die config.json still unvollstaendig, und nach dem
+    // Neustart fehlt womoeglich das MQTT-Passwort. Dieselbe Groesse wie in
+    // setupWifi, wo dasselbe Dokument entsteht.
+    DynamicJsonDocument jsonDoc(1024);
     jsonDoc["wifi_hostname"] = wifi_hostname;
     jsonDoc["ota_password"] = ota_password;
     jsonDoc["mqtt_server"] = mqtt_server;
     jsonDoc["mqtt_port"] = mqtt_port;
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
+    jsonDoc["hydraulik_switch"] = hydraulik_switch;
 
     if (httpServer->hasArg("wifi_hostname"))
     {
@@ -597,6 +615,14 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
     if (httpServer->hasArg("mqtt_password") && (httpServer->arg("mqtt_password").length() > 0))
     {
       jsonDoc["mqtt_password"] = httpServer->arg("mqtt_password");
+    }
+    // Anders als beim Passwort ist ein LEERES Feld hier eine gueltige Eingabe:
+    // Sie schaltet die Hydraulikumschaltung ab (der Notbetrieb bricht dann im
+    // ersten Schritt ab, statt sie ungeprueft zu lassen). Wer den Switch
+    // ausbaut, muss das Feld leeren koennen.
+    if (httpServer->hasArg("hydraulik_switch"))
+    {
+      jsonDoc["hydraulik_switch"] = httpServer->arg("hydraulik_switch");
     }
 
   #if defined(ESP32)
@@ -652,6 +678,11 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   httptext = httptext + "Mqtt password (leave empty to keep current):<br>";
   httptext = httptext + "<input type='password' name='mqtt_password' value=''>";
   httptext = httptext + "<br><br>";
+  // Der Tasmota-Switch der Hydraulik. Steht er nicht drin, laesst sich der
+  // Notbetrieb nicht ausloesen - das ist Absicht, siehe notbetrieb.cpp.
+  httptext = httptext + "Hydraulik switch (Tasmota, IP or hostname, empty = off):<br>";
+  httptext = httptext + "<input type='text' name='hydraulik_switch' value='" + hydraulik_switch + "'>";
+  httptext = httptext + "<br><br>";
   httptext = httptext + "<input class='w3-green w3-button' type='submit' value='Save and reboot'>";
   httptext = httptext + "</form>";
   httptext = httptext + "</div>";
@@ -696,6 +727,23 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Wärmepumpe weitermachen."
 
 /*****************************************************************************/
+/* Die Meldung, wenn die Hydraulik nicht umschaltet (3.15.0)                 */
+/*                                                                           */
+/* Sie tritt an die Stelle des generischen "Hat nicht geklappt" - und zwar    */
+/* nur bei diesem einen Abbruchgrund. Der Wortlaut ist vom Owner vorgegeben   */
+/* (2026-08-26): Wer vor der Seite steht, soll wissen, WO der Schalter haengt */
+/* und was zu tun ist. Ein Verweis auf die Anleitung am Bedienfeld waere hier */
+/* falsch - die Wärmepumpe ist gar nicht angefasst worden.                    */
+/*                                                                           */
+/* Der zweite Satz ist der wichtigere Teil des Wegs zurueck: Nach ROT steht   */
+/* der Knopf sofort wieder da (die Seite blendet ihn nur bei "laeuft" und     */
+/* GRUEN aus). Wer den Schalter von Hand legt und wiederkommt, drueckt        */
+/* erneut - der Lesevorgang meldet dann OFF, und die Folge laeuft durch.      */
+/*****************************************************************************/
+#define NB_TXT_HYDRAULIK "Die Umschaltung der Hydraulik ist fehlgeschlagen, bitte den Switch im Waschraum von Hand auf AUS schalten"
+#define NB_TXT_HYDRAULIK_DANACH "Danach diesen Knopf noch einmal drücken. An der Wärmepumpe ist nichts verstellt worden."
+
+/*****************************************************************************/
 /* Die Kurvenwarnung - ein Hinweis, keine Sperre                             */
 /*                                                                           */
 /* Die Regel steht in notbetrieb.h: Eine Heizkurve faellt mit steigender     */
@@ -709,8 +757,9 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_KURVE_AUSSEN "Die beiden Außentemperaturen der Heizkurve passen nicht zusammen: Die kalte müsste unter der warmen liegen. Der Knopf funktioniert trotzdem - bitte die vier Werte in der Hausteuerung nachsehen."
 
 // Alle zwei Sekunden den Kurzstatus holen und daraus Klartext machen. Die
-// Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" - so kurz wie
-// moeglich, weil der ESP8266 nebenher die Waermepumpe abfragt.
+// Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" plus die vier
+// hinten angehaengten Felder (Lage, Dauertext, Kurvenwarnung, Abbruchgrund) -
+// so kurz wie moeglich, weil der ESP8266 nebenher die Waermepumpe abfragt.
 //
 // Die Seite fuehrt Knopf UND Sperrhinweis nach, nicht nur das Ergebnis: Steht
 // die Anlage auf Kuehlen und jemand legt den KNX-Schalter um, gibt sich der
@@ -726,10 +775,14 @@ static const char notbetriebJS[] PROGMEM =
     "function nbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
     "var p=t.trim().split(';');var z=parseInt(p[0]);var s=parseInt(p[1]);var n=parseInt(p[2]);"
     "var m=parseInt(p[3]);var sp=parseInt(p[4]);"
-    // Feld 7: Plausibilitaet der Kurve (0 = ok, 1 = Vorlauf, 2 = Aussenpunkte).
-    // Es haengt HINTEN an, damit die Felder 5 und 6 stehen bleiben - die
-    // Startseite liest sie ueber dieselbe Route (verbindungJS).
+    // Index 7: Plausibilitaet der Kurve (0 = ok, 1 = Vorlauf, 2 = Aussenpunkte).
+    // Index 8: Warum der letzte Lauf abgebrochen wurde (3 = Hydraulik).
+    //
+    // Beide haengen HINTEN an, und das ist keine Kosmetik: Die Indizes 5 und 6
+    // (Lage und Dauer der Verbindung) liest die STARTSEITE ueber dieselbe
+    // Route (verbindungJS). Ein Einschub in der Mitte haette sie verschoben.
     "var kw=parseInt(p[7]);"
+    "var ag=parseInt(p[8]);"
     // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
     // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
     "vbSetzen(parseInt(p[5]),p[6],true);"
@@ -737,7 +790,13 @@ static const char notbetriebJS[] PROGMEM =
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
     "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist eingeschaltet. Die Wärmepumpe läuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe für den Kompressor - siehe Anleitung.</p>';}"
-    "else if(z==3){e.className='w3-panel w3-red';e.innerHTML='<h3>ROT</h3><p>Hat nicht geklappt. " NB_TXT_PLAN_B "</p>';}"
+    // Bei ROT entscheidet der Abbruchgrund, was zu tun ist: Bleibt die
+    // Hydraulik auf 2-stufig, fuehrt der Weg ueber den Schalter im Waschraum
+    // und NICHT ueber das Bedienfeld der Waermepumpe - dort ist nichts
+    // verstellt worden, weil der Schritt ganz vorn steht.
+    "else if(z==3){e.className='w3-panel w3-red';e.innerHTML=(ag==3)"
+    "?'<h3>ROT</h3><p>" NB_TXT_HYDRAULIK "</p><p>" NB_TXT_HYDRAULIK_DANACH "</p>'"
+    ":'<h3>ROT</h3><p>Hat nicht geklappt. " NB_TXT_PLAN_B "</p>';}"
     "else{e.className='';e.innerHTML='';}"
     // Waehrend ein Lauf unterwegs ist und nach GRUEN steht weder Knopf noch
     // Sperrhinweis - dort gibt es nichts zu entscheiden. Nach ROT kommt beides
@@ -917,8 +976,9 @@ void handleNotbetriebStart(WebServerClass *httpServer)
 /*****************************************************************************/
 void handleNotbetriebStatus(WebServerClass *httpServer)
 {
-  // Puffer grosszuegig: fuenf Zahlen des Notbetriebs plus Lage und Dauertext
-  // ("mehr als 30 Tagen" ist der laengste, 17 Zeichen).
+  // Puffer grosszuegig: fuenf Zahlen des Notbetriebs plus Lage, Dauertext
+  // ("mehr als 30 Tagen" ist der laengste, 17 Zeichen), Kurvenwarnung und
+  // Abbruchgrund. Der laengste Fall liegt bei rund 35 Zeichen.
   char status[96];
   notbetrieb_status(status, sizeof(status));
 
@@ -930,7 +990,7 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
   // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere auf
   // einem ESP8266 der teurere Weg. Format nach der Erweiterung:
-  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))
   {
@@ -945,11 +1005,14 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
                             verbindung_ausfall_sekunden(&hausteuerung),
                             verbindung_ueber_deckel(&hausteuerung));
     }
-    // Die Kurvenwarnung haengt hinten an und nicht bei den Notbetriebsfeldern:
-    // Die Startseite liest Lage und Dauer ueber dieselbe Route an den Indizes 5
-    // und 6, ein Einschub in der Mitte haette beide Seiten verschoben.
-    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u",
-                   (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung());
+    // Kurvenwarnung und Abbruchgrund haengen HINTEN an und nicht bei den
+    // Notbetriebsfeldern: Die Startseite liest Lage und Dauer ueber dieselbe
+    // Route an den Indizes 5 und 6, ein Einschub in der Mitte haette beide
+    // Seiten verschoben. Jedes weitere Feld gehoert aus demselben Grund ans
+    // Ende.
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u",
+                   (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung(),
+                   (unsigned)notbetrieb_abbruchgrund());
   }
 
   httpServer->send(200, "text/plain", status);

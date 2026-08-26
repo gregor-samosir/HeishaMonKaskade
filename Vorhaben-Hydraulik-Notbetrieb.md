@@ -5,8 +5,11 @@ das niemand sicher — im Normalbetrieb schaltet die Kaskadensteuerung einen
 Tasmota-Switch, und genau die ist im Notbetriebsfall weg. Dieses Vorhaben legt
 die Umschaltung in die Firmware, als **Schritt 1** der Notbetriebsfolge.
 
-**Stand:** 2026-08-26, Planung. Ausgangsversion 3.14.2. Alle Grundsatzfragen
-sind entschieden (Abschnitt 3), es ist noch keine Zeile Code geschrieben.
+**Stand:** 2026-08-27, **umgesetzt als 3.15.0.** Ausgangsversion war 3.14.2.
+Die Reihenfolgefrage aus Abschnitt 11 ist zugunsten dieses Vorhabens entschieden
+(Owner, 2026-08-27): Es kommt zuerst, der ESP8266-Pfad wird dafür noch einmal
+mitgepflegt. Was am Code steht, ist gebaut und im Hosttest belegt; der Prüfplan
+aus Abschnitt 10 steht noch aus.
 
 ---
 
@@ -318,7 +321,7 @@ Datenpunkte stehen dann eingefroren auf dem Wert von vorher und sehen aus wie
 aktuelle Werte. Es zählt, was die Bridge über `/tablerefresh` herausgibt, und
 für den Switch das, was `cmnd=Power` direkt antwortet.
 
-## 11. Version und Reihenfolge
+## 11. Version und Reihenfolge — entschieden
 
 Parallel läuft [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) mit
 der Zielversion 3.15.0. Die beiden Vorhaben berühren sich nicht, aber die
@@ -334,3 +337,17 @@ nicht umgesetzt ist, **darf der Warmwasser-Notbetrieb an Stufe 2 nur gedrückt
 werden, wenn vorher jemand den Switch im Waschraum von Hand auf AUS gelegt
 hat.** Bis dahin gehört dieser Satz an den Anfang der Notbetriebsanleitung —
 unabhängig davon, welche Reihenfolge gewählt wird.
+
+**Entschieden am 2026-08-27 (Owner): dieses Vorhaben zuerst, als 3.15.0.** Der
+ESP8266-Pfad wird dafür noch einmal mitgepflegt — der Hydraulikschritt ist in
+beiden Pfaden gebaut und in beiden übersetzt (`ESP8266HTTPClient` bzw.
+`HTTPClient`, eine `#if defined(ESP32)`-Weiche in `notbetrieb.cpp`). Der Preis
+steht im Changelog: rund 6 kB Flash auf dem D1 mini, 20 kB auf dem ESP32, fast
+vollständig die HTTP-Bibliothek.
+
+[`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) rückt damit auf
+**3.16.0**; seine Zielversionsangabe ist entsprechend fortzuschreiben, sobald es
+angefasst wird.
+
+Der Satz oben — erst den Switch von Hand legen — gilt bis zum Rollout dieser
+Version und kann danach aus der Notbetriebsanleitung entfallen.

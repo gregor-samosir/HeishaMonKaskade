@@ -4,7 +4,8 @@ Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
 passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
-**Stand:** 2026-08-24, Firmware 3.14.1 (seit dem 2026-08-23 auf beiden Stufen).
+**Stand:** 2026-08-27, Firmware 3.15.0 (Hydraulikschritt; 3.14.1 lief seit dem
+2026-08-23 auf beiden Stufen).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in
@@ -24,15 +25,17 @@ trägt das ganze Dokument:
 
 Ereignis | Dauer | Wer treibt den Ablauf
 :--- | ---: | :---
-Notbetrieb einschalten, Stufe 1 (Heizen) | **56 s** | die Firmware, Schritt für Schritt
-Notbetrieb einschalten, Stufe 2 (Warmwasser) | **24 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 1 (Heizen) | **64 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 2 (Warmwasser) | **32 s** | die Firmware, Schritt für Schritt
 Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
 
 ---
 
 # 1. Notbetrieb einschalten — Stufe 1, Rolle Heizen
 
-Sieben Schritte, t = 0 ist der Klick auf den Knopf.
+Acht Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
+die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), die übrigen sieben
+gehen an die Wärmepumpe.
 
 ## Phase 1 — Auslösen (t = 0)
 
@@ -45,18 +48,27 @@ t | Was passiert | Wo
 0 s | **Sperre serverseitig geprüft.** Fehlen gehaltene Werte, oder steht TOP101 nicht sauber auf 0, endet der Ablauf hier: Logzeile, 303 zurück auf die Seite, kein Kommando an die Wärmepumpe | [`notbetrieb.cpp:423`](src/notbetrieb.cpp#L423)
 0 s | Zustand BEREIT → LÄUFT, Schrittzähler auf 1, Lauf- und Schrittuhr gestartet, das Ergebnis des vorigen Laufs verworfen | `notbetrieb_start()`
 0 s | MQTT-Log: „NOTBETRIEB ausgeloest ueber die Weboberflaeche" |
-0 s | Schritt 1 abgesetzt, dann 303 zurück auf `/notbetrieb`. Alles Weitere tickt aus `loop()` | [`notbetrieb.cpp:289`](src/notbetrieb.cpp#L289)
+0 s | 303 zurück auf `/notbetrieb`. **Der Handler setzt keinen Schritt mehr ab** | `notbetrieb_starten()`
++ ein `loop()`-Durchlauf | Schritt 1 geht raus. Alles Weitere tickt ebenfalls aus `loop()` | `notbetrieb_loop()`
+
+**Seit 3.15.0 setzt der Webhandler den ersten Schritt nicht mehr selbst ab.**
+Bis 3.14.2 tat er es — für ein Set-Kommando eine Sache von Mikrosekunden.
+Schritt 1 ist jetzt der Hydraulikschritt und damit ein HTTP-Request von bis zu
+1,5 s; läge er im Handler, hinge der Browser so lange an einer Seite, die noch
+nichts anzeigen kann. Der Versatz ist ein `loop()`-Durchlauf, also
+Millisekunden.
 
 Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
 versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
 Aufbau der Seite und dem Klick können Minuten liegen.
 
-## Phase 2 — Die Schrittfolge (0 bis 56 s)
+## Phase 2 — Die Schrittfolge (0 bis 64 s)
 
 ### Der Rhythmus eines einzelnen Schritts
 
-Jeder der sieben Schritte durchläuft dieselben Stationen. Die Zeitangaben sind
-relativ zum Beginn des Schritts.
+Jeder der sieben **Set-Schritte** durchläuft dieselben Stationen; der
+Hydraulikschritt hat seinen eigenen Rhythmus und steht in Abschnitt 1a. Die
+Zeitangaben sind relativ zum Beginn des Schritts.
 
 Zeit im Schritt | Was passiert
 :--- | :---
@@ -72,18 +84,19 @@ der sieben Kommandos hintereinander absetzt, packt sie alle in *ein* Telegramm �
 dann konkurriert das Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und
 welcher gewinnt, ist unbekannt.
 
-### Die sieben Schritte
+### Die acht Schritte
 
 Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 ---: | ---: | :--- | ---: | :---
-1 | 0 s | `OperationMode` = 0 (Heat only) | 4 | **Zuerst**, sonst schaltet der Knopf am Ende eine Anlage ein, die auf Kühlen steht
-2 | +8 s | `HeatingMode` = 0 (Comp. Curve) | 76 | Der Moduswechsel setzt die Kurvenpunkte auf die Panasonic-Werksvorgaben zurück — deshalb **vor** der Kurve
-3 | +16 s | `Z1HeatCurveTargetHighTemp` („VL kalt") | 29 | Erst jetzt hält die Kurve; vorher geschrieben wäre sie umsonst
-4 | +24 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
-5 | +32 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
-6 | +40 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
-7 | +48 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Betriebsart und Kurve stehen, darf die Anlage anlaufen
-— | **+56 s** | **GRÜN** | | alle sieben Werte zurückgelesen
+**1** | **0 s** | **Hydraulik auf AUS (1-stufig)** | — | **Ganz vorn**: Bricht er ab, ist an der Wärmepumpe noch nichts verstellt. Bestätigt durch `{"POWER":"OFF"}` vom Switch
+2 | +8 s | `OperationMode` = 0 (Heat only) | 4 | Vor allem anderen an der WP, sonst schaltet der Knopf am Ende eine Anlage ein, die auf Kühlen steht
+3 | +16 s | `HeatingMode` = 0 (Comp. Curve) | 76 | Der Moduswechsel setzt die Kurvenpunkte auf die Panasonic-Werksvorgaben zurück — deshalb **vor** der Kurve
+4 | +24 s | `Z1HeatCurveTargetHighTemp` („VL kalt") | 29 | Erst jetzt hält die Kurve; vorher geschrieben wäre sie umsonst
+5 | +32 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
+6 | +40 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
+7 | +48 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
+8 | +56 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Betriebsart und Kurve stehen, darf die Anlage anlaufen
+— | **+64 s** | **GRÜN** | | alle acht Schritte bestätigt
 
 Legt jemand den KNX-Schalter mitten im Lauf auf Kühlen, bricht der Lauf sofort
 ab — noch vor jeder anderen Prüfung. Ein bestätigter Schritt ist in einer
@@ -93,7 +106,7 @@ kühlenden Anlage nichts wert.
 
 t | Was passiert
 :--- | :---
-+56 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
++64 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
 alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort — auch die Sperre, der Knopf gibt sich also von selbst frei
 GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
 danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
@@ -105,6 +118,122 @@ Kette gezeigt: Knopf → Kurve → Wärme.
 
 ---
 
+# 1a. Der Hydraulikschritt
+
+Er steht seit 3.15.0 in **beiden** Schrittfolgen an Position 1 und ist der
+einzige Schritt, der nicht mit der Wärmepumpe spricht.
+
+## Warum er sein muss
+
+Der Notbetrieb setzt hydraulisch **1-stufigen** Betrieb voraus. Steht die
+Hydraulik auf 2-stufig, während eine Stufe im Warmwasser-Notbetrieb läuft,
+**schiebt der Warmwasserbetrieb bis zu 57 °C in den Heizkreis** — die
+Fußbodenheizung verträgt das nicht gut (Owner, 2026-08-26). Im Normalbetrieb
+schaltet die Kaskadensteuerung den Switch; im Notbetriebsfall ist genau die weg.
+
+## Was er tut
+
+Ein Sonoff TH mit Tasmota, Adresse aus den Einstellungen (`hydraulik_switch`).
+**EIN = 2-stufig, AUS = 1-stufig.**
+
+Nr | Was | Antwort | Folge
+---: | :--- | :--- | :---
+1 | `GET /cm?cmnd=Power` | `{"POWER":"OFF"}` | schon 1-stufig, Schritt erledigt, Logzeile „stand bereits"
+1 | `GET /cm?cmnd=Power` | `{"POWER":"ON"}` | weiter mit 2
+1 | `GET /cm?cmnd=Power` | keine oder unverständliche Antwort | **Abbruch**, kein zweiter Request
+2 | `GET /cm?cmnd=Power%20Off` | `{"POWER":"OFF"}` | Schritt erledigt
+2 | `GET /cm?cmnd=Power%20Off` | alles andere | **Abbruch**
+
+Der Zustand wird **vorher gelesen und nicht blind geschaltet**, obwohl ein
+einzelnes `Power Off` beide Fälle abdecken würde: Tasmota antwortet auch dann
+mit `"OFF"`, wenn der Schalter schon aus war. Nur so steht im Log, ob
+tatsächlich umgeschaltet wurde.
+
+**Die Antwort kommt chunked, ohne `Content-Length`** (am 2026-08-27 an Tasmota
+12.0.2 gemessen). Die Firmware liest sie deshalb byteweise in einen festen
+Puffer und hört auf, sobald `"OFF"` oder `"ON"` darin steht — ein `readBytes()`
+auf Puffergröße hätte bei einer 15 Byte langen Antwort jedes Mal das volle
+Timeout abgesessen, und `getString()` hätte auf dem Heap in der Größe der
+Antwort allokiert.
+
+Der Schritt hält die **Mindestwartezeit von 8 s** ein wie jeder andere, obwohl
+er in Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
+8 s fallen ohnehin in die 90 s der Stellantriebe.
+
+## Warum die 90 s keine Wartezeit erzwingen
+
+Das Relais bestätigt sich sofort, die beiden motorischen Stellantriebe brauchen
+je 90 s, und `Heatpump = 1` geht an Stufe 2 schon nach 24 s raus. **Der
+Kompressor braucht trotzdem länger als die Ventile:** Nach dem Einschalten
+vergehen rund drei Minuten, bis die Wärmepumpe ihn hochfährt; zunächst läuft nur
+die Umwälzpumpe an (Owner, 2026-08-26).
+
+**Der Beleg ist der Normalbetrieb selbst.** Dort sendet die Kaskadensteuerung
+ihre Kommandos an die Wärmepumpen **gleichzeitig** mit dem Switch-Kommando —
+dieselbe Konstellation, seit jeher, ohne Schaden. Der Notbetrieb ist der
+günstigere Fall: Zwischen Hydraulikschritt und `Heatpump = 1` liegen 16 s
+(Stufe 2) beziehungsweise 48 s (Stufe 1) zusätzlicher Vorsprung.
+
+## Warum der Request `loop()` blockieren darf
+
+`HTTPClient.GET()` hält `loop()` an, bis die Antwort da ist oder das Timeout
+greift: kein `read_pana_data`, kein `timeout_serial`, kein Webserver. Der
+UART-Empfangspuffer fasst 256 Byte, ein Telegramm hat 203 — ein zweites ginge
+verloren.
+
+Genau deshalb steht der Schritt **vorn**: In diesem Moment ist kein Kommando an
+die Wärmepumpe unterwegs und kein Sammelfenster offen. Eine einmalige Blockade
+trifft nur den Abfragezyklus, der ohnehin nur liest, und verschiebt ihn.
+
+Damit sie im Fehlerfall nicht ausufert:
+
+* **Timeout 1500 ms** statt der voreingestellten 5000 ms — der Switch hängt im
+  selben Subnetz.
+* **Höchstens ein Timeout je Lauf** — läuft schon der Lesevorgang ins Leere,
+  kommt der zweite Request gar nicht erst.
+* **Kein Wiederholungsversuch** — der Mensch steht vor der Seite und drückt
+  erneut, das ist der bessere Wiederholungsversuch.
+
+## Die Fehlerfälle
+
+Lage | Zustand | Was der Mensch sieht
+:--- | :--- | :---
+Switch stand schon auf AUS | läuft weiter | nichts Besonderes; im Log „Hydraulik stand bereits auf 1-stufig"
+Switch antwortet nicht (Timeout) | **ROT nach rund 2 s** | die Meldung unten
+Switch antwortet, meldet aber weiter `"ON"` | **ROT** | die Meldung unten
+Switch antwortet unverständlich | **ROT** | die Meldung unten
+keine Adresse eingetragen | **ROT sofort** | die Meldung unten
+
+> **Die Umschaltung der Hydraulik ist fehlgeschlagen, bitte den Switch im
+> Waschraum von Hand auf AUS schalten**
+
+Sie tritt an die Stelle des generischen „Hat nicht geklappt" — der Weg zurück
+führt hier über einen Schalter im Haus und nicht über das Bedienfeld der
+Wärmepumpe, an der nichts verstellt worden ist.
+
+**Der Knopf kommt nach ROT von selbst zurück**, ohne Neuladen und ohne die 15
+Minuten der Verfallszeit abzuwarten: Die Seite blendet ihn nur bei „läuft" und
+GRÜN aus. Wer den Schalter von Hand legt und zurückkommt, drückt erneut — der
+Lesevorgang meldet dann `"OFF"`, und die Folge läuft durch.
+
+## Wer zurück auf 2-stufig schaltet
+
+**Die Kaskadensteuerung, nicht die Firmware** — wie bei allen anderen Werten
+auch (Entscheidung 7, Abschnitt 3). Ihr Re-Assert liest den Switch zurück,
+stellt bei Abweichung nach und meldet sie.
+
+Dabei gilt seit dem 2026-08-26 eine **Frische-Bedingung**: Ein Schaltbefehl geht
+nur raus, wenn der Betriebsmodus von Stufe 2 nicht älter als zwölf Minuten ist.
+Der Grund ist, dass die beiden Befehlswege den ioBroker über **verschiedene
+Adapter** verlassen — die Wärmepumpenkommandos über `mqtt` (Port 1883, zugleich
+der Broker der Bridges), das Switch-Kommando über `sonoff` (Port 1886). Genau
+der Ausfall, für den der Notbetriebsknopf gebaut ist, trifft den `mqtt`-Adapter;
+der `sonoff`-Adapter läuft weiter. Ein Re-Assert, der stur alle fünf Minuten
+schaltet, legte die Hydraulik mitten im Notbetrieb zurück auf 2-stufig — der
+Schaden von oben, nur von der anderen Seite verursacht.
+
+---
+
 # 2. Notbetrieb einschalten — Stufe 2, Rolle Warmwasser
 
 Derselbe Automat, dieselben Regelzeiten, nur eine kürzere Folge: Warmwasser
@@ -112,15 +241,16 @@ braucht keine Kurve.
 
 Nr | t ab Klick | Kommando | TOP | Anmerkung
 ---: | ---: | :--- | ---: | :---
-1 | 0 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
-2 | +8 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
-3 | +16 s | `Heatpump` = 1 | 0 |
-— | **+24 s** | **GRÜN** | |
+**1** | **0 s** | **Hydraulik auf AUS (1-stufig)** | — | derselbe Schritt wie an Stufe 1 — und hier der wichtigere, siehe Abschnitt 1a
+2 | +8 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
+3 | +16 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
+4 | +24 s | `Heatpump` = 1 | 0 |
+— | **+32 s** | **GRÜN** | |
 
 **Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
 Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
 die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
-liegt hier bei 60 s statt 140 s, weil er sich aus der Schrittzahl ableitet.
+liegt hier bei 80 s statt 160 s, weil er sich aus der Schrittzahl ableitet.
 
 ---
 
@@ -180,6 +310,12 @@ GRÜN + 15 min | Firmware | Die Anzeige fällt auf BEREIT. Das ist der **einzige
 Alle Läufe an der Anlage, protokolliert in
 [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md)
 Abschnitt 10.
+
+**Sie stammen aus der Zeit vor dem Hydraulikschritt** (Firmware 3.12.0), also
+aus sieben- bzw. dreischrittigen Folgen. Ihre Aussage trägt trotzdem: Was sie
+belegen, ist der Rhythmus von 8 s je Schritt und die Herkunft der Kurvenwerte
+aus dem RAM — beides hat 3.15.0 nicht angefasst. Die Gesamtzeiten liegen seither
+um einen Schritt höher (64 s statt 56 s, 32 s statt 24 s).
 
 Lauf | Datum | Was er belegt | Ergebnis
 :--- | :--- | :--- | :---
