@@ -101,9 +101,17 @@ Abschnitt 3), und sie steht dort aus demselben Grund: nicht an einer Anlage
 drehen, die man gerade nicht sieht.
 
 Umgesetzt im Repo `nodered-flows`, Tab *Kaskaden Logik*, Gruppe „Hydraulik-Status
-Systemweit festlegen" — `WegeVentil-Relais Steuerung V2.0`, 2026-08-26. Der
-Knoten liest den Switch über den ioBroker zurück (Telemetrie alle 15 s), schaltet
-nur bei Abweichung und schreibt jede Abweichung ins Log.
+Systemweit festlegen", 2026-08-26. Der Knoten `WegeVentil-Relais Steuerung V2.1`
+liest den Switch über den ioBroker zurück (Telemetrie alle 15 s), schaltet nur
+bei Abweichung und schreibt jede Abweichung ins Log.
+
+Dazu gehört ein zweiter Knoten: `Hydraulik-Status V2.0` leitet die Stufigkeit
+der Anlage nicht mehr allein aus den Rückmeldungen von Stufe 2 ab, sondern lässt
+den zurückgelesenen Schalterzustand **widersprechen**. Das ist für den Notbetrieb
+der Rolle Heizen nötig: Dort bleibt Stufe 2 unangetastet und meldet weiter
+Heizbetrieb, während hydraulisch nur noch eine Wärmepumpe auf dem Kreis liegt.
+Ohne diesen Widerspruch führte die Kaskade die Anlage in diesem Fenster als
+2-stufig — mit abgezogener Spreizung und gedrosselter Pumpe.
 
 Die verworfene Möglichkeit, der Vollständigkeit halber: **weiterlaufen mit
 Warnung**, falls der Switch nicht antwortet. Sie ist abgelehnt, und der Grund
