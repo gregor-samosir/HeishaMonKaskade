@@ -59,8 +59,51 @@ Frage | Entscheidung | Folge
 Was, wenn der Switch nicht antwortet? | **Abbruch.** Kein Notbetrieb ohne bestätigte 1-stufige Hydraulik. | Eigener Abbruchgrund und eigene Meldung, Abschnitt 8
 Erst lesen oder gleich schalten? | **Erst `Power` lesen, nur bei EIN schalten.** | Zwei Requests, Abschnitt 4
 Beide Stufen oder nur Stufe 1? | **Beide.** Welchen Knopf jemand zuerst drückt, weiß niemand; ein doppeltes AUS schadet nicht. | Der Schritt steht in beiden Schrittfolgen
-Wer schaltet zurück auf 2-stufig? | **Die Kaskadensteuerung per Re-Assert.** Sie prüft den Zustand selbst und warnt, wenn er nicht passt. | **Kein** Rückschaltpfad in der Firmware — wie bei allen anderen Werten auch (Entscheidung 7, [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 3)
-Kann der Re-Assert die Hydraulik mitten im Notbetrieb zurückholen? | **Nein.** Switch-Re-Assert und Wärmepumpen-Re-Assert liegen im selben Flow und im selben Takt. | Kommt der eine, kommt der andere und holt die Anlage ohnehin aus dem Notbetrieb
+Wer schaltet zurück auf 2-stufig? | **Die Kaskadensteuerung per Re-Assert.** Sie liest den Switch zurück, stellt bei Abweichung nach und meldet sie. | **Kein** Rückschaltpfad in der Firmware — wie bei allen anderen Werten auch (Entscheidung 7, [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 3)
+Kann der Re-Assert die Hydraulik mitten im Notbetrieb zurückholen? | **Nur, wenn die Kaskadensteuerung den Betriebsmodus von Stufe 2 gerade frisch sieht.** Das prüft sie vor jedem Schaltbefehl. | Frische-Bedingung in Node-RED, nicht in der Firmware — Begründung gleich unten
+
+### Warum „selber Flow, selber Takt" als Begründung nicht reicht
+
+Die naheliegende Beruhigung lautet: Switch-Re-Assert und Wärmepumpen-Re-Assert
+liegen im selben Node-RED-Flow und im selben 5-Minuten-Takt — kommt der eine,
+kommt der andere und holt die Anlage ohnehin aus dem Notbetrieb. Selber Flow und
+selber Takt stimmen. **Selbes Schicksal nicht.**
+
+Die beiden Befehle verlassen den ioBroker auf verschiedenen Wegen:
+
+* Die Wärmepumpenkommandos gehen über den `mqtt`-Adapter, Port 1883. Der ist
+  zugleich der Broker, an dem die Bridges hängen.
+* Das Switch-Kommando geht über den `sonoff`-Adapter, **Port 1886** — eigener
+  Adapter, eigener Broker, eigener Prozess.
+
+Genau der Ausfall, für den der Notbetriebsknopf gebaut ist, trifft den
+`mqtt`-Adapter. Der `sonoff`-Adapter läuft weiter. Ein Re-Assert, der stur alle
+fünf Minuten schaltet, täte in diesem Fall Folgendes: Node-RED läuft, der zuletzt
+gesehene Betriebsmodus von Stufe 2 steht eingefroren auf dem Wert von vor dem
+Ausfall — etwa 4 (Heat+DHW), also Soll 2-stufig. Jemand drückt den
+Warmwasser-Notbetrieb, die Firmware legt den Switch auf AUS. Fünf Minuten später
+legt Node-RED ihn wieder auf EIN. Das ist der Schaden aus Abschnitt 1, nur von
+der anderen Seite verursacht.
+
+Dass das heute nicht passieren kann, ist ein Zufall der Verdrahtung und kein
+Entwurf: Der 5-Minuten-Takt der Hydraulikgruppe ist gar kein eigener Timer,
+sondern der Vollversand der Bridge (`UPDATEALLTIME`, 300 s in
+[`HeishaMon.h`](src/HeishaMon.h)). Er stirbt mit dem Broker — und mit ihm der
+Schaltbefehl. Wer den Takt eigenständig macht, nimmt diese Sicherung weg.
+
+**Deshalb liegt der Schutz in Node-RED, als Frische-Bedingung.** Ein
+Schaltbefehl an den Switch geht nur raus, wenn der Betriebsmodus von Stufe 2
+nicht älter als zwölf Minuten ist — zwei Vollversand-Zyklen plus Reserve für den
+Reconnect-Backoff. Ist er älter, unterbleibt der Befehl und die Steuerung meldet
+es. Das ist dieselbe Bauart wie die Puls-Bedingung, mit der der Verteiler die
+Rückkehr von Stufe 1 absichert ([`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md)
+Abschnitt 3), und sie steht dort aus demselben Grund: nicht an einer Anlage
+drehen, die man gerade nicht sieht.
+
+Umgesetzt im Repo `nodered-flows`, Tab *Kaskaden Logik*, Gruppe „Hydraulik-Status
+Systemweit festlegen" — `WegeVentil-Relais Steuerung V2.0`, 2026-08-26. Der
+Knoten liest den Switch über den ioBroker zurück (Telemetrie alle 15 s), schaltet
+nur bei Abweichung und schreibt jede Abweichung ins Log.
 
 Die verworfene Möglichkeit, der Vollständigkeit halber: **weiterlaufen mit
 Warnung**, falls der Switch nicht antwortet. Sie ist abgelehnt, und der Grund
