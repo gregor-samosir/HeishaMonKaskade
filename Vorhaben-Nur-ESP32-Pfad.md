@@ -39,6 +39,19 @@ Abschnitt „Das Protokoll vom 2026-08-21").
 
 ## 2. Vorbedingung: die Backup-Boards müssen stehen
 
+> **Entschieden am 2026-08-27 (Owner): Diese Vorbedingung wird NACHGEZOGEN.**
+> Die Boards sind noch nicht da, und das Vorhaben wartet nicht auf sie. Als
+> Rückfall für die Zwischenzeit dient das **vorhandene 3.15.0** — die vier
+> OTA-Abbilder liegen im privaten Release `v3.15.0` und bleiben flashbar, auch
+> wenn der ESP8266-Pfad aus dem Repo verschwindet. Sie lassen sich dann nur
+> nicht mehr neu bauen, sondern nur noch aus dem Tag `v3.15.0`. Die
+> Rückfallebene ist damit nicht weg, sondern **eingefroren** — und das reicht
+> dem Owner. Die Backup-Boards werden bespielt, sobald sie da sind und 3.16.0
+> ein paar Tage unauffällig gelaufen ist.
+>
+> Der Absatz unten bleibt als Begründung stehen, warum die Vorbedingung
+> ursprünglich gesetzt wurde.
+
 **Vor Etappe 3 sind beide Backup-Boards nach
 [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) einzurichten.**
 
@@ -329,7 +342,33 @@ Etappe | Inhalt | Nachweis
 **6** | CI: neue Begründung, Cache-Kommentar mit gemessenen Zahlen | grüner Lauf, Laufzeit notieren
 **7** | `piotools`: `obj-dump.py` umstellen oder entfernen, Altlasten aufräumen | —
 **8** | Doku nach 3.6 | —
+**5b** | **ArduinoJson 6.x → 7** (Owner-Entscheidung 2026-08-27) — `DynamicJsonDocument` ist entfallen, betroffen ist `webfunctions.cpp` an drei Stellen | eigener Nachweis, siehe unten. **Nicht mit Etappe 5 vermischen**
 **9** | Changelog `src/version.h`, Version 3.16.0, Release | —
+**10** | Rollout auf H1 und H2 (Owner-Entscheidung 2026-08-27) | Abnahme nach `abnahme-nach-flash`: Baseline über `/tablerefresh`, zeilenweise vergleichen
+
+**Warum 5b eine eigene Etappe ist und nicht in 5 mitläuft.** Der Nachweis von
+Etappe 5 ist „die Größe ist identisch" — das ist der einzige Weg, einen falsch
+aufgelösten Zweig zu bemerken. ArduinoJson 7 ändert die Größe zwangsläufig
+(elastische Allokation statt fester Dokumentgröße). Vermischt man beides, ist
+der Vergleich wertlos: Bei einer Abweichung wüsste niemand, ob sie von der
+Bibliothek kommt oder von einem zerschossenen `#else`-Zweig. Also erst 5 mit
+identischer Größe abnehmen, dann 5b mit einer Größe, die sich ändern **darf**.
+
+**Der Nachweis von 5b ist ein anderer** — und er ist sicherheitskritisch, weil
+ArduinoJson genau den Pfad anfasst, der `config.json` liest und schreibt:
+
+1. Alle sechs Envs bauen, Hosttests, CI.
+2. Am Gerät: über `/settings` ein Feld setzen (z. B. `hydraulik_switch`), Reboot
+   abwarten, Wert zurücklesen — und prüfen, dass **die übrigen Felder erhalten
+   sind** (Verbindungslage 0 auf der Statusroute belegt, dass MQTT-Server und
+   Zugangsdaten noch stimmen). Derselbe Weg wie am 2026-08-27 beim Einführen
+   von `hydraulik_switch`.
+3. H2 zuerst, H1 erst nach erfolgreicher Gegenprobe.
+
+Geht dabei etwas schief, wird das Board **kein Ziegelstein**: Bei einem
+Parse-Fehler ruft `setupWifi()` `resetSettings()` auf und der Setup-AP geht auf.
+Aber alle Einstellungen müssen dann von Hand neu eingetragen werden, und ein
+OTA-Rückfall auf 3.15.0 ist in diesem Zustand nicht mehr möglich.
 
 **Etappe 5 ist die einzige, bei der ein Fehler die Firmware verändern kann.**
 Der ESP8266-Code steht in `#else`-Zweigen, die der Präprozessor beim
@@ -457,6 +496,12 @@ bleiben, wie sie sind.
 
 ## 9. Offene Punkte
 
+> **Die drei Punkte dieses Abschnitts sind am 2026-08-27 entschieden:**
+> Version **3.16.0**, ArduinoJson **wird umgestellt** (Etappe 5b, eigener
+> Nachweis), und der Widerspruch in `Ablauf-Backup-Boards.md` wird beim
+> Doku-Durchgang in Etappe 8 aufgelöst. Der Text darunter bleibt als Begründung
+> stehen.
+
 **Versionsnummer: 3.16.0 oder 4.0.0?** Vorschlag ist **3.16.0**. Begründung:
 Die ausgelieferte Firmware verhält sich identisch, es fällt keine Funktion und
 kein Topic weg. Für 4.0.0 spräche, dass eine Zielplattform verschwindet — das
@@ -465,11 +510,12 @@ beim Owner.
 
 **ArduinoJson 6.x → 7?** Die Festlegung auf 6.x in
 [`platformio.ini:53`](platformio.ini#L53) hat als einzige Begründung den
-ESP8266-Footprint. Sie wird mit diesem Vorhaben gegenstandslos. **Gehört
-trotzdem nicht in dieses Vorhaben:** ArduinoJson 7 ändert die API
-(`DynamicJsonDocument` ist entfallen), betrifft `webfunctions.cpp` an mehreren
-Stellen und hat ein eigenes Risiko. Vorschlag: Der Kommentar wird in Etappe 3
-auf „bewusst 6.x, Umstieg auf 7 nicht geprüft" geändert, mehr nicht.
+ESP8266-Footprint. Sie wird mit diesem Vorhaben gegenstandslos.
+
+**Entschieden 2026-08-27: Die Umstellung wird mitgenommen** — aber als eigene
+Etappe 5b mit eigenem Nachweis, nicht vermischt mit dem Auflösen der Weichen
+(Begründung bei den Etappen). Der ursprüngliche Vorschlag, es beim Umformulieren
+des Kommentars zu belassen, ist damit überholt.
 
 **`Ablauf-Backup-Boards.md` Abschnitt „Was damit entfällt"** widerspricht nach
 der Entscheidung aus Abschnitt 1 der Realität (Test-Prefix bleibt). Etappe 8
