@@ -7,15 +7,18 @@ wie sie eingerichtet werden, was bei jeder Firmware-Änderung mit ihnen passiert
 und was im Ernstfall zu tun ist.
 
 **Stand:** 2026-08-24, fortgeschrieben am 2026-08-27 nach der
-Erstinbetriebnahme. Ersetzt die bisherige Rückfallebene aus archivierten
-`firmware.bin`-Dateien und ESP8266-Boards — beides wird nicht mehr gepflegt.
-Der ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
+Erstinbetriebnahme. Ersetzt die bisherige Rückfallebene aus ESP8266-Boards und
+einem Vollarchiv aller `firmware.bin` — beides wird nicht mehr gepflegt. Der
+ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)).
 
 **Beide Backup-Boards stehen seit dem 2026-08-27** mit 3.16.0, Port 1884 und
-eigenem Hostnamen (Protokoll unten). Damit ist die eingefrorene Rückfallebene
-aus dem privaten Release `v3.15.0` nicht mehr der Notanker, sondern nur noch
-Altbestand — sie wird nicht gelöscht, aber auch nicht mehr gepflegt.
+eigenem Hostnamen (Protokoll unten).
+
+Die Rückfallebene ist damit **zweiteilig**, und beide Teile werden gebraucht:
+die Boards gegen den Hardware-Ausfall, das Abbild der Vorversion gegen einen
+Firmware-Fehler. Warum das eine das andere nicht ersetzt, steht unten unter
+„Was damit entfällt".
 
 ## Die vier Boards
 
@@ -189,9 +192,30 @@ produktive Board seiner Stufe.
 * **Der ESP8266-Pfad.** Die vier `d1_mini_*`-Envs, `esp8266_base`,
   `stage_test_esp8266` und die Plattformschicht dafür sind mit 3.16.0 entfernt.
   Die CI baut seitdem sechs Envs.
-* **Das Binärarchiv der Rückfallstände.** Ein Rollback heißt jetzt: Board
-  tauschen oder aus dem Git-Tag neu bauen. Firmware-Binaries mit AP- und
-  Notbetriebspasswort müssen dafür nicht mehr aufbewahrt werden.
+* **Das Binärarchiv der Rückfallstände** — als *Archiv*. Am 2026-08-27 auf zwei
+  Releases eingedampft: das aktuelle und das davor. Elf ältere Releases und 62
+  lokale Abbilder sind gelöscht, 60 MB auf 5,8 MB.
+
+### Richtigstellung (2026-08-27): ein Rückfallstand bleibt nötig
+
+Hier stand, ein Rollback heiße jetzt „Board tauschen oder aus dem Git-Tag neu
+bauen", Binaries müssten nicht mehr aufbewahrt werden. **Das greift zu kurz.**
+Die Backup-Boards decken den *Hardware*-Ausfall ab — den *Firmware*-Rollback
+decken sie konstruktiv nicht ab: Nach der Regel oben („Backups direkt nach der
+Abnahme nachziehen, kein Sicherheitsversatz") tragen nach jedem Update alle vier
+Boards dieselbe Version. Ein Fehler, der erst nach Tagen auffällt, steckt dann
+in allen vieren.
+
+Deshalb bleibt **die jeweils vorige Version** als Abbild liegen. Alles davor
+kann weg — auf 3.7.0 will niemand zurück.
+
+Und der zweite Weg, „aus dem Git-Tag neu bauen", hatte eine Lücke, die niemand
+notiert hatte: Er setzt `platformio_user_env.ini` voraus, und die lag bis zum
+2026-08-27 **ausschließlich lokal** auf dem Entwicklungsrechner — in keinem der
+beiden Repos. Ohne sie entsteht zwar eine lauffähige Firmware, aber mit anderem
+AP- und Notbetriebspasswort, und das ausgedruckte Blatt in der Notfallbox wäre
+falsch. Sie hängt jetzt als Asset am Release und gehört künftig an jedes;
+Begründung und Ablauf stehen im README der privaten Ablage.
 
 ### Richtigstellung (2026-08-25): der Test-Prefix bleibt
 
