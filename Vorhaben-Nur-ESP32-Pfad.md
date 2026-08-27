@@ -525,8 +525,17 @@ stellt das richtig — der Punkt steht hier, damit er nicht untergeht.
 **Die drei stromlosen D1 minis.** `192.168.2.108`, `.193` und `.197` liegen
 physisch noch vor. Sie sind nach diesem Vorhaben nicht mehr flashbar (die Envs
 sind weg) und tragen Firmwarestände, die auf den produktiven Prefix schreiben
-würden. Entscheidung offen: entsorgen, oder mit einem Aufkleber „nicht
-anschließen" ablegen. Bis dahin gilt: stromlos.
+würden.
+
+> **Entschieden am 2026-08-27 (Owner): Sie gehen in die Bastelkiste** und stehen
+> anderen Projekten zur Verfügung, wo sie einfach überschrieben werden. Weder
+> entsorgen noch etikettieren.
+>
+> Ein praktischer Hinweis dazu, kein Einwand: Der alte Stand ist erst mit dem
+> ersten Flash weg. Wer so ein Board vorher ans Netzteil hängt, hat ein Gerät im
+> WLAN, das sich unter `panasonic_heat_pump` bzw. `panasonic_heat_pump2` beim
+> Broker meldet und die `set`-Topics abonniert. Für die Bastelkiste heißt das:
+> **erst überschreiben, dann einschalten** — nicht umgekehrt.
 
 ---
 
@@ -591,6 +600,18 @@ Frage | Entscheidung | Begründung
 `name-firmware.py` anfassen? | **ja**, minimal | Es legte weiterhin ein leeres `build_output/map/` an und trug einen auskommentierten Kopierblock für die `firmware.map`, die es seit dem Wegfall von `[esp8266_base]` nicht mehr gibt
 Feste Prüfstands-IP in `test/README.md`? | **Platzhalter**, alte IP in den datierten Protokollen belassen | 192.168.2.197 war der D1 mini; die neue IP hängt am geliehenen Board
 
+### Erledigt am 2026-08-27, nach dem Rollout
+
+Die drei Punkte, die nach dem Rollout beim Owner lagen, sind entschieden:
+
+* **Die drei D1 minis** gehen in die Bastelkiste (siehe Abschnitt 9).
+* **Den CI-Cache** löscht der Owner von Hand über Actions → Caches.
+* **Die 14 Rettungsanker-Tags im Remote sind gelöscht.** Vorher geprüft, dass
+  jeder von ihnen lokal auf demselben Commit liegt — sonst wäre ein Anker mit
+  dem Push verschwunden. Das Remote trägt jetzt ausschließlich Versions-Tags;
+  lokal sind alle 24 Anker vollständig. **Die Falle bleibt bestehen:**
+  `git push --follow-tags` schöbe sie beim nächsten Mal wieder hoch.
+
 ### Offen geblieben
 
 * **Die drei stromlosen D1 minis** (`192.168.2.108`, `.193`, `.197`) — siehe
@@ -611,10 +632,11 @@ Feste Prüfstands-IP in `test/README.md`? | **Platzhalter**, alte IP in den dati
 
   Er verschwindet erst, wenn kein älterer Eintrag mehr passt (GitHub räumt nach
   7 Tagen ohne Zugriff auf) — oder wenn jemand die `pio-`Einträge von Hand
-  löscht: **Actions → Caches**. Der Lauf danach ist einmal kalt, und der Cache
-  enthält anschließend nur noch den ESP32-Anteil. Über die API ging das nicht:
-  Der hier verfügbare Token darf Caches nicht löschen (HTTP 403). `restore-keys`
+  löscht: **Actions → Caches** — der Owner macht das (2026-08-27). Der Lauf
+  danach ist einmal kalt, und der Cache enthält anschließend nur noch den
+  ESP32-Anteil. Über die API ging es nicht: Der hier verfügbare Token darf
+  Caches nicht löschen (HTTP 403). `restore-keys`
   bleibt trotzdem stehen — ein Präfix-Treffer mit veraltetem Inhalt ist immer
   noch besser als ein Lauf, der von den Espressif-Servern abhängt, und genau
   dafür ist der Cache da.
-* **Die drei stromlosen D1 minis** — siehe darüber.
+* **Die drei stromlosen D1 minis** — entschieden, siehe Abschnitt 9.
