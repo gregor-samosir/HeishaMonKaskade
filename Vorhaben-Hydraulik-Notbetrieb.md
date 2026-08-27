@@ -5,11 +5,13 @@ das niemand sicher — im Normalbetrieb schaltet die Kaskadensteuerung einen
 Tasmota-Switch, und genau die ist im Notbetriebsfall weg. Dieses Vorhaben legt
 die Umschaltung in die Firmware, als **Schritt 1** der Notbetriebsfolge.
 
-**Stand:** 2026-08-27, **umgesetzt als 3.15.0.** Ausgangsversion war 3.14.2.
+**Stand:** 2026-08-27, **umgesetzt als 3.15.0 und an der Anlage abgenommen.**
+Ausgangsversion war 3.14.2. Beide Stufen laufen seit dem 2026-08-27 auf 3.15.0.
 Die Reihenfolgefrage aus Abschnitt 11 ist zugunsten dieses Vorhabens entschieden
 (Owner, 2026-08-27): Es kommt zuerst, der ESP8266-Pfad wird dafür noch einmal
-mitgepflegt. Was am Code steht, ist gebaut und im Hosttest belegt; der Prüfplan
-aus Abschnitt 10 steht noch aus.
+mitgepflegt. Das Prüfprotokoll steht in Abschnitt 12 — es hat **zwei
+Zeitannahmen dieses Entwurfs widerlegt** und einen Schritt hinzugefügt, den der
+Entwurf nicht vorgesehen hatte.
 
 ---
 
@@ -351,3 +353,73 @@ angefasst wird.
 
 Der Satz oben — erst den Switch von Hand legen — gilt bis zum Rollout dieser
 Version und kann danach aus der Notbetriebsanleitung entfallen.
+
+---
+
+## 12. Das Protokoll vom 2026-08-27
+
+Gefahren an **H2** (Rolle Warmwasser, `192.168.2.122`), Hydraulik vorher von
+Hand auf 2-stufiges Umpumpen gestellt, beide Wärmepumpen aus, Umwälzpumpen an.
+Speicher 56 °C bei Soll 48 — die Wärmepumpe hatte also keinen echten Bedarf,
+das hielt den Eingriff klein.
+
+### Was durchlief
+
+Nr | Ergebnis
+:--- | :---
+**P1** | ✅ Switch von EIN auf AUS geschaltet, GRÜN. Logzeile „Hydraulik auf 1-stufig geschaltet (Stellantriebe 90 s)"
+**P2** | ✅ Switch stand schon auf AUS: kein Schaltvorgang, Logzeile „stand bereits auf 1-stufig", GRÜN nach 33 s (Regelzeit 32 s, damals noch vier Schritte)
+**P3** | ✅ ROT nach rund 5 s mit der Waschraum-Meldung, **kein Kommando an der Wärmepumpe** (TOP0, TOP4 und TOP104 unverändert). Der POST-Handler antwortete in **36 ms** — der Request läuft also tatsächlich aus `loop()` und nicht im Handler
+**P4** | ✅ Nach P3 den Schalter von Hand auf AUS gelegt, Knopf war da, Lauf lief durch. Nebenbei belegt: Ein zweiter Klick während eines laufenden Vorgangs prallt ab
+**P5** | entfällt — Owner-Entscheidung 2026-08-27. Der Hydraulikschritt ist rollenunabhängig derselbe Code; P5 hätte nur die längere Schrittfolge gezeigt und dafür einen echten Heizvorgang in die Fußbodenheizung gekostet
+**P6** | ✅ zweimal beobachtet: Der Re-Assert stellte 2-stufig **und** den Fix-Modus der Pumpe wieder her, 2,5 bzw. 4,5 min nach GRÜN
+**P7** | ✅ Der Abfragezyklus zeigte während der Blockade einen einmaligen Versatz von 4–5 s (die Weboberfläche antwortete in dieser Zeit nicht) und lief danach ohne Nacharbeit weiter; alle 92 Tabellenzeilen trugen sofort wieder Werte
+
+**P3 ohne Stromlosmachen.** Statt den Sonoff physisch abzuschalten, stand
+kurzzeitig eine tote Adresse (`192.168.2.199`) in den Einstellungen. Für die
+Firmware ist das derselbe Fall — der Verbindungsaufbau läuft ins Leere —, nur
+reversibel und ohne die Stellantriebe in einen undefinierten Zustand zu bringen.
+
+### Was der Prüflauf am Entwurf korrigiert hat
+
+**Zwei Zeitannahmen aus Abschnitt 6 haben nicht getragen.** Beide waren
+geschätzt, nicht gemessen:
+
+Annahme | Befund | Jetzt
+:--- | :--- | :---
+„Timeout 1500 ms — antwortet er in 1,5 s nicht, antwortet er nicht" | Der **erste** Verbindungsaufbau nach einem Neustart scheiterte dreimal reproduzierbar mit `HTTP -1`, während jeder weitere Lauf durchlief | **5000 ms**
+Lesefrist 300 ms, „der Rumpf liegt praktisch immer schon im Puffer" | Stimmt fürs Lesen, nicht fürs **Schalten**: Auf `Power Off` legt Tasmota erst das Relais um und publiziert per MQTT, bevor es antwortet. Der Lauf endete mit „liess sich nicht schalten (HTTP 200)" — die Verbindung stand, der Switch hatte sauber gearbeitet, und die Firmware hatte die Antwort verpasst | **dieselbe Frist wie für den Request**
+
+Der Preis der ersten Korrektur ist gemessen und steht in P7: Im echten
+Fehlerfall blockiert der Request `loop()` jetzt 4–5 s statt 1,5 s. Das ist
+tragbar, weil der Schritt ganz vorn steht — es ist kein Kommando an die
+Wärmepumpe unterwegs und kein Sammelfenster offen.
+
+**Die Diagnose war zu dünn.** Beide Fehler kosteten Suchzeit, weil im Log nur
+„antwortet nicht" stand. Jetzt stehen dort der HTTP-Code und die ersten Bytes
+der Antwort: `HTTP -1, Antwort ""` und `HTTP 200, Antwort "…"` sind zwei
+verschiedene Ursachen mit zwei verschiedenen Abhilfen.
+
+### Was der Entwurf nicht vorgesehen hatte
+
+**Die Umwälzpumpe** (Owner-Beobachtung während des Prüflaufs, 2026-08-27). Nach
+dem Umschalten auf 2-stufiges Umpumpen stand TOP104 auf `1 Fix` und die Pumpe
+lief mit rund 16 l/min dauerhaft durch. Gesetzt hat das die Kaskadensteuerung —
+also genau die, die im Notbetriebsfall weg ist. Ohne Gegenmaßnahme liefe die
+Pumpe im Notbetrieb ohne Not weiter.
+
+Beide Schrittfolgen bekommen deshalb **`WaterPump` = 0 (auto)** als vorletzten
+Schritt, unmittelbar vor dem Einschalten und hinter allen Moduswechseln. An der
+Anlage belegt: TOP104 `1 Fix` → `0 Auto`, Pump_Flow 16,24 → 0,13 l/min. Der
+Re-Assert stellt beides hinterher wieder her — derselbe Kreislauf wie bei allen
+anderen Werten.
+
+Damit sind es **neun Schritte (Heizen, 72 s)** und **fünf (Warmwasser, 40 s)**;
+an H2 gemessen: GRÜN nach 43 s.
+
+### Ein Hinweis für spätere Läufe
+
+**Solange die Kaskadensteuerung läuft, holt sie einen von Hand gelegten Schalter
+innerhalb von fünf Minuten zurück.** Im echten Notfall ist sie weg und das
+passiert nicht — für einen Test heißt es aber: Zwischen dem Schalten im
+Waschraum und dem Knopfdruck dürfen nur wenige Minuten liegen.

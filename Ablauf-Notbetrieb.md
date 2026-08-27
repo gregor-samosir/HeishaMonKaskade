@@ -25,16 +25,16 @@ trägt das ganze Dokument:
 
 Ereignis | Dauer | Wer treibt den Ablauf
 :--- | ---: | :---
-Notbetrieb einschalten, Stufe 1 (Heizen) | **64 s** | die Firmware, Schritt für Schritt
-Notbetrieb einschalten, Stufe 2 (Warmwasser) | **32 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 1 (Heizen) | **72 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 2 (Warmwasser) | **40 s** | die Firmware, Schritt für Schritt
 Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
 
 ---
 
 # 1. Notbetrieb einschalten — Stufe 1, Rolle Heizen
 
-Acht Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
-die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), die übrigen sieben
+Neun Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
+die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), die übrigen acht
 gehen an die Wärmepumpe.
 
 ## Phase 1 — Auslösen (t = 0)
@@ -62,11 +62,11 @@ Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
 versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
 Aufbau der Seite und dem Klick können Minuten liegen.
 
-## Phase 2 — Die Schrittfolge (0 bis 64 s)
+## Phase 2 — Die Schrittfolge (0 bis 72 s)
 
 ### Der Rhythmus eines einzelnen Schritts
 
-Jeder der sieben **Set-Schritte** durchläuft dieselben Stationen; der
+Jeder der acht **Set-Schritte** durchläuft dieselben Stationen; der
 Hydraulikschritt hat seinen eigenen Rhythmus und steht in Abschnitt 1a. Die
 Zeitangaben sind relativ zum Beginn des Schritts.
 
@@ -84,7 +84,7 @@ der sieben Kommandos hintereinander absetzt, packt sie alle in *ein* Telegramm �
 dann konkurriert das Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und
 welcher gewinnt, ist unbekannt.
 
-### Die acht Schritte
+### Die neun Schritte
 
 Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 ---: | ---: | :--- | ---: | :---
@@ -95,8 +95,9 @@ Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 5 | +32 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
 6 | +40 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
 7 | +48 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
-8 | +56 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Betriebsart und Kurve stehen, darf die Anlage anlaufen
-— | **+64 s** | **GRÜN** | | alle acht Schritte bestätigt
+8 | +56 s | `WaterPump` = 0 (auto) | 104 | Die Steuerung lässt die Pumpe im Umpumpbetrieb auf **Fix** laufen; im Notbetrieb gehört sie zurück auf bedarfsgeregelt. **Hinter** allen Moduswechseln, damit keiner sie zurückstellt
+9 | +64 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Betriebsart, Kurve und Pumpe stehen, darf die Anlage anlaufen
+— | **+72 s** | **GRÜN** | | alle neun Schritte bestätigt
 
 Legt jemand den KNX-Schalter mitten im Lauf auf Kühlen, bricht der Lauf sofort
 ab — noch vor jeder anderen Prüfung. Ein bestätigter Schritt ist in einer
@@ -106,7 +107,7 @@ kühlenden Anlage nichts wert.
 
 t | Was passiert
 :--- | :---
-+64 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
++72 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
 alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort — auch die Sperre, der Knopf gibt sich also von selbst frei
 GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
 danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
@@ -156,9 +157,30 @@ auf Puffergröße hätte bei einer 15 Byte langen Antwort jedes Mal das volle
 Timeout abgesessen, und `getString()` hätte auf dem Heap in der Größe der
 Antwort allokiert.
 
+**Gewartet wird dabei so lange wie für den ganzen Request**, nicht kürzer. Auch
+das ist eine Lehre vom 2026-08-27: Hier stand zuerst eine eigene Frist von
+300 ms, weil der Rumpf „praktisch immer schon im Puffer liegt". Fürs Lesen
+stimmt das, fürs **Schalten** nicht — auf `Power Off` legt Tasmota erst das
+Relais um und veröffentlicht den neuen Zustand per MQTT, bevor es antwortet. Der
+Lauf endete dann mit `liess sich nicht schalten (HTTP 200)`: Die Verbindung
+stand, der Switch hatte sauber gearbeitet, und die Firmware hatte die Antwort
+verpasst.
+
 Der Schritt hält die **Mindestwartezeit von 8 s** ein wie jeder andere, obwohl
 er in Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
 8 s fallen ohnehin in die 90 s der Stellantriebe.
+
+## Die Umwälzpumpe gehört mit zurück
+
+Der Hydraulikschritt hat einen Zwilling am anderen Ende der Folge: **`WaterPump`
+= 0.** Am 2026-08-27 an beiden Stufen beobachtet — nach dem Umschalten auf
+2-stufiges Umpumpen stand TOP104 auf `1 Fix` und die Pumpe lief mit rund
+16 l/min dauerhaft durch. Gesetzt hat das die Kaskadensteuerung, also genau die,
+die im Notbetriebsfall weg ist.
+
+An der Anlage belegt: TOP104 `1 Fix` → `0 Auto`, Pump_Flow 16,24 → 0,13 l/min.
+Der Re-Assert stellt beides hinterher wieder her — derselbe Kreislauf wie bei
+allen anderen Werten.
 
 ## Warum die 90 s keine Wartezeit erzwingen
 
@@ -187,8 +209,12 @@ trifft nur den Abfragezyklus, der ohnehin nur liest, und verschiebt ihn.
 
 Damit sie im Fehlerfall nicht ausufert:
 
-* **Timeout 1500 ms** statt der voreingestellten 5000 ms — der Switch hängt im
-  selben Subnetz.
+* **Timeout 5000 ms.** Der Entwurf sah 1500 ms vor („antwortet er in 1,5 s
+  nicht, antwortet er nicht"). Der Prüflauf am 2026-08-27 hat das widerlegt:
+  Beim **ersten** Kontakt nach einem Neustart scheiterte der Verbindungsaufbau
+  reproduzierbar (`HTTP -1`), während jeder weitere Lauf durchlief. Das ist der
+  Regelfall, nicht der Sonderfall — nach einem Stromausfall startet die Bridge
+  neu und hat mit dem Switch noch nie gesprochen.
 * **Höchstens ein Timeout je Lauf** — läuft schon der Lesevorgang ins Leere,
   kommt der zweite Request gar nicht erst.
 * **Kein Wiederholungsversuch** — der Mensch steht vor der Seite und drückt
@@ -199,7 +225,7 @@ Damit sie im Fehlerfall nicht ausufert:
 Lage | Zustand | Was der Mensch sieht
 :--- | :--- | :---
 Switch stand schon auf AUS | läuft weiter | nichts Besonderes; im Log „Hydraulik stand bereits auf 1-stufig"
-Switch antwortet nicht (Timeout) | **ROT nach rund 2 s** | die Meldung unten
+Switch antwortet nicht (Timeout) | **ROT nach rund 5 s** | die Meldung unten
 Switch antwortet, meldet aber weiter `"ON"` | **ROT** | die Meldung unten
 Switch antwortet unverständlich | **ROT** | die Meldung unten
 keine Adresse eingetragen | **ROT sofort** | die Meldung unten
@@ -244,13 +270,14 @@ Nr | t ab Klick | Kommando | TOP | Anmerkung
 **1** | **0 s** | **Hydraulik auf AUS (1-stufig)** | — | derselbe Schritt wie an Stufe 1 — und hier der wichtigere, siehe Abschnitt 1a
 2 | +8 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
 3 | +16 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
-4 | +24 s | `Heatpump` = 1 | 0 |
-— | **+32 s** | **GRÜN** | |
+4 | +24 s | `WaterPump` = 0 (auto) | 104 | wie an Stufe 1 — die Pumpe zurück auf bedarfsgeregelt
+5 | +32 s | `Heatpump` = 1 | 0 |
+— | **+40 s** | **GRÜN** | | an H2 gemessen: **GRÜN nach 43 s** (2026-08-27)
 
 **Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
 Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
 die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
-liegt hier bei 80 s statt 160 s, weil er sich aus der Schrittzahl ableitet.
+liegt hier bei 100 s statt 180 s, weil er sich aus der Schrittzahl ableitet.
 
 ---
 
@@ -315,7 +342,8 @@ Abschnitt 10.
 aus sieben- bzw. dreischrittigen Folgen. Ihre Aussage trägt trotzdem: Was sie
 belegen, ist der Rhythmus von 8 s je Schritt und die Herkunft der Kurvenwerte
 aus dem RAM — beides hat 3.15.0 nicht angefasst. Die Gesamtzeiten liegen seither
-um einen Schritt höher (64 s statt 56 s, 32 s statt 24 s).
+um zwei Schritte höher (72 s statt 56 s, 40 s statt 24 s) — Hydraulik am Anfang,
+Umwälzpumpe vor dem Einschalten.
 
 Lauf | Datum | Was er belegt | Ergebnis
 :--- | :--- | :--- | :---

@@ -40,8 +40,8 @@ enum NotbetriebRolle
 /*                                                                           */
 /* Die Waermepumpe uebernimmt ein Kommando in 2-8 s (KNX-Messung 2026-08-16),*/
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
-/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.15.0 64 s    */
-/* (acht Schritte, davon der erste die Hydraulik).                           */
+/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.15.0 72 s    */
+/* (neun Schritte, davon der erste die Hydraulik).                           */
 /*                                                                           */
 /* Der Gesamtdeckel ist ABGELEITET (Schrittzahl * Schritt-Timeout) und nicht */
 /* frei gewaehlt. Ein kleinerer Deckel wuerde einen Lauf abbrechen, den die  */
@@ -67,7 +67,7 @@ enum NotbetriebRolle
 /* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
 /* Reserve ab. Das ist der Preis dafuer, dass GRUEN wirklich "zurueckgelesen" */
 /* heisst. Der Gesamtdeckel folgt der Schrittzahl und liegt seit 3.15.0 bei   */
-/* 160 s (Heizen, acht Schritte) bzw. 80 s (Wasser, vier).                    */
+/* 180 s (Heizen, neun Schritte) bzw. 100 s (Wasser, fuenf).                  */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -80,7 +80,7 @@ enum NotbetriebRolle
 /* faellt die Anzeige deshalb auf BEREIT zurueck und der Knopf steht wieder   */
 /* da; im MQTT-Log bleibt der Lauf vollstaendig nachlesbar.                   */
 /*                                                                           */
-/* 15 Minuten sind laenger als jeder Lauf (Deckel 160 s) und kurz genug, dass */
+/* 15 Minuten sind laenger als jeder Lauf (Deckel 180 s) und kurz genug, dass */
 /* niemand ein fremdes Ergebnis fuer seines haelt.                            */
 /*****************************************************************************/
 #define NOTBETRIEB_ANZEIGE_VERFALL_MS 900000u
@@ -225,6 +225,18 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /*                                                                          */
 /* Der Schritt steht in BEIDEN Folgen: Welchen Knopf jemand zuerst drueckt,  */
 /* weiss niemand, und ein doppeltes AUS schadet nicht.                       */
+/*                                                                          */
+/* DIE UMWAELZPUMPE GEHOERT AUF AUTO (WaterPump = 0, seit 3.15.0). Am        */
+/* 2026-08-27 an beiden Stufen beobachtet: Nach dem Umschalten auf           */
+/* 2-stufiges Umpumpen stand TOP104 auf 1 (Fix) und die Pumpe lief dauerhaft */
+/* durch - gesetzt von der Kaskadensteuerung, die im Notbetriebsfall weg     */
+/* ist. Bliebe das so, liefe die Pumpe im Notbetrieb ohne Not weiter.        */
+/*                                                                          */
+/* Der Schritt steht VOR dem Einschalten und HINTER allen Moduswechseln: Ob  */
+/* ein Wechsel der Betriebsart den Pumpenmodus zurueckstellt, ist nicht      */
+/* gemessen - an dieser Stelle kann er ihn jedenfalls nicht mehr             */
+/* ueberschreiben. Dieselbe Vorsicht wie bei den Kurvenpunkten, und aus      */
+/* demselben Grund: Der Werks-Reset des Moduswechsels ist belegt.            */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
@@ -234,6 +246,7 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_SET, "Z1HeatCurveTargetLowTemp", 30, 1, 0},          // "VL warm"
     {NB_SCHRITT_SET, "Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
     {NB_SCHRITT_SET, "Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
+    {NB_SCHRITT_SET, "WaterPump", 104, NOTBETRIEB_FESTER_WERT, 0},   // Pumpe auf auto
     {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
 
 /*****************************************************************************/
@@ -246,6 +259,7 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
     {NB_SCHRITT_SET, "DHWTemp", 9, 0, 0},
+    {NB_SCHRITT_SET, "WaterPump", 104, NOTBETRIEB_FESTER_WERT, 0}, // Pumpe auf auto
     {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}};
 
 static const unsigned NOTBETRIEB_SCHRITTE_HEIZEN_N =

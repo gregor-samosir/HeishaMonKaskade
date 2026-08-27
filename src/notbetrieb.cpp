@@ -333,14 +333,50 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
 /* getrieben wird, und kaufte dafuer 1,5 s in einem Fehlerfall zurueck, der   */
 /* ohnehin im Abbruch endet.                                                  */
 /*****************************************************************************/
-#define HYDRAULIK_TIMEOUT_MS 1500
+/*****************************************************************************/
+/* 5000 ms - AM GERAET GEMESSEN, nicht geschaetzt (2026-08-27)                */
+/*                                                                           */
+/* Der Entwurf sah 1500 ms vor, mit der Begruendung "der Switch haengt im     */
+/* selben Subnetz - antwortet er in 1,5 s nicht, antwortet er nicht". Fuer    */
+/* den ERSTEN Kontakt nach einem Neustart stimmt das nicht: Dort ist die      */
+/* MAC-Adresse des Switch noch nicht aufgeloest, das erste SYN geht ins       */
+/* Leere, und TCP wiederholt es erst nach rund 3 s. Mit 1500 ms endete der    */
+/* Lauf reproduzierbar in "HTTP -1" (Verbindung nicht zustande gekommen) -    */
+/* dreimal hintereinander, jeweils beim ersten Druck nach dem Boot, waehrend  */
+/* jeder weitere Lauf durchlief.                                             */
+/*                                                                           */
+/* Das ist kein Laborfall, sondern der Regelfall: Nach einem Stromausfall     */
+/* startet die Bridge neu und hat mit dem Switch noch nie gesprochen - genau  */
+/* dann drueckt jemand den Knopf. Der erste Druck waere verlaesslich          */
+/* gescheitert und haette ihn unnoetig in den Waschraum geschickt.            */
+/*                                                                           */
+/* Der Preis steht im selben Atemzug: Antwortet der Switch wirklich nicht     */
+/* (stromlos), blockiert der Request loop() jetzt 5 s statt 1,5 s. Das ist    */
+/* vertretbar, weil der Schritt ganz vorn steht - kein Kommando an die        */
+/* Waermepumpe ist unterwegs, kein Sammelfenster offen, und der              */
+/* Abfragezyklus liest ohnehin nur.                                          */
+/*****************************************************************************/
+#define HYDRAULIK_TIMEOUT_MS 5000
 
-// Wie lange nach dem Antwortkopf noch auf den Rumpf gewartet wird. Er ist rund
-// 15 Byte lang und liegt praktisch immer schon im Puffer; die Frist ist der
-// Deckel fuer den Fall, dass er es einmal nicht tut. Sie kommt NUR im
-// Erfolgsfall ueberhaupt zum Tragen - wer gar nicht antwortet, ist vorher am
-// Verbindungstimeout gescheitert.
-#define HYDRAULIK_LESEFRIST_MS 300u
+/*****************************************************************************/
+/* Wie lange nach dem Antwortkopf auf den Rumpf gewartet wird                 */
+/*                                                                           */
+/* DIESELBE FRIST WIE FUER DEN REST DES REQUESTS - und das ist eine Lehre aus */
+/* dem 2026-08-27. Hier standen zuerst 300 ms, mit der Begruendung "der Rumpf */
+/* ist rund 15 Byte lang und liegt praktisch immer schon im Puffer". Das ist  */
+/* fuer das LESEN richtig und fuer das SCHALTEN falsch: Auf "Power Off" legt  */
+/* Tasmota erst das Relais um und veroeffentlicht den neuen Zustand per MQTT, */
+/* bevor es antwortet. Die Antwort kam dann als HTTP 200 an, aber nach der    */
+/* Frist - der Lauf endete mit "liess sich nicht schalten", obwohl der Switch */
+/* sauber gearbeitet hatte.                                                   */
+/*                                                                           */
+/* Eine eigene, kleinere Frist hat hier also keinen Nutzen, sondern nur ein   */
+/* Risiko: Im Normalfall bricht die Schleife ohnehin ab, sobald "OFF" oder    */
+/* "ON" dasteht - das ist eine Sache von Millisekunden. Zum Tragen kommt die  */
+/* Frist nur, wenn etwas schiefgeht, und dann ist der Zeitdeckel des ganzen   */
+/* Requests das richtige Mass.                                                */
+/*****************************************************************************/
+#define HYDRAULIK_LESEFRIST_MS ((uint32_t)HYDRAULIK_TIMEOUT_MS)
 
 enum HydraulikAntwort
 {
@@ -362,8 +398,33 @@ enum HydraulikAntwort
 /* Sie ist rund 15 Byte lang, und der Rest der Firmware kommt seit 2.3.0      */
 /* ohne Heap-Allokationen in den heissen Pfaden aus.                          */
 /*****************************************************************************/
+/*****************************************************************************/
+/* Der letzte HTTP-Code des Switch - fuer die Logzeile                       */
+/*                                                                           */
+/* Ohne ihn steht im Log nur "antwortet nicht", und beim naechsten Mal faengt */
+/* die Suche wieder bei null an: Verbindungsaufbau gescheitert, Zeitablauf,   */
+/* 401 wegen eines gesetzten Web-Passworts oder eine Antwort, die niemand     */
+/* deuten kann - das sind vier verschiedene Ursachen mit vier verschiedenen   */
+/* Abhilfen. Negative Werte sind HTTPClient-Fehler (-1 = Verbindung           */
+/* gescheitert, -11 = Zeitablauf), positive sind echte HTTP-Codes.            */
+/*****************************************************************************/
+static int hydraulikLetzterCode = 0;
+
+/*****************************************************************************/
+/* Der Anfang der letzten Antwort - fuer die Logzeile                        */
+/*                                                                           */
+/* Am 2026-08-27 kostete genau diese fehlende Auskunft eine halbe Stunde:     */
+/* Das Log meldete "liess sich nicht schalten (HTTP 200)", und ob nun gar     */
+/* nichts, etwas Halbes oder etwas Unerwartetes angekommen war, liess sich    */
+/* nicht unterscheiden. Leer heisst "nichts empfangen" - das ist die          */
+/* Auskunft, die den Unterschied macht.                                       */
+/*****************************************************************************/
+static char hydraulikLetzteAntwort[24] = "";
+
 static HydraulikAntwort hydraulik_kommando(const char *kommando)
 {
+  hydraulikLetzterCode = 0;
+  hydraulikLetzteAntwort[0] = '\0';
   // Ohne Adresse gibt es nichts zu fragen. Der Aufrufer macht daraus einen
   // Abbruch mit Klartext - lieber gar kein Notbetrieb als einer, der die
   // Fussbodenheizung mit 57 C beschickt.
@@ -399,6 +460,7 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
     return HYDRAULIK_UNKLAR;
 
   const int code = http.GET();
+  hydraulikLetzterCode = code;
   if (code != HTTP_CODE_OK)
   {
     http.end();
@@ -454,6 +516,14 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   }
   http.end();
 
+  // Steuerzeichen ersetzen: Bei chunked stehen Laengen und CRLF mit im Strom,
+  // und eine Logzeile mit rohen Zeilenumbruechen ist schwer zu lesen.
+  for (size_t i = 0; i < sizeof(hydraulikLetzteAntwort) - 1 && i < gelesen; i++)
+    hydraulikLetzteAntwort[i] = (antwort[i] >= 32 && antwort[i] < 127) ? antwort[i] : '.';
+  hydraulikLetzteAntwort[(gelesen < sizeof(hydraulikLetzteAntwort) - 1)
+                             ? gelesen
+                             : sizeof(hydraulikLetzteAntwort) - 1] = '\0';
+
   if (strstr(antwort, "\"OFF\"") != 0)
     return HYDRAULIK_AUS;
   if (strstr(antwort, "\"ON\"") != 0)
@@ -481,8 +551,9 @@ static bool hydraulik_auf_einstufig(void)
   if (ist == HYDRAULIK_UNKLAR)
   {
     (void)snprintf(log_line, sizeof(log_line),
-                   "Notbetrieb: Hydraulik-Switch (%.40s) antwortet nicht",
-                   hydraulik_switch[0] ? hydraulik_switch : "keine Adresse");
+                   "Notbetrieb: Hydraulik-Switch (%.40s) antwortet nicht (HTTP %d, Antwort \"%.23s\")",
+                   hydraulik_switch[0] ? hydraulik_switch : "keine Adresse",
+                   hydraulikLetzterCode, hydraulikLetzteAntwort);
     write_mqtt_log(log_line);
     return false; // kein zweiter Request - hoechstens ein Timeout je Lauf
   }
@@ -496,7 +567,10 @@ static bool hydraulik_auf_einstufig(void)
   // Sie stand auf 2-stufig - jetzt umlegen und die Antwort nachhalten.
   if (hydraulik_kommando("Power%20Off") != HYDRAULIK_AUS)
   {
-    write_mqtt_log((char *)"Notbetrieb: Hydraulik liess sich nicht auf 1-stufig schalten");
+    (void)snprintf(log_line, sizeof(log_line),
+                   "Notbetrieb: Hydraulik liess sich nicht auf 1-stufig schalten (HTTP %d, Antwort \"%.23s\")",
+                   hydraulikLetzterCode, hydraulikLetzteAntwort);
+    write_mqtt_log(log_line);
     return false;
   }
 

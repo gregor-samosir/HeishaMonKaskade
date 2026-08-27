@@ -234,8 +234,8 @@ static void test_schrittfolge()
 {
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 8, "Heizen hat acht Schritte");
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 4, "Wasser hat vier Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 9, "Heizen hat neun Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 5, "Wasser hat fuenf Schritte");
 
   // Die Reihenfolge traegt vierfach: erst die Hydraulik (sonst schiebt der
   // Warmwasserbetrieb bis zu 57 C in die Fussbodenheizung), dann die
@@ -268,12 +268,19 @@ static void test_schrittfolge()
              notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3)->wert_index == 0,
          "Betriebsart steht vor dem ersten gehaltenen Wert");
 
-  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7);
-  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 8 schaltet die Anlage ein");
+  // Die Pumpe kommt VOR dem Einschalten und HINTER allen Moduswechseln:
+  // Nach dem Umpumpen steht sie auf Fix und liefe sonst dauerhaft durch.
+  const NotbetriebSchritt *sp = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7);
+  pruefe_text(sp->set_name, "WaterPump", "Heizen Schritt 8 stellt die Pumpe auf auto");
+  pruefe_zahl(sp->fester_wert, 0, "WaterPump auf 0 = auto");
+  pruefe_zahl(sp->top, 104, "rueckgelesen an TOP104");
+
+  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 8);
+  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 9 schaltet die Anlage ein");
   pruefe_zahl(s6->fester_wert, 1, "Heatpump auf 1");
   pruefe_zahl(s6->top, 0, "rueckgelesen an TOP0");
 
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 8) == 0, "hinter dem letzten Schritt ist Schluss");
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 9) == 0, "hinter dem letzten Schritt ist Schluss");
 
   // Wasser: derselbe Hydraulikschritt vorn - welchen Knopf jemand zuerst
   // drueckt, weiss niemand, und ein doppeltes AUS schadet nicht
@@ -287,8 +294,25 @@ static void test_schrittfolge()
   pruefe_zahl(w0->fester_wert, 3, "OperationMode auf 3 = DHW only");
   pruefe_zahl(w0->top, 4, "rueckgelesen an TOP4");
 
-  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 3);
-  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 4 schaltet die Anlage ein");
+  const NotbetriebSchritt *wp = notbetrieb_schritt(NOTBETRIEB_WASSER, 3);
+  pruefe_text(wp->set_name, "WaterPump", "Wasser Schritt 4 stellt die Pumpe auf auto");
+  pruefe_zahl(wp->fester_wert, 0, "WaterPump auf 0 = auto");
+  pruefe_zahl(wp->top, 104, "rueckgelesen an TOP104");
+
+  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 4);
+  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 5 schaltet die Anlage ein");
+
+  // In BEIDEN Rollen steht die Pumpe unmittelbar vor dem Einschalten - ein
+  // Moduswechsel dahinter koennte sie sonst wieder auf Fix zurueckstellen.
+  for (unsigned r = 0; r < 2; r++)
+  {
+    NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
+    const unsigned n = notbetrieb_schritt_anzahl(rolle);
+    pruefe(strcmp(notbetrieb_schritt(rolle, n - 2)->set_name, "WaterPump") == 0 &&
+               strcmp(notbetrieb_schritt(rolle, n - 1)->set_name, "Heatpump") == 0,
+           (r == 0) ? "Heizen endet auf WaterPump, dann Heatpump"
+                    : "Wasser endet auf WaterPump, dann Heatpump");
+  }
 
   // Genau EIN Hydraulikschritt je Rolle, und er steht vorn. Ein zweiter waere
   // harmlos, aber er stuende fuer ein Missverstaendnis - der Switch wird
@@ -436,8 +460,8 @@ static void test_automat()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
               "Heizen mit 6-s-Antworten wird GRUEN");
-  // acht Schritte * 8 s Mindestwarte = 64 s Regelzeit (Ablauf-Notbetrieb.md)
-  pruefe(dauer <= 70000u, "realistischer Heizen-Lauf bleibt unter 70 s");
+  // neun Schritte * 8 s Mindestwarte = 72 s Regelzeit (Ablauf-Notbetrieb.md)
+  pruefe(dauer <= 80000u, "realistischer Heizen-Lauf bleibt unter 80 s");
   printf("       (gemessene Laufdauer: %u ms)\n", dauer);
 
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
@@ -517,9 +541,9 @@ static void test_automat()
 
   // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN),
-              (int)(8u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 8 x Schritt-Timeout");
+              (int)(9u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 9 x Schritt-Timeout");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
-              (int)(4u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 4 x Schritt-Timeout");
+              (int)(5u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 5 x Schritt-Timeout");
 }
 
 /*****************************************************************************/
@@ -546,18 +570,18 @@ static void test_mindestwarte()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
               "Lauf mit Sofortbestaetigung wird GRUEN");
-  const uint32_t mindestens = 8u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-  pruefe(dauer >= mindestens, "aber nicht schneller als 8 x Mindestwarte");
+  const uint32_t mindestens = 9u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 9 x Mindestwarte");
   printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
 
   // Der Hydraulikschritt haelt die Mindestwarte mit ein, obwohl er in
   // Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
   // 8 s fallen ohnehin in die 90 s der beiden Stellantriebe.
   //
-  // Gegenprobe Wasser: vier Schritte
+  // Gegenprobe Wasser: fuenf Schritte
   (void)lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 0, &dauer);
-  pruefe(dauer >= 4u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
-         "Wasser ebenso, mit vier Schritten");
+  pruefe(dauer >= 5u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
+         "Wasser ebenso, mit fuenf Schritten");
 
   // Die Regel muss in sich stimmig bleiben, sonst endet jeder Lauf in ROT
   pruefe(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,

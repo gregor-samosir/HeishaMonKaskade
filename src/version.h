@@ -16,6 +16,20 @@
 //         schaltet die Kaskadensteuerung den Switch - und genau die ist im
 //         Notbetriebsfall weg.
 //
+//         DIE UMWAELZPUMPE KOMMT MIT (WaterPump = 0, SET14, TOP104). Am
+//         2026-08-27 an beiden Stufen beobachtet: Nach dem Umschalten auf
+//         2-stufiges Umpumpen stand TOP104 auf 1 (Fix), die Pumpe lief
+//         dauerhaft durch (Pump_Flow rund 16 l/min). Gesetzt hat das die
+//         Kaskadensteuerung - also genau die, die im Notbetriebsfall weg ist.
+//         Ohne diesen Schritt liefe die Pumpe im Notbetrieb ohne Not weiter.
+//         Der Schritt steht VOR dem Einschalten und HINTER allen
+//         Moduswechseln: Ob ein Wechsel der Betriebsart den Pumpenmodus
+//         zurueckstellt, ist nicht gemessen - an dieser Stelle kann er ihn
+//         jedenfalls nicht mehr ueberschreiben (dieselbe Vorsicht wie bei den
+//         Kurvenpunkten). An der Anlage belegt: TOP104 1 -> 0, Pump_Flow
+//         16,24 -> 0,13 l/min; der Re-Assert stellt beides hinterher wieder
+//         her, der Kreislauf ist also derselbe wie bei allen anderen Werten.
+//
 //         GANZ VORN, vor OperationMode. Zwei Gruende: Bricht der Schritt ab,
 //         steht die Waermepumpe genau so da wie vorher (kein Kommando
 //         abgesetzt, kein Sammelfenster offen, kein halber Notbetrieb zum
@@ -52,6 +66,38 @@
 //         Eine asynchrone Loesung ist verworfen: Nebenlaeufigkeit in einem
 //         Automaten, der vollstaendig aus loop() getrieben wird, gegen 1,5 s
 //         in einem Fall, der ohnehin im Abbruch endet.
+//
+//         ZWEI ZEITEN AM GERAET KORRIGIERT (2026-08-27, beide im Prueflauf
+//         gefunden - der Entwurf hatte sie geschaetzt):
+//
+//         1. TIMEOUT 5000 STATT 1500 ms. Die Entwurfsbegruendung lautete "der
+//            Switch haengt im selben Subnetz - antwortet er in 1,5 s nicht,
+//            antwortet er nicht". Fuer den ERSTEN Kontakt nach einem Neustart
+//            stimmt das nicht: Dreimal hintereinander endete der erste Druck
+//            nach dem Boot mit "HTTP -1" (Verbindung nicht zustande gekommen),
+//            waehrend jeder weitere Lauf durchlief. Das ist kein Laborfall,
+//            sondern der Regelfall - nach einem Stromausfall startet die
+//            Bridge neu und hat mit dem Switch noch nie gesprochen.
+//
+//         2. LESEFRIST = TIMEOUT statt eigener 300 ms. Hier stand zuerst eine
+//            eigene, kleine Frist mit der Begruendung "der Rumpf ist rund 15
+//            Byte lang und liegt praktisch immer schon im Puffer". Das ist
+//            fuers LESEN richtig und fuers SCHALTEN falsch: Auf "Power Off"
+//            legt Tasmota erst das Relais um und veroeffentlicht den neuen
+//            Zustand per MQTT, bevor es antwortet. Der Lauf endete dann mit
+//            "liess sich nicht schalten (HTTP 200)" - die Verbindung stand,
+//            der Switch hatte sauber gearbeitet, und die Firmware hatte die
+//            Antwort verpasst. Eine eigene kleinere Frist hat hier keinen
+//            Nutzen: Im Normalfall bricht die Schleife ohnehin ab, sobald
+//            "OFF" oder "ON" dasteht.
+//
+//         DIE DIAGNOSE TRAEGT JETZT DEN GRUND MIT. Beide Fehler kosteten
+//         Suchzeit, weil im Log nur "antwortet nicht" stand. Jetzt stehen dort
+//         der HTTP-Code (negativ = HTTPClient-Fehler, -1 = Verbindung
+//         gescheitert) UND die ersten Bytes der Antwort. "HTTP -1, Antwort """
+//         und "HTTP 200, Antwort "..."" sind zwei verschiedene Ursachen mit
+//         zwei verschiedenen Abhilfen; ohne diese Auskunft sind sie nicht zu
+//         unterscheiden.
 //
 //         GEMESSEN AM ECHTEN SWITCH (2026-08-27, Tasmota 12.0.2): Die Antwort
 //         auf /cm?cmnd=Power kommt CHUNKED, ohne Content-Length. Das hat drei
@@ -101,15 +147,28 @@
 //         legte die Hydraulik mitten im Notbetrieb zurueck auf 2-stufig.
 //
 //         GROESSE (.elf, text/data/bss gegen 3.14.2):
-//           esp32_h1_ota  1018319/221386/2192879 -> 1034715/225330/2192919
-//           esp32_h2_ota  1017983/221018/2192879 -> 1034371/225042/2192919
-//           d1_mini_h1    469923/2440/31216      -> 476267/2440/31272
-//         Der Zuwachs von rund 20 kB (ESP32) bzw. 6 kB (ESP8266) Flash ist
-//         fast vollstaendig der HTTPClient; im RAM sind es 40 bzw. 56 Byte.
+//           esp32_h1_ota  1018319/221386/2192879 -> 1034911/225430/2192951
+//           esp32_h2_ota  1017983/221018/2192879 -> 1034535/225142/2192951
+//           d1_mini_h1    469923/2440/31216      -> 476491/2440/31304
+//         Der Zuwachs von rund 20 kB (ESP32) bzw. 6,5 kB (ESP8266) Flash ist
+//         fast vollstaendig der HTTPClient; im RAM sind es 72 bzw. 88 Byte.
+//
+//         SCHRITTZAHLEN UND ZEITEN: Heizen 9 Schritte / 72 s (Deckel 180 s),
+//         Warmwasser 5 Schritte / 40 s (Deckel 100 s). An H2 gemessen: GRUEN
+//         nach 43 s.
+//
+//         AN DER ANLAGE ABGENOMMEN (2026-08-27, H2): Switch von EIN auf AUS
+//         geschaltet und GRUEN; Switch stand schon auf AUS und wurde nicht
+//         angefasst ("stand bereits"); Switch unerreichbar -> ROT nach rund
+//         5 s mit der Waschraum-Meldung und KEIN Kommando an der Waermepumpe;
+//         der Abfragezyklus zeigte dabei einen einmaligen Versatz von 4-5 s
+//         und lief danach ohne Nacharbeit weiter; der Re-Assert stellte
+//         2-stufig und den Fix-Modus der Pumpe jedes Mal wieder her. Der
+//         POST-Handler antwortete in 36 ms - der Request laeuft also
+//         tatsaechlich aus loop() und nicht im Handler.
 //
 //         MITGEZOGEN: test/notbetrieb_test.cpp (neuer Abschnitt 9a, alle
-//         Schrittindizes um eins verschoben), Ablauf-Notbetrieb.md und
-//         README.md.
+//         Schrittindizes verschoben), Ablauf-Notbetrieb.md und README.md.
 //
 // 3.14.2 - Der Kuehlkurven-Aussenpunkt Z1CoolCurveOutsideLowTemp (SET33) war
 //         auf 20..30 begrenzt. Richtig ist 15..30. Die Firmware wies 15 mit

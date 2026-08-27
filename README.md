@@ -123,6 +123,11 @@ Seit 3.15.0 macht es die Firmware, als **Schritt 1 beider Schrittfolgen**: Sie
 liest den Switch, legt ihn bei Bedarf auf AUS und **bricht ab, wenn das nicht
 gelingt.** Kein Notbetrieb ohne bestätigte 1-stufige Hydraulik.
 
+Dazu gehört ein zweiter Schritt am anderen Ende der Folge: **`WaterPump` = 0.**
+Im Umpumpbetrieb lässt die Steuerung die Umwälzpumpe auf `Fix` laufen — sie
+läuft dann dauerhaft durch. Auch das setzt im Normalbetrieb die Steuerung, und
+auch sie ist im Notbetriebsfall weg.
+
 Drei Entscheidungen dahinter:
 
 * **Ganz vorn, vor allem anderen.** Bricht der Schritt ab, steht die Wärmepumpe
