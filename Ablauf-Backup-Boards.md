@@ -193,8 +193,8 @@ produktive Board seiner Stufe.
   `stage_test_esp8266` und die Plattformschicht dafür sind mit 3.16.0 entfernt.
   Die CI baut seitdem sechs Envs.
 * **Das Binärarchiv der Rückfallstände** — als *Archiv*. Am 2026-08-27 auf zwei
-  Releases eingedampft: das aktuelle und das davor. Elf ältere Releases und 62
-  lokale Abbilder sind gelöscht, 60 MB auf 5,8 MB.
+  Releases eingedampft: das aktuelle und das davor. Elf ältere Releases samt ihren
+  Tags und 62 lokale Abbilder sind gelöscht, 60 MB auf 5,8 MB.
 
 ### Richtigstellung (2026-08-27): ein Rückfallstand bleibt nötig
 
