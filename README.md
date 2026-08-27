@@ -5,6 +5,21 @@ Eine Variante von [HeishaMon](https://github.com/Egyras/HeishaMon) für den
 Steuerung (Node-RED/ioBroker). Läuft auf dem offiziellen
 HeishaMon-ESP32-S3-Board.
 
+<p align="center">
+  <img src="pictures/hmon_pcb/HeishamonV6_pcb.jpeg" width="520"
+       alt="HeishaMon-v6-Platine: ESP32-S3-Modul, zwei blaue Relais, Anschlussbuchsen für Wärmepumpe und CZ-TAW, unbestückter Sockel für die Ethernet-Platine">
+</p>
+
+<p align="center">
+  <em><b>Das Stück Hardware, um das alles hier kreist:</b> HeishaMon v6, Design
+  Igor Ybema. Die Buchse mit der Aufschrift <code>HEATPUMP</code> führt zum
+  CN-CNT-Anschluss der Wärmepumpe — von dort kommen alle fünf Sekunden die
+  203 Bytes, um deren richtige Deutung es auf den folgenden Bildschirmmetern
+  geht. Das weiße Etikett ist unspektakulär, aber der wichtigste Teil der
+  Anlagendokumentation: Es sagt, welche der beiden Stufen man gerade in der
+  Hand hält.</em>
+</p>
+
 ---
 
 ## In English — what this is and whether it is for you
@@ -54,6 +69,21 @@ Kommandos in die Gegenrichtung.
    (Kaskadenlogik, Wächter)  <---->   (hier: ioBroker-  <---->  Stufe 1 (ESP32)  <---->  WP1
                                        mqtt-Adapter)      <---->  Stufe 2 (ESP32)  <---->  WP2
 ```
+
+<p align="center">
+  <img src="pictures/hmon_pcb/TheSiblings_pcb.jpeg" width="820"
+       alt="Zwei baugleiche HeishaMon-v6-Platinen nebeneinander, beschriftet H1 und H2">
+</p>
+
+<p align="center">
+  <em><b>Stufe 1 und Stufe 2, oder: die Geschwister.</b> Sie sehen nicht nur
+  gleich aus, sie tragen auch denselben Quelltext — der Unterschied zwischen
+  ihnen sind drei Build-Flags (MQTT-Präfix, Web-Titel, Hostname) und zwei
+  Streifen Etikett. Genau diese Verdopplung hat die Fehler ans Licht gebracht,
+  die weiter unten stehen: Ein Gerät, das jemand von Hand bedient, verzeiht
+  vieles. Zwei Geräte, die alle fünf Minuten den kompletten Sollzustand
+  aufgedrückt bekommen, verzeihen nichts.</em>
+</p>
 
 Die Wärmepumpen-Firmware selbst ist Panasonic-Code und wird nicht angefasst.
 Sicherheitsrelevante Vorgänge (Abtauen, Frostschutz) entscheidet die Wärmepumpe
@@ -829,8 +859,30 @@ Client-IDs bei schnellen Reconnects.
 
 ## Was bewusst nicht drin ist
 
+<p align="center">
+  <img src="pictures/hmon_pcb/relays_pcb.jpeg" width="440"
+       alt="Nahaufnahme der beiden Relais SRD-05VDC-SL-C auf der HeishaMon-Platine, darunter die Klemmen RELAY1 und RELAY2 mit der Aufschrift MAX 5A">
+</p>
+
+<p align="center">
+  <em><b>Zehn Ampere auf dem Gehäuse, MAX 5A auf dem Silkscreen — und in dieser
+  Anlage schaltet keines der beiden Relais irgendetwas.</b> Naheliegend wäre
+  gewesen, ihnen den KNX-Aktor abzunehmen. Ausgerechnet wurde es trotzdem, und
+  zwar bevor jemand zum Schraubendreher griff: Der Kompressorkontakt ist in
+  dieser Kaskade funktionslos — abgeschaltet wird über <code>set/Heatpump</code>.
+  Und der Heat/Cool-Kontakt bleibt am KNX, weil der Notbetrieb bewusst auf den
+  Winter beschränkt ist. Zwei blaue Kästchen, die ihren Dienst dadurch tun, dass
+  sie stillstehen.</em>
+</p>
+
 * **Zone 2** — siehe oben.
-* **Extras des ESP32-Boards** (1-Wire, S0-Zähler, OpenTherm) bleiben ungenutzt.
+* **Extras des ESP32-Boards** (1-Wire, S0-Zähler, OpenTherm) bleiben ungenutzt;
+  der Sockel für die Ethernet-Platine (USR-ES1 / W5500) bleibt leer, angebunden
+  wird über WLAN.
+* **Die beiden Relais der Platine.** Geprüft, durchgerechnet und begründet
+  verworfen — der Weg dahin steht in
+  [`Analyse-Relais-statt-KNX.md`](Analyse-Relais-statt-KNX.md), samt der
+  Handbuchangabe zur Kontaktlogik, die an dieser Anlage falsch herum ist.
 * **Keine Unity-Testsuite.** Die Werkzeuge in `test/` sind eigenständige
   Diagnoseprogramme, `pio test` nutzt sie nicht. `merge_test.cpp` wäre die
   Vorlage für echte Unit-Tests.
@@ -842,7 +894,9 @@ Client-IDs bei schnellen Reconnects.
 
 Basis ist das Projekt [HeishaMon](https://github.com/Egyras/HeishaMon) von
 Egyras und der HeishaMon-Community — ohne deren Protokollarbeit gäbe es hier
-nichts. Die Hardware ist das offizielle HeishaMon-ESP32-Board.
+nichts. Die Hardware ist das offizielle HeishaMon-ESP32-Board; der
+**Platinenentwurf stammt von Igor Ybema** (Version v6, 5-2026) — die Fotos in
+diesem Dokument zeigen genau diese Platine, wie sie hier im Einsatz ist.
 
 Die Umbauten dieses Forks sind in Zusammenarbeit mit **Claude Code**
 entstanden. Das erklärt auch den Dokumentationsstil: Zu jeder Änderung gehört
