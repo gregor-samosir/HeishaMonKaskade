@@ -29,20 +29,38 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Cache für Toolchains und Bibliotheken (nur noch ESP32).
+      # Cache für Toolchains und Bibliotheken.
       #
       # WARUM er hier steht - nicht wegen der Laufzeit. Am 2026-08-12 gemessen,
       # Lauf #6 (kalt) gegen #7 (warm) bei identischem Code und dem damaligen
       # Stand von zehn Envs: Job ~287 s -> ~246 s, also gut 40 s von rund vier
       # Minuten, und davon ist ein Teil Streuung des Runners (pip allein
       # schwankte um 11 s). Der Hauptposten war die Kompilierzeit, die der Cache
-      # nicht berührt; das Wiederherstellen der damals 1163 MB kostete umgekehrt
-      # selbst 11 s. Mit dem Wegfall des espressif8266-Anteils in 3.16.0 werden
-      # beide Zahlen kleiner - siehe die Messung darunter.
+      # nicht berührt; das Wiederherstellen der 1163 MB kostete umgekehrt selbst
+      # 11 s.
       # Der Cache bleibt, weil er die CI von den Espressif-Downloadservern
       # unabhängig macht: sind die nicht erreichbar, läuft sie trotzdem durch.
       # Das wiegt mehr als eine halbe Minute - eine Rückversicherung, die nur
       # läuft, wenn ein fremder Server antwortet, ist keine.
+      #
+      # NACHGEMESSEN AM 2026-08-27, erster Lauf der 3.16.0 (sechs statt zehn
+      # Envs): Job 3:23 min gegen 4:15 min am 2026-08-25. Die Cachegröße blieb
+      # dagegen bei 1163 MB - NICHT kleiner, wie beim Planen erwartet.
+      #
+      # Der Grund steht zwei Zeilen tiefer: restore-keys. Der Schlüssel hängt an
+      # platformio.ini, die sich geändert hat - also gab es keinen Volltreffer,
+      # und der Präfix-Treffer stellte den ALTEN Cache samt espressif8266-
+      # Toolchain wieder her. Am Jobende wird dann genau dieser Inhalt unter dem
+      # neuen Schlüssel abgelegt. Der Ballast wandert also mit, statt zu
+      # verschwinden. Er verschwindet erst, wenn kein passender älterer Eintrag
+      # mehr existiert (GitHub räumt nach 7 Tagen ohne Zugriff auf) oder wenn
+      # jemand die pio-Einträge von Hand löscht: Actions -> Caches. Der erste
+      # Lauf danach ist kalt, und der Cache enthält anschließend nur noch den
+      # ESP32-Anteil.
+      #
+      # restore-keys bleibt trotzdem stehen: Ein Präfix-Treffer mit veraltetem
+      # Inhalt ist immer noch besser als ein Lauf, der von den Espressif-Servern
+      # abhängt - und genau dafür ist der Cache da.
       #
       # Der Schlüssel hängt an platformio.ini, weil dort steht, welche
       # Plattformen und Bibliotheken gebraucht werden. Zwei Folgen davon:

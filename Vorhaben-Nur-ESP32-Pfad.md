@@ -445,8 +445,9 @@ bleiben, wie sie sind.
 
 * **Bei jeder Änderung spürbar.** Die Projektkonvention verlangt, vor dem Merge
   alle Envs lokal zu bauen. Sechs statt zehn — das trifft öfter als die CI.
-* **CI und Cache.** 10 Envs werden 6; der Cache verliert den kompletten
-  espressif8266-Anteil. Ausgangswert für den Vergleich: 4:15 min, 1163 MB.
+* **CI und Cache.** 10 Envs werden 6. Ausgangswert für den Vergleich:
+  4:15 min, 1163 MB. *(Nachgemessen am 2026-08-27: 3:23 min — die Cachegröße
+  blieb aber bei 1163 MB, siehe Abschnitt 10.)*
 * **Ein Vorhaben wird freigeschaltet.**
   [`Analyse-Relais-statt-KNX.md`](Analyse-Relais-statt-KNX.md) Abschnitt 6.3:
   Solange der D1 mini Rückfallebene ist, kann die KNX-Ablösung über die
@@ -597,7 +598,23 @@ Feste Prüfstands-IP in `test/README.md`? | **Platzhalter**, alte IP in den dati
   den produktiven Prefix schreiben würde. Entscheidung des Owners steht aus:
   entsorgen oder mit Aufkleber „nicht anschließen" ablegen. Bis dahin gilt:
   **stromlos**.
-* **Die neuen Cache-Zahlen der CI** (Abschnitt 3.4) — sie werden nach dem
-  ersten Lauf dieses Stands gemessen und in `main.yml` nachgetragen, nicht
-  geschätzt. Die alten Zahlen stehen dort als das gekennzeichnet, was sie sind:
-  eine Messung vom 2026-08-12 unter zehn Envs.
+* **Der Cache schrumpft nicht von allein** — und das war eine falsche
+  Erwartung des Plans (Abschnitt 7: „der Cache verliert den kompletten
+  espressif8266-Anteil"). Gemessen am 2026-08-27, erster Lauf der 3.16.0:
+  Laufzeit **3:23 min** statt 4:15, Cachegröße unverändert **1163 MB**.
+
+  Der Grund ist `restore-keys`. Der Schlüssel hängt an `platformio.ini`, die
+  sich geändert hat — also kein Volltreffer, sondern ein Präfix-Treffer, der den
+  **alten** Cache samt espressif8266-Toolchain wiederherstellt. Am Jobende wird
+  genau dieser Inhalt unter dem neuen Schlüssel abgelegt: Der Ballast wandert
+  mit, statt zu verschwinden.
+
+  Er verschwindet erst, wenn kein älterer Eintrag mehr passt (GitHub räumt nach
+  7 Tagen ohne Zugriff auf) — oder wenn jemand die `pio-`Einträge von Hand
+  löscht: **Actions → Caches**. Der Lauf danach ist einmal kalt, und der Cache
+  enthält anschließend nur noch den ESP32-Anteil. Über die API ging das nicht:
+  Der hier verfügbare Token darf Caches nicht löschen (HTTP 403). `restore-keys`
+  bleibt trotzdem stehen — ein Präfix-Treffer mit veraltetem Inhalt ist immer
+  noch besser als ein Lauf, der von den Espressif-Servern abhängt, und genau
+  dafür ist der Cache da.
+* **Die drei stromlosen D1 minis** — siehe darüber.
