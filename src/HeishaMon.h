@@ -127,6 +127,8 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg);
 void notbetrieb_loop(char actual[][MAXVALUELEN]); // Tick aus loop()
 bool notbetrieb_starten(void);                    // vom Webhandler
 void notbetrieb_status(char *out, size_t len);     // Zustand;Schritt;Schritte;fehlend;Sperre
+                                                  // (Lage, Dauer, Kurvenwarnung und
+                                                  //  Abbruchgrund haengt die Statusroute an)
 // Warum der Knopf gesperrt ist. In notbetrieb_loop() je Durchlauf aus TOP101
 // und den gehaltenen Werten bestimmt, weil die Webhandler kein actual_data
 // haben. NOTBETRIEB_FREI heisst: der Knopf darf gedrueckt werden.
@@ -134,6 +136,16 @@ NotbetriebSperre notbetrieb_sperre(void);
 // Plausibilitaet der gehaltenen Kurve (nur Rolle Heizen). WARNT, sperrt nicht -
 // die Regel steht in notbetrieb.h, der Text auf der Seite in webfunctions.cpp.
 NotbetriebKurvenWarnung notbetrieb_kurvenwarnung(void);
+
+// Warum ein Lauf abgebrochen wurde. Die Seite macht daraus Klartext: Beim
+// Hydraulik-Grund fuehrt der Weg zurueck ueber den Schalter im Waschraum,
+// nicht ueber die Firmware.
+NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void);
+
+// Adresse des Tasmota-Switch fuer die Hydraulik (config.json, Feld
+// "hydraulik_switch"). Leer heisst "nicht eingerichtet" - dann bricht der
+// Notbetrieb im ersten Schritt ab.
+extern char hydraulik_switch[];
 
 // Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
 extern const NotbetriebRolle notbetriebRolle;

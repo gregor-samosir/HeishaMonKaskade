@@ -1,4 +1,5 @@
-// Nachweis fuer die Regeln des Notbetriebs (src/notbetrieb.h), 3.12.0.
+// Nachweis fuer die Regeln des Notbetriebs (src/notbetrieb.h), 3.12.0,
+// erweitert um den Hydraulikschritt in 3.15.0.
 //
 // Geprueft wird der Code, der auch auf dem Geraet laeuft: die Datei wird hier
 // direkt eingebunden, es gibt keine Nachbildung, die auseinanderlaufen kann.
@@ -19,6 +20,10 @@
 //     statt weiterzumachen?
 //  5. Haelt das alles dem millis()-Ueberlauf nach 49,7 Tagen stand? An der
 //     Anlage waere das nicht abzuwarten.
+//  6. Steht der Hydraulikschritt in BEIDEN Rollen an Position 1, und endet
+//     ein Lauf, der ihn nicht bestaetigt bekommt, mit dem Hydraulik-Grund?
+//     Nur so nennt die Seite den Schalter im Waschraum statt "Hat nicht
+//     geklappt" - und nur so bleibt die Fussbodenheizung aus dem Spiel.
 //
 // Bauen und ausfuehren:
 //   c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
@@ -155,7 +160,7 @@ static void test_grenzen()
   int wert = 0;
   NotbetriebLauf lauf;
   notbetrieb_lauf_leeren(&lauf);
-  lauf.schritt = 2; // Index 2 traegt TargetHigh (seit die Betriebsart vorn steht)
+  lauf.schritt = 3; // Index 3 traegt TargetHigh (seit die Hydraulik vorn steht)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "Wert liegt vor");
   pruefe_zahl(wert, 55, "nach abgelehnter 56 steht weiterhin 55");
 
@@ -229,48 +234,102 @@ static void test_schrittfolge()
 {
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 7, "Heizen hat sieben Schritte");
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 3, "Wasser hat drei Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 9, "Heizen hat neun Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 5, "Wasser hat fuenf Schritte");
 
-  // Die Reihenfolge traegt dreifach: erst die Betriebsart (sonst schaltet der
-  // Knopf eine Anlage ein, die auf Kuehlen steht), dann der Moduswechsel, dann
-  // die Kurve - andersherum schreibt der Werks-Reset des Moduswechsels sie
-  // sofort wieder ueber.
-  const NotbetriebSchritt *s0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0);
-  pruefe_text(s0->set_name, "OperationMode", "Heizen Schritt 1 setzt die Betriebsart");
+  // Die Reihenfolge traegt vierfach: erst die Hydraulik (sonst schiebt der
+  // Warmwasserbetrieb bis zu 57 C in die Fussbodenheizung), dann die
+  // Betriebsart (sonst schaltet der Knopf eine Anlage ein, die auf Kuehlen
+  // steht), dann der Moduswechsel, dann die Kurve - andersherum schreibt der
+  // Werks-Reset des Moduswechsels sie sofort wieder ueber.
+  const NotbetriebSchritt *h0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0);
+  pruefe_zahl(h0->typ, NB_SCHRITT_HYDRAULIK, "Heizen Schritt 1 stellt die Hydraulik");
+  pruefe_text(h0->set_name, NOTBETRIEB_HYDRAULIK_NAME, "und heisst so in der Logzeile");
+  pruefe_zahl(h0->top, -1, "er liest an keinem TOP zurueck");
+
+  const NotbetriebSchritt *s0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1);
+  pruefe_zahl(s0->typ, NB_SCHRITT_SET, "Heizen Schritt 2 ist ein Set-Kommando");
+  pruefe_text(s0->set_name, "OperationMode", "Heizen Schritt 2 setzt die Betriebsart");
   pruefe_zahl(s0->fester_wert, 0, "OperationMode auf 0 = Heat only");
   pruefe_zahl(s0->top, 4, "rueckgelesen an TOP4");
 
-  const NotbetriebSchritt *s1 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1);
-  pruefe_text(s1->set_name, "HeatingMode", "Heizen Schritt 2 schaltet auf Kurve");
+  const NotbetriebSchritt *s1 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2);
+  pruefe_text(s1->set_name, "HeatingMode", "Heizen Schritt 3 schaltet auf Kurve");
   pruefe_zahl(s1->fester_wert, 0, "HeatingMode auf 0 = Kurve");
   pruefe_zahl(s1->top, 76, "rueckgelesen an TOP76");
 
-  const NotbetriebSchritt *s2 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2);
-  pruefe_text(s2->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 3 ist der Vorlauf bei Kaelte");
+  const NotbetriebSchritt *s2 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3);
+  pruefe_text(s2->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 4 ist der Vorlauf bei Kaelte");
   pruefe_zahl(s2->top, 29, "rueckgelesen an TOP29");
 
   // Die Betriebsart muss VOR der Kurve stehen: Ob ein Moduswechsel die
   // Kurvenpunkte anfasst, ist nicht gemessen - hinter ihr waere es ein Risiko.
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0)->set_name[0] == 'O' &&
-             notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2)->wert_index == 0,
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1)->set_name[0] == 'O' &&
+             notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3)->wert_index == 0,
          "Betriebsart steht vor dem ersten gehaltenen Wert");
 
-  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 6);
-  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 7 schaltet die Anlage ein");
+  // Die Pumpe kommt VOR dem Einschalten und HINTER allen Moduswechseln:
+  // Nach dem Umpumpen steht sie auf Fix und liefe sonst dauerhaft durch.
+  const NotbetriebSchritt *sp = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7);
+  pruefe_text(sp->set_name, "WaterPump", "Heizen Schritt 8 stellt die Pumpe auf auto");
+  pruefe_zahl(sp->fester_wert, 0, "WaterPump auf 0 = auto");
+  pruefe_zahl(sp->top, 104, "rueckgelesen an TOP104");
+
+  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 8);
+  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 9 schaltet die Anlage ein");
   pruefe_zahl(s6->fester_wert, 1, "Heatpump auf 1");
   pruefe_zahl(s6->top, 0, "rueckgelesen an TOP0");
 
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7) == 0, "hinter dem letzten Schritt ist Schluss");
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 9) == 0, "hinter dem letzten Schritt ist Schluss");
+
+  // Wasser: derselbe Hydraulikschritt vorn - welchen Knopf jemand zuerst
+  // drueckt, weiss niemand, und ein doppeltes AUS schadet nicht
+  const NotbetriebSchritt *v0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 0);
+  pruefe_zahl(v0->typ, NB_SCHRITT_HYDRAULIK, "Wasser Schritt 1 stellt ebenfalls die Hydraulik");
+  pruefe_zahl(v0->top, -1, "auch er liest an keinem TOP zurueck");
 
   // Wasser: OperationMode 3 traegt auch im KNX-Kuehlbetrieb (M3, 2026-08-20)
-  const NotbetriebSchritt *w0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 0);
-  pruefe_text(w0->set_name, "OperationMode", "Wasser Schritt 1 setzt den Betriebsmodus");
+  const NotbetriebSchritt *w0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 1);
+  pruefe_text(w0->set_name, "OperationMode", "Wasser Schritt 2 setzt den Betriebsmodus");
   pruefe_zahl(w0->fester_wert, 3, "OperationMode auf 3 = DHW only");
   pruefe_zahl(w0->top, 4, "rueckgelesen an TOP4");
 
-  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 2);
-  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 3 schaltet die Anlage ein");
+  const NotbetriebSchritt *wp = notbetrieb_schritt(NOTBETRIEB_WASSER, 3);
+  pruefe_text(wp->set_name, "WaterPump", "Wasser Schritt 4 stellt die Pumpe auf auto");
+  pruefe_zahl(wp->fester_wert, 0, "WaterPump auf 0 = auto");
+  pruefe_zahl(wp->top, 104, "rueckgelesen an TOP104");
+
+  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 4);
+  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 5 schaltet die Anlage ein");
+
+  // In BEIDEN Rollen steht die Pumpe unmittelbar vor dem Einschalten - ein
+  // Moduswechsel dahinter koennte sie sonst wieder auf Fix zurueckstellen.
+  for (unsigned r = 0; r < 2; r++)
+  {
+    NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
+    const unsigned n = notbetrieb_schritt_anzahl(rolle);
+    pruefe(strcmp(notbetrieb_schritt(rolle, n - 2)->set_name, "WaterPump") == 0 &&
+               strcmp(notbetrieb_schritt(rolle, n - 1)->set_name, "Heatpump") == 0,
+           (r == 0) ? "Heizen endet auf WaterPump, dann Heatpump"
+                    : "Wasser endet auf WaterPump, dann Heatpump");
+  }
+
+  // Genau EIN Hydraulikschritt je Rolle, und er steht vorn. Ein zweiter waere
+  // harmlos, aber er stuende fuer ein Missverstaendnis - der Switch wird
+  // einmal gestellt, nicht mehrfach.
+  for (unsigned r = 0; r < 2; r++)
+  {
+    NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
+    unsigned hydraulisch = 0;
+    for (unsigned i = 0; i < notbetrieb_schritt_anzahl(rolle); i++)
+    {
+      if (notbetrieb_schritt(rolle, i)->typ == NB_SCHRITT_HYDRAULIK)
+        hydraulisch++;
+    }
+    pruefe_zahl((int)hydraulisch, 1,
+                (r == 0) ? "Heizen hat genau einen Hydraulikschritt"
+                         : "Wasser hat genau einen Hydraulikschritt");
+  }
 
   // Jeder Schritt mit gehaltenem Wert muss auf einen gueltigen Index zeigen
   bool indizes_ok = true;
@@ -318,22 +377,41 @@ static uint8_t lauf_durchspielen(NotbetriebRolle rolle, uint32_t start,
 
   uint32_t jetzt = start;
   uint32_t seit_schritt = 0;
+  // Getickt wird ZUERST und die Uhr danach vorgestellt: Seit 3.15.0 setzt der
+  // Tick den ersten Schritt ab (der Webhandler tut es nicht mehr, weil der
+  // Hydraulikschritt einen HTTP-Request von bis zu 1,5 s bedeutet). Der erste
+  // Tick faellt damit auf den Startzeitpunkt selbst, und alle Zeitrechnungen
+  // dahinter bleiben dieselben wie vorher.
+  //
   // Obergrenze, damit ein nicht terminierender Automat den Test scheitern
   // laesst statt endlos zu laufen
   for (unsigned runde = 0; runde < 10000; runde++)
   {
-    jetzt += 1000; // die Firmware tickt aus loop(), hier 1 s je Runde
-    seit_schritt += 1000;
     bool bestaetigt = (seit_schritt >= antwortzeit);
     NotbetriebAktion a = notbetrieb_tick(&lauf, rolle, jetzt, bestaetigt, richtung);
     if (a == NOTBETRIEB_SENDEN)
       seit_schritt = 0;
     if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH || a == NOTBETRIEB_ABBRUCH_KUEHLEN)
       break;
+    jetzt += 1000; // die Firmware tickt aus loop(), hier 1 s je Runde
+    seit_schritt += 1000;
   }
   if (dauer_out)
     *dauer_out = jetzt - start;
   return lauf.zustand;
+}
+
+/*****************************************************************************/
+/* Einen Lauf anstossen wie die Firmware es tut                              */
+/*                                                                           */
+/* notbetrieb_start() startet nur; ABGESETZT wird der erste Schritt vom       */
+/* ersten Tick aus loop(). Wer im Test beides trennt, prueft einen Ablauf,    */
+/* den es auf dem Geraet nicht gibt - deshalb steht das hier einmal.          */
+/*****************************************************************************/
+static void lauf_anstossen(NotbetriebLauf *lauf, NotbetriebRolle rolle, uint32_t jetzt)
+{
+  (void)notbetrieb_start(lauf, jetzt);
+  (void)notbetrieb_tick(lauf, rolle, jetzt, false, "0");
 }
 
 static void test_automat()
@@ -344,14 +422,22 @@ static void test_automat()
   notbetrieb_lauf_leeren(&lauf);
   pruefe_zahl(lauf.zustand, NOTBETRIEB_BEREIT, "frischer Lauf ist BEREIT");
 
-  // Start setzt den ersten Schritt ab
-  pruefe_zahl(notbetrieb_start(&lauf, 1000), NOTBETRIEB_SENDEN, "Start sendet Schritt 1");
+  // Start stoesst den Lauf an - abgesetzt wird der erste Schritt aber erst vom
+  // Tick aus loop() (seit 3.15.0, siehe schritt_gesendet in notbetrieb.h)
+  pruefe_zahl(notbetrieb_start(&lauf, 1000), NOTBETRIEB_SENDEN, "Start stoesst den Lauf an");
   pruefe_zahl(lauf.zustand, NOTBETRIEB_LAEUFT, "Zustand ist LAEUFT");
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler steht auf 0");
+  pruefe_zahl(lauf.schritt_gesendet, 0, "Schritt 1 ist noch nicht abgesetzt");
 
   // Ein zweiter Klick waehrend des Laufs darf nichts anstossen
   pruefe_zahl(notbetrieb_start(&lauf, 2000), NOTBETRIEB_TU_NICHTS, "zweiter Klick prallt ab");
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler unveraendert");
+
+  // Der erste Tick setzt Schritt 1 ab und startet dessen Uhr
+  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000, false, "0"), NOTBETRIEB_SENDEN,
+              "der erste Tick setzt Schritt 1 ab");
+  pruefe_zahl(lauf.schritt_gesendet, 1, "und merkt sich das");
+  pruefe_zahl((int)lauf.schritt_start, 1000, "die Schrittuhr laeuft ab dem Absetzen");
 
   // Warten ohne Rueckmeldung: nichts passiert, solange das Timeout laeuft
   pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 5000, false, "0"), NOTBETRIEB_TU_NICHTS,
@@ -374,7 +460,8 @@ static void test_automat()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
               "Heizen mit 6-s-Antworten wird GRUEN");
-  pruefe(dauer <= 65000u, "realistischer Heizen-Lauf bleibt unter 65 s");
+  // neun Schritte * 8 s Mindestwarte = 72 s Regelzeit (Ablauf-Notbetrieb.md)
+  pruefe(dauer <= 80000u, "realistischer Heizen-Lauf bleibt unter 80 s");
   printf("       (gemessene Laufdauer: %u ms)\n", dauer);
 
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
@@ -389,7 +476,7 @@ static void test_automat()
   // Schritt-Timeout, nicht durch den Gesamtdeckel
   NotbetriebLauf tot;
   notbetrieb_lauf_leeren(&tot);
-  (void)notbetrieb_start(&tot, 1000);
+  lauf_anstossen(&tot, NOTBETRIEB_HEIZEN, 1000);
   NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
   uint32_t t = 1000;
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
@@ -401,15 +488,20 @@ static void test_automat()
   pruefe_zahl((int)(t - 1000), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
               "ROT genau nach dem Schritt-Timeout, nicht spaeter");
   pruefe_zahl(tot.schritt, 0, "abgebrochen im ersten Schritt, nicht weitergemacht");
+  // Schritt 1 ist der Hydraulikschritt - die Seite muss den Schalter im
+  // Waschraum nennen koennen und nicht "Hat nicht geklappt" zeigen
+  pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_HYDRAULIK,
+              "und mit dem Hydraulik-Grund, nicht mit dem allgemeinen Timeout");
 
   // Nach ROT darf neu gestartet werden
   pruefe_zahl(notbetrieb_start(&tot, 100000), NOTBETRIEB_SENDEN, "nach ROT ist ein neuer Lauf erlaubt");
+  pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_KEINER, "der neue Lauf startet ohne Abbruchgrund");
 
   // Bricht ein Schritt in der Mitte ab, bleibt der Zaehler dort stehen -
   // die Seite zeigt ROT, es wird NICHT weitergemacht
   NotbetriebLauf mitte;
   notbetrieb_lauf_leeren(&mitte);
-  (void)notbetrieb_start(&mitte, 1000);
+  lauf_anstossen(&mitte, NOTBETRIEB_HEIZEN, 1000);
   (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 10000, true, "0"); // Schritt 1 ok
   (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 19000, true, "0"); // Schritt 2 ok
   pruefe_zahl(mitte.schritt, 2, "steht bei Schritt 3");
@@ -422,12 +514,14 @@ static void test_automat()
   }
   pruefe_zahl(mitte.zustand, NOTBETRIEB_ROT, "Abbruch mitten in der Folge wird ROT");
   pruefe_zahl(mitte.schritt, 2, "der Zaehler bleibt stehen, es wird nicht weitergemacht");
+  pruefe_zahl(mitte.grund, NOTBETRIEB_GRUND_TIMEOUT,
+              "ein Set-Schritt meldet den allgemeinen Grund");
 
   // Kommt die Rueckmeldung genau im Timeout-Moment, gilt der Schritt als
   // geschafft - ein knapp erreichtes Ziel ist erreicht
   NotbetriebLauf knapp;
   notbetrieb_lauf_leeren(&knapp);
-  (void)notbetrieb_start(&knapp, 1000);
+  lauf_anstossen(&knapp, NOTBETRIEB_HEIZEN, 1000);
   pruefe_zahl(notbetrieb_tick(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true, "0"),
               NOTBETRIEB_SENDEN, "Rueckmeldung im Timeout-Moment zaehlt noch");
   // (liegt hinter der Mindestwarte, sonst waere sie gar nicht gezaehlt worden)
@@ -447,9 +541,9 @@ static void test_automat()
 
   // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN),
-              (int)(7u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 7 x Schritt-Timeout");
+              (int)(9u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 9 x Schritt-Timeout");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
-              (int)(3u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 3 x Schritt-Timeout");
+              (int)(5u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 5 x Schritt-Timeout");
 }
 
 /*****************************************************************************/
@@ -476,14 +570,18 @@ static void test_mindestwarte()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
               "Lauf mit Sofortbestaetigung wird GRUEN");
-  const uint32_t mindestens = 7u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-  pruefe(dauer >= mindestens, "aber nicht schneller als 7 x Mindestwarte");
+  const uint32_t mindestens = 9u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 9 x Mindestwarte");
   printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
 
-  // Gegenprobe Wasser: drei Schritte
+  // Der Hydraulikschritt haelt die Mindestwarte mit ein, obwohl er in
+  // Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
+  // 8 s fallen ohnehin in die 90 s der beiden Stellantriebe.
+  //
+  // Gegenprobe Wasser: fuenf Schritte
   (void)lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 0, &dauer);
-  pruefe(dauer >= 3u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
-         "Wasser ebenso, mit drei Schritten");
+  pruefe(dauer >= 5u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
+         "Wasser ebenso, mit fuenf Schritten");
 
   // Die Regel muss in sich stimmig bleiben, sonst endet jeder Lauf in ROT
   pruefe(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -504,7 +602,7 @@ static void test_ueberlauf()
   // nicht etwa nie
   NotbetriebLauf tot;
   notbetrieb_lauf_leeren(&tot);
-  (void)notbetrieb_start(&tot, kurz_vor_ende);
+  lauf_anstossen(&tot, NOTBETRIEB_HEIZEN, kurz_vor_ende);
   NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
   uint32_t t = kurz_vor_ende;
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
@@ -530,17 +628,23 @@ static void test_schritt_wert()
   notbetrieb_lauf_leeren(&lauf);
   int wert = -999;
 
-  // fester Wert braucht keinen Speicher
+  // Der Hydraulikschritt hat keinen Wert, den man senden koennte - er meldet
+  // das und liefert keine stille 0 (siehe notbetrieb_schritt_wert)
   lauf.schritt = 0;
+  pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
+         "der Hydraulikschritt traegt keinen Wert");
+
+  // fester Wert braucht keinen Speicher
+  lauf.schritt = 1;
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "fester Wert immer verfuegbar");
   pruefe_zahl(wert, 0, "OperationMode 0 = Heat only");
 
-  lauf.schritt = 1;
-  pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "auch Schritt 2 ist fest");
+  lauf.schritt = 2;
+  pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "auch Schritt 3 ist fest");
   pruefe_zahl(wert, 0, "HeatingMode 0 = Kurve");
 
   // gehaltener Wert fehlt noch
-  lauf.schritt = 2;
+  lauf.schritt = 3;
   pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
          "fehlender gehaltener Wert wird gemeldet");
 
@@ -552,7 +656,7 @@ static void test_schritt_wert()
   // negative Werte muessen durchkommen
   notbetrieb_speicher_leeren(&sp);
   pruefe(annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10), "OutsideLow gesetzt");
-  lauf.schritt = 4; // Index 4 traegt OutsideLow (seit die Betriebsart vorn steht)
+  lauf.schritt = 5; // Index 5 traegt OutsideLow (seit die Hydraulik vorn steht)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "negativer Wert verfuegbar");
   pruefe_zahl(wert, -10, "OutsideLow -10 kommt unveraendert durch");
 
@@ -709,6 +813,77 @@ static void test_freigabe()
 }
 
 /*****************************************************************************/
+/* 9a. Der Hydraulikschritt (3.15.0)                                         */
+/*                                                                           */
+/* Der Request selbst ist im Hosttest nicht nachzubilden - sein ERGEBNIS     */
+/* schon. Der Automat bekommt es als Wahrheitswert herein, genau wie bei den */
+/* TOP-Schritten. Geprueft wird also das, was der Automat daraus macht:      */
+/* Reihenfolge, Mindestwarte und der Abbruchgrund, der auf die Seite geht.   */
+/*                                                                           */
+/* Warum das zaehlt: Steht die Hydraulik auf 2-stufig, waehrend eine Stufe   */
+/* im Warmwasser-Notbetrieb laeuft, schiebt der Warmwasserbetrieb bis zu     */
+/* 57 C in die Fussbodenheizung (Owner, 2026-08-26). Ein Notbetrieb, der     */
+/* trotzdem weiterlaeuft, waere keiner.                                      */
+/*****************************************************************************/
+static void test_hydraulikschritt()
+{
+  printf("\n== Der Hydraulikschritt ==\n");
+
+  // Der Grund haengt am Typ des Schritts, nicht an seiner Nummer
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 0), NOTBETRIEB_GRUND_HYDRAULIK,
+              "Schritt 1 meldet den Hydraulik-Grund");
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 1), NOTBETRIEB_GRUND_TIMEOUT,
+              "Schritt 2 meldet den allgemeinen Grund");
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 99), NOTBETRIEB_GRUND_TIMEOUT,
+              "hinter dem letzten Schritt gilt der allgemeine Grund");
+
+  // BESTAETIGT: Der Lauf geht weiter - aber nicht vor der Mindestwarte. Der
+  // Switch antwortet in Millisekunden; ohne diese Regel liefe die Folge aus
+  // dem einen Rhythmus heraus, den der Automat kennt.
+  NotbetriebLauf ok;
+  notbetrieb_lauf_leeren(&ok);
+  lauf_anstossen(&ok, NOTBETRIEB_WASSER, 1000);
+  pruefe_zahl(ok.schritt, 0, "der Lauf steht auf dem Hydraulikschritt");
+
+  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER, 1000 + 3000, true, ""), NOTBETRIEB_TU_NICHTS,
+              "der sofort bestaetigte Switch schaltet nicht sofort weiter");
+  pruefe_zahl(ok.schritt, 0, "er steht noch auf Schritt 1");
+
+  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER,
+                              1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, ""),
+              NOTBETRIEB_SENDEN, "nach der Mindestwarte geht es zu OperationMode weiter");
+  pruefe_zahl(ok.schritt, 1, "Schrittzaehler auf 1");
+  pruefe_zahl(ok.grund, NOTBETRIEB_GRUND_KEINER, "und kein Abbruchgrund unterwegs");
+
+  // NICHT BESTAETIGT: ROT mit dem Hydraulik-Grund. In der Firmware bricht der
+  // Lauf schon beim fehlgeschlagenen Request ab (notbetrieb.cpp) - hier zaehlt,
+  // dass auch der Zeitweg denselben Grund liefert und nicht "Hat nicht
+  // geklappt" auf die Seite schreibt.
+  NotbetriebLauf tot;
+  notbetrieb_lauf_leeren(&tot);
+  lauf_anstossen(&tot, NOTBETRIEB_WASSER, 1000);
+  NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+  uint32_t t = 1000;
+  for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
+  {
+    t += 1000;
+    a = notbetrieb_tick(&tot, NOTBETRIEB_WASSER, t, false, "");
+  }
+  pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "ein stummer Switch wird ROT");
+  pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_HYDRAULIK, "mit dem Hydraulik-Grund");
+  pruefe_zahl(tot.schritt, 0, "und ohne dass ein Kommando an die WP gegangen waere");
+
+  // Der Kuehl-Abbruch behaelt seinen eigenen Grund - die beiden duerfen sich
+  // nicht vermischen, weil der Weg zurueck ein voellig anderer ist
+  NotbetriebLauf kuehl;
+  notbetrieb_lauf_leeren(&kuehl);
+  lauf_anstossen(&kuehl, NOTBETRIEB_HEIZEN, 1000);
+  pruefe_zahl(notbetrieb_tick(&kuehl, NOTBETRIEB_HEIZEN, 2000, false, "1"),
+              NOTBETRIEB_ABBRUCH_KUEHLEN, "Kuehlbetrieb bricht auch im Hydraulikschritt ab");
+  pruefe_zahl(kuehl.grund, NOTBETRIEB_GRUND_KUEHLEN, "und meldet den Kuehl-Grund");
+}
+
+/*****************************************************************************/
 /* 10. Der Anzeigeverfall                                                    */
 /*                                                                           */
 /* GRUEN und ROT blieben bis zum 2026-08-21 stehen, bis jemand erneut        */
@@ -724,7 +899,7 @@ static void test_anzeigeverfall()
   // ROT verfaellt - aber nicht zu frueh
   NotbetriebLauf rot;
   notbetrieb_lauf_leeren(&rot);
-  notbetrieb_abschluss(&rot, NOTBETRIEB_ROT, start);
+  notbetrieb_abschluss(&rot, NOTBETRIEB_ROT, start, NOTBETRIEB_GRUND_TIMEOUT);
   pruefe_zahl((int)rot.ende, (int)start, "der Abschluss haelt den Zeitpunkt fest");
   pruefe(!notbetrieb_verfall_pruefen(&rot, start + NOTBETRIEB_ANZEIGE_VERFALL_MS - 1),
          "kurz vor 15 min steht das ROT noch");
@@ -738,7 +913,7 @@ static void test_anzeigeverfall()
   // GRUEN ebenso
   NotbetriebLauf gruen;
   notbetrieb_lauf_leeren(&gruen);
-  notbetrieb_abschluss(&gruen, NOTBETRIEB_GRUEN, start);
+  notbetrieb_abschluss(&gruen, NOTBETRIEB_GRUEN, start, NOTBETRIEB_GRUND_KEINER);
   pruefe(notbetrieb_verfall_pruefen(&gruen, start + NOTBETRIEB_ANZEIGE_VERFALL_MS),
          "auch GRUEN verfaellt");
 
@@ -754,7 +929,7 @@ static void test_anzeigeverfall()
   // koennte ein 16 Minuten altes ROT den frischen Lauf sofort abraeumen
   NotbetriebLauf neu;
   notbetrieb_lauf_leeren(&neu);
-  notbetrieb_abschluss(&neu, NOTBETRIEB_ROT, start);
+  notbetrieb_abschluss(&neu, NOTBETRIEB_ROT, start, NOTBETRIEB_GRUND_TIMEOUT);
   (void)notbetrieb_start(&neu, start + NOTBETRIEB_ANZEIGE_VERFALL_MS - 1000);
   pruefe_zahl((int)neu.ende, 0, "der Start loescht den alten Zeitstempel");
 
@@ -762,7 +937,7 @@ static void test_anzeigeverfall()
   const uint32_t kurz_vor_ende = 0xFFFFFF00u;
   NotbetriebLauf ueber;
   notbetrieb_lauf_leeren(&ueber);
-  notbetrieb_abschluss(&ueber, NOTBETRIEB_ROT, kurz_vor_ende);
+  notbetrieb_abschluss(&ueber, NOTBETRIEB_ROT, kurz_vor_ende, NOTBETRIEB_GRUND_TIMEOUT);
   pruefe(!notbetrieb_verfall_pruefen(&ueber, (uint32_t)(kurz_vor_ende + 60000u)),
          "eine Minute nach dem Ueberlauf steht das ROT noch");
   pruefe(notbetrieb_verfall_pruefen(&ueber,
@@ -875,6 +1050,7 @@ int main()
   test_schritt_wert();
   test_ruecklesen();
   test_freigabe();
+  test_hydraulikschritt();
   test_anzeigeverfall();
   test_kurvenplausibilitaet();
 

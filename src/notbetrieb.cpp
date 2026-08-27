@@ -3,6 +3,15 @@
 #include "Topics.h"
 #include "decode.h" // state_topic_index()
 
+// Der Hydraulikschritt spricht den Tasmota-Switch ueber HTTP an. Beide
+// Plattformen bringen denselben HTTPClient mit, nur unter verschiedenen
+// Kopfdateien - dieselbe Weiche wie bei den WiFi-Kopfdateien in HeishaMon.h.
+#if defined(ESP32)
+#include <HTTPClient.h>
+#else
+#include <ESP8266HTTPClient.h>
+#endif
+
 /*****************************************************************************/
 /* Notbetrieb - die Firmware-Anbindung                                       */
 /*                                                                           */
@@ -101,7 +110,9 @@ void notbetrieb_init(void)
   for (unsigned i = 0; i < notbetrieb_schritt_anzahl(notbetriebRolle); i++)
   {
     const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, i);
-    if (s && state_topic_index((unsigned)s->top) < 0)
+    // Der Hydraulikschritt liest an keinem TOP zurueck (top = -1) - er haette
+    // hier sonst bei JEDEM Start eine FEHLER-Zeile ausgeloest.
+    if (s && s->typ == NB_SCHRITT_SET && state_topic_index((unsigned)s->top) < 0)
     {
       char log_line[128];
       (void)snprintf(log_line, sizeof(log_line),
@@ -118,6 +129,13 @@ void notbetrieb_init(void)
   if (notbetriebRolle != NOTBETRIEB_WASSER && heizKuehlIndex < 0)
   {
     Serial.println("FEHLER Notbetrieb: TOP101 (Heat_Cool_SW_State) fehlt in stateTopics[]");
+  }
+
+  // Und die Adresse des Hydraulik-Switch. Fehlt sie, laesst sich der Notbetrieb
+  // nicht ausloesen - das faellt sonst erst auf, wenn jemand den Knopf drueckt.
+  if (hydraulik_switch[0] == '\0')
+  {
+    Serial.println("WARNUNG Notbetrieb: keine Adresse fuer den Hydraulik-Switch (Settings)");
   }
 }
 
@@ -276,6 +294,301 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
 }
 
 /*****************************************************************************/
+/* Die Hydraulik auf 1-stufig stellen                                        */
+/*                                                                           */
+/* WARUM. Der Notbetrieb setzt hydraulisch 1-stufigen Betrieb voraus. Steht  */
+/* die Hydraulik auf 2-stufig, waehrend eine Stufe im Warmwasser-Notbetrieb  */
+/* laeuft, schiebt der Warmwasserbetrieb bis zu 57 C in den Heizkreis - die  */
+/* Fussbodenheizung vertraegt das nicht (Owner, 2026-08-26). Im Normalbetrieb*/
+/* stellt die Kaskadensteuerung den Switch; im Notbetriebsfall ist genau die */
+/* weg. Deshalb macht es die Firmware, als Schritt 1 beider Schrittfolgen.   */
+/*                                                                           */
+/* DER SCHALTER. Ein Sonoff TH mit Tasmota, ohne Web-Passwort. EIN = 2-stufig,*/
+/* AUS = 1-stufig. Er treibt zwei motorische Stellantriebe mit je 90 s        */
+/* Laufzeit - das Relais ist der Startschuss der Umschaltung, nicht ihr       */
+/* Ergebnis. Eine Wartezeit erzwingt das trotzdem nicht: Die Waermepumpe      */
+/* braucht nach dem Einschalten rund drei Minuten bis zum Kompressor, die     */
+/* Ventile sind nach 90 s durch (Owner, 2026-08-26). Im Normalbetrieb gehen   */
+/* Switch- und WP-Kommandos ohnehin GLEICHZEITIG raus, seit jeher und ohne    */
+/* Schaden; der Notbetrieb hat zwischen beiden sogar 16 s (Wasser) bzw. 48 s  */
+/* (Heizen) Vorsprung.                                                       */
+/*                                                                           */
+/* WARUM DER BLOCKIERENDE REQUEST HIER ERTRAEGLICH IST. HTTPClient::GET()     */
+/* blockiert loop() bis zur Antwort oder zum Timeout: kein read_pana_data,    */
+/* kein timeout_serial, kein Webserver. Der UART-Puffer fasst 256 Byte, ein   */
+/* Telegramm hat 203 - ein zweites ginge verloren. Genau deshalb steht der    */
+/* Schritt VORN: In diesem Moment ist kein Kommando an die Waermepumpe        */
+/* unterwegs und kein Sammelfenster offen. Eine einmalige Blockade trifft nur */
+/* den Abfragezyklus, der ohnehin nur liest, und verschiebt ihn.              */
+/*                                                                           */
+/* Damit sie im Fehlerfall nicht ausufert: Timeout 1,5 s statt der            */
+/* voreingestellten 5 s (der Switch haengt im selben Subnetz - antwortet er   */
+/* in 1,5 s nicht, antwortet er nicht), hoechstens ein Timeout je Lauf (der   */
+/* Lesevorgang bricht ab, bevor der zweite Request kommt) und KEIN            */
+/* Wiederholungsversuch: Der Mensch steht vor der Seite, er drueckt erneut,   */
+/* und das ist der bessere Wiederholungsversuch.                              */
+/*                                                                           */
+/* Eine asynchrone Loesung (AsyncTCP, eigener Task) ist verworfen: Sie braechte*/
+/* Nebenlaeufigkeit in einen Zustandsautomaten, der vollstaendig aus loop()    */
+/* getrieben wird, und kaufte dafuer 1,5 s in einem Fehlerfall zurueck, der   */
+/* ohnehin im Abbruch endet.                                                  */
+/*****************************************************************************/
+/*****************************************************************************/
+/* 5000 ms - AM GERAET GEMESSEN, nicht geschaetzt (2026-08-27)                */
+/*                                                                           */
+/* Der Entwurf sah 1500 ms vor, mit der Begruendung "der Switch haengt im     */
+/* selben Subnetz - antwortet er in 1,5 s nicht, antwortet er nicht". Fuer    */
+/* den ERSTEN Kontakt nach einem Neustart stimmt das nicht: Dort ist die      */
+/* MAC-Adresse des Switch noch nicht aufgeloest, das erste SYN geht ins       */
+/* Leere, und TCP wiederholt es erst nach rund 3 s. Mit 1500 ms endete der    */
+/* Lauf reproduzierbar in "HTTP -1" (Verbindung nicht zustande gekommen) -    */
+/* dreimal hintereinander, jeweils beim ersten Druck nach dem Boot, waehrend  */
+/* jeder weitere Lauf durchlief.                                             */
+/*                                                                           */
+/* Das ist kein Laborfall, sondern der Regelfall: Nach einem Stromausfall     */
+/* startet die Bridge neu und hat mit dem Switch noch nie gesprochen - genau  */
+/* dann drueckt jemand den Knopf. Der erste Druck waere verlaesslich          */
+/* gescheitert und haette ihn unnoetig in den Waschraum geschickt.            */
+/*                                                                           */
+/* Der Preis steht im selben Atemzug: Antwortet der Switch wirklich nicht     */
+/* (stromlos), blockiert der Request loop() jetzt 5 s statt 1,5 s. Das ist    */
+/* vertretbar, weil der Schritt ganz vorn steht - kein Kommando an die        */
+/* Waermepumpe ist unterwegs, kein Sammelfenster offen, und der              */
+/* Abfragezyklus liest ohnehin nur.                                          */
+/*****************************************************************************/
+#define HYDRAULIK_TIMEOUT_MS 5000
+
+/*****************************************************************************/
+/* Wie lange nach dem Antwortkopf auf den Rumpf gewartet wird                 */
+/*                                                                           */
+/* DIESELBE FRIST WIE FUER DEN REST DES REQUESTS - und das ist eine Lehre aus */
+/* dem 2026-08-27. Hier standen zuerst 300 ms, mit der Begruendung "der Rumpf */
+/* ist rund 15 Byte lang und liegt praktisch immer schon im Puffer". Das ist  */
+/* fuer das LESEN richtig und fuer das SCHALTEN falsch: Auf "Power Off" legt  */
+/* Tasmota erst das Relais um und veroeffentlicht den neuen Zustand per MQTT, */
+/* bevor es antwortet. Die Antwort kam dann als HTTP 200 an, aber nach der    */
+/* Frist - der Lauf endete mit "liess sich nicht schalten", obwohl der Switch */
+/* sauber gearbeitet hatte.                                                   */
+/*                                                                           */
+/* Eine eigene, kleinere Frist hat hier also keinen Nutzen, sondern nur ein   */
+/* Risiko: Im Normalfall bricht die Schleife ohnehin ab, sobald "OFF" oder    */
+/* "ON" dasteht - das ist eine Sache von Millisekunden. Zum Tragen kommt die  */
+/* Frist nur, wenn etwas schiefgeht, und dann ist der Zeitdeckel des ganzen   */
+/* Requests das richtige Mass.                                                */
+/*****************************************************************************/
+#define HYDRAULIK_LESEFRIST_MS ((uint32_t)HYDRAULIK_TIMEOUT_MS)
+
+enum HydraulikAntwort
+{
+  HYDRAULIK_AUS = 0,     // der Switch meldet OFF - 1-stufig, so soll es sein
+  HYDRAULIK_EIN = 1,     // der Switch meldet ON - 2-stufig, muss geschaltet werden
+  HYDRAULIK_UNKLAR = 2   // keine Antwort, oder eine, die niemand deuten kann
+};
+
+/*****************************************************************************/
+/* Ein Tasmota-Kommando absetzen und die Antwort deuten                      */
+/*                                                                           */
+/* Beide gebrauchten Kommandos antworten mit demselben JSON-Feld:            */
+/*   cmnd=Power       ->  {"POWER":"ON"}  oder  {"POWER":"OFF"}              */
+/*   cmnd=Power%20Off ->  {"POWER":"OFF"}                                    */
+/* Es genuegt, auf "OFF" bzw. "ON" zu pruefen; ein JSON-Parser wird dafuer    */
+/* nicht gebraucht und waere auf einem ESP8266 der teurere Weg.               */
+/*                                                                           */
+/* Die Antwort wird in einen FESTEN Puffer gelesen statt in einen String:     */
+/* Sie ist rund 15 Byte lang, und der Rest der Firmware kommt seit 2.3.0      */
+/* ohne Heap-Allokationen in den heissen Pfaden aus.                          */
+/*****************************************************************************/
+/*****************************************************************************/
+/* Der letzte HTTP-Code des Switch - fuer die Logzeile                       */
+/*                                                                           */
+/* Ohne ihn steht im Log nur "antwortet nicht", und beim naechsten Mal faengt */
+/* die Suche wieder bei null an: Verbindungsaufbau gescheitert, Zeitablauf,   */
+/* 401 wegen eines gesetzten Web-Passworts oder eine Antwort, die niemand     */
+/* deuten kann - das sind vier verschiedene Ursachen mit vier verschiedenen   */
+/* Abhilfen. Negative Werte sind HTTPClient-Fehler (-1 = Verbindung           */
+/* gescheitert, -11 = Zeitablauf), positive sind echte HTTP-Codes.            */
+/*****************************************************************************/
+static int hydraulikLetzterCode = 0;
+
+/*****************************************************************************/
+/* Der Anfang der letzten Antwort - fuer die Logzeile                        */
+/*                                                                           */
+/* Am 2026-08-27 kostete genau diese fehlende Auskunft eine halbe Stunde:     */
+/* Das Log meldete "liess sich nicht schalten (HTTP 200)", und ob nun gar     */
+/* nichts, etwas Halbes oder etwas Unerwartetes angekommen war, liess sich    */
+/* nicht unterscheiden. Leer heisst "nichts empfangen" - das ist die          */
+/* Auskunft, die den Unterschied macht.                                       */
+/*****************************************************************************/
+static char hydraulikLetzteAntwort[24] = "";
+
+static HydraulikAntwort hydraulik_kommando(const char *kommando)
+{
+  hydraulikLetzterCode = 0;
+  hydraulikLetzteAntwort[0] = '\0';
+  // Ohne Adresse gibt es nichts zu fragen. Der Aufrufer macht daraus einen
+  // Abbruch mit Klartext - lieber gar kein Notbetrieb als einer, der die
+  // Fussbodenheizung mit 57 C beschickt.
+  if (hydraulik_switch[0] == '\0')
+    return HYDRAULIK_UNKLAR;
+
+  // Ein "http://" im Einstellungsfeld ist die naheliegende Fehlbedienung - wer
+  // eine Adresse eintraegt, tippt sie oft so, wie sie im Browser steht. Es hier
+  // zu ueberspringen ist eine Zeile; ohne sie entstuende "http://http://..."
+  // und der Notbetrieb braeche ab, ohne dass jemand den Grund saehe.
+  const char *adresse = hydraulik_switch;
+  if (strncmp(adresse, "http://", 7) == 0)
+    adresse += 7;
+  if (adresse[0] == '\0')
+    return HYDRAULIK_UNKLAR; // im Feld stand nur das Praefix
+
+  char url[128];
+  (void)snprintf(url, sizeof(url), "http://%s/cm?cmnd=%s", adresse, kommando);
+
+  WiFiClient client;
+  HTTPClient http;
+
+  http.setReuse(false);
+  http.setTimeout(HYDRAULIK_TIMEOUT_MS); // Lesetimeout
+#if defined(ESP32)
+  // ESP32 trennt Verbindungs- und Lesetimeout; ESP8266 deckt mit setTimeout()
+  // beides ab. Ohne diese Zeile stuende die Blockade bei einem stromlosen
+  // Switch auf den ESP32-Vorgabewerten statt auf 1,5 s.
+  http.setConnectTimeout(HYDRAULIK_TIMEOUT_MS);
+#endif
+
+  if (!http.begin(client, url))
+    return HYDRAULIK_UNKLAR;
+
+  const int code = http.GET();
+  hydraulikLetzterCode = code;
+  if (code != HTTP_CODE_OK)
+  {
+    http.end();
+    return HYDRAULIK_UNKLAR;
+  }
+
+  /***************************************************************************/
+  /* Die Antwort lesen - byteweise, mit Puffergrenze und eigener Frist        */
+  /*                                                                          */
+  /* Drei Fallen liegen hier, und alle drei sind am 2026-08-27 am echten      */
+  /* Switch (Tasmota 12.0.2) nachgemessen:                                    */
+  /*                                                                          */
+  /* 1. TASMOTA ANTWORTET CHUNKED, OHNE Content-Length. getSize() liefert     */
+  /*    also -1, und ein Lesen "so viele Bytes wie angekuendigt" gibt es      */
+  /*    nicht. Der rohe Strom traegt dafuer die Chunk-Laengen mit - fuer die  */
+  /*    Suche nach "OFF"/"ON" ist das gleichgueltig, die Nutzlast steht im    */
+  /*    Klartext darin.                                                       */
+  /* 2. readBytes(puffer, 63) waere die naheliegende Zeile - und sie wartet,  */
+  /*    bis 63 Byte da sind ODER das Timeout ablaeuft. Bei einer 15 Byte      */
+  /*    langen Antwort saesse jeder Lauf die vollen 1,5 s ab, auch im         */
+  /*    Erfolgsfall, und der Notbetrieb blockierte loop() dreimal so lange    */
+  /*    wie noetig.                                                           */
+  /* 3. getString() loest die Chunks zwar sauber auf, allokiert aber auf dem  */
+  /*    Heap in der Groesse der Antwort. Zeigt die eingetragene Adresse aus   */
+  /*    Versehen auf einen richtigen Webserver, waere das eine ganze          */
+  /*    HTML-Seite - auf einem ESP8266 mit rund 30 kB freiem Heap genau im    */
+  /*    Notfall der falsche Moment.                                           */
+  /*                                                                          */
+  /* Deshalb: fester Puffer, harte Frist, und Schluss, sobald die Auskunft    */
+  /* dasteht. Der uebliche Fall ist nach rund 15 Byte entschieden.            */
+  /***************************************************************************/
+  char antwort[64] = "";
+  size_t gelesen = 0;
+  // Stream* statt WiFiClient*: Der konkrete Typ hinter getStreamPtr() heisst
+  // auf ESP8266 und ESP32 nicht gleich (und im ESP32-Core 3.x noch einmal
+  // anders). read() steht in der gemeinsamen Basisklasse.
+  Stream *stream = http.getStreamPtr();
+  const uint32_t frist = millis() + HYDRAULIK_LESEFRIST_MS;
+  while (stream && gelesen < sizeof(antwort) - 1 && (int32_t)(millis() - frist) < 0)
+  {
+    const int c = stream->read();
+    if (c < 0)
+    {
+      delay(1); // ruft yield() - der WLAN-Stack braucht die Gelegenheit
+      continue;
+    }
+    antwort[gelesen++] = (char)c;
+    antwort[gelesen] = '\0';
+    // "OFF" zuerst: "ON" ist in "OFF" nicht enthalten, aber die Reihenfolge
+    // waere sonst eine Falle fuer den naechsten Leser.
+    if (strstr(antwort, "\"OFF\"") != 0 || strstr(antwort, "\"ON\"") != 0)
+      break; // die Auskunft steht, der Rest der Antwort interessiert nicht
+  }
+  http.end();
+
+  // Steuerzeichen ersetzen: Bei chunked stehen Laengen und CRLF mit im Strom,
+  // und eine Logzeile mit rohen Zeilenumbruechen ist schwer zu lesen.
+  for (size_t i = 0; i < sizeof(hydraulikLetzteAntwort) - 1 && i < gelesen; i++)
+    hydraulikLetzteAntwort[i] = (antwort[i] >= 32 && antwort[i] < 127) ? antwort[i] : '.';
+  hydraulikLetzteAntwort[(gelesen < sizeof(hydraulikLetzteAntwort) - 1)
+                             ? gelesen
+                             : sizeof(hydraulikLetzteAntwort) - 1] = '\0';
+
+  if (strstr(antwort, "\"OFF\"") != 0)
+    return HYDRAULIK_AUS;
+  if (strstr(antwort, "\"ON\"") != 0)
+    return HYDRAULIK_EIN;
+  return HYDRAULIK_UNKLAR;
+}
+
+/*****************************************************************************/
+/* Der Hydraulikschritt: erst lesen, dann nur bei Bedarf schalten            */
+/*                                                                           */
+/* Der Zustand wird VORHER gelesen und nicht blind geschaltet, obwohl ein     */
+/* einzelnes "Power Off" beide Faelle abdecken wuerde (Tasmota antwortet auch */
+/* dann mit OFF, wenn der Schalter schon aus war). Der Unterschied ist        */
+/* trotzdem wichtig: Nur so steht im Log, ob tatsaechlich umgeschaltet wurde  */
+/* - und nur so liesse sich spaeter eine Wartezeit anhaengen, falls die       */
+/* Stellantriebe doch einmal knapp werden sollten.                            */
+/*                                                                           */
+/* Rueckgabe: true, wenn die Hydraulik nachweislich 1-stufig steht.           */
+/*****************************************************************************/
+static bool hydraulik_auf_einstufig(void)
+{
+  char log_line[160];
+
+  const HydraulikAntwort ist = hydraulik_kommando("Power");
+  if (ist == HYDRAULIK_UNKLAR)
+  {
+    (void)snprintf(log_line, sizeof(log_line),
+                   "Notbetrieb: Hydraulik-Switch (%.40s) antwortet nicht (HTTP %d, Antwort \"%.23s\")",
+                   hydraulik_switch[0] ? hydraulik_switch : "keine Adresse",
+                   hydraulikLetzterCode, hydraulikLetzteAntwort);
+    write_mqtt_log(log_line);
+    return false; // kein zweiter Request - hoechstens ein Timeout je Lauf
+  }
+
+  if (ist == HYDRAULIK_AUS)
+  {
+    write_mqtt_log((char *)"Notbetrieb: Hydraulik stand bereits auf 1-stufig");
+    return true;
+  }
+
+  // Sie stand auf 2-stufig - jetzt umlegen und die Antwort nachhalten.
+  if (hydraulik_kommando("Power%20Off") != HYDRAULIK_AUS)
+  {
+    (void)snprintf(log_line, sizeof(log_line),
+                   "Notbetrieb: Hydraulik liess sich nicht auf 1-stufig schalten (HTTP %d, Antwort \"%.23s\")",
+                   hydraulikLetzterCode, hydraulikLetzteAntwort);
+    write_mqtt_log(log_line);
+    return false;
+  }
+
+  write_mqtt_log((char *)"Notbetrieb: Hydraulik auf 1-stufig geschaltet (Stellantriebe 90 s)");
+  return true;
+}
+
+/*****************************************************************************/
+/* Das Ergebnis des Hydraulikschritts                                        */
+/*                                                                           */
+/* Der Automat bekommt seine Bestaetigung als Wahrheitswert herein - bei den  */
+/* Set-Schritten aus actual_data[], hier aus der Antwort des Switch. Der Wert */
+/* wird beim Absetzen gesetzt und beim Start jedes Laufs geloescht: Ohne das  */
+/* koennte ein "ja" vom vorigen Lauf den naechsten bestaetigen.               */
+/*****************************************************************************/
+static bool hydraulikBestaetigt = false;
+
+/*****************************************************************************/
 /* Den aktuellen Schritt absetzen                                            */
 /*                                                                           */
 /* Die Kommandos gehen durch build_heatpump_command() - UNVERAENDERT. Der    */
@@ -291,6 +604,20 @@ static bool notbetrieb_schritt_absetzen(void)
   const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
   if (!s)
     return false;
+
+  // Der Hydraulikschritt geht nicht an die Waermepumpe, sondern ins Hausnetz.
+  // Sein Ergebnis steht sofort fest und wird fuer den Tick gemerkt.
+  if (s->typ == NB_SCHRITT_HYDRAULIK)
+  {
+    char hyd_log[160];
+    (void)snprintf(hyd_log, sizeof(hyd_log), "Notbetrieb Schritt %u/%u: %.32s",
+                   (unsigned)(notbetriebLauf.schritt + 1),
+                   notbetrieb_schritt_anzahl(notbetriebRolle), s->set_name);
+    write_mqtt_log(hyd_log);
+
+    hydraulikBestaetigt = hydraulik_auf_einstufig();
+    return hydraulikBestaetigt;
+  }
 
   int wert = 0;
   if (!notbetrieb_schritt_wert(&notbetriebLauf, notbetriebRolle, &notbetriebWerte, &wert))
@@ -344,30 +671,40 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   if (!s)
   {
     // kann nur ein Tabellenfehler sein
-    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
+    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis(), NOTBETRIEB_GRUND_TIMEOUT);
     return;
   }
 
-  // Sollwert des laufenden Schritts. Fehlt er, ist der Lauf nicht zu retten -
-  // die Seite laesst ihn dann gar nicht erst starten, dies ist der Notnagel.
-  int soll = 0;
-  if (!notbetrieb_schritt_wert(&notbetriebLauf, notbetriebRolle, &notbetriebWerte, &soll))
+  bool bestaetigt = false;
+  if (s->typ == NB_SCHRITT_HYDRAULIK)
   {
-    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
-    write_mqtt_log((char *)"Notbetrieb abgebrochen: ein Wert fehlt");
-    return;
+    // Die Bestaetigung kommt aus der Antwort des Switch, nicht aus
+    // actual_data[] - gesetzt beim Absetzen, siehe hydraulikBestaetigt.
+    bestaetigt = hydraulikBestaetigt;
   }
+  else
+  {
+    // Sollwert des laufenden Schritts. Fehlt er, ist der Lauf nicht zu retten -
+    // die Seite laesst ihn dann gar nicht erst starten, dies ist der Notnagel.
+    int soll = 0;
+    if (!notbetrieb_schritt_wert(&notbetriebLauf, notbetriebRolle, &notbetriebWerte, &soll))
+    {
+      notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis(), NOTBETRIEB_GRUND_TIMEOUT);
+      write_mqtt_log((char *)"Notbetrieb abgebrochen: ein Wert fehlt");
+      return;
+    }
 
-  // GRUEN heisst zurueckgelesen, nicht abgesendet: Der TOP des Schritts muss
-  // den Sollwert tragen. notbetrieb_rueckgelesen() faengt dabei den leeren
-  // Rueckgabewert ab - sonst bestaetigte ein nie empfangenes TOP jeden
-  // Schritt mit dem Sollwert 0.
-  // ACHTUNG: s->top ist die TOP-NUMMER, actual_data[] wird ueber den
-  // ZEILENINDEX adressiert. Beides ist nicht dasselbe - die Nummerierung hat
-  // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 104 bei 92 Zeilen. Wer
-  // hier direkt mit der Nummer indiziert, liest die falsche Zeile.
-  const int index = (s->top >= 0) ? state_topic_index((unsigned)s->top) : -1;
-  const bool bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;
+    // GRUEN heisst zurueckgelesen, nicht abgesendet: Der TOP des Schritts muss
+    // den Sollwert tragen. notbetrieb_rueckgelesen() faengt dabei den leeren
+    // Rueckgabewert ab - sonst bestaetigte ein nie empfangenes TOP jeden
+    // Schritt mit dem Sollwert 0.
+    // ACHTUNG: s->top ist die TOP-NUMMER, actual_data[] wird ueber den
+    // ZEILENINDEX adressiert. Beides ist nicht dasselbe - die Nummerierung hat
+    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 104 bei 92 Zeilen. Wer
+    // hier direkt mit der Nummer indiziert, liest die falsche Zeile.
+    const int index = (s->top >= 0) ? state_topic_index((unsigned)s->top) : -1;
+    bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;
+  }
 
   char log_line[160];
   switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt, richtung))
@@ -375,8 +712,16 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   case NOTBETRIEB_SENDEN:
     if (!notbetrieb_schritt_absetzen())
     {
-      notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
-      write_mqtt_log((char *)"Notbetrieb abgebrochen: Kommando abgelehnt");
+      // Der Hydraulikschritt bricht HIER ab und nicht erst nach 20 s: Sein
+      // Ergebnis steht mit der Antwort des Switch fest, es gibt nichts
+      // nachzulesen. Der Mensch sieht ROT nach rund zwei Sekunden und kann
+      // den Schalter im Waschraum von Hand legen.
+      const NotbetriebAbbruchgrund grund =
+          notbetrieb_grund_fuer_schritt(notbetriebRolle, notbetriebLauf.schritt);
+      notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis(), grund);
+      write_mqtt_log(grund == NOTBETRIEB_GRUND_HYDRAULIK
+                         ? (char *)"Notbetrieb ROT: Hydraulik nicht auf 1-stufig, kein Kommando an die WP"
+                         : (char *)"Notbetrieb abgebrochen: Kommando abgelehnt");
     }
     break;
 
@@ -419,6 +764,13 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
 /* POST auf /notbetrieb/start laesst sich auch ohne die Seite absetzen, und  */
 /* zwischen dem Aufbau der Seite und dem Klick koennen Minuten liegen. Eine  */
 /* Oberflaeche, die nur den Knopf versteckt, ist keine Sperre.                */
+/*                                                                          */
+/* SEIT 3.15.0 SETZT DIESER HANDLER KEINEN SCHRITT MEHR AB. Bis 3.14.2 ging  */
+/* das erste Kommando von hier aus raus - fuer ein Set-Kommando eine Sache   */
+/* von Mikrosekunden. Schritt 1 ist jetzt der Hydraulikschritt und damit ein */
+/* HTTP-Request von bis zu 1,5 s; laege er hier, hinge der Browser so lange  */
+/* an einer Seite, die noch nichts anzeigen kann. Der erste Tick aus loop()  */
+/* holt ihn im naechsten Millisekundentakt nach.                             */
 /*****************************************************************************/
 bool notbetrieb_starten(void)
 {
@@ -436,14 +788,22 @@ bool notbetrieb_starten(void)
   if (notbetrieb_start(&notbetriebLauf, millis()) != NOTBETRIEB_SENDEN)
     return false;
 
+  // Ein "ja" vom vorigen Lauf darf den neuen nicht bestaetigen.
+  hydraulikBestaetigt = false;
+
   write_mqtt_log((char *)"NOTBETRIEB ausgeloest ueber die Weboberflaeche");
-  if (!notbetrieb_schritt_absetzen())
-  {
-    notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis());
-    write_mqtt_log((char *)"Notbetrieb abgebrochen: erstes Kommando abgelehnt");
-    return false;
-  }
   return true;
+}
+
+/*****************************************************************************/
+/* Warum der letzte Lauf abgebrochen wurde                                   */
+/*                                                                           */
+/* Die Statusroute haengt den Wert hinten an den Kurzstatus, die Seite macht  */
+/* daraus Klartext. Bei GRUEN und waehrend eines Laufs steht dort KEINER.     */
+/*****************************************************************************/
+NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void)
+{
+  return (NotbetriebAbbruchgrund)notbetriebLauf.grund;
 }
 
 /*****************************************************************************/
