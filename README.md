@@ -2,8 +2,8 @@
 
 Eine Variante von [HeishaMon](https://github.com/Egyras/HeishaMon) für den
 **Kaskadenbetrieb zweier Panasonic-Wärmepumpen** an einer übergeordneten
-Steuerung (Node-RED/ioBroker). Läuft auf ESP8266 (D1 mini) und auf dem
-offiziellen HeishaMon-ESP32-S3-Board — aus einer Codebasis.
+Steuerung (Node-RED/ioBroker). Läuft auf dem offiziellen
+HeishaMon-ESP32-S3-Board.
 
 ---
 
@@ -98,7 +98,7 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 | Set-Kommandos | im Code verteilt | eine Tabelle `setCommands` |
 | State-Topics | vier positionsgleiche Parallel-Tabellen | eine Tabelle `stateTopics` |
 | Zonen | Zone 1 + Zone 2 | nur Zone 1 (Anlage hat keine zweite Zone) |
-| Hardware | getrennte Codebasen | eine Codebasis, ESP8266 + ESP32-S3 |
+| Hardware | getrennte Codebasen je Board | nur ESP32-S3 (der ESP8266-Zweig lief bis 3.15.0 aus derselben Codebasis mit) |
 | Gerätespezifisches | Code anpassen | Build-Flags je Stufe |
 | Web-UI | jQuery/CSS vom CDN | inline, ohne externe Abhängigkeiten, mit Auth |
 | Dekodierpfad | `String`-Objekte | feste Puffer, keine Heap-Allokation |
@@ -519,13 +519,23 @@ Heizkurvenwerte, und der vierte — ausgerechnet der Vorlauf bei Kälte — ist
 nach dem Umschalten von Hand nachzutragen. Der komplette Nachweis steht in
 [`test/README.md`](test/README.md).
 
-### Eine Codebasis für ESP8266 und ESP32-S3 (3.0.0)
+### Umzug auf das ESP32-S3-Board (3.0.0 – 3.16.0)
 
-Die Plattformunterschiede sind in [`src/HeishaMon.h`](src/HeishaMon.h) isoliert:
-Auf dem D1 mini hängt die Wärmepumpe an der getauschten Haupt-UART, auf dem
-ESP32-S3-Board an einer eigenen `Serial1` (RX18/TX17) — die USB-Konsole bleibt
-dort parallel nutzbar. Die bewährte Timing-Kette (Ticker, `serialquerysent` als
-Mutex) ist hardwareunabhängig und wurde unverändert übernommen.
+Bis 3.15.0 baute dieselbe Codebasis für beide Boards: D1 mini (ESP8266) und
+ESP32-S3. Alles Board-Abhängige stand in `#if defined(ESP32)`-Weichen, gebündelt
+in [`src/HeishaMon.h`](src/HeishaMon.h) — auf dem D1 mini hing die Wärmepumpe an
+der getauschten Haupt-UART, auf dem ESP32-S3-Board hängt sie an einer eigenen
+`Serial1` (RX18/TX17), und die USB-Konsole bleibt dort parallel nutzbar. Die
+bewährte Timing-Kette (Ticker, `serialquerysent` als Mutex) ist
+hardwareunabhängig und wurde unverändert übernommen.
+
+Mit **3.16.0** ist der ESP8266-Zweig entfernt. Die Rückfallebene sind seitdem
+zwei baugleiche ESP32-Backup-Boards
+([`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md)), nicht mehr das ältere
+Board. Die ausgelieferte Firmware hat sich dabei um kein Byte geändert — die
+`#else`-Zweige übersetzte der Präprozessor beim ESP32-Build ohnehin nie mit; der
+Nachweis steht im Changelog. Wer den ESP8266-Stand noch bauen will, findet ihn
+unter dem Tag `v3.15.0`.
 
 Zwei Stolpersteine, die Zeit gekostet haben und im Changelog stehen:
 Das offizielle Board hat **4 MB Flash**, nicht 8 wie die
@@ -582,8 +592,8 @@ durchnummerieren.
 ### Speicher und Robustheit (2.0.1 – 2.3.1)
 
 * Dekodierpfad komplett `String`-frei — feste Puffer statt Heap-Allokationen im
-  5-Sekunden-Takt (auf dem ESP8266 der Unterschied zwischen "läuft" und
-  "fragmentiert nach Tagen").
+  5-Sekunden-Takt (auf einem Gerät, das monatelang durchläuft, der
+  Unterschied zwischen "läuft" und "fragmentiert nach Tagen").
 * Web-UI ohne CDN-Abhängigkeiten, Authentifizierung für alle
   zustandsändernden Endpunkte, MQTT-Passwort nicht mehr im HTML.
 * NTP-Timeout statt Endlosschleife beim Start, mDNS-Fehler nicht mehr fatal,
@@ -599,7 +609,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | Datei | Inhalt |
 | --- | --- |
 | [`src/HeishaMon.cpp`](src/HeishaMon.cpp) | Hauptschleife, Timing-Kette, serielle Anbindung, MQTT, OTA |
-| [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht ESP8266/ESP32, Timing-Konstanten |
+| [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht (ESP32-S3), Timing-Konstanten |
 | [`src/telegram.h`](src/telegram.h) | Typ-, Längen- und Prüfsummenregel des Antworttelegramms (auch vom Hosttest genutzt) |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
@@ -643,15 +653,17 @@ dient `platformio_user_env_sample.ini`:
 cp platformio_user_env_sample.ini platformio_user_env.ini
 ```
 
-In `platformio_user_env.ini` stehen ausschließlich Upload-Ziele, getrennt nach
-Board: `[usb_defaults]` und `[ota_defaults_h1|h2]` für den D1 mini,
-`[usb32_defaults]` und `[ota32_defaults_h1|h2|test]` für das ESP32-Board. Alle
-Sektionen müssen vorhanden sein, auch wenn nur ein Board benutzt wird.
+In `platformio_user_env.ini` stehen die Upload-Ziele — `[usb32_defaults]` und
+`[ota32_defaults_h1|h2|test]` — sowie zwei Passwörter, die nicht in git
+gehören: `[ap_defaults]` (Setup-Hotspot) und `[notbetrieb_defaults]` (Zugang
+zum Notbetriebsknopf). Alle sechs Sektionen müssen vorhanden sein, auch wenn
+nur ein Board benutzt wird: `platformio.ini` referenziert sie alle, und eine
+fehlende bricht den Build sofort.
 
 `platformio.ini` selbst ist in Bausteine gegliedert: Board-Basis
-(`[esp8266_base]`, `[esp32_base]`), Stufen-Identität (`[stage_h1]`,
-`[stage_h2]`, `[stage_test_*]`) und darauf aufbauend die Envs — die Werte sind
-die dieser Anlage und dienen als Beispiel:
+(`[esp32_base]`), Stufen-Identität (`[stage_h1]`, `[stage_h2]`,
+`[stage_test_esp32]`) und darauf aufbauend die Envs — die Werte sind die dieser
+Anlage und dienen als Beispiel:
 
 **Produktiv (Update per OTA):**
 
@@ -659,8 +671,6 @@ die dieser Anlage und dienen als Beispiel:
 | --- | --- | --- |
 | `heishamon_esp32_h1_ota` | ESP32-S3 | Stufe 1 an WP1 |
 | `heishamon_esp32_h2_ota` | ESP32-S3 | Stufe 2 an WP2 |
-| `d1_mini_h1_ota` | D1 mini | Stufe 1 auf ESP8266 (Rückfallebene) |
-| `d1_mini_h2_ota` | D1 mini | Stufe 2 auf ESP8266 (Rückfallebene) |
 
 **Erstsetup (Flash über USB):**
 
@@ -668,22 +678,25 @@ die dieser Anlage und dienen als Beispiel:
 | --- | --- | --- |
 | `heishamon_esp32_h1_usb` | ESP32-S3 | Erstflash der Stufe 1 (s. u.) |
 | `heishamon_esp32_h2_usb` | ESP32-S3 | Erstflash der Stufe 2 (s. u.) |
-| `d1_mini_usb` | D1 mini | Erstflash ohne Stufen-Flags |
 
 **Test:**
 
 | Env | Board | Zweck |
 | --- | --- | --- |
-| `heishamon_esp32_usb` / `_ota` | ESP32-S3 | Testgerät mit eigenem MQTT-Präfix |
-| `d1_mini_test` | D1 mini | Prüfstand **ohne** Wärmepumpe |
+| `heishamon_esp32_usb` / `_ota` | ESP32-S3 | Prüfstand mit eigenem MQTT-Präfix (`panasonic_heat_pump32`) |
+
+Einen eigenen Prüfstand gibt es seit 3.16.0 nicht mehr; dafür wird eines der
+beiden Backup-Boards geliehen. Der Ablauf hat eine sicherheitskritische
+Reihenfolge und steht in [`test/README.md`](test/README.md).
 
 ```bash
 pio run -e heishamon_esp32_h1_ota -t upload
 ```
 
 Für eine eigene Anlage sind die Build-Flags der Stufen anzupassen — Präfix und
-Web-Titel in der Stufen-Sektion, der Hostname im Env (ESP8266- und ESP32-Board
-derselben Stufe können parallel im Netz hängen und brauchen eindeutige Namen):
+Web-Titel in der Stufen-Sektion, der Hostname im Env (mehrere Boards können
+dieselbe Stufe fahren — das Backup-Board trägt denselben Build, aber einen
+eigenen Namen):
 
 ```ini
 [stage_h1]

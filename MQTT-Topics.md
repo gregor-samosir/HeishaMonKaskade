@@ -722,7 +722,7 @@ printed emergency sheet; the same sheet must not also open the firmware upload
 and the MQTT credentials.
 
 `/notbetrieb/status` needs no login at all. It only returns state and step
-number, is polled every two seconds, and authenticating that on an ESP8266
+number, is polled every two seconds, and authenticating that on the device
 would be noticeable.
 
 ### `/notbetrieb/status` also carries the connection state (new in 3.13.0)
@@ -756,7 +756,7 @@ so the connection fields keep indices 5 and 6, which the home page reads.
 The **home page** polls this same route, at the 30-second interval of the topic
 table. That the path says "notbetrieb" is deliberate: it is the device's only
 status route, it is reachable without a login, and a second route for two
-fields would be the more expensive option on an ESP8266.
+fields would be the more expensive option.
 
 What is measured is the **MQTT connection**, not the WLAN. The outage this is
 about is the ioBroker going down — and the MQTT broker *is* the ioBroker
