@@ -39,6 +39,14 @@ Abschnitt „Das Protokoll vom 2026-08-21").
 
 ## 2. Vorbedingung: die Backup-Boards müssen stehen
 
+> **ERLEDIGT am 2026-08-27.** Beide Boards sind eingerichtet und stillgelegt:
+> `HeishaMon32_h1b` (192.168.2.194) und `HeishaMon32_h2b` (192.168.2.166),
+> beide mit 3.16.0 auf Port 1884. Die Vorbedingung ist damit nachgezogen und
+> die eingefrorene Rückfallebene aus `v3.15.0` nicht mehr nötig. Der Ablauf
+> wich vom Plan ab — Nachtrag am Ende von Abschnitt 10.
+>
+> ---
+>
 > **Entschieden am 2026-08-27 (Owner): Diese Vorbedingung wird NACHGEZOGEN.**
 > Die Boards sind noch nicht da, und das Vorhaben wartet nicht auf sie. Als
 > Rückfall für die Zwischenzeit dient das **vorhandene 3.15.0** — die vier
@@ -270,6 +278,13 @@ Größe | Herkunft | Beim Flashen mit Test-Firmware
 
 Die `config.json` liegt in LittleFS und überlebt sowohl OTA als auch den
 USB-Flash — die Partitionen sind getrennt (`min_spiffs.csv`).
+
+**Nachgemessen am 2026-08-27, und der Befund reicht weiter als hier
+angenommen:** Die `config.json` überlebt sogar den Wechsel **von der
+Original-Firmware** auf die eigene. Beide Backup-Boards kamen nach dem
+USB-Erstflash mit den WLAN-Daten und MQTT-Feldern der Original-Firmware hoch,
+ohne Setup-Portal. `Ablauf-Backup-Boards.md` behauptete das Gegenteil und ist
+korrigiert.
 
 **Das ist günstig:** Ein frisch mit Test-Firmware bespieltes Backup-Board ist
 doppelt gesperrt — falscher Prefix *und* toter Port. Es kann in diesem Zustand
@@ -640,3 +655,28 @@ Die drei Punkte, die nach dem Rollout beim Owner lagen, sind entschieden:
   noch besser als ein Lauf, der von den Espressif-Servern abhängt, und genau
   dafür ist der Cache da.
 * **Die drei stromlosen D1 minis** — entschieden, siehe Abschnitt 9.
+
+### Nachtrag 2026-08-27: Etappe 2 nachgezogen
+
+Die Backup-Boards sind eingerichtet. Zwei Dinge, die der Plan nicht wusste:
+
+**Das LittleFS wird beim Erstflash nicht geleert.** `Ablauf-Backup-Boards.md`
+ging davon aus, die Original-Firmware hinterlasse eine unlesbare `config.json`,
+die Firmware rufe deshalb `resetSettings()` und das Board komme im Setup-Portal
+hoch. Beide Boards taten das Gegenteil: Sie luden die Original-`config.json`,
+buchten sich mit deren WLAN-Daten ein und waren sofort per HTTP erreichbar. Das
+Portal wurde bei der ganzen Inbetriebnahme kein einziges Mal gebraucht.
+
+**Damit wird der erste Flash zur kritischen Stelle.** Ein Board, das direkt die
+Stufen-Firmware bekommt, hängt mit produktivem Prefix im Netz und richtet sich
+nach einer `config.json`, die niemand gesehen hat. Hier war `mqtt_server` leer
+und es ging gut — aus Zufall. Der Erstflash läuft deshalb jetzt über
+`heishamon_esp32_usb` (Test-Prefix), und die Stufen-Firmware kommt erst per OTA,
+wenn Port 1884 und Hostname nachgewiesen sind. Das ist dieselbe Logik wie die
+sicherheitskritische Reihenfolge in Abschnitt 4.3, nur für die Einrichtung
+statt für die Rückgabe.
+
+Der Nachweis der Sperre kam aus der seriellen Konsole: vor dem Eintragen des
+Brokers `DNS Failed for ''`, danach `Connection reset by peer` im
+10-Sekunden-Takt — kein Publish, kein Subscribe. Die produktiven Boards liefen
+während der gesamten Inbetriebnahme unberührt weiter.
