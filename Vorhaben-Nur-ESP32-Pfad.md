@@ -5,8 +5,12 @@ Code, Build-Konfiguration, CI und Dokumentation zu entfernen. Die Firmware auf
 den beiden produktiven Boards ändert sich dabei **um kein Byte** — es geht um
 Wartbarkeit, nicht um Funktion.
 
-**Stand:** 2026-08-25, Planung. Ausgangsversion 3.14.2. Vorgesehene
-Zielversion **3.15.0** (siehe Abschnitt 9).
+**Stand:** 2026-08-25, Planung; Versionsangaben am 2026-08-27 fortgeschrieben.
+Ausgangsversion ist jetzt **3.15.0**, vorgesehene Zielversion **3.16.0** (siehe
+Abschnitt 9). Grund: Der Owner hat am 2026-08-27 entschieden, dass
+[`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) zuerst
+kommt; es ist als 3.15.0 draußen und läuft auf beiden Stufen. Der ESP8266-Pfad
+wurde dafür noch einmal mitgepflegt.
 
 ---
 
@@ -325,7 +329,7 @@ Etappe | Inhalt | Nachweis
 **6** | CI: neue Begründung, Cache-Kommentar mit gemessenen Zahlen | grüner Lauf, Laufzeit notieren
 **7** | `piotools`: `obj-dump.py` umstellen oder entfernen, Altlasten aufräumen | —
 **8** | Doku nach 3.6 | —
-**9** | Changelog `src/version.h`, Version 3.15.0, Release | —
+**9** | Changelog `src/version.h`, Version 3.16.0, Release | —
 
 **Etappe 5 ist die einzige, bei der ein Fehler die Firmware verändern kann.**
 Der ESP8266-Code steht in `#else`-Zweigen, die der Präprozessor beim
@@ -362,7 +366,7 @@ Ausgangswerte für Stufe 1, Stand 3.14.2:
 Wer es schärfer will, legt zusätzlich `xtensa-esp32s3-elf-nm --size-sort` vor
 und nach dem Umbau nebeneinander — das zeigt nicht nur *dass*, sondern *welche*
 Funktion sich geändert hat. Der Versionsstring bleibt für diesen Vergleich
-unverändert; erst wenn die Zahlen stimmen, wird auf 3.15.0 gezogen.
+unverändert; erst wenn die Zahlen stimmen, wird auf 3.16.0 gezogen.
 
 ---
 
@@ -445,7 +449,7 @@ bleiben, wie sie sind.
    steht im Changelog: Der CSS-Test lief vor dem Rollout von 3.14.0 nicht mit,
    und die Firmware war da schon auf beiden Stufen.
 4. CI grün, Laufzeit notieren.
-5. Kein OTA an H1/H2 nötig — die Firmware ist unverändert. Wenn 3.15.0
+5. Kein OTA an H1/H2 nötig — die Firmware ist unverändert. Wenn 3.16.0
    trotzdem ausgerollt wird, gilt das übliche Verfahren: `test/tablesnap.py`
    vorher und nachher, zeilenweise vergleichen.
 
@@ -453,7 +457,7 @@ bleiben, wie sie sind.
 
 ## 9. Offene Punkte
 
-**Versionsnummer: 3.15.0 oder 4.0.0?** Vorschlag ist **3.15.0**. Begründung:
+**Versionsnummer: 3.16.0 oder 4.0.0?** Vorschlag ist **3.16.0**. Begründung:
 Die ausgelieferte Firmware verhält sich identisch, es fällt keine Funktion und
 kein Topic weg. Für 4.0.0 spräche, dass eine Zielplattform verschwindet — das
 ist aber eine Aussage über das Repo, nicht über das Gerät. Entscheidung liegt
