@@ -15,9 +15,9 @@ HeishaMon-ESP32-S3-Board.
   Igor Ybema. Die Buchse mit der Aufschrift <code>HEATPUMP</code> führt zum
   CN-CNT-Anschluss der Wärmepumpe — von dort kommen alle fünf Sekunden die
   203 Bytes, um deren richtige Deutung es auf den folgenden Bildschirmmetern
-  geht. Das weiße Etikett ist unspektakulär, aber der wichtigste Teil der
-  Anlagendokumentation: Es sagt, welche der beiden Stufen man gerade in der
-  Hand hält.</em>
+  geht. Rechts oben der unbestückte Sockel für die Ethernet-Platine — hier
+  bleibt er leer, angebunden wird über WLAN. Das weiße Etikett ist nur für das
+  Foto angebracht.</em>
 </p>
 
 ---
@@ -72,17 +72,19 @@ Kommandos in die Gegenrichtung.
 
 <p align="center">
   <img src="pictures/hmon_pcb/TheSiblings_pcb.jpeg" width="820"
-       alt="Zwei baugleiche HeishaMon-v6-Platinen nebeneinander, beschriftet H1 und H2">
+       alt="Zwei baugleiche HeishaMon-v6-Platinen nebeneinander — die Boards der beiden Kaskadenstufen">
 </p>
 
 <p align="center">
-  <em><b>Stufe 1 und Stufe 2, oder: die Geschwister.</b> Sie sehen nicht nur
-  gleich aus, sie tragen auch denselben Quelltext — der Unterschied zwischen
-  ihnen sind drei Build-Flags (MQTT-Präfix, Web-Titel, Hostname) und zwei
-  Streifen Etikett. Genau diese Verdopplung hat die Fehler ans Licht gebracht,
-  die weiter unten stehen: Ein Gerät, das jemand von Hand bedient, verzeiht
-  vieles. Zwei Geräte, die alle fünf Minuten den kompletten Sollzustand
-  aufgedrückt bekommen, verzeihen nichts.</em>
+  <em><b>Die Geschwister.</b> Sie sehen nicht nur gleich aus, sie tragen auch
+  denselben Quelltext — der ganze Unterschied zwischen Stufe 1 und Stufe 2 sind
+  drei Build-Flags (MQTT-Präfix, Web-Titel, Hostname). Im Projekt laufen sie
+  deshalb unter <code>…_h1_ota</code> und <code>…_h2_ota</code>, die beiden
+  Ersatzplatinen unter <code>…_h1b_ota</code> und <code>…_h2b_ota</code>; die
+  Aufkleber auf dem Foto sind nur für das Foto. Genau diese Verdopplung hat die
+  Fehler ans Licht gebracht, die weiter unten stehen: Ein Gerät, das jemand von
+  Hand bedient, verzeiht vieles. Zwei Geräte, die alle fünf Minuten den
+  kompletten Sollzustand aufgedrückt bekommen, verzeihen nichts.</em>
 </p>
 
 Die Wärmepumpen-Firmware selbst ist Panasonic-Code und wird nicht angefasst.
