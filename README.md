@@ -831,8 +831,6 @@ Client-IDs bei schnellen Reconnects.
 
 * **Zone 2** — siehe oben.
 * **Extras des ESP32-Boards** (1-Wire, S0-Zähler, OpenTherm) bleiben ungenutzt.
-* **ArduinoJson bleibt auf 6.x** — v7 ist für den ESP8266 wegen des Footprints
-  nicht empfohlen.
 * **Keine Unity-Testsuite.** Die Werkzeuge in `test/` sind eigenständige
   Diagnoseprogramme, `pio test` nutzt sie nicht. `merge_test.cpp` wäre die
   Vorlage für echte Unit-Tests.

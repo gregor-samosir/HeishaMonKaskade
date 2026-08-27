@@ -146,7 +146,11 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 
         size_t read = configFile.readBytes(buf.get(), size);
         buf[read] = '\0';
-        DynamicJsonDocument jsonDoc(1024);
+        // Seit 3.16.0 (ArduinoJson 7) waechst das Dokument elastisch; die
+        // frueher noetige feste Groesse ist entfallen. Beim LESEN war sie
+        // ohnehin unkritisch: Passte die Datei nicht, kam ein
+        // DeserializationError, den der else-Zweig unten abfaengt.
+        JsonDocument jsonDoc;
         DeserializationError error = deserializeJson(jsonDoc, buf.get());
         serializeJson(jsonDoc, Serial);
         if (!error)
@@ -246,7 +250,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   if (shouldSaveConfig)
   {
     Serial.println("Save config");
-    DynamicJsonDocument jsonDoc(1024);
+    JsonDocument jsonDoc;
     jsonDoc["wifi_hostname"] = wifi_hostname;
     jsonDoc["ota_password"] = ota_password;
     jsonDoc["mqtt_server"] = mqtt_server;
@@ -255,15 +259,27 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
 
-    File configFile = LittleFS.open("/config.json", "w");
-    if (!configFile)
+    // Ueberlaufpruefung, siehe die ausfuehrliche Begruendung in handleSettings:
+    // Eine halb geschriebene config.json kostet nach dem Neustart womoeglich
+    // das MQTT-Passwort. Lieber den alten Stand behalten.
+    if (jsonDoc.overflowed())
     {
-      Serial.println("Failed to open config file for writing");
+      Serial.println("Config document overflowed, keeping previous config.json");
     }
-
-    serializeJson(jsonDoc, Serial);
-    serializeJson(jsonDoc, configFile);
-    configFile.close();
+    else
+    {
+      File configFile = LittleFS.open("/config.json", "w");
+      if (!configFile)
+      {
+        Serial.println("Failed to open config file for writing");
+      }
+      else
+      {
+        serializeJson(jsonDoc, Serial);
+        serializeJson(jsonDoc, configFile);
+        configFile.close();
+      }
+    }
     // end save
   }
 
@@ -551,14 +567,19 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   // check if POST was made with save settings, if yes then save and reboot
   if (httpServer->args())
   {
-    // 1024 statt der frueheren 512 (seit 3.15.0): Mit dem siebten Feld
-    // (hydraulik_switch) reichten 512 Byte nicht mehr sicher. Die Werte
-    // kommen als String aus arg() und werden ins Dokument KOPIERT - je Feld
-    // bis zu 40 Byte plus Verwaltung. Laeuft das Dokument ueber, schreibt
-    // serializeJson die config.json still unvollstaendig, und nach dem
-    // Neustart fehlt womoeglich das MQTT-Passwort. Dieselbe Groesse wie in
-    // setupWifi, wo dasselbe Dokument entsteht.
-    DynamicJsonDocument jsonDoc(1024);
+    // Bis 3.15.0 stand hier eine feste Dokumentgroesse (zuletzt 1024 Byte, davor
+    // 512), und die musste bei jedem neuen Feld nachgerechnet werden. Mit
+    // ArduinoJson 7 waechst das Dokument elastisch - die Rechnerei entfaellt,
+    // die GEFAHR aber nicht: Sie heisst jetzt nicht mehr "Groesse zu klein
+    // geschaetzt", sondern "Allokation fehlgeschlagen". Der Ausgang waere
+    // derselbe: serializeJson schriebe die config.json still unvollstaendig,
+    // und nach dem Neustart fehlte womoeglich das MQTT-Passwort.
+    //
+    // Deshalb wird unten overflowed() geprueft und im Zweifel GAR NICHT
+    // geschrieben. Der alte Stand ist besser als ein halber neuer: Das Geraet
+    // startet nach dem Speichern neu, und ein fehlendes MQTT-Passwort faellt
+    // erst auf, wenn die Hausteuerung nichts mehr bekommt.
+    JsonDocument jsonDoc;
     jsonDoc["wifi_hostname"] = wifi_hostname;
     jsonDoc["ota_password"] = ota_password;
     jsonDoc["mqtt_server"] = mqtt_server;
@@ -617,7 +638,12 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
       jsonDoc["hydraulik_switch"] = httpServer->arg("hydraulik_switch");
     }
 
-    if (LittleFS.begin(true)) // format on first mount
+    // Nicht schreiben, wenn eine Allokation fehlgeschlagen ist (Begruendung
+    // oben beim Anlegen des Dokuments). Faellt der Code hier durch, bleibt die
+    // bisherige config.json stehen, es wird NICHT neu gestartet, und der
+    // Browser bekommt die Settings-Seite mit den alten Werten zurueck - der
+    // Nutzer sieht also, dass nichts uebernommen wurde.
+    if (!jsonDoc.overflowed() && LittleFS.begin(true)) // format on first mount
     {
       File configFile = LittleFS.open("/config.json", "w");
       if (configFile)
