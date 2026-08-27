@@ -7,9 +7,9 @@
 #include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
-// platform layer: same firmware for ESP8266 (D1 mini) and ESP32-S3
-// (official HeishaMon board), differences are isolated here
-#if defined(ESP32)
+// platform layer: the official HeishaMon ESP32-S3 board. Until 3.15.0 the same
+// firmware also built for the D1 mini (ESP8266); that branch was dropped in
+// 3.16.0, everything board specific still lives here.
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ESPmDNS.h>
@@ -18,11 +18,13 @@
 #include <WebServer.h>
 #include <HTTPUpdateServer.h>
 #include <DNSServer.h>
+// quotes on purpose: pulls sstaub/Ticker from lib_deps. <Ticker.h> would find
+// the core's own Ticker with a different API and break the timing chain.
 #include "Ticker.h"
 #include <TelnetStream.h>
 #include <TimeLib.h>
 
-// class names differ between the cores
+// class names kept behind typedefs since the 3.0.0 port
 typedef WebServer WebServerClass;
 typedef HTTPUpdateServer HTTPUpdateServerClass;
 
@@ -34,30 +36,7 @@ typedef HTTPUpdateServer HTTPUpdateServerClass;
 #define ENABLEPIN 5   // mosfet enable for TX line to heatpump
 #define ENABLEOTPIN 4 // OpenTherm 24V booster - unused, must stay LOW
 
-#else
-#include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
-#include <ESP8266mDNS.h>
-#include <ArduinoOTA.h>
-#include <PubSubClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
-#include <DNSServer.h>
-#include "Ticker.h"
-#include <TelnetStream.h>
-#include <TimeLib.h>
-#include <sntp.h>
-
-typedef ESP8266WebServer WebServerClass;
-typedef ESP8266HTTPUpdateServer HTTPUpdateServerClass;
-
-// heatpump on the swapped main UART (gpio13/15), enabled via gpio5
-#define heatpumpSerial Serial
-#define ENABLEPIN 5
-
-#endif
-
-// posix TZ string (identical to TZ_Europe_Berlin), works on both cores
+// posix TZ string (identical to TZ_Europe_Berlin)
 #define TIME_ZONE "CET-1CEST,M3.5.0,M10.5.0/3"
 
 #define MAXDATASIZE 256

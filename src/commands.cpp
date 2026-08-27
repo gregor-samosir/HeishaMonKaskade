@@ -9,8 +9,9 @@
 /*****************************************************************************/
 
 // conversion rules from mqtt value to protocol byte
-// byte-basiert statt int: das enum steckt in jeder Tabellenzeile, und auf dem
-// ESP8266 liegen const-Tabellen im RAM (vgl. Feldreihenfolge in decode.h)
+// byte-basiert statt int: das enum steckt in jeder Tabellenzeile, und jedes
+// gesparte Byte zaehlt dort mal die Zeilenzahl (vgl. Feldreihenfolge in
+// decode.h)
 enum ConvType : byte
 {
   CONV_ADD,    // set_byte = value + param
