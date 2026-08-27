@@ -45,6 +45,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
+| `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
@@ -120,6 +121,43 @@ Solange ein Backup-Board Pruefstand ist, hat die betreffende Stufe **keinen
 Notanker**. Deshalb: immer nur **ein** Board gleichzeitig ausleihen, und vorher
 kurz pruefen, ob an der eigenen Stufe gerade etwas ansteht (Rollout,
 Heizperiode, Abwesenheit). Ein Pruefstand ist selten dringend.
+
+## Antwortquote messen
+
+Die aussagekraeftigste einzelne Zahl ueber die serielle Strecke: Wie viele der
+gesendeten Telegramme die Waermepumpe beantwortet hat. Nur eine Telnet-Sitzung
+gleichzeitig - vorher pruefen, dass niemand sonst drauf ist.
+
+```bash
+./test/telnet_mitschnitt.py 192.168.2.120 420 > mitschnitt.txt
+sed -i '' 's/\x1b\[[0-9;]*m//g' mitschnitt.txt   # Farbcodes raus
+for M in "Send query" "Send command" "Valid data" "Telegramm verworfen" \
+         "Serial interface read timeout" "Restdaten vor dem Senden" \
+         "Mqtt reconnect" "Lesefenster laeuft noch"; do
+  printf '%-32s %s\n' "$M" "$(grep -c "$M" mitschnitt.txt)"
+done
+```
+
+`Send query` + `Send command` muss gleich `Valid data` sein. Referenzwerte aus
+7-Minuten-Laeufen an Stufe 1:
+
+Datum | Version | gesendet | Valid data | verworfen
+:--- | :--- | ---: | ---: | ---:
+2026-08-13 | 3.6.0 | 68 + 4 | 72 | 0
+2026-08-27 | 3.16.0 | 68 + 2 | 70 | 0
+
+Der Zyklus liegt konstant bei 6 s. **Ausreisser von 11-12 s sind kein Befund**,
+sondern Bauart: Die Leitung ist halbduplex, ein Kommandotelegramm kostet eine
+Abfragerunde.
+
+**`Telegramm verworfen (unvollstaendig): Typ 0x00, Laenge 0` heisst: gar keine
+Antwort.** Das `0x00` ist der Platzhalter der Logzeile (`HeishaMon.cpp`, `(serial_length > 0) ? serial_data[0] : 0`), kein Byte von der Leitung - es stand
+also nichts auf der Leitung, nicht Muell. Am 2026-08-27 trat das zweimal
+waehrend eines Notbetriebslaufs auf, beide Male mit einem zweiten Telegramm
+dicht hinter dem ersten (der 5-min-Re-Assert fiel in den letzten Schritt).
+Verloren ist dabei eine Leserunde, kein Kommando: Der Notbetrieb liest jeden
+Schritt zurueck, die Steuerung wiederholt alle 5 min. Im Normalbetrieb liegt
+die Quote bei 100 %, siehe Tabelle.
 
 ## Ausfuehren
 

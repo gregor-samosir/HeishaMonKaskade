@@ -93,6 +93,40 @@
 //         Gewinn ist die Freiheit, alte Designzwaenge zu ueberdenken - nicht
 //         die Pflicht dazu.
 //
+//         ABNAHME AM GERAET (2026-08-27). Beide Stufen per OTA, Tabellen-
+//         vergleich ueber /tablerefresh: H2 90 von 92, H1 89 von 92 Zeilen
+//         identisch - die Abweichungen sind ausschliesslich laufende
+//         Messwerte. Der config.json-Pfad an H2 gegengeprueft (Feld geaendert,
+//         Neustart, zurueckgelesen, uebrige Felder erhalten, Verbindungslage
+//         0). Der Notbetrieb an H1 hat real einen Heizlauf ausgeloest
+//         (Pump_Speed 2200, Pump_Duty 91, Pump_Flow 11,95 l/min), den der
+//         5-min-Re-Assert der Steuerung danach erwartungsgemaess zurueckholte.
+//
+//         ANTWORTQUOTE NACHGEMESSEN, weil waehrend dieses Notbetriebslaufs
+//         zweimal "Telegramm verworfen (unvollstaendig): Typ 0x00, Laenge 0"
+//         im Log stand. Laenge 0 heisst: gar keine Antwort - das 0x00 ist der
+//         Platzhalter der Logzeile, kein Byte von der Leitung. Beide Male lag
+//         ein zweites Telegramm dicht hinter dem ersten (Re-Assert der
+//         Steuerung fiel in den letzten Notbetriebsschritt). Verloren ist
+//         dabei eine Leserunde, kein Kommando: Der Notbetrieb liest jeden
+//         Schritt zurueck, die Steuerung wiederholt alle 5 min.
+//         Passiver 7-Minuten-Mitschnitt an H1 unter 3.16.0 (05:33:27-05:40:22)
+//         zum Vergleich mit dem Referenzlauf vom 2026-08-13 (3.6.0):
+//           68 Abfragen + 2 Kommandos = 70 gesendet, 70x "Valid data"
+//           0 verworfen, 0 Serial-Timeout, 0 Restdaten, 0 Mqtt-Reconnect,
+//           0 "Lesefenster laeuft noch"
+//           Zyklus 6 s (63x), 7 s (2x); die zwei Ausreisser mit 11 und 12 s
+//           liegen genau dort, wo ein Kommandotelegramm dazwischen lag -
+//           halbduplex, ein Kommando kostet eine Abfragerunde.
+//         Damals: 68 Abfragen + 4 Kommandos, ebenfalls kein verworfenes. Die
+//         Quote ist also unveraendert 100 %; die beiden Aussetzer haengen an
+//         der dichten Kommandofolge eines Notbetriebslaufs, nicht an 3.16.0.
+//         Der serielle Pfad ist von diesem Umbau ohnehin nicht beruehrt -
+//         readSerial, send_pana_command und timeout_serial sind unter den
+//         9346 unveraenderten Symbolen.
+//         Zugabe: Der Anzeigeverfall des Notbetriebs griff auf die Sekunde
+//         genau (GRUEN 05:21:35 -> "Anzeige zurueckgesetzt" 05:36:35).
+//
 //         FREIGESCHALTET: Analyse-Relais-statt-KNX.md Abschnitt 6.3 ("Die
 //         Rueckfallebene D1 mini kann es nicht") ist damit erledigt. Die
 //         Backup-Boards sind dieselbe Hardware und haben die Relais.
