@@ -526,3 +526,78 @@ physisch noch vor. Sie sind nach diesem Vorhaben nicht mehr flashbar (die Envs
 sind weg) und tragen Firmwarestände, die auf den produktiven Prefix schreiben
 würden. Entscheidung offen: entsorgen, oder mit einem Aufkleber „nicht
 anschließen" ablegen. Bis dahin gilt: stromlos.
+
+---
+
+## 10. Das Protokoll vom 2026-08-27
+
+Umgesetzt als **3.16.0** auf Branch `esp32-only`, Rettungsanker
+`rettungsanker-vor-esp32-only-2026-08-27` (lokal). Reihenfolge der Etappen:
+0, 1, 3, 4, 5, 6, 7, 8, 5b, 9, 10 — Etappe 2 ist nachgezogen (Entscheidung in
+Abschnitt 2).
+
+### Was der Plan nicht wusste
+
+**Es waren zehn Weichen, nicht acht.** Abschnitt 3.1 wurde am 2026-08-25
+erhoben; mit 3.15.0 kamen zwei weitere in
+[`src/notbetrieb.cpp`](src/notbetrieb.cpp) dazu — die HTTPClient-Kopfdatei und
+das getrennte Verbindungs-/Lesetimeout des Hydraulikschritts. Beide sind
+mitaufgelöst. Beim Anfassen fiel auf, dass der Timeout-Kommentar noch „1,5 s"
+nannte, obwohl der Wert seit 3.15.0 auf 5000 ms steht; das ist mitkorrigiert.
+
+**Die `[ap_defaults]`-Begründung war ebenfalls betroffen.** Sie sprach von
+„beide Board-Basen" — es gibt nur noch eine.
+
+### Der Nachweis von Etappe 5
+
+Beide Maßstäbe aus Abschnitt 5, und beide sind bestanden:
+
+```text
+                         text      data      bss
+h1 (ota/usb/test)     1034911    225430   2192951    unverändert
+h2 (ota/usb)          1034535    225142   2192951    unverändert
+```
+
+`xtensa-esp32s3-elf-nm --size-sort`: **alle 9346 Symbole unverändert** — nicht
+nur die Summen stimmen, sondern jedes einzelne Symbol. Damit ist auch der
+Restzweifel ausgeräumt, den ein reiner Summenvergleich offen ließe
+(verschobene Symbole bei gleicher Summe).
+
+Der Vergleich lief über `git stash push src/`, einen Build des alten Stands und
+`git stash pop` — dieselbe Toolchain, dieselben Flags, nur der Quellcode
+unterschied sich.
+
+### Der Nachweis von Etappe 5b
+
+ArduinoJson 7.4.3 kostet **text +2916, data +200, bss ±0** (Test-Envs: data
++216). Das ist die Größenänderung, die hier ausdrücklich erlaubt ist — und der
+Grund, warum 5b nicht in 5 mitlaufen durfte.
+
+Dabei kam etwas dazu, das nicht im Plan stand und dort hingehört hätte: Die
+feste Dokumentgröße war nicht nur Rechnerei, sie war auch die einzige
+Absicherung gegen eine halb geschriebene `config.json`. Mit dem elastischen
+`JsonDocument` heißt dieselbe Gefahr „Allokation fehlgeschlagen" statt „Größe
+zu klein geschätzt" — der Ausgang wäre identisch. **Beide Schreibpfade prüfen
+jetzt `jsonDoc.overflowed()` und schreiben im Zweifel gar nicht.** Bis 3.15.0
+wurde überhaupt nicht geprüft; die 3.15.0 hatte das Problem nur durch eine
+größer geschätzte Zahl (512 → 1024) entschärft.
+
+### Entscheidungen, die während der Umsetzung fielen
+
+Frage | Entscheidung | Begründung
+:--- | :--- | :---
+`obj-dump.py` umstellen oder entfernen? | **entfernen**, mit fünf weiteren toten Skripten | Umstellen hätte ein weiterhin nicht eingebundenes Skript ergeben — unbemerkt tot statt nachweislich kaputt. Größennachweise laufen hier über `size` und `nm`
+`name-firmware.py` anfassen? | **ja**, minimal | Es legte weiterhin ein leeres `build_output/map/` an und trug einen auskommentierten Kopierblock für die `firmware.map`, die es seit dem Wegfall von `[esp8266_base]` nicht mehr gibt
+Feste Prüfstands-IP in `test/README.md`? | **Platzhalter**, alte IP in den datierten Protokollen belassen | 192.168.2.197 war der D1 mini; die neue IP hängt am geliehenen Board
+
+### Offen geblieben
+
+* **Die drei stromlosen D1 minis** (`192.168.2.108`, `.193`, `.197`) — siehe
+  Abschnitt 9. Sie sind jetzt nicht mehr flashbar und tragen Firmware, die auf
+  den produktiven Prefix schreiben würde. Entscheidung des Owners steht aus:
+  entsorgen oder mit Aufkleber „nicht anschließen" ablegen. Bis dahin gilt:
+  **stromlos**.
+* **Die neuen Cache-Zahlen der CI** (Abschnitt 3.4) — sie werden nach dem
+  ersten Lauf dieses Stands gemessen und in `main.yml` nachgetragen, nicht
+  geschätzt. Die alten Zahlen stehen dort als das gekennzeichnet, was sie sind:
+  eine Messung vom 2026-08-12 unter zehn Envs.
