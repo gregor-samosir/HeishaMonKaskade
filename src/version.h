@@ -1,5 +1,102 @@
 #pragma once
 // Changelog:
+// 3.16.0 - NUR NOCH DER ESP32-PFAD. Der ESP8266-Zweig (D1 mini) ist aus Code,
+//         Build-Konfiguration, CI und Doku entfernt. Aus zehn Envs werden
+//         sechs. Vorhaben-Nur-ESP32-Pfad.md.
+//
+//         WARUM. Es geht um Wartbarkeit, nicht um Funktion. Die Konvention
+//         verlangt, vor jedem Merge ALLE Envs lokal zu bauen - das traf
+//         haeufiger als die CI. Dazu kamen zehn #if-Weichen im Code, acht
+//         davon aus dem 3.0.0-Port, zwei neu aus 3.15.0 (HTTPClient-Kopfdatei
+//         und das getrennte Verbindungs-/Lesetimeout des Hydraulikschritts).
+//         Jede davon kostet beim Lesen die Frage, welcher Zweig gerade gilt.
+//
+//         DIE FIRMWARE AENDERT SICH DABEI UM KEIN BYTE. Der ESP8266-Code
+//         stand in #else-Zweigen, die der Praeprozessor beim ESP32-Build
+//         ohnehin nie uebersetzt hat. Genau deshalb ist der Groessenvergleich
+//         hier kein Formalismus, sondern der EINZIGE Weg, einen falsch
+//         aufgeloesten Zweig zu bemerken - ein getroffener aktiver Zweig
+//         faellt sonst erst zur Laufzeit auf.
+//
+//         NACHWEIS (alle sechs Envs, vor und nach dem Aufloesen der Weichen):
+//           text/data/bss Byte fuer Byte identisch
+//           h1: 1034911 / 225430 / 2192951
+//           h2: 1034535 / 225142 / 2192951
+//           xtensa-esp32s3-elf-nm --size-sort: alle 9346 Symbole unveraendert
+//         Ein md5-Vergleich der .bin taugt dafuer NICHT: Der ESP32-App-
+//         Descriptor traegt Compile-Datum und -Uhrzeit im Abbild, zwei Builds
+//         sind hier nie byte-gleich (am 2026-08-25 nachgeprueft).
+//
+//         DIE RUECKFALLEBENE. Bis 3.15.0 war es der D1 mini. Ab jetzt sind es
+//         zwei baugleiche ESP32-Backup-Boards (Ablauf-Backup-Boards.md). Die
+//         sind noch nicht da - fuer die Zwischenzeit ist die Rueckfallebene
+//         nicht weg, sondern EINGEFROREN: Die vier OTA-Abbilder der 3.15.0
+//         liegen im privaten Release und bleiben flashbar. Neu bauen laesst
+//         sich der ESP8266-Stand nur noch aus dem Tag v3.15.0. Owner-
+//         Entscheidung vom 2026-08-27, bewusst so getroffen.
+//
+//         ARDUINOJSON 6.x -> 7 (eigene Etappe, eigener Nachweis). Die
+//         Festlegung auf 6.x hatte als einzige Begruendung den
+//         ESP8266-Footprint. DynamicJsonDocument gibt es in 7 nicht mehr; die
+//         drei Stellen in webfunctions.cpp benutzen jetzt das elastisch
+//         wachsende JsonDocument. Kosten: text +2916, data +200, bss +/-0.
+//
+//         DABEI EINE GEFAHR MIT NEUEM NAMEN. Bis 3.15.0 hiess sie "feste
+//         Dokumentgroesse zu klein geschaetzt" - deshalb der Sprung 512 ->
+//         1024 in 3.15.0, als hydraulik_switch als siebtes Feld dazukam. Jetzt
+//         heisst sie "Allokation fehlgeschlagen". Der Ausgang waere derselbe:
+//         serializeJson schriebe die config.json still unvollstaendig, das
+//         Geraet startet direkt danach neu, und ein fehlendes MQTT-Passwort
+//         faellt erst auf, wenn die Hausteuerung nichts mehr bekommt. Beide
+//         Schreibpfade pruefen deshalb jetzt jsonDoc.overflowed() und
+//         schreiben im Zweifel GAR NICHT - der alte Stand ist besser als ein
+//         halber neuer. Bis 3.15.0 wurde ueberhaupt nicht geprueft.
+//
+//         DER PRUEFSTAND IST JETZT EIN ABLAUF, KEIN BOARD. d1_mini_test war
+//         ein Geraet zum Anstecken; ein drittes ESP32-Board gibt es bewusst
+//         nicht. Stattdessen wird ein Backup-Board geliehen. Der Test-Prefix
+//         panasonic_heat_pump32 BLEIBT dafuer erhalten - Ablauf-Backup-
+//         Boards.md behauptete, er entfalle mit dem toten MQTT-Port 1884; das
+//         ist richtiggestellt. Ein toter Port sperrt gegen den Broker und
+//         ersetzt gerade deshalb nicht das Testen MIT erreichbarem Broker auf
+//         eigenen Topics. Beides zusammen sperrt ein geliehenes Board doppelt.
+//         Bei der RUECKGABE ist die Reihenfolge sicherheitskritisch: erst
+//         mqtt_port auf 1884, DANN die Stufen-Firmware. Umgekehrt saesse das
+//         Backup-Board mit produktivem Prefix am echten Broker und schriebe
+//         parallel zum laufenden Board mit, ohne an einer WP zu haengen.
+//         Vollstaendig in test/README.md.
+//
+//         ELF KOMMENTARE UMGESCHRIEBEN, NICHT GELOESCHT. Sie nennen den
+//         ESP8266 in einer Design-Begruendung (const-Tabellen im RAM, feste
+//         Puffer statt String, kurzer Statusstring, Statusroute ohne
+//         Anmeldung). Die Entscheidungen bleiben richtig, nur ihr Grund ist
+//         weniger zwingend. Wer den Satz statt des Plattformnamens streicht,
+//         nimmt einem spaeteren Leser den Grund und laedt dazu ein, die
+//         Entscheidung versehentlich rueckgaengig zu machen. Zwei Sonderfaelle
+//         stehen ausdruecklich da: In decode.h/commands.cpp lagen const-
+//         Tabellen auf dem ESP8266 im RAM, auf dem ESP32 liegen sie im Flash -
+//         die 400 Byte Ersparnis der Feldreihenfolge bleiben, sie kosten nur
+//         eine andere Ressource. Und der 20-ms-Unterschied je sendContent()
+//         in webfunctions.cpp ist ein Messergebnis, kein Plattformzwang.
+//
+//         SECHS TOTE PIOTOOLS ENTFERNT (espupload, gzip-firmware,
+//         http-uploader, sftp-uploader, strip-floats, obj-dump). Keines war in
+//         extra_scripts eingebunden. obj-dump.py rief seit dem 3.0.0-Port
+//         xtensa-lx106-elf-objdump auf - eine Toolchain, die dieses Projekt
+//         gar nicht mehr installiert; es war also schon vorher kaputt, nur
+//         unbemerkt. Umstellen haette ein weiterhin nicht eingebundenes
+//         Skript ergeben. Groessennachweise laufen hier ueber
+//         xtensa-esp32s3-elf-size und -nm auf der .elf.
+//
+//         WAS AUSDRUECKLICH KEIN GEWINN IST: kein Byte kleiner, keine
+//         Schleife schneller, kein RAM gespart, keine Hosttest-Aenderung. Der
+//         Gewinn ist die Freiheit, alte Designzwaenge zu ueberdenken - nicht
+//         die Pflicht dazu.
+//
+//         FREIGESCHALTET: Analyse-Relais-statt-KNX.md Abschnitt 6.3 ("Die
+//         Rueckfallebene D1 mini kann es nicht") ist damit erledigt. Die
+//         Backup-Boards sind dieselbe Hardware und haben die Relais.
+//
 // 3.15.0 - DER NOTBETRIEB STELLT DIE HYDRAULIK SELBST AUF 1-STUFIG. Neuer
 //         Schritt 1 in BEIDEN Schrittfolgen: Die Firmware legt den
 //         Tasmota-Switch der Hydraulik auf AUS und bricht ab, wenn das nicht
@@ -1309,4 +1406,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.15.0";
+static const char* heishamon_version = "3.16.0";

@@ -6,8 +6,12 @@ der `config.json` mit dem laufenden Board identisch. Dieses Dokument hält fest,
 wie sie eingerichtet werden, was bei jeder Firmware-Änderung mit ihnen passiert
 und was im Ernstfall zu tun ist.
 
-**Stand:** 2026-08-24. Ersetzt die bisherige Rückfallebene aus archivierten
-`firmware.bin`-Dateien und ESP8266-Boards — beides wird nicht mehr gepflegt.
+**Stand:** 2026-08-24, fortgeschrieben am 2026-08-27. Ersetzt die bisherige
+Rückfallebene aus archivierten `firmware.bin`-Dateien und ESP8266-Boards —
+beides wird nicht mehr gepflegt. Der ESP8266-Pfad ist mit **3.16.0** aus dem
+Repo entfernt ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)); die
+vier OTA-Abbilder der 3.15.0 liegen eingefroren im privaten Release und bleiben
+flashbar, bis die Backup-Boards stehen.
 
 ## Die vier Boards
 
@@ -111,11 +115,25 @@ produktive Board seiner Stufe.
 ## Was damit entfällt
 
 * **Der ESP8266-Pfad.** Die vier `d1_mini_*`-Envs, `esp8266_base`,
-  `stage_test_esp8266` und die Plattformschicht dafür werden nicht mehr
-  gepflegt. Die CI baut künftig nur noch die vier ESP32-Envs.
-* **Der eigene Test-Prefix** `panasonic_heat_pump32` samt `stage_test_esp32` und
-  den Envs `heishamon_esp32_usb`/`_ota`. Getestet wird mit der echten
-  Stufen-Firmware; die Barriere ist der tote Port, nicht mehr ein zweiter Prefix.
+  `stage_test_esp8266` und die Plattformschicht dafür sind mit 3.16.0 entfernt.
+  Die CI baut seitdem sechs Envs.
 * **Das Binärarchiv der Rückfallstände.** Ein Rollback heißt jetzt: Board
   tauschen oder aus dem Git-Tag neu bauen. Firmware-Binaries mit AP- und
   Notbetriebspasswort müssen dafür nicht mehr aufbewahrt werden.
+
+### Richtigstellung (2026-08-25): der Test-Prefix bleibt
+
+An dieser Stelle stand, mit dem toten Port entfalle auch der eigene Test-Prefix
+`panasonic_heat_pump32` samt `stage_test_esp32` und den Envs
+`heishamon_esp32_usb`/`_ota`. **Das gilt nicht.** Ein toter MQTT-Port sperrt ein
+Board gegen den Broker — aber genau deshalb ersetzt er nicht die Möglichkeit,
+mit **erreichbarem** Broker zu testen, ohne auf den produktiven Topics zu
+sitzen. Das Prüfstand-Protokoll vom 2026-08-21
+([`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md))
+brauchte genau das.
+
+Test-Prefix und die beiden Test-Envs bleiben deshalb erhalten. Sie sind der
+Grund, warum ein geliehenes Backup-Board **doppelt** gesperrt ist: falsches
+Prefix *und* toter Port. Der vollständige Ausleih- und Rückgabeablauf steht in
+[`test/README.md`](test/README.md) unter „Prüfstand aufsetzen"; die Reihenfolge
+bei der Rückgabe ist sicherheitskritisch.

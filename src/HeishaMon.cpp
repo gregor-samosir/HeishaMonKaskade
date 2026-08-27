@@ -82,7 +82,7 @@ uint8_t serial_data[MAXDATASIZE]; // uint8_t statt char: Bytes > 127, kein Vorze
 unsigned int serial_length = 0; // int instead of byte: must be able to reach MAXDATASIZE for the overflow check
 
 // store actual values in a fixed char array: permanent String objects
-// fragment the heap on long running ESP8266 devices
+// fragment the heap on a device that runs for months
 char actual_data[NUMBEROFTOPICS][MAXVALUELEN];
 
 // log message
@@ -148,10 +148,7 @@ byte cleanCommand[QUERYSIZE];
 /*****************************************************************************/
 void setupOTA()
 {
-#if !defined(ESP32)
-  ArduinoOTA.setPort(8266); // ESP32 keeps default 3232 (matches espota upload)
-#endif
-  ArduinoOTA.setHostname(wifi_hostname); // Hostname defaults to esp8266-[ChipID]
+  ArduinoOTA.setHostname(wifi_hostname); // default would be esp32-[ChipID]
   ArduinoOTA.setPassword(ota_password);  // Set authentication
   ArduinoOTA.onStart([]() {});
   ArduinoOTA.onEnd([]() {});
@@ -306,16 +303,13 @@ void setupHttp()
 /*****************************************************************************/
 void setupSerial()
 {
-  Serial.begin(115200); // ESP8266: boot debug before swap / ESP32: USB CDC console
-#if defined(ESP32)
-  delay(100); // let USB CDC come up
-#endif
+  Serial.begin(115200); // USB CDC console
+  delay(100);           // let USB CDC come up
   Serial.flush();
 }
 
 void switchSerial()
 {
-#if defined(ESP32)
   // heatpump on its own UART - USB console stays available in parallel
   Serial.println("Starting heatpump serial on Serial1 (RX18/TX17). USB debug stays alive.");
   heatpumpSerial.setRxBufferSize(MAXDATASIZE);
@@ -325,17 +319,6 @@ void switchSerial()
   digitalWrite(ENABLEOTPIN, LOW); // keep unused OpenTherm 24V booster off
   pinMode(ENABLEPIN, OUTPUT);
   digitalWrite(ENABLEPIN, HIGH); // enable mosfet for TX line to heatpump
-#else
-  Serial.println("Switch serial to heatpump. Look for debug on mqtt log topic.");
-  // serial to cn-cnt
-  heatpumpSerial.flush();
-  heatpumpSerial.end();
-  heatpumpSerial.begin(9600, SERIAL_8E1);
-  heatpumpSerial.flush();
-  heatpumpSerial.swap();       // swap to gpio13 (D7) and gpio15 (D8)
-  pinMode(ENABLEPIN, OUTPUT);  // enable gpio15 after boot using gpio5 (D1)
-  digitalWrite(ENABLEPIN, HIGH);
-#endif
 }
 
 /*****************************************************************************/
@@ -871,11 +854,7 @@ void handle_telnetstream()
 /*****************************************************************************/
 void setupTime()
 {
-#if defined(ESP32)
   configTzTime(TIME_ZONE, "0.de.pool.ntp.org");
-#else
-  configTime(TIME_ZONE, "0.de.pool.ntp.org");
-#endif
   // wait max. 30 s for NTP, otherwise continue without valid time
   // (timestamps then start at 1970, but heatpump polling must not be blocked)
   unsigned long start = millis();
@@ -943,9 +922,6 @@ void loop()
 {
   ArduinoOTA.handle();
   httpServer.handleClient();
-#if !defined(ESP32)
-  MDNS.update(); // not needed/available on ESP32
-#endif
 
   handle_telnetstream();
   check_wifi();
@@ -973,7 +949,7 @@ void loop()
       stilleBeendetSekunden = 0;
     }
 
-    // uint32_t und nicht unsigned long: Auf ESP8266 und ESP32 ist beides
+    // uint32_t und nicht unsigned long: Auf dem ESP32 ist beides
     // 32 Bit, aber die Wacht rechnet durchgaengig in uint32_t (siehe
     // verbindung.h). Ein Zeigercast zwischen beiden Typen waere genau die
     // Falle, die dieser Header vermeidet.

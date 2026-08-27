@@ -49,23 +49,77 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
 
-## Pruefstand aufsetzen
+## Pruefstand aufsetzen - ein Backup-Board leihen
 
-Ein beliebiges ESP8266-Board, **ohne Waermepumpe**. Der Nachweis braucht keine
-Gegenstelle: Der Hexlog gibt das Telegramm aus, bevor es auf die Leitung geht.
+Bis 3.15.0 war der Pruefstand ein eigenes Board (`d1_mini_test`, D1 mini,
+192.168.2.197), das man einfach anstecken konnte. Mit 3.16.0 ist der
+ESP8266-Pfad weg, und ein drittes ESP32-Board gibt es bewusst nicht. Der
+Pruefstand ist seitdem eines der beiden **Backup-Boards, leihweise**
+([`Ablauf-Backup-Boards.md`](../Ablauf-Backup-Boards.md)).
 
-```bash
-pio run -e d1_mini_test -t upload      # eigenes MQTT-Prefix, s. platformio.ini
-```
+Eine Waermepumpe braucht der Pruefstand nach wie vor nicht: Der Hexlog gibt das
+Telegramm aus, bevor es auf die Leitung geht.
 
-Das eigene Prefix ist Pflicht - ohne Stufen-Build-Flags greift der Fallback
-`panasonic_heat_pump` aus `Topics.cpp`, und der Pruefling saesse auf dem LWT-
-und state-Pfad der produktiven WP1. Falls das Board noch keinen MQTT-Server
-kennt, laesst er sich ohne Neuflashen setzen:
+### Warum das ueberhaupt sicher ist
 
-```bash
-curl -u admin:heisha "http://<ip>/settings?mqtt_server=192.168.2.147"
-```
+`HEISHA_MQTT_PREFIX` ist ein reines Build-Flag - es wechselt mit der Firmware.
+Hostname, MQTT-Port, Broker und Zugangsdaten stehen dagegen in der
+`config.json` in LittleFS, und `loadConfigValue()` ueberschreibt damit beim
+Start die Build-Vorgaben. LittleFS ueberlebt OTA wie USB-Flash, die Partitionen
+sind getrennt (`min_spiffs.csv`).
+
+Groesse | Herkunft | Beim Flashen mit Test-Firmware
+:--- | :--- | :---
+MQTT-Prefix | Build-Flag | **wechselt** auf `panasonic_heat_pump32`
+Hostname | `config.json` schlaegt Build-Flag | bleibt `HeishaMon32_h1b`
+MQTT-Port | `config.json` | bleibt **1884**
+Broker, Zugangsdaten, WLAN | `config.json` | bleiben
+
+Ein frisch mit Test-Firmware bespieltes Backup-Board ist damit **doppelt
+gesperrt**: falsches Prefix *und* toter Port. Es kann in diesem Zustand nichts
+anrichten.
+
+### Ausleihe
+
+1. Backup-Board holen und mit Strom versorgen.
+2. `pio run -e heishamon_esp32_usb -t upload` - Prefix `panasonic_heat_pump32`.
+3. Ueber `http://<ip>/settings` den **MQTT-Port auf 1883** setzen. Erst jetzt
+   erreicht der Pruefling den Broker - auf dem Test-Prefix, an das der
+   Node-RED-Verteiler nichts sendet.
+4. Testen.
+
+Der Hostname bleibt dabei `HeishaMon32_h1b`. Das ist kein Fehler, sondern die
+zweite Sicherung: Er ist zugleich die MQTT-Client-ID und kollidiert mit keinem
+produktiven Board.
+
+### Rueckgabe - die Reihenfolge ist sicherheitskritisch
+
+> **Erst den Port auf 1884 stellen, dann die Stufen-Firmware flashen.
+> Nie umgekehrt.**
+
+Nach Schritt 3 steht in der `config.json` `mqtt_port = 1883`. Wird in diesem
+Zustand die Stufen-Firmware aufgespielt, wechselt das Prefix zurueck auf
+`panasonic_heat_pump` - und das Backup-Board sitzt mit **produktivem Prefix auf
+dem echten Broker**. Es publiziert dann `state`- und `LWT`-Topics und abonniert
+die `set`-Topics parallel zum laufenden Board, ohne ueberhaupt an einer
+Waermepumpe zu haengen. Der abweichende Hostname verhindert nur den
+gegenseitigen Client-ID-Rauswurf, nicht das Mitschreiben.
+
+1. Ueber `/settings` des Prueflings **`mqtt_port` auf 1884** setzen. Das Geraet
+   startet neu und erreicht den Broker nicht mehr.
+2. Erst danach `pio run -e heishamon_esp32_h1_usb -t upload` (bzw. `_h2_usb`).
+3. Gegenprobe: `http://<ip>/settings` oeffnen und Port **1884** sowie Hostname
+   `HeishaMon32_h1b` ablesen, bevor das Board zurueck in die Schublade geht.
+   Das ist kein Formalismus - es ist die einzige Stelle, an der ein Fehler in
+   Schritt 1 noch auffaellt.
+4. Stromlos ablegen.
+
+### Was die Ausleihe kostet
+
+Solange ein Backup-Board Pruefstand ist, hat die betreffende Stufe **keinen
+Notanker**. Deshalb: immer nur **ein** Board gleichzeitig ausleihen, und vorher
+kurz pruefen, ob an der eigenen Stufe gerade etwas ansteht (Rollout,
+Heizperiode, Abwesenheit). Ein Pruefstand ist selten dringend.
 
 ## Ausfuehren
 
@@ -84,10 +138,15 @@ c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindo
 c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test notbetrieb_test.cpp && /tmp/notbetrieb_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
 
-./hexlog_test.py     --esp 192.168.2.197 --broker 192.168.2.147
-./verteiler_test.py  --esp 192.168.2.197
+./hexlog_test.py     --esp <ip-des-pruefstands> --broker 192.168.2.147
+./verteiler_test.py  --esp <ip-des-pruefstands>
 ./produktiv_mitschnitt.py --esp 192.168.2.120     # nur mithoeren
 ```
+
+Die IP des Pruefstands ist die des geliehenen Backup-Boards (DHCP, ueber den
+Router oder den mDNS-Namen `HeishaMon32_h1b.local` zu finden). Bis 3.15.0 stand
+hier die feste 192.168.2.197 des D1-mini-Pruefstands - sie taucht in den
+datierten Nachweisen weiter unten deshalb noch auf.
 
 Die beiden sendenden Tests weigern sich, gegen ein Prefix ohne `test` im Namen
 zu laufen.
@@ -365,9 +424,9 @@ Der Test deckt drei Dinge ab, die sich sonst nirgends belegen liessen:
   sich das nicht. Eine Gegenprobe im Test zeigt, dass die naive Schreibweise
   `now < start + limit` genau an dieser Naht falsch liegt.
 
-Deshalb rechnen die Regeln in `uint32_t` und nicht in `unsigned long`: auf
-ESP8266 und ESP32 ist beides 32 Bit, auf dem Mac waere `unsigned long` 64 Bit
-und der Ueberlauftest wuerde gegen nichts pruefen.
+Deshalb rechnen die Regeln in `uint32_t` und nicht in `unsigned long`: auf dem
+ESP32 ist beides 32 Bit, auf dem Mac waere `unsigned long` 64 Bit und der
+Ueberlauftest wuerde gegen nichts pruefen.
 
 Gegenprobe gemacht: mit ungedeckeltem Fenster faellt der Test mit 10
 Abweichungen durch. **Was er nicht abdeckt**, sind die Zustandsuebergaenge in

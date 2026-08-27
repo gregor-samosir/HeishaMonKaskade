@@ -1,33 +1,38 @@
+# Kopiert die fertige firmware.bin nach build_output/firmware/<env>.bin, damit
+# die Abbilder aller Envs nebeneinander liegen und am Namen erkennbar sind
+# (.pioenvs/<env>/firmware.bin heisst in jedem Env gleich).
+#
+# Als einziges Skript aus piotools/ ist es in platformio.ini eingebunden. Die
+# uebrigen sechs (Upload- und objdump-Helfer aus dem Original-HeishaMon) sind
+# in 3.16.0 entfernt worden: Sie waren nirgends referenziert, und obj-dump.py
+# rief seit dem ESP32-Port eine Toolchain auf, die dieses Projekt gar nicht
+# mehr installiert. Groessennachweise laufen hier ueber
+# xtensa-esp32s3-elf-size und -nm auf der .elf.
+
 Import('env')
 import os
 import shutil
 
 OUTPUT_DIR = "build_output{}".format(os.path.sep)
 
-def bin_map_copy(source, target, env):
+
+def bin_copy(source, target, env):
+    # .pioenvs/<env>/firmware.bin -> der Env-Name steht an zweiter Stelle
     variant = str(target[0]).split(os.path.sep)[1]
-    
-    # check if output directories exist and create if necessary
-    if not os.path.isdir(OUTPUT_DIR):
-        os.mkdir(OUTPUT_DIR)
 
-    for d in ['firmware', 'map']:
-        if not os.path.isdir("{}{}".format(OUTPUT_DIR, d)):
-            os.mkdir("{}{}".format(OUTPUT_DIR, d))
+    # Zielverzeichnis anlegen, falls es den ersten Build noch nicht gab
+    firmware_dir = "{}firmware".format(OUTPUT_DIR)
+    if not os.path.isdir(firmware_dir):
+        os.makedirs(firmware_dir)
 
-    # create string with location and file names based on variant
-    map_file = "{}map{}{}.map".format(OUTPUT_DIR, os.path.sep, variant)
-    bin_file = "{}firmware{}{}.bin".format(OUTPUT_DIR, os.path.sep, variant)
+    bin_file = "{}{}{}.bin".format(firmware_dir, os.path.sep, variant)
 
-    # check if new target files exist and remove if necessary
-    for f in [map_file, bin_file]:
-        if os.path.isfile(f):
-            os.remove(f)
+    # Vorgaenger entfernen, sonst blieb bei einem Fehlschlag der alte Stand
+    # liegen und saehe wie ein frischer Build aus
+    if os.path.isfile(bin_file):
+        os.remove(bin_file)
 
-    # copy firmware.bin to firmware/<variant>.bin
     shutil.copy(str(target[0]), bin_file)
 
-    # copy firmware.map to map/<variant>.map
-    # shutil.copy("firmware.map", map_file)
 
-env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", [bin_map_copy])
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", [bin_copy])

@@ -1,9 +1,11 @@
 name: CI
 
 # Nur noch main, nicht mehr jeder Branch. Die Projektkonvention verlangt
-# ohnehin, vor dem Merge alle zehn Envs lokal zu bauen und die Hosttests laufen
+# ohnehin, vor dem Merge alle sechs Envs lokal zu bauen und die Hosttests laufen
 # zu lassen - die CI ist damit Rueckversicherung, nicht Erstpruefung. Ihr Zweck
-# bleibt das Absichern der ESP8266-Rueckfallebene, und die steht in main.
+# ist seit 3.16.0 (Wegfall der ESP8266-Rueckfallebene) das, was beim lokalen
+# Bauen am ehesten uebergangen wird: die Envs der jeweils ANDEREN Stufe und die
+# beiden Test-Envs. Wer an H1 arbeitet, baut selten H2 mit.
 # workflow_dispatch bleibt, damit ein Branch bei Bedarf trotzdem gezielt durch
 # die CI geschickt werden kann, ohne diese Datei anzufassen (Actions -> CI ->
 # Run workflow -> Branch waehlen).
@@ -27,18 +29,20 @@ jobs:
         with:
           python-version: '3.x'
 
-      # Cache für Toolchains und Bibliotheken (ESP8266 + ESP32, 1163 MB).
+      # Cache für Toolchains und Bibliotheken (nur noch ESP32).
       #
       # WARUM er hier steht - nicht wegen der Laufzeit. Am 2026-08-12 gemessen,
-      # Lauf #6 (kalt) gegen #7 (warm) bei identischem Code: Job ~287 s -> ~246 s,
-      # also gut 40 s von rund vier Minuten, und davon ist ein Teil Streuung des
-      # Runners (pip allein schwankte um 11 s). Der Hauptposten sind die ~220 s
-      # Kompilierzeit für zehn Envs, die der Cache nicht berührt; das
-      # Wiederherstellen der 1163 MB kostet umgekehrt selbst 11 s.
+      # Lauf #6 (kalt) gegen #7 (warm) bei identischem Code und dem damaligen
+      # Stand von zehn Envs: Job ~287 s -> ~246 s, also gut 40 s von rund vier
+      # Minuten, und davon ist ein Teil Streuung des Runners (pip allein
+      # schwankte um 11 s). Der Hauptposten war die Kompilierzeit, die der Cache
+      # nicht berührt; das Wiederherstellen der damals 1163 MB kostete umgekehrt
+      # selbst 11 s. Mit dem Wegfall des espressif8266-Anteils in 3.16.0 werden
+      # beide Zahlen kleiner - siehe die Messung darunter.
       # Der Cache bleibt, weil er die CI von den Espressif-Downloadservern
       # unabhängig macht: sind die nicht erreichbar, läuft sie trotzdem durch.
-      # Für eine CI, deren Zweck das Absichern der ESP8266-Rückfallebene ist,
-      # wiegt das mehr als eine halbe Minute.
+      # Das wiegt mehr als eine halbe Minute - eine Rückversicherung, die nur
+      # läuft, wenn ein fremder Server antwortet, ist keine.
       #
       # Der Schlüssel hängt an platformio.ini, weil dort steht, welche
       # Plattformen und Bibliotheken gebraucht werden. Zwei Folgen davon:
@@ -129,8 +133,10 @@ jobs:
           python3 test/css_klassen_test.py
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).
-      # Sonst bleibt die ESP8266-Rückfallebene ungebaut und könnte unbemerkt
-      # kaputtgehen - auffallen würde das erst, wenn man sie im Notfall braucht.
+      # Sonst bleiben die Envs der anderen Stufe und die beiden Test-Envs
+      # ungebaut und könnten unbemerkt kaputtgehen - auffallen würde das erst
+      # beim naechsten Rollout auf H2 oder beim naechsten Pruefstandslauf, also
+      # genau dann, wenn man sie braucht.
       # Die Liste kommt aus platformio.ini selbst: neue Envs werden dadurch
       # automatisch mitgebaut, und es gibt keine zweite Liste, die hinter der
       # ersten zurückbleiben kann.

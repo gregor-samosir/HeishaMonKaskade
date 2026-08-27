@@ -74,9 +74,11 @@ typedef void (*wideFP)(const StateTopic *, uint8_t *, char *);
 /* mit dem Original-Projekt. Indiziert wird ueber die Position (actual_data,  */
 /* Web-Tabelle), ausgegeben wird 'number'.                                    */
 /*****************************************************************************/
-/* Feldreihenfolge: die beiden Bytes stehen bewusst nebeneinander. Auf dem     */
-/* ESP8266 liegen const-Tabellen im RAM, und mit einem Zeiger dazwischen       */
-/* kaeme je Zeile 3 Byte Padding dazu - ueber 99 Zeilen fast 400 Byte.         */
+/* Feldreihenfolge: die beiden Bytes stehen bewusst nebeneinander. Mit einem   */
+/* Zeiger dazwischen kaeme je Zeile 3 Byte Padding dazu - ueber 99 Zeilen      */
+/* fast 400 Byte. Bis 3.15.0 waren das 400 Byte RAM (auf dem ESP8266 lagen     */
+/* const-Tabellen im RAM), auf dem ESP32 sind es 400 Byte Flash. Die           */
+/* Ersparnis bleibt, sie kostet nur eine andere Ressource.                     */
 struct StateTopic
 {
   byte number;       // TOPn - nur fuer Anzeige und Log, NICHT der Index

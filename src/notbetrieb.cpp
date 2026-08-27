@@ -3,14 +3,8 @@
 #include "Topics.h"
 #include "decode.h" // state_topic_index()
 
-// Der Hydraulikschritt spricht den Tasmota-Switch ueber HTTP an. Beide
-// Plattformen bringen denselben HTTPClient mit, nur unter verschiedenen
-// Kopfdateien - dieselbe Weiche wie bei den WiFi-Kopfdateien in HeishaMon.h.
-#if defined(ESP32)
+// Der Hydraulikschritt spricht den Tasmota-Switch ueber HTTP an.
 #include <HTTPClient.h>
-#else
-#include <ESP8266HTTPClient.h>
-#endif
 
 /*****************************************************************************/
 /* Notbetrieb - die Firmware-Anbindung                                       */
@@ -392,7 +386,7 @@ enum HydraulikAntwort
 /*   cmnd=Power       ->  {"POWER":"ON"}  oder  {"POWER":"OFF"}              */
 /*   cmnd=Power%20Off ->  {"POWER":"OFF"}                                    */
 /* Es genuegt, auf "OFF" bzw. "ON" zu pruefen; ein JSON-Parser wird dafuer    */
-/* nicht gebraucht und waere auf einem ESP8266 der teurere Weg.               */
+/* nicht gebraucht und waere der teurere Weg.                                 */
 /*                                                                           */
 /* Die Antwort wird in einen FESTEN Puffer gelesen statt in einen String:     */
 /* Sie ist rund 15 Byte lang, und der Rest der Firmware kommt seit 2.3.0      */
@@ -448,13 +442,11 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   HTTPClient http;
 
   http.setReuse(false);
-  http.setTimeout(HYDRAULIK_TIMEOUT_MS); // Lesetimeout
-#if defined(ESP32)
-  // ESP32 trennt Verbindungs- und Lesetimeout; ESP8266 deckt mit setTimeout()
-  // beides ab. Ohne diese Zeile stuende die Blockade bei einem stromlosen
-  // Switch auf den ESP32-Vorgabewerten statt auf 1,5 s.
-  http.setConnectTimeout(HYDRAULIK_TIMEOUT_MS);
-#endif
+  // Verbindungs- und Lesetimeout sind getrennt und muessen BEIDE gesetzt
+  // werden. Ohne die zweite Zeile stuende die Blockade bei einem stromlosen
+  // Switch auf dem Core-Vorgabewert statt auf HYDRAULIK_TIMEOUT_MS.
+  http.setTimeout(HYDRAULIK_TIMEOUT_MS);        // Lesetimeout
+  http.setConnectTimeout(HYDRAULIK_TIMEOUT_MS); // Verbindungsaufbau
 
   if (!http.begin(client, url))
     return HYDRAULIK_UNKLAR;
@@ -486,7 +478,7 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   /* 3. getString() loest die Chunks zwar sauber auf, allokiert aber auf dem  */
   /*    Heap in der Groesse der Antwort. Zeigt die eingetragene Adresse aus   */
   /*    Versehen auf einen richtigen Webserver, waere das eine ganze          */
-  /*    HTML-Seite - auf einem ESP8266 mit rund 30 kB freiem Heap genau im    */
+  /*    HTML-Seite - eine Heap-Allokation unbekannter Groesse genau im        */
   /*    Notfall der falsche Moment.                                           */
   /*                                                                          */
   /* Deshalb: fester Puffer, harte Frist, und Schluss, sobald die Auskunft    */
@@ -494,9 +486,9 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   /***************************************************************************/
   char antwort[64] = "";
   size_t gelesen = 0;
-  // Stream* statt WiFiClient*: Der konkrete Typ hinter getStreamPtr() heisst
-  // auf ESP8266 und ESP32 nicht gleich (und im ESP32-Core 3.x noch einmal
-  // anders). read() steht in der gemeinsamen Basisklasse.
+  // Stream* statt WiFiClient*: Der konkrete Typ hinter getStreamPtr() hat
+  // sich zwischen den ESP32-Core-Staenden schon geaendert. read() steht in
+  // der gemeinsamen Basisklasse und bleibt davon unberuehrt.
   Stream *stream = http.getStreamPtr();
   const uint32_t frist = millis() + HYDRAULIK_LESEFRIST_MS;
   while (stream && gelesen < sizeof(antwort) - 1 && (int32_t)(millis() - frist) < 0)
@@ -811,7 +803,7 @@ NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void)
 /*                                                                           */
 /* Bewusst maschinenlesbar und kurz - die Seite fragt ihn alle zwei Sekunden */
 /* ab und macht daraus Klartext. Je kuerzer die Antwort, desto weniger       */
-/* Arbeit fuer einen ESP8266, der nebenher die Waermepumpe abfragt.          */
+/* Arbeit fuer das Geraet, das nebenher die Waermepumpe abfragt.             */
 /*                                                                           */
 /* Das fuenfte Feld ist der Sperrgrund. Mit ihm gibt die Seite den Knopf von */
 /* selbst frei, sobald der KNX-Schalter auf Heizen steht - ohne dass jemand  */

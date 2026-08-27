@@ -127,11 +127,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 
   Serial.println("mounting LittleFS...");
 
-#if defined(ESP32)
-  if (LittleFS.begin(true)) // ESP32: format on first mount
-#else
-  if (LittleFS.begin())
-#endif
+  if (LittleFS.begin(true)) // format on first mount
   {
     Serial.println("Mount file system");
     if (LittleFS.exists("/config.json"))
@@ -150,7 +146,11 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
 
         size_t read = configFile.readBytes(buf.get(), size);
         buf[read] = '\0';
-        DynamicJsonDocument jsonDoc(1024);
+        // Seit 3.16.0 (ArduinoJson 7) waechst das Dokument elastisch; die
+        // frueher noetige feste Groesse ist entfallen. Beim LESEN war sie
+        // ohnehin unkritisch: Passte die Datei nicht, kam ein
+        // DeserializationError, den der else-Zweig unten abfaengt.
+        JsonDocument jsonDoc;
         DeserializationError error = deserializeJson(jsonDoc, buf.get());
         serializeJson(jsonDoc, Serial);
         if (!error)
@@ -241,20 +241,16 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   (void)strlcpy(hydraulik_switch, custom_hydraulik_switch.getValue(), CONFIG_FIELD_LEN);
 
   // Set hostname on wifi rather than ESP_xxxxx
-#if defined(ESP32)
   WiFi.setHostname(wifi_hostname);
-  // modem sleep breaks inbound connections on ESP32 (ping/http time out
-  // while outbound mqtt keeps working) - disable it, device is mains powered
+  // modem sleep breaks inbound connections (ping/http time out while outbound
+  // mqtt keeps working) - disable it, device is mains powered
   WiFi.setSleep(false);
-#else
-  WiFi.hostname(wifi_hostname);
-#endif
 
   // save the custom parameters to FS
   if (shouldSaveConfig)
   {
     Serial.println("Save config");
-    DynamicJsonDocument jsonDoc(1024);
+    JsonDocument jsonDoc;
     jsonDoc["wifi_hostname"] = wifi_hostname;
     jsonDoc["ota_password"] = ota_password;
     jsonDoc["mqtt_server"] = mqtt_server;
@@ -263,15 +259,27 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
 
-    File configFile = LittleFS.open("/config.json", "w");
-    if (!configFile)
+    // Ueberlaufpruefung, siehe die ausfuehrliche Begruendung in handleSettings:
+    // Eine halb geschriebene config.json kostet nach dem Neustart womoeglich
+    // das MQTT-Passwort. Lieber den alten Stand behalten.
+    if (jsonDoc.overflowed())
     {
-      Serial.println("Failed to open config file for writing");
+      Serial.println("Config document overflowed, keeping previous config.json");
     }
-
-    serializeJson(jsonDoc, Serial);
-    serializeJson(jsonDoc, configFile);
-    configFile.close();
+    else
+    {
+      File configFile = LittleFS.open("/config.json", "w");
+      if (!configFile)
+      {
+        Serial.println("Failed to open config file for writing");
+      }
+      else
+      {
+        serializeJson(jsonDoc, Serial);
+        serializeJson(jsonDoc, configFile);
+        configFile.close();
+      }
+    }
     // end save
   }
 
@@ -422,7 +430,7 @@ void handleRoot(WebServerClass *httpServer)
   httpServer->sendContent_P(verbindungJS);
   // Die Startseite fuehrt die Verbindungszeile im 30-s-Takt der Tabelle nach,
   // nicht alle zwei Sekunden wie die Notbetriebsseite: Hier steht keine
-  // Entscheidung an, und der ESP8266 fragt nebenher die Waermepumpe ab.
+  // Entscheidung an, und das Geraet fragt nebenher die Waermepumpe ab.
   httpServer->sendContent_P(verbindungStartJS);
   // refreshJS schliesst den <head> und oeffnet den <body> - alles, was in den
   // Kopf gehoert, muss davor stehen.
@@ -451,14 +459,14 @@ void handleRoot(WebServerClass *httpServer)
 /* Table rows, collected into TCP-sized blocks                               */
 /*                                                                           */
 /* One sendContent() per row used to cost about one network round trip on    */
-/* the ESP32 (~20 ms each): its core pushes every write out as its own       */
-/* packet and waits for the ack, so 99 rows added up to ~1.9 s of "Loading". */
-/* The ESP8266 core coalesces writes and never showed the effect. Filling a  */
-/* buffer close to the TCP segment size first turns those 99 sends into      */
-/* about six on both platforms.                                              */
+/* the ESP32 (~20 ms each, measured before 3.4.0): the core pushes every     */
+/* write out as its own packet and waits for the ack, so 99 rows added up to */
+/* ~1.9 s of "Loading". Filling a buffer close to the TCP segment size first */
+/* turns those 99 sends into about six. (The ESP8266 core, supported until   */
+/* 3.15.0, coalesced writes and never showed the effect.)                    */
 /*                                                                           */
 /* sendbuf is static on purpose: 1400 bytes would be a large share of the    */
-/* ESP8266 stack, and this handler is only ever entered from loop().         */
+/* stack, and this handler is only ever entered from loop().                 */
 /*****************************************************************************/
 #define TABLE_SENDBUF 1400 // just below the usual TCP MSS of 1460
 
@@ -559,14 +567,19 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   // check if POST was made with save settings, if yes then save and reboot
   if (httpServer->args())
   {
-    // 1024 statt der frueheren 512 (seit 3.15.0): Mit dem siebten Feld
-    // (hydraulik_switch) reichten 512 Byte nicht mehr sicher. Die Werte
-    // kommen als String aus arg() und werden ins Dokument KOPIERT - je Feld
-    // bis zu 40 Byte plus Verwaltung. Laeuft das Dokument ueber, schreibt
-    // serializeJson die config.json still unvollstaendig, und nach dem
-    // Neustart fehlt womoeglich das MQTT-Passwort. Dieselbe Groesse wie in
-    // setupWifi, wo dasselbe Dokument entsteht.
-    DynamicJsonDocument jsonDoc(1024);
+    // Bis 3.15.0 stand hier eine feste Dokumentgroesse (zuletzt 1024 Byte, davor
+    // 512), und die musste bei jedem neuen Feld nachgerechnet werden. Mit
+    // ArduinoJson 7 waechst das Dokument elastisch - die Rechnerei entfaellt,
+    // die GEFAHR aber nicht: Sie heisst jetzt nicht mehr "Groesse zu klein
+    // geschaetzt", sondern "Allokation fehlgeschlagen". Der Ausgang waere
+    // derselbe: serializeJson schriebe die config.json still unvollstaendig,
+    // und nach dem Neustart fehlte womoeglich das MQTT-Passwort.
+    //
+    // Deshalb wird unten overflowed() geprueft und im Zweifel GAR NICHT
+    // geschrieben. Der alte Stand ist besser als ein halber neuer: Das Geraet
+    // startet nach dem Speichern neu, und ein fehlendes MQTT-Passwort faellt
+    // erst auf, wenn die Hausteuerung nichts mehr bekommt.
+    JsonDocument jsonDoc;
     jsonDoc["wifi_hostname"] = wifi_hostname;
     jsonDoc["ota_password"] = ota_password;
     jsonDoc["mqtt_server"] = mqtt_server;
@@ -625,11 +638,12 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
       jsonDoc["hydraulik_switch"] = httpServer->arg("hydraulik_switch");
     }
 
-  #if defined(ESP32)
-  if (LittleFS.begin(true)) // ESP32: format on first mount
-#else
-  if (LittleFS.begin())
-#endif
+    // Nicht schreiben, wenn eine Allokation fehlgeschlagen ist (Begruendung
+    // oben beim Anlegen des Dokuments). Faellt der Code hier durch, bleibt die
+    // bisherige config.json stehen, es wird NICHT neu gestartet, und der
+    // Browser bekommt die Settings-Seite mit den alten Werten zurueck - der
+    // Nutzer sieht also, dass nichts uebernommen wurde.
+    if (!jsonDoc.overflowed() && LittleFS.begin(true)) // format on first mount
     {
       File configFile = LittleFS.open("/config.json", "w");
       if (configFile)
@@ -759,7 +773,7 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 // Alle zwei Sekunden den Kurzstatus holen und daraus Klartext machen. Die
 // Antwort ist "Zustand;Schritt;Schritte;fehlendMaske;Sperre" plus die vier
 // hinten angehaengten Felder (Lage, Dauertext, Kurvenwarnung, Abbruchgrund) -
-// so kurz wie moeglich, weil der ESP8266 nebenher die Waermepumpe abfragt.
+// so kurz wie moeglich, weil das Geraet nebenher die Waermepumpe abfragt.
 //
 // Die Seite fuehrt Knopf UND Sperrhinweis nach, nicht nur das Ergebnis: Steht
 // die Anlage auf Kuehlen und jemand legt den KNX-Schalter um, gibt sich der
@@ -970,7 +984,7 @@ void handleNotbetriebStart(WebServerClass *httpServer)
 /*                                                                           */
 /* Sie gibt nur Zustand und Schrittzahl heraus und aendert nichts. Mit        */
 /* Anmeldung muesste die Seite bei jeder Abfrage alle zwei Sekunden erneut    */
-/* authentifizieren, was auf einem ESP8266 spuerbar ist - und wer die Zahl    */
+/* authentifizieren, was auf dem Geraet spuerbar ist - und wer die Zahl       */
 /* "3 von 6" lesen kann, kann damit nichts anfangen, was er nicht ohnehin     */
 /* auf der Startseite saehe.                                                  */
 /*****************************************************************************/
@@ -988,8 +1002,8 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   //
   // Warum die Startseite dieselbe Route abfragt, obwohl "notbetrieb" darin
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
-  // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere auf
-  // einem ESP8266 der teurere Weg. Format nach der Erweiterung:
+  // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere der
+  // teurere Weg. Format nach der Erweiterung:
   //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))

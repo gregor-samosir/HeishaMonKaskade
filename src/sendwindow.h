@@ -45,7 +45,7 @@
 /* waere an dieser Stelle falsch.                                            */
 /*                                                                           */
 /* uint32_t und NICHT unsigned long, obwohl millis() unsigned long liefert:  */
-/* auf ESP8266 und ESP32 sind beide 32 Bit, auf dem Mac ist unsigned long    */
+/* auf dem ESP32 sind beide 32 Bit, auf dem Mac ist unsigned long            */
 /* aber 64 Bit. Der Hosttest wuerde den Ueberlauf sonst mit einer Breite     */
 /* pruefen, die es auf dem Geraet gar nicht gibt - also gegen nichts.        */
 /*****************************************************************************/

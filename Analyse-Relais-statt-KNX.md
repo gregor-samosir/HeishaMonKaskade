@@ -235,7 +235,14 @@ KNX-Aktor weiter. Danach nicht mehr. Das ist der einzige Punkt, an dem der
 Umbau echte Redundanz kostet, und er ist mit dem Handschalter aus Abschnitt 5
 zu bezahlen.
 
-### 6.3 Die Rückfallebene D1 mini kann es nicht
+### 6.3 Die Rückfallebene D1 mini kann es nicht — ERLEDIGT (2026-08-27)
+
+> **Dieser Punkt ist mit 3.16.0 erledigt.** Der ESP8266-Pfad ist aus dem Repo
+> entfernt ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)), die
+> Rückfallebene sind zwei baugleiche ESP32-Backup-Boards
+> ([`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md)) — dieselbe Hardware,
+> also dieselben Relais. Der Blocker für die KNX-Ablösung ist damit weg. Der
+> Absatz bleibt stehen, weil er erklärt, warum es ihn gab.
 
 `platformio.ini` pflegt `d1_mini_h1_ota`/`d1_mini_h2_ota` als Rückfallebene,
 und in `~/HeishaMon-Rollback/` liegen aktuelle 3.13.0-Binaries dafür. Ein
