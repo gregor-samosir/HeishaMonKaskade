@@ -422,6 +422,9 @@ SET33 | Z1CoolCurveOutsideLowTemp | 88 | Cooling curve: **cool** end of the outs
 SET34 | Z1CoolCurveOutsideHighTemp | 89 | Cooling curve: **hot** end of the outside axis (pairs with TargetLow) | 15 - 30
 SET35 | HeatingMode | 28 | Heating operation mode | 0=compensation curve, 1=direct
 SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=direct
+SET37 | RoomHeaterState | 9 | Release the internal backup heater for room heating (a release, not a switch - see note) | 0=blocked, 1=free
+SET38 | DHWHeaterState | 9 | Release the internal backup heater for DHW | 0=blocked, 1=free
+SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=off, 1=on
 
 > ⚠️ **SET35/SET36 are not harmlessly reversible.** Switching a circuit to the
 > compensation curve resets that curve to the Panasonic factory defaults, and
@@ -439,6 +442,35 @@ SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=dire
 > Panasonic-Werksvorgaben zurück; das Zurückschalten stellt sie nicht wieder
 > her, und der Sollwert des anderen Kreises wandert mit. Danach die Kurve
 > beider Kreise nachziehen.*
+
+> ⚠️ **SET37 is a release, not an on switch (new in 3.17.0).** The unit switches
+> the backup heater on by itself once six conditions hold at the same time, and
+> SET37 is only the first of them: 30 min since compressor thermo-on, 9 min
+> since the pump started, outside temperature below SET20 `HeaterOnOutdoorTemp`,
+> flow more than 4 K below target, and 20 min since the heater last went off. So
+> a release does not take effect immediately, and toggling it quickly achieves
+> nothing - a controller has to release ahead of the need. If SET20 is set such
+> that the unit never considers the heater, the release stays without effect.
+> The release also changes defrosting: with the backup heater released it runs
+> along during a defrost cycle, which shows up in TOP90
+> `Room_Heater_Operations_Hours` next to the regulated share. Read back via
+> TOP59 `Room_Heater_State` and TOP58 `DHW_Heater_State` (`Blocked` / `Free`).
+>
+> **SET39 `ForceHeater` is a state, not a pulse** like SET12 `ForceDefrost` -
+> whoever sets it has to take it back. The service manual describes it as a
+> substitute heat source for a **fault** of the heat pump; checked at the
+> control panel on 2026-08-28, it can also be switched on **without any fault
+> while the heat pump is switched off**. With the unit running, the panel
+> rejects the request. Read back via TOP68 `Force_Heater_State`.
+>
+> *Deutsch: SET37 ist eine **Freigabe**, kein Einschalter — die Wärmepumpe
+> schaltet den Heizstab selbst zu, sobald sechs Bedingungen zusammenkommen, und
+> die Freigabe ist nur die erste davon. Sie wirkt deshalb nicht sofort;
+> schnelles Ein/Aus bringt nichts, und ohne passende Außentemperaturschwelle
+> (SET20) bleibt sie wirkungslos. Bei freigegebenem Heizstab läuft er auch beim
+> Abtauen mit. SET39 `ForceHeater` ist ein Zustand, den niemand automatisch
+> zurücknimmt; er lässt sich bei ausgeschalteter Wärmepumpe auch ohne Störung
+> einschalten, bei laufendem Betrieb wird er abgelehnt.*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 
