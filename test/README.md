@@ -954,6 +954,50 @@ damit auch die beiden TargetHigh-Werte, die sich mit ihnen eine Speicherstelle
 teilen. Nach allen vier Laeufen stand der Ausgangszustand wieder vollstaendig -
 alle 15 Werte, beide Betriebsarten und der Betriebsmodus.
 
+## Heizstab schalten (Byte 9 und Byte 5, 2026-08-28, WP1)
+
+Nachweis fuer SET37 `RoomHeaterState` und SET39 `ForceHeater` aus 3.17.0.
+Anlage AUS, Modus Heizen, jeder Eingriff einzeln aufgerufen. Ablauf wie bei
+Byte 28: Mitschnitt starten, ein Kommando senden, Flanke im laufenden
+Mitschnitt ansehen, zurueckstellen.
+
+```
+./test/byte_monitor.py 192.168.2.120 9 --dauer 60     # im Hintergrund
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/RoomHeaterState=0
+./test/tablesnap.py 192.168.2.120 | grep -E "TOP(58|59|68)\|"
+```
+
+Schritt | Kommando | Byte | Ruecklesen
+:--- | :--- | :--- | :---
+M0 | - | Byte 9 = `0x56` | TOP59 Free, TOP58 Blocked
+M1 | `RoomHeaterState 0` | `0x56` -> `0x55` | TOP59 -> Blocked
+M2 | `RoomHeaterState 1` | `0x55` -> `0x56` | TOP59 -> Free
+M3 | - | Byte 5 = `0x55` | TOP68 Inactive
+M4 | `ForceHeater 1` | `0x55` -> `0x59` | TOP68 -> Active
+M5 | `ForceHeater 0` | `0x59` -> `0x55` | TOP68 -> Inactive
+
+**Die WP nimmt beide Bytes an.** In beiden Faellen wechselte NUR die eigene
+Bitgruppe. Byte 9 traegt an dieser Anlage noch zwei weitere belegte Gruppen
+(1+2 und 3+4, beide `01`) - ohne Maske waere das Byte auf `0x02` zusammen-
+gefallen und haette drei Felder auf einmal umgelegt.
+
+**Zwei Befunde, die man beim naechsten Mal kennen sollte:**
+
+1. **SET39 wird verzoegert uebernommen.** Bei Byte 9 lag die Flanke nach zwei
+   Telegrammen (rund 12 s), bei ForceHeater erst beim zehnten von zwoelf -
+   grob eine halbe Minute. Ein `/tablerefresh` direkt nach dem Senden zeigte
+   noch `Inactive`. Wer zu frueh zuruecklieset, haelt ein angekommenes Kommando
+   fuer verworfen.
+2. **Der Raumheizstab war an BEIDEN Stufen schon freigegeben** (TOP59 = Free,
+   an H2 auch TOP58), TOP90 zaehlt an H1 267 Betriebsstunden. Die Annahme des
+   Vorhabens, Byte 9 stehe auf blockiert, war falsch. Deaktiviert ist der
+   Heizstab also anderswo, nicht ueber diesen Schalter.
+
+Nebenbei aus demselben Mitschnitt: Bytes 104-106 (Startverzoegerung und Deltas
+des internen Heizstabs, laut Referenz "J/K/L series") stehen alle drei auf
+`0x00` - bei dieser Serie also nicht belegt. TOP78 `Heater_On_Outdoor_Temp`
+steht auf 2 Grad.
+
 ## Kurvenbetrieb: was die WP annimmt und was sie verwirft (2026-08-20, WP1)
 
 Der Lauf gehoert zum Vorhaben Notbetrieb (M1/M2, siehe

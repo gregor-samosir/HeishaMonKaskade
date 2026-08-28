@@ -308,16 +308,36 @@ ohne sie legte ein Raumheiz-Kommando die Warmwasser-Freigabe mit um. SET39
 `ForceHeater` liegt auf Byte 5 neben SET2 `HolidayMode` (`0x30`) und dem
 Zeitprogramm TOP13 (`0xC0`).
 
-**Nachgewiesen ist bisher nur die Kodierung, nicht das Verhalten der Anlage.**
-[`test/byte9_test.cpp`](test/byte9_test.cpp) legt die Merge-Zeile aus
-`commands.cpp` und die echten Dekodierer aus `decode.cpp` nebeneinander: jeder
-gesendete Wert kommt zurückgelesen wieder heraus, jedes Kommando lässt seine
-Nachbarfelder stehen, und die Gegenprobe ohne Maske zeigt, was sonst umfiele.
-Am Gerät gemessen ist das noch nicht — der Messplan dafür steht in
+**Am 2026-08-28 an Stufe 1 gemessen, bei ausgeschalteter Anlage.** Die Anlage
+nimmt beide Bytes an, und die Masken greifen bitgenau:
+
+Kommando | Byte | Rohbyte | Rücklesen | Nachbarn
+:--- | ---: | :--- | :--- | :---
+`RoomHeaterState 0` | 9 | `0x56` → `0x55` | TOP59 `Free` → `Blocked` | Bits 1+2, 3+4, 5+6 unverändert
+`RoomHeaterState 1` | 9 | `0x55` → `0x56` | TOP59 `Blocked` → `Free` | dito
+`ForceHeater 1` | 5 | `0x55` → `0x59` | TOP68 `Inactive` → `Active` | Bits 1+2, 3+4, 7+8 unverändert
+`ForceHeater 0` | 5 | `0x59` → `0x55` | TOP68 `Active` → `Inactive` | dito
+
+**Byte 9 trägt an dieser Anlage mehr als die zwei Heizstab-Felder** — die
+Bitgruppen 1+2 und 3+4 stehen auf `01`. Ohne Maske wäre das Byte auf `0x02`
+zusammengefallen und hätte drei Felder auf einmal umgelegt.
+
+⚠️ **SET39 wird verzögert übernommen** — die Flanke lag erst beim zehnten von
+zwölf Telegrammen des Mitschnitts, grob eine halbe Minute nach dem Kommando; ein
+Rücklesen unmittelbar danach zeigte noch `Inactive`. Bei Byte 9 lag sie nach
+zwei Telegrammen. Wer zu früh zurückliest, hält ein angekommenes Kommando für
+verworfen.
+
+Zusätzlich ohne Gerät belegt: [`test/byte9_test.cpp`](test/byte9_test.cpp) legt
+die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus `decode.cpp`
+nebeneinander, samt Gegenprobe ohne Maske. Einzelheiten und der volle Ablauf:
 [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), Abschnitt 8.
 
-**„Frei" heißt nicht „an".** TOP59 `Room_Heater_State` meldet die Freigabe,
-nicht den laufenden Heizstab. Ob er wirklich läuft, zeigen TOP60
+**„Frei" heißt nicht „an" — und an dieser Anlage steht es längst auf „frei".**
+Beim Messlauf zeigte sich, dass TOP59 an **beiden** Stufen bereits `Free`
+meldet (an H2 auch TOP58) und TOP90 an H1 267 Betriebsstunden zählt. Der
+Heizstab ist also nicht über diesen Schalter deaktiviert. TOP59 meldet die
+Freigabe, nicht den laufenden Heizstab. Ob er wirklich läuft, zeigen TOP60
 `Internal_Heater_State` und TOP90 `Room_Heater_Operations_Hours`; die
 Wärmepumpe entscheidet über fünf weitere Bedingungen mit (Servicehandbuch
 12.6.1), von denen nur die Außentemperaturschwelle über SET20
@@ -446,10 +466,10 @@ Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
 **Erledigt in 3.17.0: der Heizstab (Byte 9 und Byte 5).** SET37
 `RoomHeaterState` und SET38 `DHWHeaterState` geben den internen Heizstab frei
 (0 = blockiert, 1 = frei), SET39 `ForceHeater` schaltet die Ersatzwärmequelle.
-Damit sind drei der Lücken aus Abschnitt 3a geschlossen. Die Kodierung ist im
-Hosttest belegt ([`test/byte9_test.cpp`](test/byte9_test.cpp)), **am Gerät
-gemessen ist sie noch nicht** — das unterscheidet diesen Eintrag von den beiden
-darüber. Einzelheiten in Fußnote ⁷ und in
+Damit sind drei der Lücken aus Abschnitt 3a geschlossen. **Am 2026-08-28 an
+Stufe 1 gemessen** — die Anlage nimmt Byte 9 und Byte 5 an, beide Masken greifen
+bitgenau; zusätzlich im Hosttest belegt
+([`test/byte9_test.cpp`](test/byte9_test.cpp)). Einzelheiten in Fußnote ⁷ und in
 [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md).
 
 **Zu präzisieren (2026-08-21):** „fernschaltbar" hieß hier über MQTT, und der
@@ -533,10 +553,11 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
   Anlagen, 2026-08-10/11), SET3, SET4 und SET9 im laufenden Betrieb
   (2026-08-15/16) sowie SET14 auf Byte 4 und SET15 auf Byte 45, beide mit
   Änderung in beide Richtungen (2026-08-19, Fußnote ⁵) sowie SET35/SET36 auf
-  Byte 28 in vier Läufen (2026-08-19, Fußnote ⁶). **Nicht gemessen sind die
-  drei Heizstab-Kommandos SET37–SET39** (3.17.0): Ihre Kodierung ist im
-  Hosttest belegt, ob die Wärmepumpe Byte 9 annimmt, ist offen — Messplan in
-  [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md). Die übrigen Paare
+  Byte 28 in vier Läufen (2026-08-19, Fußnote ⁶) sowie SET37 auf Byte 9 und
+  SET39 auf Byte 5, beide mit Änderung in beide Richtungen (2026-08-28,
+  Fußnote ⁷). **SET38 `DHWHeaterState` ist als einziges der drei nicht am Gerät
+  gemessen** — es hätte den Warmwasser-Heizstab freigegeben, und dafür gab es
+  keinen Grund; sein Nachbarfeld ist über SET37 mitbelegt. Die übrigen Paare
   stützen sich auf die identische
   Byte-Position, die bei jedem einzelnen der 35 Paare zutrifft. Wo Zweifel an
   einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)

@@ -5,14 +5,20 @@ ging das nur am Bedienterminal.
 
 **Stand dieser Datei:** 2026-08-28, Firmware 3.17.0.
 
-> **In 3.17.0 gebaut, am Gerät noch nicht gemessen.** Alle **drei** Kommandos
-> stehen in `setCommands[]`: SET37 `RoomHeaterState`, SET38 `DHWHeaterState`,
-> SET39 `ForceHeater`. Owner-Entscheidung vom 2026-08-28, alle drei zusammen zu
-> bauen statt sie zu staffeln — die Begründung dafür steht am Ende von
-> Abschnitt 1. Die Kodierung ist ohne Gerät belegt
-> ([`test/byte9_test.cpp`](test/byte9_test.cpp), in der CI); offen bleibt der
-> Messplan aus Abschnitt 8 und damit die Frage, ob die WH-MDC05H3E5 Byte 9
-> überhaupt annimmt.
+> **In 3.17.0 gebaut und am 2026-08-28 an Stufe 1 gemessen — beides erledigt.**
+> Alle **drei** Kommandos stehen in `setCommands[]`: SET37 `RoomHeaterState`,
+> SET38 `DHWHeaterState`, SET39 `ForceHeater`. Owner-Entscheidung vom
+> 2026-08-28, alle drei zusammen zu bauen statt sie zu staffeln — die Begründung
+> dafür steht am Ende von Abschnitt 1.
+>
+> **Die WH-MDC05H3E5 nimmt Byte 9 an.** M0–M5 sind gelaufen (Abschnitt 8), die
+> Kodierung ist zusätzlich ohne Gerät belegt
+> ([`test/byte9_test.cpp`](test/byte9_test.cpp), in der CI). Offen ist nur noch
+> das Winterexperiment.
+>
+> ⚠️ **Eine tragende Annahme dieses Dokuments war falsch:** Der Raumheizstab war
+> an **beiden** Anlagen bereits freigegeben (TOP59 = `Free`), an H2 auch der
+> Warmwasser-Heizstab. Abschnitt 6, Punkt 3 ist entsprechend richtiggestellt.
 >
 > Die Topic-Namen tragen **kein** `Set`-Präfix: Bei uns heißt der Pfad
 > `<prefix>/set/<Name>`, also `set/RoomHeaterState`. Der Upstream schreibt
@@ -227,10 +233,9 @@ plant das Zurücknehmen mit ein.
 
 ## 6. Was offen ist
 
-1. **Nimmt die H-Serie Byte 9 an?** In `ProtocolByteDecrypt.md` Zeile 14 ist das
-   Byte ohne Serieneinschränkung dokumentiert, belegt ist es für unsere
-   WH-MDC05H3E5 aber nicht. Das ist die einzige echte Unbekannte — wie seinerzeit
-   bei Byte 28, und dort hat die Anlage angenommen.
+1. ~~**Nimmt die H-Serie Byte 9 an?**~~ **Beantwortet, 2026-08-28: ja.** M1/M2
+   haben Byte 9 im laufenden Mitschnitt wandern lassen (`0x56` → `0x55` →
+   `0x56`), TOP59 folgte in beide Richtungen. Wie seinerzeit bei Byte 28.
 
 2. **Was heißt „frei" wirklich?** Unser Code zeigt `Blocked`/`Free`,
    `ProtocolByteDecrypt.md` Zeile 14 schreibt für dieselben Bits „heater
@@ -239,17 +244,33 @@ plant das Zurücknehmen mit ein.
    Messplan prüft, dass das Bit ankommt — ob „frei" auch heißt, dass der Stab
    je läuft, zeigt erst das Winterexperiment über TOP60 und TOP90.
 
-3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet:** Der Heizstab ist an
-   beiden Anlagen deaktiviert, Byte 9 steht also auf blockiert. Damit ist auch
-   klar, dass M1 im Messplan den Ist-Zustand trifft und M2 die eigentliche
-   Änderung ist.
+3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet — und anders als hier
+   angenommen (2026-08-28, gemessen statt geschlossen):**
 
-4. **Die Feineinstellung fehlt uns vermutlich dauerhaft.** Startverzögerung
-   (Byte 104), Start-Delta (105) und Stopp-Delta (106) sind in
-   `ProtocolByteDecrypt.md` Zeilen 109–111 als „J/K/L series" markiert. Bei
-   H-Serie stehen die Bytes erfahrungsgemäß auf `00`. Ebenfalls aus dem
-   Mitschnitt zu klären. Wenn sie leer sind, bleibt als einziger Stellhebel die
-   Außentemperaturschwelle SET20 — die reicht für das Ziel.
+   Anlage | Byte 9 | TOP59 `Room_Heater_State` | TOP58 `DHW_Heater_State` | TOP90 Betriebsstunden
+   :--- | :--- | :--- | :--- | ---:
+   H1 | `0x56` | **Free** | Blocked | **267 h**
+   H2 | — | **Free** | **Free** | **35 h**
+
+   **Der Raumheizstab ist in Byte 9 also längst freigegeben, an beiden Stufen**,
+   und er hat auch schon gelaufen. Die Annahme „der Heizstab ist deaktiviert,
+   Byte 9 steht auf blockiert" stammte aus der Beschreibung der Anlage, nicht aus
+   einer Messung — sie war falsch. Deaktiviert ist der Heizstab demnach an
+   anderer Stelle (Installateur-/Custom-Setup), nicht über diesen Schalter.
+
+   **Folge für das Vorhaben:** Der Messplan drehte sich um — M1 (`0`) wurde zur
+   eigentlichen Änderung, M2 (`1`) zur Rückstellung. **Folge für das Ziel:** Ob
+   die Freigabe die Regelgröße sein kann, die Abschnitt 1 beschreibt, ist damit
+   offen — sie steht ja schon auf „frei", ohne dass der Stab im laufenden Betrieb
+   zuschaltet. Das gehört vor dem Winterexperiment geklärt, am ehesten am
+   Bedienpanel: Was genau ist dort abgeschaltet, wenn nicht dieser Schalter?
+
+4. ~~**Die Feineinstellung fehlt uns vermutlich dauerhaft.**~~ **Bestätigt,
+   2026-08-28:** Startverzögerung (Byte 104), Start-Delta (105) und Stopp-Delta
+   (106) stehen an H1 alle drei auf `0x00` — die Bytes sind in
+   `ProtocolByteDecrypt.md` als „J/K/L series" markiert und bei dieser Serie
+   leer. **Einziger Stellhebel bleibt die Außentemperaturschwelle SET20**, und
+   die ist gesetzt: TOP78 meldet **2 °C**.
 
 ## 7. Reihenfolge der Umsetzung
 
@@ -261,45 +282,79 @@ Schritt | Stand
 **1.** Alle drei Kommandos in `setCommands[]`, Masken im Kommentarblock nachgezogen | **erledigt, 3.17.0**
 **2.** Hosttest `test/byte9_test.cpp`, in der CI | **erledigt, 3.17.0**
 **3.** `MQTT-Topics.md`, `SET-TOP-Zuordnung.md`, `README.md`, `test/README.md`, Changelog | **erledigt, 3.17.0**
-**4.** Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand (kein Eingriff) | offen
-**5.** OTA auf Stufe 1, Abnahme über `/tablerefresh`, M0–M2 messen (Abschnitt 8) | offen
-**6.** Winterexperiment vorbereiten: Freigabekriterium in der Steuerung festlegen, Mitschrieb einrichten | offen
+**4.** Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand (kein Eingriff) | **erledigt, 2026-08-28** — TOP78 = 2 °C, Bytes 104–106 = `0x00`
+**5.** OTA auf Stufe 1, Abnahme über `/tablerefresh`, M0–M5 messen (Abschnitt 8) | **erledigt, 2026-08-28** — Abnahme zeilengleich bis auf einen Messwert
+**6.** OTA auf Stufe 2 | offen
+**7.** Klären, wo der Heizstab tatsächlich abgeschaltet ist (Abschnitt 6, Punkt 3) | offen
+**8.** Winterexperiment vorbereiten: Freigabekriterium in der Steuerung festlegen, Mitschrieb einrichten | offen
 
 Byte 9 ist ohne Messung bekannt: blockiert, an beiden Anlagen.
 
-## 8. Messplan
+## 8. Messplan und Ergebnis
 
 Muster wie beim Byte-28-Vorhaben: Ausgangszustand sichern, ein Bit ändern,
-zurücklesen, zurückstellen. Alles an **Stufe 1**, im Ruhefenster.
+zurücklesen, zurückstellen. Alles an **Stufe 1**. **Gelaufen am 2026-08-28**,
+bei ausgeschalteter Anlage im Modus Heizen — jeder Eingriff einzeln aufgerufen,
+damit ein Abbruch greift.
 
-Schritt | Kommando | Erwartung Byte | Erwartung Rücklesen
-:--- | :--- | :--- | :---
-M0 | — | Byte 9 notieren | TOP58/59 notieren
-M1 | `RoomHeaterState 0` | Byte 9 Bits 0+1 → `01` | TOP59 → `Blocked`
-M2 | `RoomHeaterState 1` | Byte 9 Bits 0+1 → `10` | TOP59 → `Free`, **TOP58 unverändert**
+### Ergebnis: gelaufen am 2026-08-28, Stufe 1, Anlage aus, Modus Heizen
 
-M2 ist der eigentliche Nachweis: dass das Nachbarfeld im selben Byte stehen
-bleibt, ist der Punkt, an dem eine falsche Maske auffällt. Die Bitrechnung
-dahinter ist seit 3.17.0 ohne Gerät belegt
-([`test/byte9_test.cpp`](test/byte9_test.cpp)) — M0–M2 beantworten die eine
-Frage, die ein Hosttest nicht beantworten kann: ob die Wärmepumpe Byte 9
-annimmt.
+Firmware 3.17.0 per OTA um 14:07, Abnahme über `test/tablesnap.py` gegen die
+Baseline von 14:02: 92 Zeilen, **einzige Abweichung `Inside_Pipe_Temp` 25 → 24**
+— ein laufender Messwert. Danach die Messreihe, jeder Eingriff einzeln, Byte im
+laufenden Mitschnitt über [`test/byte_monitor.py`](test/byte_monitor.py):
 
-**SET39 `ForceHeater` misst sich nicht im selben Fenster.** Nach dem Befund vom
-2026-08-28 nimmt die Anlage ihn nur bei **ausgeschalteter** Wärmepumpe an — das
-ist kein Ruhefenster-Lauf nebenbei, sondern ein eigener Termin an einer
-stehenden Stufe:
+Schritt | Kommando | Byte 9 | TOP59 `Room_Heater_State` | TOP58 `DHW_Heater_State`
+:--- | :--- | :--- | :--- | :---
+M0 | — | `0x56` | Free | Blocked
+M1 | `RoomHeaterState 0` | `0x56` → **`0x55`** | Free → **Blocked** | **Blocked, unverändert**
+M2 | `RoomHeaterState 1` | `0x55` → **`0x56`** | Blocked → **Free** | **Blocked, unverändert**
 
-Schritt | Kommando | Erwartung Byte | Erwartung Rücklesen
-:--- | :--- | :--- | :---
-M3 | — (WP aus) | Byte 5 notieren | TOP68, TOP19, TOP13 notieren
-M4 | `ForceHeater 1` | Byte 5 Bits 5+6 → `10` | TOP68 → `Active`, **TOP19 und TOP13 unverändert**
-M5 | `ForceHeater 0` | Byte 5 Bits 5+6 → `01` | TOP68 → `Inactive`
+**Die WH-MDC05H3E5 nimmt Byte 9 an** — das war die einzige echte Unbekannte des
+Vorhabens. In M1 lag die Flanke zwischen dem zweiten und dritten Telegramm des
+Mitschnitts, also im üblichen Rahmen von rund zwei Abfragezyklen.
 
-Auch hier gilt: zurückstellen, was M3 notiert hat.
+**Der Maskennachweis fiel stärker aus als geplant.** Byte 9 trägt an dieser
+Anlage nicht nur die beiden Heizstab-Felder: Die Bitgruppen 1+2 und 3+4 stehen
+beide auf `01`. Bei M1 und M2 wechselte **ausschließlich** die Gruppe 7+8 —
+alle drei übrigen blieben stehen. Ohne Maske wäre Byte 9 auf `0x02`
+zusammengefallen und hätte drei Felder gleichzeitig umgelegt.
 
-Ausgangszustand aus M0 nach dem Lauf wiederherstellen — der Heizstab gehört
-danach wieder auf blockiert, bis das Winterexperiment vorbereitet ist.
+### ForceHeater: M3–M5, dieselbe Sitzung
+
+Die Wärmepumpe stand aus — nach dem Befund aus Abschnitt 1 die einzige Lage, in
+der sie das Kommando überhaupt annimmt:
+
+Schritt | Kommando | Byte 5 | TOP68 `Force_Heater_State` | TOP19 / TOP13
+:--- | :--- | :--- | :--- | :---
+M3 | — (WP aus) | `0x55` | Inactive | Off / Disabled
+M4 | `ForceHeater 1` | `0x55` → **`0x59`** | Inactive → **Active** | **unverändert**
+M5 | `ForceHeater 0` | `0x59` → **`0x55`** | Active → **Inactive** | **unverändert**
+
+**Auch Byte 5 nimmt die Anlage an, und auch hier wechselte nur die eigene
+Bitgruppe** — die Gruppen 1+2 (Zeitprogramm), 3+4 (HolidayMode) und 7+8 blieben
+auf `01` stehen.
+
+⚠️ **ForceHeater wird deutlich langsamer übernommen als Byte 9.** Die Flanke lag
+im Mitschnitt erst beim zehnten von zwölf Telegrammen, grob eine halbe Minute
+nach dem Kommando; ein `/tablerefresh` unmittelbar danach zeigte noch
+`Inactive`. Wer das Kommando prüft, darf nicht sofort nach dem Senden
+zurücklesen und daraus schließen, es sei verworfen worden. Die Ursache ist
+nicht gemessen — plausibel ist eine interne Prüfung in der Wärmepumpe.
+
+**TOP60 `Internal_Heater_State` blieb während M4 auf `Inactive`, TOP90 auf
+267 h** — in den rund zwei Minuten mit gesetztem ForceHeater lief der Heizstab
+nicht an. Was das Kommando bei ausgeschalteter Anlage tatsächlich bewirkt, ist
+damit **nicht** belegt; belegt ist nur, dass die Anlage das Bit annimmt und
+zurückmeldet.
+
+**Ausgangszustand wiederhergestellt:** Byte 9 = `0x56`, Byte 5 = `0x55`, TOP59
+`Free`, TOP58 `Blocked`, TOP68 `Inactive`, TOP90 unverändert 267 h.
+
+Der Satz, der hier bis 3.17.0 stand — „der Heizstab gehört danach wieder auf
+blockiert" —, war eine Folge der falschen Annahme über den Ist-Zustand. Richtig
+ist: **wiederhergestellt wird, was M0 vorgefunden hat**, und das war an Stufe 1
+`Free`.
 
 ### Das Winterexperiment
 

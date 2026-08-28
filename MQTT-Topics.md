@@ -456,8 +456,17 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 > `Room_Heater_Operations_Hours` next to the regulated share. Read back via
 > TOP59 `Room_Heater_State` and TOP58 `DHW_Heater_State` (`Blocked` / `Free`).
 >
+> **Measured on stage 1, 2026-08-28** (unit switched off, mode heating): the
+> unit accepts both bytes, and each command changed **only its own bit group** -
+> byte 9 went `0x56` → `0x55` → `0x56`, byte 5 went `0x55` → `0x59` → `0x55`.
+> Note that TOP59 already read `Free` on both stages before the run, so the
+> backup heater is disabled elsewhere, not through this switch.
+>
 > **SET39 `ForceHeater` is a state, not a pulse** like SET12 `ForceDefrost` -
-> whoever sets it has to take it back. The service manual describes it as a
+> whoever sets it has to take it back. It is also **taken over with a delay**:
+> the edge showed up about half a minute after the command (byte 9 takes about
+> two query cycles), and a readback right after sending still said `Inactive` -
+> do not mistake that for a rejected command. The service manual describes it as a
 > substitute heat source for a **fault** of the heat pump; checked at the
 > control panel on 2026-08-28, it can also be switched on **without any fault
 > while the heat pump is switched off**. With the unit running, the panel

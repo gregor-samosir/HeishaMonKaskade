@@ -45,11 +45,23 @@
 //         wieder heraus, jedes Kommando laesst seine Nachbarfelder stehen, und
 //         die Gegenprobe ohne Maske zeigt, was sonst umfiele.
 //
-//         AM GERAET IST NICHTS GEMESSEN. Byte 9 ist in ProtocolByteDecrypt.md
-//         ohne Serieneinschraenkung dokumentiert, fuer die WH-MDC05H3E5 aber
-//         nicht belegt - ob die Anlage es annimmt, ist offen. Das war bei
-//         Byte 28 genauso, dort hat sie angenommen. Der Messplan (M0-M2 an
-//         Stufe 1, im Ruhefenster) steht in Vorhaben-HeaterSet.md Abschnitt 8.
+//         AM GERAET GEMESSEN (2026-08-28, Stufe 1, Anlage aus, Modus Heizen).
+//         Die einzige echte Unbekannte ist beantwortet: DIE WH-MDC05H3E5 NIMMT
+//         BYTE 9 AN. Byte 9 wanderte im laufenden Mitschnitt 0x56 -> 0x55 ->
+//         0x56, Byte 5 fuer ForceHeater 0x55 -> 0x59 -> 0x55; in beiden Faellen
+//         wechselte NUR die eigene Bitgruppe, alle drei Nachbargruppen des
+//         Bytes blieben stehen. Rueckgelesen ueber TOP59 (Free -> Blocked ->
+//         Free) und TOP68 (Inactive -> Active -> Inactive). Alle Ausgangswerte
+//         sind wiederhergestellt. Einzelheiten: Vorhaben-HeaterSet.md
+//         Abschnitt 8.
+//
+//         BEFUND NEBENBEI, DER EINE ANNAHME KIPPT: Der Raumheizstab war an
+//         BEIDEN Anlagen bereits freigegeben (TOP59 = Free, an H2 auch TOP58),
+//         und TOP90 zaehlt an H1 267 Betriebsstunden. Das Vorhaben ging vom
+//         Gegenteil aus. Deaktiviert ist der Heizstab also woanders, nicht in
+//         Byte 9 - was den Wert der Freigabe als Regelgroesse offenlaesst.
+//         SET20 HeaterOnOutdoorTemp steht auf 2 Grad, ist also gesetzt; die
+//         Feineinstellung (Bytes 104-106) steht wie erwartet auf 0x00.
 //
 //         NICHT DABEI: die Anbindung an den Notbetrieb - NOTBETRIEB_WERTE_
 //         HEIZEN[] in notbetrieb.h bleibt unveraendert, Komforteinbussen im
