@@ -110,9 +110,9 @@ Umrechnung, Name und Grenzen in einer Zeile; `subscribe_set_topics()` und
 `set_command_range()` laufen über dieselbe Tabelle:
 
 ```c
-    {37,  9, 0x03, CONV_MUL_INC, "RoomHeaterState",  0,   1,   1}, // blockiert=1 frei=2
-    {38,  5, 0x0C, CONV_MUL_INC, "ForceHeater",      0,   1,   4}, // aus=4 an=8
-    {39,  9, 0x0C, CONV_MUL_INC, "DHWHeaterState",   0,   1,   4}, // blockiert=4 frei=8
+    {37,  9, 0x03, CONV_MUL_INC, "SetRoomHeaterState",  0,   1,   1}, // blockiert=1 frei=2
+    {38,  9, 0x0C, CONV_MUL_INC, "SetDHWHeaterState",   0,   1,   4}, // blockiert=4 frei=8
+    {39,  5, 0x0C, CONV_MUL_INC, "SetForceHeater",      0,   1,   4}, // aus=4 an=8
 ```
 
 `CONV_MUL_INC` ist `(Wert + 1) * param` und trifft alle drei Wertepaare exakt —
