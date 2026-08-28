@@ -1,7 +1,7 @@
 # SET-TOP-Zuordnung
 
 Welches State-Topic liest ein Set-Kommando zurück? Diese Datei beantwortet das
-für alle 32 Set-Kommandos und alle 92 State-Topics der Firmware 3.10.0 und
+für alle 37 Set-Kommandos und alle 92 State-Topics der Firmware 3.17.0 und
 hält fest, wo es kein Gegenstück gibt.
 
 Wozu: Eine Steuerung, die schreibt, muss prüfen können, ob der Wert angekommen
@@ -11,14 +11,14 @@ Bereichs kommentarlos auf den nächsten Rand (nachgewiesen an den beiden
 einzige Nachweis ist das Rücklesen des zugehörigen State-Topics. Wo diese
 Spalte leer bleibt, schreibt die Steuerung blind.
 
-*In English: which state topic reads a set command back? This file maps all 32
-set commands and all 92 state topics of firmware 3.10.0 against each other and
+*In English: which state topic reads a set command back? This file maps all 37
+set commands and all 92 state topics of firmware 3.17.0 against each other and
 records where no counterpart exists. The heat pump acknowledges nothing and
 silently clamps out-of-range values, so reading the matching state topic back
 is the only proof a write arrived — where that column is empty, a controller
 writes blind. Tables are language-neutral; the notes are German.*
 
-**Stand:** 2026-08-19, Firmware 3.10.0. Quelle sind ausschließlich die beiden
+**Stand:** 2026-08-28, Firmware 3.17.0. Quelle sind ausschließlich die beiden
 Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
 und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
 sind nicht von Hand gepflegt, sondern von
@@ -43,7 +43,7 @@ Byte 7).
 Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 * **Kommando- und Antworttelegramm benutzen dieselben Byte-Positionen.** Alle
-  30 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
+  35 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
   Heizanforderung und Byte 38 liest sie zurück, ohne eine einzige Ausnahme. Die
   Zuordnung ist damit nicht geraten, sondern abgelesen.
 * **Das Kommandotelegramm ist 110 Bytes lang** (`QUERYSIZE`, Indizes 0–109),
@@ -53,9 +53,9 @@ Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 Daraus ergibt sich die Zweiteilung des Telegramms: Bytes 4–106 tragen
 Einstellungen und spiegeln das Kommandotelegramm, ab Byte 110 kommen
-Ist-Zustände und Messwerte. Jedes der 30 Paare liegt unter Byte 110.
+Ist-Zustände und Messwerte. Jedes der 35 Paare liegt unter Byte 110.
 
-## 1. Set-Kommandos mit Rückmeldung (32 von 34)
+## 1. Set-Kommandos mit Rückmeldung (35 von 37)
 
 Die Spalte *Bits* zählt wie das Projekt: **Bit 1 ist das höchstwertige Bit**,
 `ganz` heißt, das Kommando belegt das volle Byte. *Art* sagt, ob das Topic
@@ -95,6 +95,9 @@ SET33 | `Z1CoolCurveOutsideLowTemp` (AT kühl) | 88 | ganz | TOP75 | `Z1_Cool_Cu
 SET34 | `Z1CoolCurveOutsideHighTemp` (AT heiß) | 89 | ganz | TOP74 | `Z1_Cool_Curve_Outside_High_Temp` | voll
 SET35 | `HeatingMode` | 28 | 7+8 | TOP76 | `Heating_Mode` | voll ⁶
 SET36 | `CoolingMode` | 28 | 5+6 | TOP81 | `Cooling_Mode` | voll ⁶
+SET37 | `RoomHeaterState` | 9 | 7+8 | TOP59 | `Room_Heater_State` | voll ⁷
+SET38 | `DHWHeaterState` | 9 | 5+6 | TOP58 | `DHW_Heater_State` | voll ⁷
+SET39 | `ForceHeater` | 5 | 5+6 | TOP68 | `Force_Heater_State` | voll ⁷
 
 Bei den Kurven kreuzen sich `High` und `Low` zwischen SET- und TOP-Nummer
 (SET29 `OutsideLow` → TOP32, SET30 `OutsideHigh` → TOP31). Das ist kein Fehler
@@ -296,6 +299,37 @@ Wärmepumpe waren nicht freigegeben, es gab für die Steuerung also nichts zu
 tun. **Wer in einem solchen Zustand misst, muss die Sollwerte über SET5/SET6
 selbst zurückstellen.**
 
+### ⁷ Heizstab: Freigabe und ForceHeater (neu in 3.17.0)
+
+SET37 und SET38 teilen sich Byte 9: Bits 7+8 tragen die Freigabe des
+Raumheizstabs, Bits 5+6 die des Warmwasser-Heizstabs, je `1` = blockiert,
+`2` = frei. Die Masken `0x03` und `0x0C` sind wie bei Byte 28 keine Kosmetik —
+ohne sie legte ein Raumheiz-Kommando die Warmwasser-Freigabe mit um. SET39
+`ForceHeater` liegt auf Byte 5 neben SET2 `HolidayMode` (`0x30`) und dem
+Zeitprogramm TOP13 (`0xC0`).
+
+**Nachgewiesen ist bisher nur die Kodierung, nicht das Verhalten der Anlage.**
+[`test/byte9_test.cpp`](test/byte9_test.cpp) legt die Merge-Zeile aus
+`commands.cpp` und die echten Dekodierer aus `decode.cpp` nebeneinander: jeder
+gesendete Wert kommt zurückgelesen wieder heraus, jedes Kommando lässt seine
+Nachbarfelder stehen, und die Gegenprobe ohne Maske zeigt, was sonst umfiele.
+Am Gerät gemessen ist das noch nicht — der Messplan dafür steht in
+[`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), Abschnitt 8.
+
+**„Frei" heißt nicht „an".** TOP59 `Room_Heater_State` meldet die Freigabe,
+nicht den laufenden Heizstab. Ob er wirklich läuft, zeigen TOP60
+`Internal_Heater_State` und TOP90 `Room_Heater_Operations_Hours`; die
+Wärmepumpe entscheidet über fünf weitere Bedingungen mit (Servicehandbuch
+12.6.1), von denen nur die Außentemperaturschwelle über SET20
+`HeaterOnOutdoorTemp` beeinflussbar ist.
+
+**SET39 ist ein Zustand, kein Impuls** — anders als SET12 `ForceDefrost` bleibt
+er stehen, bis ihn jemand zurücknimmt. Das Servicehandbuch (12.9) führt ihn als
+Ersatzwärmequelle bei einer *Störung*; am 2026-08-28 am Bedienpanel
+gegengeprüft: bei **ausgeschalteter** Wärmepumpe lässt er sich auch ohne
+anliegende Störung einschalten, bei laufendem Betrieb wird die Anforderung
+abgelehnt.
+
 ## 2. Set-Kommandos ohne Rückmeldung (2)
 
 SET | Kommando | Byte | Bits | Lage
@@ -321,11 +355,11 @@ angefangen hat, nicht dass das Kommando angekommen ist. Bleibt die Routine aus,
 lässt sich daraus nicht ableiten, ob das Kommando verworfen wurde oder die
 Wärmepumpe es abgelehnt hat.
 
-## 3. State-Topics ohne Set-Kommando (60)
+## 3. State-Topics ohne Set-Kommando (57)
 
-### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (11)
+### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (8)
 
-Diese 11 Topics liegen unter Byte 110, ihre Adresse existiert im
+Diese 8 Topics liegen unter Byte 110, ihre Adresse existiert im
 Kommandotelegramm also. **Das heißt nicht, dass die Wärmepumpe dort auch
 schreiben lässt** — belegt ist nur die Leseseite. Die Spalte *Kodierung* ist
 aus dem vorhandenen Dekodierer zurückgerechnet und damit nicht geraten; offen
@@ -333,17 +367,20 @@ ist allein, ob das Feld beschreibbar ist und welchen Bereich es zulässt.
 
 TOP | State-Topic | Byte | Bits | Kodierung eines Set-Kommandos | Nutzen
 :--- | :--- | ---: | :--- | :--- | :---
-TOP68 | `Force_Heater_State` | 5 | 5+6 | Maske `0x0C`, `(n+1)×4` | mittel
 TOP79 | `Heat_To_Cool_Temp` | 95 | ganz | `Wert + 128` | mittel
 TOP80 | `Cool_To_Heat_Temp` | 96 | ganz | `Wert + 128` | mittel
-TOP58 | `DHW_Heater_State` | 9 | 5+6 | Maske `0x0C`, `(n+1)×4` | mittel
-TOP59 | `Room_Heater_State` | 9 | 7+8 | Maske `0x03`, `(n+1)×1` | mittel
 TOP25 | `DHW_Holiday_Shift_Temp` | 44 | ganz | `Wert + 128` | gering
 TOP45 | `Room_Holiday_Shift_Temp` | 43 | ganz | `Wert + 128` | gering
 TOP70 | `Sterilization_Temp` | 100 | ganz | `Wert + 128` | gering
 TOP71 | `Sterilization_Max_Time` | 101 | ganz | `Wert + 1` | gering
 TOP3 | `Quiet_Mode_Schedule` | 7 | 1+2 | Maske `0xC0`, `(n+1)×64` | gering ⁵
 TOP13 | `Main_Schedule_State` | 5 | 1+2 | Maske `0xC0`, `(n+1)×64` | gering ⁵
+
+Die drei Heizstab-Topics TOP58, TOP59 und TOP68 standen bis 3.16.0 ebenfalls
+hier. Seit 3.17.0 haben sie ihr Set-Kommando (SET37 – SET39, Fußnote ⁷) — die
+Kodierungsspalte dieser Tabelle hat sich damit zum ersten Mal als Bauanleitung
+bewährt: Byte, Maske und Umrechnung standen hier, bevor eine Zeile Code
+geschrieben war.
 
 ⁵ Die beiden Schedule-Topics melden, ob ein Zeitprogramm aktiv ist. Das
 Zeitprogramm selbst steht nicht in diesen Bits — es einzuschalten, ohne es
@@ -405,6 +442,15 @@ Rückmeldung.
 (Byte 28).** SET35 `HeatingMode` und SET36 `CoolingMode`, je 0 = Kurve,
 1 = Direkt. Damit ist der Notbetrieb fernschaltbar — bis hierher musste beim
 Ausfall der Kaskadensteuerung jemand ans Bedienterminal.
+
+**Erledigt in 3.17.0: der Heizstab (Byte 9 und Byte 5).** SET37
+`RoomHeaterState` und SET38 `DHWHeaterState` geben den internen Heizstab frei
+(0 = blockiert, 1 = frei), SET39 `ForceHeater` schaltet die Ersatzwärmequelle.
+Damit sind drei der Lücken aus Abschnitt 3a geschlossen. Die Kodierung ist im
+Hosttest belegt ([`test/byte9_test.cpp`](test/byte9_test.cpp)), **am Gerät
+gemessen ist sie noch nicht** — das unterscheidet diesen Eintrag von den beiden
+darüber. Einzelheiten in Fußnote ⁷ und in
+[`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md).
 
 **Zu präzisieren (2026-08-21):** „fernschaltbar" hieß hier über MQTT, und der
 Broker *ist* der ioBroker-Adapter. Fällt der ioBroker aus, fehlt auch der
@@ -486,9 +532,13 @@ Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
   Am Gerät belegt sind die Kurven-Kommandos SET27–SET34 (Rücklesen an beiden
   Anlagen, 2026-08-10/11), SET3, SET4 und SET9 im laufenden Betrieb
   (2026-08-15/16) sowie SET14 auf Byte 4 und SET15 auf Byte 45, beide mit
-  Änderung in beide Richtungen (2026-08-19, Fußnote ⁵). Die übrigen Paare
+  Änderung in beide Richtungen (2026-08-19, Fußnote ⁵) sowie SET35/SET36 auf
+  Byte 28 in vier Läufen (2026-08-19, Fußnote ⁶). **Nicht gemessen sind die
+  drei Heizstab-Kommandos SET37–SET39** (3.17.0): Ihre Kodierung ist im
+  Hosttest belegt, ob die Wärmepumpe Byte 9 annimmt, ist offen — Messplan in
+  [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md). Die übrigen Paare
   stützen sich auf die identische
-  Byte-Position, die bei jedem einzelnen der 28 Paare zutrifft. Wo Zweifel an
+  Byte-Position, die bei jedem einzelnen der 35 Paare zutrifft. Wo Zweifel an
   einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)
   in wenigen Minuten — Byte beobachten, Wert ändern, Flanke ansehen.
 * **Abschnitt 3a listet Möglichkeiten, keine Befunde.** Dass ein Byte im

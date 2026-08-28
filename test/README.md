@@ -29,8 +29,9 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
+| `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
 | `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101, Anzeigeverfall und die Plausibilitaet der Kurve (bindet `src/notbetrieb.h` direkt ein) | nein |
-| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
+| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp` und `byte9_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
@@ -48,7 +49,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
-| `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp` und `decode_vergleich.py` | - |
+| `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp`, `byte9_test.cpp` und `decode_vergleich.py` | - |
 
 ## Pruefstand aufsetzen - ein Backup-Board leihen
 
@@ -165,8 +166,9 @@ Die C++-Programme pruefen ihre Ergebnisse selbst und geben bei gebrochener
 Zusicherung `1` zurueck - die CI bricht dann ab. Vorher (bis 3.5.0) gaben sie
 ihre Zahlen nur aus.
 
-`byte110_test.cpp` laeuft ueber das Skript, weil dabei `decode.cpp` neben die
-Ersatzheader kopiert werden muss (Begruendung im Skriptkopf).
+`byte110_test.cpp` und `byte9_test.cpp` laufen ueber das Skript, weil dabei
+`decode.cpp` neben die Ersatzheader kopiert werden muss (Begruendung im
+Skriptkopf). Ohne Argument baut das Skript `byte110_test.cpp`.
 
 ```bash
 c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
@@ -175,6 +177,7 @@ c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_t
 c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindow_test
 c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test notbetrieb_test.cpp && /tmp/notbetrieb_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
+./decode_hosttest.sh test/byte9_test.cpp   # Heizstab-Kommandos SET37-SET39 (Pfad immer repo-relativ)
 
 ./hexlog_test.py     --esp <ip-des-pruefstands> --broker 192.168.2.147
 ./verteiler_test.py  --esp <ip-des-pruefstands>

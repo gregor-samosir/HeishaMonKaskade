@@ -1,5 +1,61 @@
 #pragma once
 // Changelog:
+// 3.17.0 - HEIZSTAB PER MQTT. Drei neue Set-Kommandos: SET37 RoomHeaterState
+//         und SET38 DHWHeaterState geben den internen Heizstab frei (Byte 9),
+//         SET39 ForceHeater schaltet die Ersatzwaermequelle (Byte 5).
+//         Vorhaben-HeaterSet.md.
+//
+//         WARUM. Ein Komfortgewinn im Heizbetrieb, keine Notwendigkeit. Der
+//         Heizstab ist an beiden Anlagen deaktiviert, und das aus gutem Grund:
+//         Selbst bei -15 Grad Aussentemperatur braucht die grosse Masse der
+//         Fussbodenheizung ihn nicht. Interessant ist deshalb nicht die
+//         Dauerfreigabe, sondern das GEZIELTE Zuschalten - und dafuer fehlte
+//         bisher jeder Weg ausser dem Bedienterminal.
+//
+//         FREIGABE, KEIN EINSCHALTER. SET37 ist Bedingung (a) von sechs
+//         (Servicehandbuch 12.6.1); die uebrigen fuenf entscheidet die
+//         Waermepumpe selbst: 30 min seit Kompressor thermo-on, 9 min seit
+//         Pumpenstart, Aussentemperatur unter SET20 HeaterOnOutdoorTemp,
+//         Vorlauf 4 K unter Soll, 20 min seit dem letzten Heizstab-Aus. Eine
+//         Steuerung muss deshalb vorausschauend freigeben; schnelles Ein/Aus
+//         bringt nichts, und bei unpassender Schwelle in SET20 bleibt die
+//         Freigabe wirkungslos. TOP59 meldet die Freigabe, nicht den
+//         laufenden Stab - das sagen TOP60 und TOP90.
+//
+//         WARUM FORCEHEATER DOCH DABEI IST. Das Vorhaben hatte SET39 zunaechst
+//         zurueckgestellt: Das Servicehandbuch (12.9) beschreibt Force Heater
+//         als Ersatzwaermequelle bei einer STOERUNG der Waermepumpe, und in
+//         einer Frostphase laeuft die Anlage - dann greift das Kommando nicht.
+//         Am 2026-08-28 hat der Owner am Bedienpanel gegengeprueft: bei
+//         AUSGESCHALTETER Waermepumpe laesst sich der Heizstab auch ohne
+//         anliegende Stoerung einschalten. Damit traegt die Begruendung fuer
+//         das Zurueckstellen nicht mehr, und das Kommando ist gebaut. Es
+//         bleibt ein ZUSTAND, kein Impuls wie SET12 ForceDefrost - wer ihn
+//         setzt, muss ihn zuruecknehmen.
+//
+//         DIE MASKEN SIND HIER PFLICHT, NICHT KOSMETIK. Byte 9 traegt BEIDE
+//         Freigaben in zwei Bitfeldern (0x03 Raumheizung, 0x0C Warmwasser) -
+//         ohne Maske legte ein Raumheiz-Kommando die Warmwasser-Freigabe mit
+//         um. Byte 5 teilt sich SET39 (0x0C) mit SET2 HolidayMode (0x30) und
+//         dem Zeitprogramm TOP13 (0xC0). Derselbe Fall wie Byte 28 in 3.11.0.
+//
+//         NACHWEIS OHNE GERAET: test/byte9_test.cpp, neu in der CI. Er legt
+//         die Merge-Zeile aus commands.cpp und die ECHTEN Dekodierer aus
+//         decode.cpp nebeneinander: jeder gesendete Wert kommt zurueckgelesen
+//         wieder heraus, jedes Kommando laesst seine Nachbarfelder stehen, und
+//         die Gegenprobe ohne Maske zeigt, was sonst umfiele.
+//
+//         AM GERAET IST NICHTS GEMESSEN. Byte 9 ist in ProtocolByteDecrypt.md
+//         ohne Serieneinschraenkung dokumentiert, fuer die WH-MDC05H3E5 aber
+//         nicht belegt - ob die Anlage es annimmt, ist offen. Das war bei
+//         Byte 28 genauso, dort hat sie angenommen. Der Messplan (M0-M2 an
+//         Stufe 1, im Ruhefenster) steht in Vorhaben-HeaterSet.md Abschnitt 8.
+//
+//         NICHT DABEI: die Anbindung an den Notbetrieb - NOTBETRIEB_WERTE_
+//         HEIZEN[] in notbetrieb.h bleibt unveraendert, Komforteinbussen im
+//         Notbetrieb sind akzeptiert. Ebenso SetReset (Byte 8, Bit 0): Wer
+//         einen verriegelten Fehler quittiert, gehoert ans Bedienpanel.
+//
 // 3.16.0 - NUR NOCH DER ESP32-PFAD. Der ESP8266-Zweig (D1 mini) ist aus Code,
 //         Build-Konfiguration, CI und Doku entfernt. Aus zehn Envs werden
 //         sechs. Vorhaben-Nur-ESP32-Pfad.md.
@@ -1440,4 +1496,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.16.0";
+static const char* heishamon_version = "3.17.0";

@@ -106,6 +106,14 @@ jobs:
       #                  decode.cpp nebeneinander. Byte 28 trägt zwei Bitfelder;
       #                  ohne bitgenaue Maske schaltet ein Kühl-Kommando die
       #                  Heizung mit um, und genau das prüft die Gegenprobe.
+      # byte9_test:      Kodierung von SET37-SET39 (Heizstab, 3.17.0) gegen den
+      #                  echten Dekodierpfad - übersetzt src/decode.cpp mit,
+      #                  deshalb über das Skript. Byte 9 trägt beide
+      #                  Heizstab-Freigaben, Byte 5 den ForceHeater neben
+      #                  HolidayMode und dem Zeitprogramm; ohne bitgenaue Maske
+      #                  legt ein Kommando das Nachbarfeld mit um. Genau das
+      #                  prüft die Gegenprobe, und zwar vor dem Flashen - an der
+      #                  Anlage wäre es Schritt M2 des Messplans.
       # notbetrieb_test: Regeln des Notbetriebs aus 3.12.0 - Vollständigkeit
       #                  der gehaltenen Werte, Bereichsgrenzen (verwerfen statt
       #                  klemmen), die Karenzzeit-Ausnahme für den
@@ -148,6 +156,7 @@ jobs:
           c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test test/verbindung_test.cpp
           /tmp/verbindung_test
           ./test/decode_hosttest.sh
+          ./test/decode_hosttest.sh test/byte9_test.cpp
           python3 test/css_klassen_test.py
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).

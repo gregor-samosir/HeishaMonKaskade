@@ -1,11 +1,23 @@
-# Vorhaben: Heizstab freigeben (Byte 9), ForceHeater nachrangig (Byte 5)
+# Vorhaben: Heizstab freigeben (Byte 9) und ForceHeater (Byte 5)
 
-Übergabe für eine eigene Session. Ziel ist **ein** neues Set-Kommando, mit dem
-sich der interne Heizstab für den Heizbetrieb freigeben lässt — heute geht das
-nur am Bedienterminal.
+Ziel ist, den internen Heizstab über MQTT ansprechbar zu machen — bis 3.16.0
+ging das nur am Bedienterminal.
 
-**Stand dieser Datei:** 2026-08-28, Firmware 3.16.0 auf beiden Stufen.
-Planungsstand, nichts gebaut und nichts an der Anlage gemessen.
+**Stand dieser Datei:** 2026-08-28, Firmware 3.17.0.
+
+> **In 3.17.0 gebaut, am Gerät noch nicht gemessen.** Alle **drei** Kommandos
+> stehen in `setCommands[]`: SET37 `RoomHeaterState`, SET38 `DHWHeaterState`,
+> SET39 `ForceHeater`. Owner-Entscheidung vom 2026-08-28, alle drei zusammen zu
+> bauen statt sie zu staffeln — die Begründung dafür steht am Ende von
+> Abschnitt 1. Die Kodierung ist ohne Gerät belegt
+> ([`test/byte9_test.cpp`](test/byte9_test.cpp), in der CI); offen bleibt der
+> Messplan aus Abschnitt 8 und damit die Frage, ob die WH-MDC05H3E5 Byte 9
+> überhaupt annimmt.
+>
+> Die Topic-Namen tragen **kein** `Set`-Präfix: Bei uns heißt der Pfad
+> `<prefix>/set/<Name>`, also `set/RoomHeaterState`. Der Upstream schreibt
+> `commands/SetRoomHeaterState` — dort steckt das `Set` im Namen, weil sein
+> Pfad es nicht trägt.
 
 **Herkunft:** Fund beim Abgleich von `TobiasHanss/ioBroker.heishamon` und
 `Egyras/HeishaMon` gegen unseren Stand am 2026-08-28. Das ioBroker-Repo brachte
@@ -14,7 +26,7 @@ Set-Kommandos, die es bei uns nicht gibt.
 
 ---
 
-## 1. Das Ziel — und warum `ForceHeater` es nicht erreicht
+## 1. Das Ziel — und warum `ForceHeater` es im laufenden Betrieb nicht erreicht
 
 Motiv ist ein **Komfortgewinn im Heizbetrieb**, keine Notwendigkeit. Der
 Heizstab ist an beiden Anlagen heute **deaktiviert**, und das aus gutem Grund:
@@ -27,8 +39,8 @@ Zuschalten**: dann, wenn die Wassertemperaturen es laut Kaskadensteuerung
 erlauben. Ob das den Komfort spürbar hebt, müssen Experimente im Winter zeigen —
 das Vorhaben schafft nur die Voraussetzung dafür.
 
-Das naheliegende Kommando dafür wäre `ForceHeater` gewesen. **Es ist das
-falsche.** Das Panasonic-Servicehandbuch (Kapitel 12.9, liegt in
+Das naheliegende Kommando dafür wäre `ForceHeater` gewesen. **Für dieses Ziel
+ist es das falsche.** Das Panasonic-Servicehandbuch (Kapitel 12.9, liegt in
 `doku-intern/`, nicht öffentlich) beschreibt Force Heater als Ersatzwärmequelle
 **bei einer Störung der Wärmepumpe** — die Betriebsart setzt einen anliegenden
 Fehler voraus und wird von der Fernbedienung im Fehlerfall auch selbst
@@ -58,6 +70,20 @@ Damit ist die Lage klar: **Von allem, was für das Ziel nötig ist, fehlt genau
 ein Schalter** — die Freigabe in Byte 9. Die Schwelle, ab der die Anlage den
 Heizstab überhaupt in Betracht zieht, können wir mit SET20 längst setzen.
 
+### Nachtrag 2026-08-28: `ForceHeater` ist trotzdem ein eigener Hebel
+
+Am Bedienpanel gegengeprüft, und der Befund kippt die Staffelung dieses
+Dokuments: **Steht die Wärmepumpe auf aus, lässt sich der Heizstab über Force
+Heater einschalten, ohne dass eine Störung anliegt.** Die Handbuchaussage
+bleibt richtig, sie ist nur unvollständig — sie beschreibt den Fall der
+laufenden Anlage, und dort wird die Anforderung tatsächlich abgelehnt.
+
+Für das Ziel dieses Vorhabens — Komfort im laufenden Heizbetrieb — ändert das
+nichts: Dort bleibt SET37 der Hebel. Für **stehende** Anlage ist `ForceHeater`
+dagegen der einzige Weg, den Heizstab überhaupt anzufordern, und das ist der
+Fall, der im Notbetrieb und bei einer Störung interessiert. Deshalb ist SET39
+in 3.17.0 mitgebaut worden statt zurückgestellt.
+
 ## 2. Abgrenzung — was ausdrücklich NICHT dazugehört
 
 **Keine Anbindung an den Notbetrieb.** Entscheidung vom 2026-08-28: Das würde
@@ -73,12 +99,14 @@ bleibt frei; wir belegen dort nur `0x02` (SET12 `ForceDefrost`) und `0x04`
 (SET13 `ForceSterilization`).
 
 **Der Warmwasser-Heizstab ist nicht das Ziel.** Für DHW hängt an dieser Anlage
-bereits ein externer Heizstab. `SetDHWHeaterState` steht unten nur der
-Vollständigkeit halber, weil Byte 9 beide Felder trägt.
+bereits ein externer Heizstab. SET38 `DHWHeaterState` ist trotzdem gebaut, weil
+Byte 9 beide Felder trägt und der Hosttest dadurch den Nachbarschutz belegen
+kann — gebraucht wird es an dieser Anlage nicht.
 
 **Kompatibilität der SET-Nummern mit HeishaMon ist kein Ziel.** Unsere
 Nummerierung ist ab SET16 gegenüber dem Upstream verschoben und bleibt es. Was
-zählt, ist Byte, Funktion und Name. Nächste freie Nummer bei uns: **SET37**.
+zählt, ist Byte, Funktion und Name. Vergeben wurden **SET37 – SET39**; nächste
+freie Nummer ist damit SET40.
 
 ## 3. Was belegt ist
 
@@ -87,19 +115,19 @@ Original nachgelesen — nicht über die TypeScript-Portierung.
 
 ### Byte 9 — Heizstab freigeben (das Vorhaben)
 
-Funktion | Werte | Bits | Maske | Rücklesen
+Kommando | Werte | Bits | Maske | Rücklesen
 :--- | :--- | :--- | :--- | :---
-`set_room_heater_state` | `1` = blockiert, `2` = frei | `getBit7and8` | `0x03` | TOP59 `Room_Heater_State`
-`set_dhw_heater_state` | `4` = blockiert, `8` = frei | `getBit5and6` | `0x0C` | TOP58 `DHW_Heater_State`
+SET37 `RoomHeaterState` | `1` = blockiert, `2` = frei | `getBit7and8` | `0x03` | TOP59 `Room_Heater_State`
+SET38 `DHWHeaterState` | `4` = blockiert, `8` = frei | `getBit5and6` | `0x0C` | TOP58 `DHW_Heater_State`
 
-Byte 9 ist in `setCommands[]` bisher gar nicht belegt. Beide Rücklese-Topics
-existieren schon und zeigen `Blocked` / `Free`.
+Byte 9 war in `setCommands[]` bis 3.16.0 gar nicht belegt. Beide Rücklese-Topics
+existierten schon und zeigen `Blocked` / `Free`.
 
-### Byte 5 — ForceHeater (nachrangig, siehe Abschnitt 1)
+### Byte 5 — ForceHeater (SET39)
 
-`set_force_heater` schreibt Byte 5 auf `4` (aus) oder `8` (an) — die Bits, die
+Das Kommando schreibt Byte 5 auf `4` (aus) oder `8` (an) — die Bits, die
 `getBit5and6` liest, also **Maske `0x0C`**. Rücklesen über TOP68
-`Force_Heater_State`. Byte 5 ist bei uns schon belegt: SET2 `HolidayMode` mit
+`Force_Heater_State`. Byte 5 war schon belegt: SET2 `HolidayMode` mit
 Maske `0x30`, kein Überlapp. `ProtocolByteDecrypt.md` Zeile 10 führt für Byte 5
 zusätzlich „Dry Concrete" auf Bits 7+8; auch das bleibt unberührt.
 
@@ -110,20 +138,23 @@ Umrechnung, Name und Grenzen in einer Zeile; `subscribe_set_topics()` und
 `set_command_range()` laufen über dieselbe Tabelle:
 
 ```c
-    {37,  9, 0x03, CONV_MUL_INC, "SetRoomHeaterState",  0,   1,   1}, // blockiert=1 frei=2
-    {38,  9, 0x0C, CONV_MUL_INC, "SetDHWHeaterState",   0,   1,   4}, // blockiert=4 frei=8
-    {39,  5, 0x0C, CONV_MUL_INC, "SetForceHeater",      0,   1,   4}, // aus=4 an=8
+    {37,  9, 0x03, CONV_MUL_INC, "RoomHeaterState",     0,   1,   1}, // blockiert=1 frei=2
+    {38,  9, 0x0C, CONV_MUL_INC, "DHWHeaterState",      0,   1,   4}, // blockiert=4 frei=8
+    {39,  5, 0x0C, CONV_MUL_INC, "ForceHeater",         0,   1,   4}, // aus=4 an=8
 ```
+
+So stehen sie seit 3.17.0 im Code — mit den erklärenden Kommentarblöcken
+davor, die hier in Abschnitt 1 und 4 begründet sind.
 
 `CONV_MUL_INC` ist `(Wert + 1) * param` und trifft alle drei Wertepaare exakt —
 dasselbe Muster wie SET2 `HolidayMode` (`16`/`32`). Nachgerechnet:
 `RoomHeaterState 0` → `1*1 = 1`, `RoomHeaterState 1` → `2*1 = 2`.
 
-**Mit zu ändern:** der Kommentarblock „Why the mask column exists" in
-`commands.cpp` listet die geteilten Bytes auf. Byte 9 ist eine neue Zeile, Byte 5
-bekommt `ForceHeater 0x0C` dazu, falls es gebaut wird. Wer die Liste nicht
-pflegt, nimmt der nächsten Session die einzige Übersicht darüber, welche
-Kommandos sich ein Byte teilen.
+**Mit geändert:** der Kommentarblock „Why the mask column exists" in
+`commands.cpp` listet die geteilten Bytes auf. Byte 9 ist dort eine neue Zeile,
+Byte 5 hat `ForceHeater 0x0C` dazubekommen. Wer die Liste nicht pflegt, nimmt
+der nächsten Session die einzige Übersicht darüber, welche Kommandos sich ein
+Byte teilen.
 
 ## 4. Nebenwirkungen der Freigabe
 
@@ -188,11 +219,11 @@ Zwei Kommandos im selben 500-ms-Sammelfenster sind damit unkritisch; Lauf 4 des
 Byte-28-Vorhabens hat gezeigt, dass die Anlage zwei gleichzeitig wechselnde
 Bitfelder annimmt.
 
-**Falls `ForceHeater` doch gebaut wird:** Es ist ein Zustand, kein Impuls wie
-SET12 `ForceDefrost`. Praktisch entschärft die Anlage das selbst — die
-Betriebsart endet mit dem Fehler, mit „Betrieb aus" oder mit einem
-Netz-Reset —, aber ein gesetztes Kommando, das niemand zurücknimmt, bleibt ein
-loses Ende.
+**`ForceHeater` ist ein Zustand, kein Impuls** wie SET12 `ForceDefrost`.
+Praktisch entschärft die Anlage das selbst — die Betriebsart endet mit dem
+Fehler, mit „Betrieb aus" oder mit einem Netz-Reset —, aber ein gesetztes
+Kommando, das niemand zurücknimmt, bleibt ein loses Ende. Wer SET39 benutzt,
+plant das Zurücknehmen mit ein.
 
 ## 6. Was offen ist
 
@@ -205,7 +236,8 @@ loses Ende.
    `ProtocolByteDecrypt.md` Zeile 14 schreibt für dieselben Bits „heater
    off/on". Nach Kapitel 12.6.1 ist „Freigabe" richtig: Bedingung (a) ist der
    Schalter, die übrigen fünf Bedingungen entscheidet die Anlage. M2 im
-   Messplan prüft das.
+   Messplan prüft, dass das Bit ankommt — ob „frei" auch heißt, dass der Stab
+   je läuft, zeigt erst das Winterexperiment über TOP60 und TOP90.
 
 3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet:** Der Heizstab ist an
    beiden Anlagen deaktiviert, Byte 9 steht also auf blockiert. Damit ist auch
@@ -221,16 +253,19 @@ loses Ende.
 
 ## 7. Reihenfolge der Umsetzung
 
-1. Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand
-   (kein Eingriff). Byte 9 ist bekannt: blockiert.
-2. SET37 `RoomHeaterState` einbauen, M0–M2 messen.
-3. Winterexperiment vorbereiten (Abschnitt 8): Freigabekriterium in der
-   Steuerung festlegen, Mitschrieb einrichten.
-4. SET38 `ForceHeater` und SET39 `DHWHeaterState` nur, falls sich aus 2. oder 3.
-   ein konkreter Grund ergibt. Nach Abschnitt 1 ist der für `ForceHeater` nicht
-   in Sicht.
-5. `MQTT-Topics.md`, `SET-TOP-Zuordnung.md`, Changelog in `src/version.h`
-   nachziehen; Hosttest wie bei den übrigen Set-Kommandos.
+Die ursprüngliche Staffelung („erst SET37, den Rest nur bei Bedarf") ist mit
+der Owner-Entscheidung vom 2026-08-28 hinfällig — gebaut sind alle drei.
+
+Schritt | Stand
+:--- | :---
+**1.** Alle drei Kommandos in `setCommands[]`, Masken im Kommentarblock nachgezogen | **erledigt, 3.17.0**
+**2.** Hosttest `test/byte9_test.cpp`, in der CI | **erledigt, 3.17.0**
+**3.** `MQTT-Topics.md`, `SET-TOP-Zuordnung.md`, `README.md`, `test/README.md`, Changelog | **erledigt, 3.17.0**
+**4.** Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand (kein Eingriff) | offen
+**5.** OTA auf Stufe 1, Abnahme über `/tablerefresh`, M0–M2 messen (Abschnitt 8) | offen
+**6.** Winterexperiment vorbereiten: Freigabekriterium in der Steuerung festlegen, Mitschrieb einrichten | offen
+
+Byte 9 ist ohne Messung bekannt: blockiert, an beiden Anlagen.
 
 ## 8. Messplan
 
@@ -244,7 +279,24 @@ M1 | `RoomHeaterState 0` | Byte 9 Bits 0+1 → `01` | TOP59 → `Blocked`
 M2 | `RoomHeaterState 1` | Byte 9 Bits 0+1 → `10` | TOP59 → `Free`, **TOP58 unverändert**
 
 M2 ist der eigentliche Nachweis: dass das Nachbarfeld im selben Byte stehen
-bleibt, ist der Punkt, an dem eine falsche Maske auffällt.
+bleibt, ist der Punkt, an dem eine falsche Maske auffällt. Die Bitrechnung
+dahinter ist seit 3.17.0 ohne Gerät belegt
+([`test/byte9_test.cpp`](test/byte9_test.cpp)) — M0–M2 beantworten die eine
+Frage, die ein Hosttest nicht beantworten kann: ob die Wärmepumpe Byte 9
+annimmt.
+
+**SET39 `ForceHeater` misst sich nicht im selben Fenster.** Nach dem Befund vom
+2026-08-28 nimmt die Anlage ihn nur bei **ausgeschalteter** Wärmepumpe an — das
+ist kein Ruhefenster-Lauf nebenbei, sondern ein eigener Termin an einer
+stehenden Stufe:
+
+Schritt | Kommando | Erwartung Byte | Erwartung Rücklesen
+:--- | :--- | :--- | :---
+M3 | — (WP aus) | Byte 5 notieren | TOP68, TOP19, TOP13 notieren
+M4 | `ForceHeater 1` | Byte 5 Bits 5+6 → `10` | TOP68 → `Active`, **TOP19 und TOP13 unverändert**
+M5 | `ForceHeater 0` | Byte 5 Bits 5+6 → `01` | TOP68 → `Inactive`
+
+Auch hier gilt: zurückstellen, was M3 notiert hat.
 
 Ausgangszustand aus M0 nach dem Lauf wiederherstellen — der Heizstab gehört
 danach wieder auf blockiert, bis das Winterexperiment vorbereitet ist.

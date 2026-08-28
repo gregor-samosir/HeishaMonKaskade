@@ -45,8 +45,9 @@ struct SetCommand
 /* Applying the value through its mask keeps neighbouring fields intact:     */
 /*                                                                           */
 /*   byte 4:  Heatpump 0x03  |  WaterPump 0x30  |  ForceDHW 0xC0             */
-/*   byte 5:  HolidayMode 0x30                                               */
+/*   byte 5:  ForceHeater 0x0C  |  HolidayMode 0x30                          */
 /*   byte 8:  ForceDefrost 0x02  |  ForceSterilization 0x04                  */
+/*   byte 9:  DHWHeaterState 0x0C  |  RoomHeaterState 0x03                   */
 /*   byte 28: CoolingMode 0x0C  |  HeatingMode 0x03                          */
 /*                                                                           */
 /* Exception - byte 7: QuietMode ((n+1)*8) and PowerfulMode (73..76) really  */
@@ -153,6 +154,34 @@ static const SetCommand setCommands[] = {
     // ioBroker nachziehen (test/kurven_sync.py) - siehe test/README.md.
     {35, 28, 0x03, CONV_MUL_INC, "HeatingMode",                   0,   1,   1},
     {36, 28, 0x0C, CONV_MUL_INC, "CoolingMode",                   0,   1,   4},
+    // Heizstab (3.17.0). Byte 9 traegt BEIDE Freigaben in zwei Bitfeldern, die
+    // Masken sind hier deshalb Pflicht: ohne sie legte ein Raumheiz-Kommando die
+    // Warmwasser-Freigabe mit um. Rueckgelesen ueber TOP59 Room_Heater_State
+    // (getBit7and8) und TOP58 DHW_Heater_State (getBit5and6), Klartext
+    // Blocked/Free; die Kodierung ist aus genau diesen Dekodierern
+    // zurueckgerechnet:
+    //   RoomHeaterState 0 -> (0+1)*1 = 0b0001, gelesen (0b01 & 0b11) - 1   = 0
+    //   RoomHeaterState 1 -> (1+1)*1 = 0b0010, gelesen (0b10 & 0b11) - 1   = 1
+    //   DHWHeaterState  0 -> (0+1)*4 = 0b0100, gelesen ((4>>2) & 0b11) - 1 = 0
+    //   DHWHeaterState  1 -> (1+1)*4 = 0b1000, gelesen ((8>>2) & 0b11) - 1 = 1
+    //
+    // FREI HEISST NICHT AN. Die Freigabe ist Bedingung (a) von sechs, die
+    // uebrigen fuenf entscheidet die Waermepumpe selbst: 30 min seit Kompressor
+    // thermo-on, 9 min seit Pumpenstart, Aussentemperatur unter SET20
+    // HeaterOnOutdoorTemp, Vorlauf 4 K unter Soll, 20 min seit dem letzten
+    // Heizstab-Aus. Eine Steuerung muss deshalb vorausschauend freigeben;
+    // schnelles Ein/Aus bringt nichts. Ausfuehrlich in Vorhaben-HeaterSet.md.
+    {37,  9, 0x03, CONV_MUL_INC, "RoomHeaterState",               0,   1,   1}, // blockiert=1 frei=2
+    {38,  9, 0x0C, CONV_MUL_INC, "DHWHeaterState",                0,   1,   4}, // blockiert=4 frei=8
+    // ForceHeater ist ein ZUSTAND, kein Impuls wie SET12 ForceDefrost - wer ihn
+    // setzt, muss ihn auch zuruecknehmen. Byte 5 teilt er sich mit SET2
+    // HolidayMode (0x30), rueckgelesen ueber TOP68 Force_Heater_State
+    // (Inactive/Active). Das Servicehandbuch (12.9) beschreibt ihn als
+    // Ersatzwaermequelle bei einer Stoerung der Waermepumpe; am 2026-08-28 am
+    // Bedienpanel gegengeprueft: bei AUSGESCHALTETER Waermepumpe laesst er sich
+    // auch ohne anliegende Stoerung einschalten, bei laufendem Betrieb lehnt das
+    // Bedienteil die Anforderung ab.
+    {39,  5, 0x0C, CONV_MUL_INC, "ForceHeater",                   0,   1,   4}, // aus=4 an=8
 };
 
 static const unsigned int SETCOMMANDCOUNT = sizeof(setCommands) / sizeof(setCommands[0]);
