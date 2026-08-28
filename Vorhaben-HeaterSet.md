@@ -358,6 +358,64 @@ blockiert" —, war eine Folge der falschen Annahme über den Ist-Zustand. Richt
 ist: **wiederhergestellt wird, was M0 vorgefunden hat**, und das war an Stufe 1
 `Free`.
 
+### ForceHeater trägt die volle Regelung mit — und startet die Pumpe (2026-08-28, 21:43)
+
+Zweiter Lauf desselben Abends, diesmal mit Mitschrieb, nachdem der Owner das
+Verhalten zuerst von Hand gesehen hatte. **Stufe 1 ausgeschaltet**
+(`Heatpump_State` = 0), Außentemperatur 17 °C, Pumpe stand, im Ruhefenster des
+Re-Assert gestartet (`~/nodered-flows/testfenster.py --warte 240`).
+
+Zeit | Ereignis | Anlage
+:--- | :--- | :---
+21:43:11 | `set/ForceHeater 1` | —
+≤21:43:34 | TOP68 → `Active` | **Pumpe läuft an**: 2150 1/min, 11,2 l/min — noch bei Sollwert 20
+21:43:27 | `set/Z1HeatRequestTemperature 30` | TOP7/TOP27 stehen 15 s später auf 30
+21:45:36 | **TOP60 → `Active`, TOP16 = 3000 W** | Heizstab läuft, Vorlauf steigt
+21:45:57 | `set/Z1HeatRequestTemperature 20` | Sollwert zurück
+21:46:21 | **TOP60 → `Inactive`, TOP16 = 0 W** | Vorlauf 25,0 °C — **Pumpe läuft unverändert weiter**
+21:46:37 | `set/ForceHeater 0` | —
+21:46:52 | TOP68 → `Inactive` | —
+21:47:00 | — | **Pumpe steht** (0 1/min)
+
+Der Vorlauf stieg dabei von 22,5 auf 25,5 °C, der Durchfluss lag konstant bei
+rund 12 l/min. 3000 W elektrisch für 3 kW thermisch — der Heizstab hat keinen
+Wirkungsgrad zu verlieren.
+
+**Drei Befunde, die vorher nicht dokumentiert waren:**
+
+1. **Die Umwälzpumpe hängt an SET39, nicht am Heizstab.** Sie läuft an, sobald
+   TOP68 aktiv wird — noch bevor überhaupt eine Wärmeanforderung besteht —, und
+   sie läuft weiter, nachdem der Heizstab abgeschaltet hat. Erst das Zurücknehmen
+   von SET39 stoppt sie. **Wer SET39 setzt und vergisst, lässt die Pumpe
+   dauerhaft laufen.** Das ist das lose Ende, vor dem Abschnitt 5 warnt, in
+   konkreter Form.
+2. **Die thermische Regelung arbeitet im Force-Modus mit.** Der Heizstab schaltete
+   von selbst ab, als der Vorlauf über die Stoppschwelle stieg — rund 24 s nach
+   dem Sollwertwechsel, was zur 15-Sekunden-Bedingung des Handbuchs passt. Force
+   Heater ist damit kein ungeregeltes Durchheizen, sondern eine Ersatzwärmequelle
+   **innerhalb** der normalen Vorlaufregelung.
+3. **Der Heizstab lief rund zwei Minuten nach dem Kommando an**, nicht erst nach
+   den neun Minuten Pumpenlauf, die man aus der Handbuchbedingung erwarten würde.
+   Die Bedingung wirkt hier also nicht als harte Sperre — warum, ist offen.
+
+**Nebenbefund für die Auswertung des Winterexperiments:** TOP90
+`Room_Heater_Operations_Hours` blieb über den ganzen Lauf auf 267 h stehen,
+obwohl der Stab mit voller Leistung lief. Der Zähler erfasst kurze Läufe nicht.
+**Für Läufe unter einer Stunde sind TOP60 und TOP16 die Zeugen, nicht TOP90.**
+
+#### Was daraus folgt: eine Notheizung bei Kompressordefekt
+
+Der Lauf fand bei **ausgeschalteter Wärmepumpe** statt. Damit ist belegt, was
+SET39 wirklich wert ist: Fällt der Kompressor aus, lassen sich über MQTT 3 kW je
+Stufe in den Heizkreis bringen — mit laufender Umwälzpumpe und unter der
+Vorlaufregelung der Anlage, also ohne dass eine externe Steuerung die
+Temperaturführung übernehmen müsste. Sie muss nur den Sollwert setzen und SET39
+halten.
+
+Das ist **keine Anbindung an den Notbetrieb** und soll auch keine werden — die
+Abgrenzung aus Abschnitt 2 bleibt bestehen. Aber es ist der Grund, warum SET39
+in 3.17.0 gebaut wurde, und er ist jetzt gemessen statt vermutet.
+
 ### Das Winterexperiment
 
 Ob der Heizstab tatsächlich zuschaltet, lässt sich im Messfenster **nicht**

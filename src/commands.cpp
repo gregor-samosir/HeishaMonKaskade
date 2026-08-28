@@ -174,7 +174,11 @@ static const SetCommand setCommands[] = {
     {37,  9, 0x03, CONV_MUL_INC, "RoomHeaterState",               0,   1,   1}, // blockiert=1 frei=2
     {38,  9, 0x0C, CONV_MUL_INC, "DHWHeaterState",                0,   1,   4}, // blockiert=4 frei=8
     // ForceHeater ist ein ZUSTAND, kein Impuls wie SET12 ForceDefrost - wer ihn
-    // setzt, muss ihn auch zuruecknehmen. Byte 5 teilt er sich mit SET2
+    // setzt, muss ihn auch zuruecknehmen. UND ER STARTET DIE UMWAELZPUMPE: am
+    // 2026-08-28 gemessen laeuft sie an, sobald TOP68 aktiv wird, laeuft weiter,
+    // nachdem der Heizstab abgeschaltet hat, und stoppt erst mit ForceHeater 0.
+    // Ein vergessenes Kommando laesst also die Pumpe dauerhaft laufen. Byte 5
+    // teilt er sich mit SET2
     // HolidayMode (0x30), rueckgelesen ueber TOP68 Force_Heater_State
     // (Inactive/Active). Das Servicehandbuch (12.9) beschreibt ihn als
     // Ersatzwaermequelle bei einer Stoerung der Waermepumpe; am 2026-08-28 am

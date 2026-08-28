@@ -67,6 +67,23 @@
 //         SET20 HeaterOnOutdoorTemp steht auf 2 Grad, ist also gesetzt; die
 //         Feineinstellung (Bytes 104-106) steht wie erwartet auf 0x00.
 //
+//         WAS SET39 WIRKLICH TUT, IST AM ABEND DES 2026-08-28 GEMESSEN (Stufe 1
+//         AUSGESCHALTET, Sollwert kurz auf 30): Der Heizstab lief nach rund zwei
+//         Minuten mit 3000 W an, und die Anlage regelte dabei mit - er schaltete
+//         von selbst ab, als der Vorlauf ueber die Stoppschwelle stieg. Force
+//         Heater ist also kein ungeregeltes Durchheizen, sondern eine
+//         Ersatzwaermequelle INNERHALB der Vorlaufregelung. Damit taugt SET39 als
+//         Notheizung bei Kompressordefekt: 3 kW je Stufe ueber MQTT, ohne dass
+//         eine externe Steuerung die Temperaturfuehrung uebernehmen muss.
+//
+//         UND ER STARTET DIE UMWAELZPUMPE. Sie laeuft an, sobald TOP68 aktiv
+//         wird, laeuft weiter, nachdem der Heizstab abgeschaltet hat, und stoppt
+//         erst mit ForceHeater 0. Ein vergessenes Kommando laesst die Pumpe also
+//         dauerhaft laufen - das lose Ende aus dem Absatz oben in konkreter Form.
+//         Nebenbei: TOP90 Room_Heater_Operations_Hours blieb ueber den ganzen
+//         Lauf stehen; kurze Laeufe erfasst der Zaehler nicht, dafuer sind TOP60
+//         und TOP16 zustaendig.
+//
 //         DIE VERZOEGERUNG BEI SET39 IST BAUART, KEIN BEFUND (Owner-Einordnung):
 //         Die Waermepumpe prueft erst ihre Randbedingungen und uebernimmt den
 //         Wert dann - solche Wartezeiten sind bei Panasonic normal. Dass TOP60

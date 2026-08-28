@@ -468,7 +468,21 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 > the edge showed up about half a minute after the command (byte 9 takes about
 > two query cycles), and a readback right after sending still said `Inactive`.
 > That is how the unit works - it checks its own conditions first and only then
-> takes the value - so do not mistake it for a rejected command. The service manual describes it as a
+> takes the value - so do not mistake it for a rejected command.
+>
+> ⚠️ **SET39 also starts the water pump.** Measured on 2026-08-28 with the unit
+> switched off: the pump starts as soon as TOP68 goes `Active`, keeps running
+> after the heater itself has switched off, and only stops when SET39 is taken
+> back - a forgotten command leaves the pump running. In the same run the unit
+> **kept regulating**: the heater switched off by itself once the outlet
+> temperature rose above the stop threshold. Force heater is therefore a
+> substitute heat source *inside* the normal flow control, which makes it usable
+> as emergency heating (3 kW per stage) if the compressor fails.
+>
+> *Deutsch: SET39 startet auch die Umwälzpumpe — sie läuft, solange das Kommando
+> steht, nicht nur solange der Heizstab heizt. Die Vorlaufregelung der Anlage
+> arbeitet dabei mit: Der Stab schaltet selbst ab, wenn der Vorlauf über die
+> Stoppschwelle steigt.* The service manual describes it as a
 > substitute heat source for a **fault** of the heat pump; checked at the
 > control panel on 2026-08-28, it can also be switched on **without any fault
 > while the heat pump is switched off**. With the unit running, the panel

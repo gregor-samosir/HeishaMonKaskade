@@ -1004,6 +1004,53 @@ des internen Heizstabs, laut Referenz "J/K/L series") stehen alle drei auf
 `0x00` - bei dieser Serie also nicht belegt. TOP78 `Heater_On_Outdoor_Temp`
 steht auf 2 Grad.
 
+## ForceHeater in Betrieb: Pumpe und Regelung (2026-08-28, WP1)
+
+Zweiter Lauf des Tages, mit Mitschrieb. Stufe 1 AUS (`Heatpump_State` 0),
+Aussentemperatur 17 Grad, Pumpe stand. Fenster ueber
+`~/nodered-flows/testfenster.py --warte 240` geholt - der Re-Assert setzt
+`Z1HeatRequestTemperature` alle 5 Minuten zurueck, ohne Fenster misst man
+dagegen an.
+
+```
+./test/top_watch.py 192.168.2.120 0 1 5 6 7 8 16 27 60 65 68 90 --dauer 900 --takt 5 &
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/ForceHeater=1
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/Z1HeatRequestTemperature=30
+# ... beobachten ...
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/Z1HeatRequestTemperature=20
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/ForceHeater=0
+```
+
+Zeit | Ereignis | Anlage
+:--- | :--- | :---
+21:43:11 | `ForceHeater 1` | -
+21:43:34 | TOP68 Active | **Pumpe laeuft an**, 2150 1/min, 11,2 l/min
+21:43:27 | `Z1HeatRequestTemperature 30` | TOP7/TOP27 15 s spaeter auf 30
+21:45:36 | TOP60 Active, TOP16 3000 W | Heizstab laeuft, Vorlauf steigt
+21:45:57 | `Z1HeatRequestTemperature 20` | -
+21:46:21 | TOP60 Inactive, 0 W | Vorlauf 25,0 - **Pumpe laeuft weiter**
+21:46:37 | `ForceHeater 0` | -
+21:46:52 | TOP68 Inactive | -
+21:47:00 | - | **Pumpe steht**
+
+Vorlauf 22,5 -> 25,5 Grad bei rund 12 l/min, 3000 W elektrisch fuer 3 kW
+thermisch.
+
+**Die Umwaelzpumpe haengt an SET39, nicht am Heizstab** - sie startet mit dem
+Kommando und stoppt erst, wenn es zurueckgenommen wird. Ein vergessenes SET39
+laesst sie dauerhaft laufen; TOP65 `Pump_Speed` und TOP1 `Pump_Flow` zeigen das.
+
+**Die Anlage regelt im Force-Modus mit** - der Stab ging von selbst aus, als der
+Vorlauf ueber die Stoppschwelle stieg, rund 24 s nach dem Sollwertwechsel (die
+Stoppbedingung verlangt 15 s durchgehend). Kein ungeregeltes Durchheizen.
+
+**Der Stab lief rund zwei Minuten nach dem Kommando an**, nicht erst nach den
+neun Minuten Pumpenlauf aus der Handbuchbedingung. Warum, ist offen.
+
+**Vorsicht bei der Auswertung:** TOP90 `Room_Heater_Operations_Hours` blieb ueber
+den ganzen Lauf auf 267 h stehen. Kurze Laeufe erfasst der Zaehler nicht - dafuer
+sind TOP60 und TOP16 zustaendig.
+
 ## Kurvenbetrieb: was die WP annimmt und was sie verwirft (2026-08-20, WP1)
 
 Der Lauf gehoert zum Vorhaben Notbetrieb (M1/M2, siehe

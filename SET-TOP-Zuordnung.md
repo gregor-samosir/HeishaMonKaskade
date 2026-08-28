@@ -344,7 +344,12 @@ Wärmepumpe entscheidet über fünf weitere Bedingungen mit (Servicehandbuch
 `HeaterOnOutdoorTemp` beeinflussbar ist.
 
 **SET39 ist ein Zustand, kein Impuls** — anders als SET12 `ForceDefrost` bleibt
-er stehen, bis ihn jemand zurücknimmt. Das Servicehandbuch (12.9) führt ihn als
+er stehen, bis ihn jemand zurücknimmt. **Und er startet die Umwälzpumpe:** Am
+2026-08-28 gemessen läuft sie an, sobald TOP68 aktiv wird, läuft weiter, nachdem
+der Heizstab abgeschaltet hat, und stoppt erst mit `ForceHeater 0`. Im selben
+Lauf hat die Anlage mitgeregelt — der Stab schaltete von selbst ab, als der
+Vorlauf über die Stoppschwelle stieg. TOP65 `Pump_Speed` und TOP1 `Pump_Flow`
+sind damit die Kontrollgrößen, an denen ein vergessenes SET39 auffällt. Das Servicehandbuch (12.9) führt ihn als
 Ersatzwärmequelle bei einer *Störung*; am 2026-08-28 am Bedienpanel
 gegengeprüft: bei **ausgeschalteter** Wärmepumpe lässt er sich auch ohne
 anliegende Störung einschalten, bei laufendem Betrieb wird die Anforderung
