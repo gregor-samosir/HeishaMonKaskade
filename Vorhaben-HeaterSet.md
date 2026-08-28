@@ -396,9 +396,15 @@ Rücklaufschwelle der Schutzfunktion liegt in einem Bereich, den eine
 Fußbodenheizung bei strengem Frost durchaus streifen kann — also ausgerechnet
 im geplanten Testfenster. **Praktische Folge:** `Defrosting_State` (TOP26) ist
 im Mitschrieb kein Beiwerk, sondern die Bedingung dafür, dass das Experiment
-überhaupt auswertbar ist. Wer den Abtau-Anteil sauber ausschließen will, muss
-den Backup-Heizer im Custom Setup abschalten — und damit auch SET37
-wirkungslos machen. Beides zusammen geht nicht.
+überhaupt auswertbar ist — der Abtau-Anteil wird **herausgerechnet, nicht
+verhindert**.
+
+⛔ **Am Custom Setup wird dafür nichts abgeschaltet.** Solange der Heizstab im
+Nutzermenü freigegeben ist, ist die Freigabe im Installateurmenü keine
+Stellschraube mehr, mit der man im laufenden Betrieb spielt — die Kombination
+aus freigegebenem und zugleich im Servicemenü abgeschaltetem Heizstab ist an
+dieser Anlage nicht zulässig. Wer dort etwas ändern will, nimmt vorher die
+Freigabe zurück. **Reihenfolge: erst SET37 auf blockiert, dann das Menü.**
 
 **Der zweite Hebel liegt bei der Kaskadensteuerung.** Bedingung (e) — Vorlauf
 mehr als 4 K unter Soll — erfüllt eine träge Fußbodenheizung von allein selten.
