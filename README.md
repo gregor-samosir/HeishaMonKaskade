@@ -142,6 +142,73 @@ Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
 
 Im Detail:
 
+### Der Heizstab lässt sich schalten — und was er dabei tut (3.17.0)
+
+Drei Set-Kommandos für den internen Heizstab: SET37 `RoomHeaterState` und
+SET38 `DHWHeaterState` geben ihn frei (Byte 9), SET39 `ForceHeater` schaltet
+ihn an (Byte 5). Die Kommandos gibt es auch im Original-Projekt; hier sind sie
+**bitgenau maskiert** — Byte 9 trägt beide Freigaben in zwei Bitfeldern, an
+dieser Anlage dazu zwei weitere belegte Gruppen. Ohne Maske fiele das Byte beim
+Schreiben auf `0x02` zusammen und legte drei Felder auf einmal um.
+
+**Am 2026-08-28 an Stufe 1 gemessen**, jeder Eingriff einzeln, Byte im
+laufenden Mitschnitt (`test/byte_monitor.py`):
+
+| Kommando | Byte | Rücklesen | Nachbarfelder |
+| :--- | :--- | :--- | :--- |
+| `RoomHeaterState 0` / `1` | 9: `0x56` → `0x55` → `0x56` | TOP59 `Free` → `Blocked` → `Free` | unverändert |
+| `ForceHeater 1` / `0` | 5: `0x55` → `0x59` → `0x55` | TOP68 `Inactive` → `Active` → `Inactive` | unverändert |
+
+Damit ist belegt, dass die WH-MDC05H3E5 beide Bytes annimmt und dass jedes
+Kommando nur seine eigene Bitgruppe anfasst.
+
+#### Was beim Schalten von SET39 tatsächlich passiert
+
+Zweiter Lauf am selben Abend, mit Verlaufsmitschrieb im 5-Sekunden-Takt
+(`test/top_watch.py`), im Ruhefenster der Kaskadensteuerung. **Die Wärmepumpe
+war dabei ausgeschaltet** (`Heatpump_State` = 0, Kompressor 0 Hz), die
+Umwälzpumpe stand, die Außentemperatur lag bei 17 °C:
+
+| Zeit | Kommando | Was die Anlage tat |
+| :--- | :--- | :--- |
+| 21:43:11 | `set/ForceHeater 1` | — |
+| 21:43:19 | | TOP68 `Active`, **die Umwälzpumpe läuft an** — 0 → 2300 1/min, 11,95 l/min |
+| 21:43:27 | `set/Z1HeatRequestTemperature 30` | Sollwert steht 21:43:34 in TOP7 |
+| 21:45:31 | | **TOP60 `Active`, TOP16 = 3000 W** — der Heizstab heizt |
+| 21:45:57 | `set/Z1HeatRequestTemperature 20` | Sollwert steht 21:46:06 in TOP7 |
+| 21:46:16 | | **TOP60 `Inactive`, 0 W** — Heizstab aus, **Pumpe läuft weiter** |
+| 21:46:37 | `set/ForceHeater 0` | — |
+| 21:46:47 | | TOP68 `Inactive` |
+| 21:46:57 | | **Pumpe steht** (2300 → 0 1/min) |
+
+Der Vorlauf stieg dabei von 22,5 auf 25,5 °C, der Rücklauf von 21,0 auf
+23,0 °C, der Durchfluss lag konstant bei rund 12 l/min. 3000 W elektrisch für
+3 kW thermisch.
+
+Drei Dinge, die dieser Lauf zeigt:
+
+* **Die Umwälzpumpe hängt am Kommando, nicht am Heizstab.** Sie läuft an,
+  sobald TOP68 aktiv wird — noch bevor überhaupt eine Wärmeanforderung besteht
+  —, sie läuft weiter, nachdem der Heizstab abgeschaltet hat, und sie stoppt
+  erst, wenn SET39 zurückgenommen wird. **Wer das Kommando setzt und vergisst,
+  lässt die Pumpe dauerhaft laufen**; sichtbar an TOP65 `Pump_Speed` und TOP1
+  `Pump_Flow`.
+* **Die Vorlaufregelung der Anlage arbeitet mit.** Der Heizstab schaltete von
+  selbst ab, als der Vorlauf über die Stoppschwelle stieg — die Temperaturführung
+  bleibt also bei der Wärmepumpe, eine externe Steuerung setzt nur den Sollwert.
+* **Zeiten:** Der Heizstab lief 2:20 min nach dem Kommando an. Die Übernahme von
+  SET39 selbst schwankt — 8 s und 10 s in diesem Lauf, rund eine halbe Minute in
+  einem früheren am selben Tag. Wer direkt nach dem Senden zurückliest, sieht
+  den alten Wert und hält das Kommando leicht für verworfen.
+
+Ein Zähler taugt dafür übrigens nicht: TOP90 `Room_Heater_Operations_Hours`
+blieb über den ganzen Lauf stehen. Für kurze Läufe sind TOP60 und TOP16 die
+Zeugen.
+
+Ablauf, Rohwerte und die Herleitung aus dem Servicehandbuch stehen in
+[`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), die Wiederholung des Laufs in
+[`test/README.md`](test/README.md).
+
 ### Der Notbetrieb stellt die Hydraulik selbst um (3.15.0)
 
 Der Notbetriebsknopf setzt hydraulisch **1-stufigen** Betrieb voraus — und bis
