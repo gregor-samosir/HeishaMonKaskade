@@ -16,9 +16,16 @@ Set-Kommandos, die es bei uns nicht gibt.
 
 ## 1. Das Ziel — und warum `ForceHeater` es nicht erreicht
 
-Motiv ist der **Heizbetrieb in harten Frostphasen**: Der Heizstab hat 3 kW fix
-(beide Stufen gleich). Er kann in einer Frostphase mithelfen, mehr nicht — es
-geht um Unterstützung, nicht um eine zweite Wärmequelle.
+Motiv ist ein **Komfortgewinn im Heizbetrieb**, keine Notwendigkeit. Der
+Heizstab ist an beiden Anlagen heute **deaktiviert**, und das aus gutem Grund:
+Selbst bei −15 °C Außentemperatur hat sich gezeigt, dass die große Masse der
+Fußbodenheizung ihn nicht braucht. Er hat 3 kW fix je Stufe — er kann
+mithelfen, mehr nicht.
+
+Interessant ist deshalb nicht die Dauerfreigabe, sondern das **gezielte
+Zuschalten**: dann, wenn die Wassertemperaturen es laut Kaskadensteuerung
+erlauben. Ob das den Komfort spürbar hebt, müssen Experimente im Winter zeigen —
+das Vorhaben schafft nur die Voraussetzung dafür.
 
 Das naheliegende Kommando dafür wäre `ForceHeater` gewesen. **Es ist das
 falsche.** Das Panasonic-Servicehandbuch (Kapitel 12.9, liegt in
@@ -127,12 +134,34 @@ Plattenwärmetauschers vor Eisbildung; ausgelöst wird es bei niedrigem Vorlauf,
 tiefer Außentemperatur oder niedrigem Rücklauf während der Abtauung, und es
 hängt nicht am Heizstab-Knopf der Fernbedienung.
 
-Das ist ein Argument **für** die Freigabe, aber es heißt auch: Wer die Freigabe
-per MQTT dynamisch umschaltet, schaltet den Abtau-Schutz mit um. Eine
-Automatik, die den Heizstab „nur bei Frost" freigibt, nimmt ihn genau in den
-Abtauzyklen weg, in denen er gedacht ist. Sprich für die Nutzung: eher dauerhaft
-freigeben und die Zuschaltung über die Außentemperaturschwelle (SET20) regeln,
-als die Freigabe selbst als Regelgröße zu benutzen.
+Für dieses Vorhaben ist das kein Gegenargument — die Freigabe **soll** die
+Regelgröße sein —, aber es hat eine Folge für die Auswertung: In einer
+Freigabephase läuft der Heizstab nicht nur dann, wenn die Steuerung ihn haben
+wollte, sondern auch bei jeder Abtauung, die in diese Phase fällt. Wer den
+Nutzen der gezielten Zuschaltung beziffern will, muss den Abtau-Anteil davon
+trennen. Da der Heizstab heute gesperrt ist, läuft er auch beim Abtauen nicht
+mit; der Vergleich „vorher/nachher" misst also beides zusammen.
+
+### Die Anlage entscheidet weiter mit
+
+Die Freigabe ist Bedingung (a) von sechs. Die übrigen fünf bleiben in Kraft,
+und daraus folgt für eine Steuerung, die gezielt freigibt:
+
+* **Die Freigabe wirkt nicht sofort.** Nach ihr müssen erst 30 min
+  Kompressorlauf, 9 min Pumpenlauf und 4 K Vorlaufabweichung zusammenkommen.
+  Die Steuerung muss also vorausschauend freigeben, nicht reaktiv im Moment des
+  Bedarfs.
+* **Schnelles Ein/Aus bringt nichts.** Nach jedem Abschalten des Heizstabs
+  sperrt die Anlage ihn 20 Minuten.
+* **SET20 muss passen.** Die Außentemperaturschwelle
+  (`HeaterOnOutdoorTemp`, TOP78) ist Bedingung (d). Steht sie so, dass die
+  Anlage den Heizstab nie in Betracht zieht, bleibt die Freigabe wirkungslos.
+  Bei einem seit Jahren deaktivierten Heizstab ist gut möglich, dass der Wert
+  nie bewusst gesetzt wurde — **vor dem ersten Versuch prüfen**.
+* **Die Bedingung „4 K unter Soll" ist vorhersagbar.** Sie lässt sich aus
+  `Main_Outlet_Temp` (TOP6) und `Main_Target_Temp` (TOP7) mitrechnen. Die
+  Steuerung kann damit erkennen, ob die Anlage bei freigegebenem Stab
+  überhaupt zuschalten würde — und nur dann freigeben.
 
 **Sperren unabhängig vom Schalter.** Der Heizstab läuft laut Handbuch generell
 nicht, wenn Vorlauf- oder Rücklaufsensor gestört sind, der Strömungswächter
@@ -178,10 +207,10 @@ loses Ende.
    Schalter, die übrigen fünf Bedingungen entscheidet die Anlage. M2 im
    Messplan prüft das.
 
-3. **Was steht heute in Byte 9?** Ist der Raumheizstab an dieser Anlage
-   überhaupt freigegeben? Ohne Eingriff aus einem Mitschnitt ablesbar und der
-   sinnvolle erste Schritt — steht er schon auf `Free`, ist das Vorhaben
-   allenfalls noch Komfort.
+3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet:** Der Heizstab ist an
+   beiden Anlagen deaktiviert, Byte 9 steht also auf blockiert. Damit ist auch
+   klar, dass M1 im Messplan den Ist-Zustand trifft und M2 die eigentliche
+   Änderung ist.
 
 4. **Die Feineinstellung fehlt uns vermutlich dauerhaft.** Startverzögerung
    (Byte 104), Start-Delta (105) und Stopp-Delta (106) sind in
@@ -192,11 +221,11 @@ loses Ende.
 
 ## 7. Reihenfolge der Umsetzung
 
-1. Mitschnitt auswerten: Byte 9 und 104–106 im Ist-Zustand (kein Eingriff).
+1. Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand
+   (kein Eingriff). Byte 9 ist bekannt: blockiert.
 2. SET37 `RoomHeaterState` einbauen, M0–M2 messen.
-3. Nutzung festlegen: dauerhaft freigeben und über SET20 steuern (siehe
-   Abschnitt 4), oder Freigabe als Regelgröße — dann Abtau-Nebenwirkung
-   einplanen.
+3. Winterexperiment vorbereiten (Abschnitt 8): Freigabekriterium in der
+   Steuerung festlegen, Mitschrieb einrichten.
 4. SET38 `ForceHeater` und SET39 `DHWHeaterState` nur, falls sich aus 2. oder 3.
    ein konkreter Grund ergibt. Nach Abschnitt 1 ist der für `ForceHeater` nicht
    in Sicht.
@@ -217,16 +246,34 @@ M2 | `RoomHeaterState 1` | Byte 9 Bits 0+1 → `10` | TOP59 → `Free`, **TOP58 
 M2 ist der eigentliche Nachweis: dass das Nachbarfeld im selben Byte stehen
 bleibt, ist der Punkt, an dem eine falsche Maske auffällt.
 
-Ob der Heizstab danach tatsächlich zuschaltet, lässt sich **nicht** im
-Messfenster prüfen — dafür müssten 30 min Kompressorlauf, die
-Außentemperaturschwelle und 4 K Vorlaufabweichung zusammenkommen. Das ist eine
-Beobachtung für die nächste Frostphase, keine Messung: `Room_Heater_State`
-(TOP59), `Heat_Power_Consumption` (TOP16) und die Betriebsstunden
-`Room_Heater_Operations_Hours` (TOP90) mitschreiben und hinterher auswerten.
-TOP90 ist dabei der belastbarste Zeuge — er zählt nur, wenn der Stab wirklich
-lief.
+Ausgangszustand aus M0 nach dem Lauf wiederherstellen — der Heizstab gehört
+danach wieder auf blockiert, bis das Winterexperiment vorbereitet ist.
 
-Ausgangszustand aus M0 nach dem Lauf wiederherstellen.
+### Das Winterexperiment
+
+Ob der Heizstab tatsächlich zuschaltet, lässt sich im Messfenster **nicht**
+prüfen: dafür müssten 30 min Kompressorlauf, die Außentemperaturschwelle und
+4 K Vorlaufabweichung zusammenkommen. Das ist eine Beobachtung über eine
+Frostphase, keine Messung.
+
+Mitzuschreiben:
+
+Topic | wofür
+:--- | :---
+`Room_Heater_Operations_Hours` (TOP90) | der belastbarste Zeuge — zählt nur, wenn der Stab wirklich lief
+`Room_Heater_State` (TOP59) | wann die Steuerung freigegeben hat
+`Heat_Power_Consumption` (TOP16) | Leistungsaufnahme, zeigt den 3-kW-Sprung
+`Defrosting_State` (TOP26) | trennt den Abtau-Anteil vom geregelten Anteil (Abschnitt 4)
+`Main_Outlet_Temp` / `Main_Target_Temp` (TOP6/7) | die 4-K-Bedingung, gegen die freigegeben wurde
+`Outside_Temp` (TOP14) | Bezug zur Außentemperaturschwelle
+
+Die Frage, die das Experiment beantworten soll, ist eine Komfortfrage, keine
+Verbrauchsfrage: Kommt die Raumtemperatur in der Frostphase spürbar früher
+nach? Der Mehrverbrauch steht ohnehin fest — 3 kW mal Laufzeit aus TOP90.
+
+**Auswertung nicht vergessen:** Ohne TOP26 daneben ist der Abtau-Anteil in TOP90
+nicht vom geregelten Anteil zu trennen, und dann misst das Experiment etwas
+anderes als das, was gesteuert wurde.
 
 **Werkzeuge:** `test/frame_diff.py` für die Bytes (Ausgabe ist **hexadezimal**),
 `test/top_watch.py` für die Rückmeldungen, `test/mqtt_pub.py` zum Senden.
