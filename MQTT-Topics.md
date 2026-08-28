@@ -465,8 +465,9 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 >
 > **SET39 `ForceHeater` is a state, not a pulse** like SET12 `ForceDefrost` -
 > whoever sets it has to take it back. It is also **taken over with a delay**:
-> the edge showed up about half a minute after the command (byte 9 takes about
-> two query cycles), and a readback right after sending still said `Inactive`.
+> the edge showed up about half a minute after the command in one run and 8-10 s
+> in another (byte 9 takes about two query cycles), and a readback right after
+> sending still said `Inactive`.
 > That is how the unit works - it checks its own conditions first and only then
 > takes the value - so do not mistake it for a rejected command.
 >

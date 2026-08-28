@@ -68,8 +68,8 @@
 //         Feineinstellung (Bytes 104-106) steht wie erwartet auf 0x00.
 //
 //         WAS SET39 WIRKLICH TUT, IST AM ABEND DES 2026-08-28 GEMESSEN (Stufe 1
-//         AUSGESCHALTET, Sollwert kurz auf 30): Der Heizstab lief nach rund zwei
-//         Minuten mit 3000 W an, und die Anlage regelte dabei mit - er schaltete
+//         AUSGESCHALTET, Sollwert kurz auf 30): Der Heizstab lief nach 2:20 min
+//         mit 3000 W an, und die Anlage regelte dabei mit - er schaltete
 //         von selbst ab, als der Vorlauf ueber die Stoppschwelle stieg. Force
 //         Heater ist also kein ungeregeltes Durchheizen, sondern eine
 //         Ersatzwaermequelle INNERHALB der Vorlaufregelung. Damit taugt SET39 als

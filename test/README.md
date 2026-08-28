@@ -1021,19 +1021,22 @@ dagegen an.
 ./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/ForceHeater=0
 ```
 
+Zeiten aus `top_watch.py` (5-s-Takt), Kommandos aus dem Sendelog:
+
 Zeit | Ereignis | Anlage
 :--- | :--- | :---
 21:43:11 | `ForceHeater 1` | -
-21:43:34 | TOP68 Active | **Pumpe laeuft an**, 2150 1/min, 11,2 l/min
-21:43:27 | `Z1HeatRequestTemperature 30` | TOP7/TOP27 15 s spaeter auf 30
-21:45:36 | TOP60 Active, TOP16 3000 W | Heizstab laeuft, Vorlauf steigt
-21:45:57 | `Z1HeatRequestTemperature 20` | -
-21:46:21 | TOP60 Inactive, 0 W | Vorlauf 25,0 - **Pumpe laeuft weiter**
+21:43:19 | TOP68 Active | **Pumpe laeuft im selben Schritt an**, 0 -> 2300 1/min
+21:43:27 | `Z1HeatRequestTemperature 30` | TOP7/TOP27 folgen 21:43:34
+21:45:31 | TOP60 Active, TOP16 3000 W | Heizstab laeuft, Vorlauf steigt
+21:45:57 | `Z1HeatRequestTemperature 20` | TOP7/TOP27 folgen 21:46:06
+21:46:16 | TOP60 Inactive, 0 W | Vorlauf 25,0 - **Pumpe laeuft weiter**
 21:46:37 | `ForceHeater 0` | -
-21:46:52 | TOP68 Inactive | -
-21:47:00 | - | **Pumpe steht**
+21:46:47 | TOP68 Inactive | -
+21:46:57 | - | **Pumpe steht**, 2300 -> 0
 
-Vorlauf 22,5 -> 25,5 Grad bei rund 12 l/min, 3000 W elektrisch fuer 3 kW
+Vorlauf 22,5 -> 25,5 Grad (Hoechstwert 11 s NACH dem Abschalten), Ruecklauf
+21,0 -> 23,0, Durchfluss konstant rund 12 l/min, 3000 W elektrisch fuer 3 kW
 thermisch.
 
 **Die Umwaelzpumpe haengt an SET39, nicht am Heizstab** - sie startet mit dem
@@ -1041,11 +1044,16 @@ Kommando und stoppt erst, wenn es zurueckgenommen wird. Ein vergessenes SET39
 laesst sie dauerhaft laufen; TOP65 `Pump_Speed` und TOP1 `Pump_Flow` zeigen das.
 
 **Die Anlage regelt im Force-Modus mit** - der Stab ging von selbst aus, als der
-Vorlauf ueber die Stoppschwelle stieg, rund 24 s nach dem Sollwertwechsel (die
-Stoppbedingung verlangt 15 s durchgehend). Kein ungeregeltes Durchheizen.
+Vorlauf ueber die Stoppschwelle stieg, 10 s nachdem der zurueckgenommene
+Sollwert im Antworttelegramm stand. Auf die Sekunde nachrechnen laesst sich die
+15-s-Stoppbedingung damit nicht (die WP hatte den Sollwert schon vorher), der
+Punkt selbst steht: kein ungeregeltes Durchheizen.
 
-**Der Stab lief rund zwei Minuten nach dem Kommando an**, nicht erst nach den
-neun Minuten Pumpenlauf aus der Handbuchbedingung. Warum, ist offen.
+**Der Stab lief 2:20 min nach dem Kommando an**, nicht erst nach den neun
+Minuten Pumpenlauf aus der Handbuchbedingung. Warum, ist offen.
+
+**Die Uebernahme von SET39 schwankt** - mittags rund eine halbe Minute, abends
+8 s (ein) und 10 s (aus). Keine feste Groesse, mit der man rechnen kann.
 
 **Vorsicht bei der Auswertung:** TOP90 `Room_Heater_Operations_Hours` blieb ueber
 den ganzen Lauf auf 267 h stehen. Kurze Laeufe erfasst der Zaehler nicht - dafuer

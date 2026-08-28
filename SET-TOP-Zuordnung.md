@@ -322,12 +322,13 @@ Kommando | Byte | Rohbyte | Rücklesen | Nachbarn
 Bitgruppen 1+2 und 3+4 stehen auf `01`. Ohne Maske wäre das Byte auf `0x02`
 zusammengefallen und hätte drei Felder auf einmal umgelegt.
 
-**SET39 wird verzögert übernommen** — die Flanke lag erst beim zehnten von zwölf
-Telegrammen des Mitschnitts, grob eine halbe Minute nach dem Kommando; bei
-Byte 9 lag sie nach zwei. Das ist Bauart und nicht auf dieses Kommando
-beschränkt: Die Wärmepumpe prüft erst ihre Randbedingungen und übernimmt dann.
-Fürs Prüfen heißt es, nicht sofort nach dem Senden zurückzulesen — sonst hält
-man ein angekommenes Kommando für verworfen.
+**SET39 wird verzögert übernommen, und die Verzögerung schwankt** — mittags lag
+die Flanke grob eine halbe Minute nach dem Kommando, im Abendlauf desselben
+Tages 8 s beim Einschalten und 10 s beim Ausschalten; Byte 9 braucht rund zwei
+Abfragezyklen. Das ist Bauart: Die Wärmepumpe prüft erst ihre Randbedingungen
+und übernimmt dann. Fürs Prüfen heißt es, eine halbe Minute Geduld einzuplanen
+und nicht sofort nach dem Senden zurückzulesen — sonst hält man ein
+angekommenes Kommando für verworfen.
 
 Zusätzlich ohne Gerät belegt: [`test/byte9_test.cpp`](test/byte9_test.cpp) legt
 die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus `decode.cpp`

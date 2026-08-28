@@ -365,21 +365,25 @@ Verhalten zuerst von Hand gesehen hatte. **Stufe 1 ausgeschaltet**
 (`Heatpump_State` = 0), Außentemperatur 17 °C, Pumpe stand, im Ruhefenster des
 Re-Assert gestartet (`~/nodered-flows/testfenster.py --warte 240`).
 
+Zeiten aus `test/top_watch.py` im 5-Sekunden-Takt, Kommandos aus dem Sendelog:
+
 Zeit | Ereignis | Anlage
 :--- | :--- | :---
 21:43:11 | `set/ForceHeater 1` | —
-≤21:43:34 | TOP68 → `Active` | **Pumpe läuft an**: 2150 1/min, 11,2 l/min — noch bei Sollwert 20
-21:43:27 | `set/Z1HeatRequestTemperature 30` | TOP7/TOP27 stehen 15 s später auf 30
-21:45:36 | **TOP60 → `Active`, TOP16 = 3000 W** | Heizstab läuft, Vorlauf steigt
-21:45:57 | `set/Z1HeatRequestTemperature 20` | Sollwert zurück
-21:46:21 | **TOP60 → `Inactive`, TOP16 = 0 W** | Vorlauf 25,0 °C — **Pumpe läuft unverändert weiter**
+21:43:19 | TOP68 → `Active` | **Pumpe läuft im selben Schritt an**: 0 → 2300 1/min, 11,95 l/min — noch bei Sollwert 20
+21:43:27 | `set/Z1HeatRequestTemperature 30` | TOP7/TOP27 folgen 21:43:34
+21:43:29–21:43:49 | — | Pumpe regelt sich ein: 2150 → 2200 → 2250 → 2300 1/min
+21:45:31 | **TOP60 → `Active`, TOP16 = 3000 W** | Heizstab läuft, Vorlauf steigt
+21:45:57 | `set/Z1HeatRequestTemperature 20` | TOP7/TOP27 folgen 21:46:06
+21:46:16 | **TOP60 → `Inactive`, TOP16 = 0 W** | Vorlauf 25,0 °C — **Pumpe läuft unverändert weiter**
 21:46:37 | `set/ForceHeater 0` | —
-21:46:52 | TOP68 → `Inactive` | —
-21:47:00 | — | **Pumpe steht** (0 1/min)
+21:46:47 | TOP68 → `Inactive` | —
+21:46:57 | — | **Pumpe steht** (2300 → 0 1/min)
 
-Der Vorlauf stieg dabei von 22,5 auf 25,5 °C, der Durchfluss lag konstant bei
-rund 12 l/min. 3000 W elektrisch für 3 kW thermisch — der Heizstab hat keinen
-Wirkungsgrad zu verlieren.
+Der Vorlauf stieg von 22,5 auf 25,5 °C — sein Höchstwert fiel 11 s **nach** dem
+Abschalten, die Trägheit des Kreises ist im Mitschrieb also sichtbar. Rücklauf
+21,0 → 23,0 °C, Durchfluss konstant rund 12 l/min. 3000 W elektrisch für 3 kW
+thermisch — der Heizstab hat keinen Wirkungsgrad zu verlieren.
 
 **Drei Befunde, die vorher nicht dokumentiert waren:**
 
@@ -390,13 +394,21 @@ Wirkungsgrad zu verlieren.
    dauerhaft laufen.** Das ist das lose Ende, vor dem Abschnitt 5 warnt, in
    konkreter Form.
 2. **Die thermische Regelung arbeitet im Force-Modus mit.** Der Heizstab schaltete
-   von selbst ab, als der Vorlauf über die Stoppschwelle stieg — rund 24 s nach
-   dem Sollwertwechsel, was zur 15-Sekunden-Bedingung des Handbuchs passt. Force
-   Heater ist damit kein ungeregeltes Durchheizen, sondern eine Ersatzwärmequelle
-   **innerhalb** der normalen Vorlaufregelung.
-3. **Der Heizstab lief rund zwei Minuten nach dem Kommando an**, nicht erst nach
-   den neun Minuten Pumpenlauf, die man aus der Handbuchbedingung erwarten würde.
-   Die Bedingung wirkt hier also nicht als harte Sperre — warum, ist offen.
+   von selbst ab, als der Vorlauf über die Stoppschwelle stieg — **10 s**, nachdem
+   der zurückgenommene Sollwert im Antworttelegramm stand. Auf die Sekunde
+   nachrechnen lässt sich die 15-Sekunden-Stoppbedingung damit nicht: Die
+   Wärmepumpe hatte den Sollwert schon vor seiner Sichtbarkeit im Telegramm. Der
+   Punkt selbst steht — Force Heater ist kein ungeregeltes Durchheizen, sondern
+   eine Ersatzwärmequelle **innerhalb** der normalen Vorlaufregelung.
+3. **Der Heizstab lief 2:20 min nach dem Kommando an** (1:57 min nach der
+   sichtbaren Sollwertanhebung), nicht erst nach den neun Minuten Pumpenlauf, die
+   man aus der Handbuchbedingung erwarten würde. Die Bedingung wirkt hier also
+   nicht als harte Sperre — warum, ist offen.
+
+4. **Die Übernahme von SET39 schwankt.** Mittags lag die Flanke rund eine halbe
+   Minute nach dem Kommando, abends **8 s** (ein) und **10 s** (aus). Die
+   Verzögerung ist also keine feste Größe, mit der man rechnen kann — fürs
+   Rücklesen bleibt es dabei, eine halbe Minute Geduld einzuplanen.
 
 **Nebenbefund für die Auswertung des Winterexperiments:** TOP90
 `Room_Heater_Operations_Hours` blieb über den ganzen Lauf auf 267 h stehen,
