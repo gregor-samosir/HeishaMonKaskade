@@ -365,6 +365,48 @@ prüfen: dafür müssten 30 min Kompressorlauf, die Außentemperaturschwelle und
 4 K Vorlaufabweichung zusammenkommen. Das ist eine Beobachtung über eine
 Frostphase, keine Messung.
 
+#### Der Plan für Winter 2026/27 (Owner, 2026-08-28)
+
+**SET20 `HeaterOnOutdoorTemp` kommt unter den Abtaubereich**, als Grundschwelle
+etwa −7 °C statt der heutigen 2 °C. Damit zieht die Wärmepumpe den Heizstab in
+ihrer normalen Zuschaltlogik erst bei strengem Frost überhaupt in Betracht — im
+Temperaturbereich, in dem abgetaut wird, bleibt er außen vor. Der eigentliche
+Test ist dann: **bei etwa −7 °C gezielt mit einem oder zwei Heizstäben
+nachhelfen**, wenn es bei Wind und mehreren Frosttagen knapp wird. Ein oder
+zwei, weil jede Stufe ihre eigene Schwelle und ihre eigene Freigabe hat — 3 kW
+je Stufe, getrennt schaltbar.
+
+**Für die Abtauung braucht diese Anlage den Heizstab nicht.** Belegt durch
+mehrere Winter ohne ihn, auch in den seltenen Fällen, in denen beide Stufen
+gleichzeitig abtauen: Die Gebäudemasse und der hohe Durchfluss liefern dann
+knapp **10 kW Abtauleistung über 5–6 Minuten**, und der Rücklauf sinkt dabei
+nur um rund **2 K**. Das ist zugleich die Erklärung, warum die Freigabe hier
+gefahrlos als Regelgröße taugt.
+
+⚠️ **SET20 ist aber nicht der Hebel für das Abtau-Mitlaufen.** Die Schutzfunktion
+aus Abschnitt 4 (Handbuch 12.6.2) hat **eigene** Auslösekriterien — Vorlauf-,
+Rücklauf- und Außentemperatur während der Abtauung — und hängt an der Freigabe
+des Backup-Heizers im Custom Setup, ausdrücklich **weder an SET20 noch am
+Heizstab-Schalter** (also auch nicht an SET37). Solange der Backup-Heizer im
+Installateurmenü aktiviert ist, kann der Stab beim Abtauen also mitlaufen,
+selbst wenn SET20 tief steht und SET37 auf blockiert.
+
+Wie wahrscheinlich das ist, hängt an den Rücklauftemperaturen: Die
+Rücklaufschwelle der Schutzfunktion liegt in einem Bereich, den eine
+Fußbodenheizung bei strengem Frost durchaus streifen kann — also ausgerechnet
+im geplanten Testfenster. **Praktische Folge:** `Defrosting_State` (TOP26) ist
+im Mitschrieb kein Beiwerk, sondern die Bedingung dafür, dass das Experiment
+überhaupt auswertbar ist. Wer den Abtau-Anteil sauber ausschließen will, muss
+den Backup-Heizer im Custom Setup abschalten — und damit auch SET37
+wirkungslos machen. Beides zusammen geht nicht.
+
+**Der zweite Hebel liegt bei der Kaskadensteuerung.** Bedingung (e) — Vorlauf
+mehr als 4 K unter Soll — erfüllt eine träge Fußbodenheizung von allein selten.
+Die Steuerung setzt den Vorlaufsollwert über SET5 aber selbst: Ein kurzes
+Anheben erzeugt die Abweichung gezielt. Genau so ist der Heizstab am
+2026-08-28 auch am Bedienpanel aktiv geworden (Zieltemperatur kurz auf 40 °C).
+Freigabe und Sollwertanhebung gehören im Experiment deshalb zusammen gedacht.
+
 Mitzuschreiben:
 
 Topic | wofür
@@ -375,6 +417,9 @@ Topic | wofür
 `Defrosting_State` (TOP26) | trennt den Abtau-Anteil vom geregelten Anteil (Abschnitt 4)
 `Main_Outlet_Temp` / `Main_Target_Temp` (TOP6/7) | die 4-K-Bedingung, gegen die freigegeben wurde
 `Outside_Temp` (TOP14) | Bezug zur Außentemperaturschwelle
+`Heater_On_Outdoor_Temp` (TOP78) | die Schwelle selbst — sie wird im Experiment verstellt
+`Internal_Heater_State` (TOP60) | ob der Stab in diesem Moment läuft, nicht nur freigegeben ist
+`Main_Inlet_Temp` (TOP5) | Rücklauf — entscheidet mit, ob die Abtau-Schutzfunktion anspringt
 
 Die Frage, die das Experiment beantworten soll, ist eine Komfortfrage, keine
 Verbrauchsfrage: Kommt die Raumtemperatur in der Frostphase spürbar früher
