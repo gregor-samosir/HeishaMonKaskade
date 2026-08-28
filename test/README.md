@@ -986,12 +986,18 @@ gefallen und haette drei Felder auf einmal umgelegt.
 1. **SET39 wird verzoegert uebernommen.** Bei Byte 9 lag die Flanke nach zwei
    Telegrammen (rund 12 s), bei ForceHeater erst beim zehnten von zwoelf -
    grob eine halbe Minute. Ein `/tablerefresh` direkt nach dem Senden zeigte
-   noch `Inactive`. Wer zu frueh zuruecklieset, haelt ein angekommenes Kommando
-   fuer verworfen.
-2. **Der Raumheizstab war an BEIDEN Stufen schon freigegeben** (TOP59 = Free,
-   an H2 auch TOP58), TOP90 zaehlt an H1 267 Betriebsstunden. Die Annahme des
-   Vorhabens, Byte 9 stehe auf blockiert, war falsch. Deaktiviert ist der
-   Heizstab also anderswo, nicht ueber diesen Schalter.
+   noch `Inactive`. Das ist Bauart: Die WP prueft erst ihre Randbedingungen und
+   uebernimmt den Wert dann. Nicht sofort zuruecklesen und daraus auf ein
+   verworfenes Kommando schliessen.
+2. **TOP59 stand vor dem Lauf an beiden Stufen auf Free** (an H2 auch TOP58),
+   TOP90 zaehlt an H1 267 Betriebsstunden - der Owner hatte den Heizstab fuer
+   eigene Panel-Tests im Installateurmenue aktiviert und freigegeben. Damit ist
+   der Lauf zugleich eine Bestaetigung der Zuordnung: Byte 9 zeigte genau das,
+   was am Panel eingestellt war.
+3. **Dass der Stab waehrend M4 nicht anlief** (TOP60 Inactive, TOP90
+   unveraendert), lag am fehlenden Heizbedarf bei der Aussentemperatur des
+   Tages. Am Panel wurde er mit kurz auf 40 Grad angehobener Zieltemperatur
+   sehr wohl aktiv.
 
 Nebenbei aus demselben Mitschnitt: Bytes 104-106 (Startverzoegerung und Deltas
 des internen Heizstabs, laut Referenz "J/K/L series") stehen alle drei auf

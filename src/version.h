@@ -55,13 +55,24 @@
 //         sind wiederhergestellt. Einzelheiten: Vorhaben-HeaterSet.md
 //         Abschnitt 8.
 //
-//         BEFUND NEBENBEI, DER EINE ANNAHME KIPPT: Der Raumheizstab war an
-//         BEIDEN Anlagen bereits freigegeben (TOP59 = Free, an H2 auch TOP58),
-//         und TOP90 zaehlt an H1 267 Betriebsstunden. Das Vorhaben ging vom
-//         Gegenteil aus. Deaktiviert ist der Heizstab also woanders, nicht in
-//         Byte 9 - was den Wert der Freigabe als Regelgroesse offenlaesst.
+//         DER AUSGANGSZUSTAND WAR NICHT DER DES VORHABENS, UND DAS HAT EINEN
+//         GRUND: Beim Messen stand TOP59 an beiden Anlagen auf Free (an H2 auch
+//         TOP58), TOP90 zaehlt an H1 267 Betriebsstunden. Das Vorhaben schrieb
+//         "deaktiviert, Byte 9 blockiert" - richtig fuer den Stand davor. Der
+//         Owner hat den Heizstab fuer seine eigenen Panel-Tests im
+//         Installateurmenue aktiviert und ueber Byte 9 freigegeben. Byte 9 zeigte
+//         also genau das, was am Panel eingestellt war - eine Bestaetigung der
+//         Zuordnung, kein Widerspruch. Fuer den Messplan hiess es nur, dass sich
+//         M1 und M2 vertauschten.
 //         SET20 HeaterOnOutdoorTemp steht auf 2 Grad, ist also gesetzt; die
 //         Feineinstellung (Bytes 104-106) steht wie erwartet auf 0x00.
+//
+//         DIE VERZOEGERUNG BEI SET39 IST BAUART, KEIN BEFUND (Owner-Einordnung):
+//         Die Waermepumpe prueft erst ihre Randbedingungen und uebernimmt den
+//         Wert dann - solche Wartezeiten sind bei Panasonic normal. Dass TOP60
+//         waehrend M4 auf Inactive blieb, lag am fehlenden Heizbedarf bei der
+//         Aussentemperatur des Tages; am Panel wurde der Heizstab mit kurz
+//         angehobener Zieltemperatur sehr wohl aktiv.
 //
 //         NICHT DABEI: die Anbindung an den Notbetrieb - NOTBETRIEB_WERTE_
 //         HEIZEN[] in notbetrieb.h bleibt unveraendert, Komforteinbussen im

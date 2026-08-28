@@ -16,9 +16,11 @@ ging das nur am Bedienterminal.
 > ([`test/byte9_test.cpp`](test/byte9_test.cpp), in der CI). Offen ist nur noch
 > das Winterexperiment.
 >
-> ⚠️ **Eine tragende Annahme dieses Dokuments war falsch:** Der Raumheizstab war
-> an **beiden** Anlagen bereits freigegeben (TOP59 = `Free`), an H2 auch der
-> Warmwasser-Heizstab. Abschnitt 6, Punkt 3 ist entsprechend richtiggestellt.
+> **Der Ausgangszustand war ein anderer als hier beschrieben** — beim Messen
+> stand TOP59 an beiden Anlagen auf `Free`. Kein Widerspruch, sondern die
+> Testfreigabe des Owners: Er hatte den Heizstab für seine eigenen Panel-Tests
+> im Installateurmenü aktiviert und über Byte 9 freigegeben. Abschnitt 6,
+> Punkt 3 hält den Stand fest.
 >
 > Die Topic-Namen tragen **kein** `Set`-Präfix: Bei uns heißt der Pfad
 > `<prefix>/set/<Name>`, also `set/RoomHeaterState`. Der Upstream schreibt
@@ -244,26 +246,25 @@ plant das Zurücknehmen mit ein.
    Messplan prüft, dass das Bit ankommt — ob „frei" auch heißt, dass der Stab
    je läuft, zeigt erst das Winterexperiment über TOP60 und TOP90.
 
-3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet — und anders als hier
-   angenommen (2026-08-28, gemessen statt geschlossen):**
+3. ~~**Was steht heute in Byte 9?**~~ **Beantwortet, 2026-08-28 gemessen — und
+   der Stand hat sich seit dem Schreiben dieses Dokuments geändert:**
 
    Anlage | Byte 9 | TOP59 `Room_Heater_State` | TOP58 `DHW_Heater_State` | TOP90 Betriebsstunden
    :--- | :--- | :--- | :--- | ---:
    H1 | `0x56` | **Free** | Blocked | **267 h**
    H2 | — | **Free** | **Free** | **35 h**
 
-   **Der Raumheizstab ist in Byte 9 also längst freigegeben, an beiden Stufen**,
-   und er hat auch schon gelaufen. Die Annahme „der Heizstab ist deaktiviert,
-   Byte 9 steht auf blockiert" stammte aus der Beschreibung der Anlage, nicht aus
-   einer Messung — sie war falsch. Deaktiviert ist der Heizstab demnach an
-   anderer Stelle (Installateur-/Custom-Setup), nicht über diesen Schalter.
+   **Warum, ist geklärt (Owner, 2026-08-28):** Der Heizstab war bis zu diesen
+   Tests im Installateurmenü **komplett aktiviert**, und der Owner hatte ihn für
+   seine eigenen Panel-Versuche über Byte 9 freigegeben. Der Satz „deaktiviert,
+   Byte 9 blockiert" weiter oben beschreibt den Stand davor.
 
-   **Folge für das Vorhaben:** Der Messplan drehte sich um — M1 (`0`) wurde zur
-   eigentlichen Änderung, M2 (`1`) zur Rückstellung. **Folge für das Ziel:** Ob
-   die Freigabe die Regelgröße sein kann, die Abschnitt 1 beschreibt, ist damit
-   offen — sie steht ja schon auf „frei", ohne dass der Stab im laufenden Betrieb
-   zuschaltet. Das gehört vor dem Winterexperiment geklärt, am ehesten am
-   Bedienpanel: Was genau ist dort abgeschaltet, wenn nicht dieser Schalter?
+   **Damit ist der Messlauf zugleich eine Bestätigung der Zuordnung:** Byte 9
+   zeigte genau das, was am Bedienpanel eingestellt war — TOP59 ist der
+   Heizstab-Schalter des Panels, nicht irgendein Nachbarbit.
+
+   **Folge für den Messplan:** Er drehte sich um — M1 (`0`) wurde zur
+   eigentlichen Änderung, M2 (`1`) zur Rückstellung auf den vorgefundenen Stand.
 
 4. ~~**Die Feineinstellung fehlt uns vermutlich dauerhaft.**~~ **Bestätigt,
    2026-08-28:** Startverzögerung (Byte 104), Start-Delta (105) und Stopp-Delta
@@ -284,9 +285,8 @@ Schritt | Stand
 **3.** `MQTT-Topics.md`, `SET-TOP-Zuordnung.md`, `README.md`, `test/README.md`, Changelog | **erledigt, 3.17.0**
 **4.** Mitschnitt auswerten: SET20 / TOP78 und Byte 104–106 im Ist-Zustand (kein Eingriff) | **erledigt, 2026-08-28** — TOP78 = 2 °C, Bytes 104–106 = `0x00`
 **5.** OTA auf Stufe 1, Abnahme über `/tablerefresh`, M0–M5 messen (Abschnitt 8) | **erledigt, 2026-08-28** — Abnahme zeilengleich bis auf einen Messwert
-**6.** OTA auf Stufe 2 | offen
-**7.** Klären, wo der Heizstab tatsächlich abgeschaltet ist (Abschnitt 6, Punkt 3) | offen
-**8.** Winterexperiment vorbereiten: Freigabekriterium in der Steuerung festlegen, Mitschrieb einrichten | offen
+**6.** OTA auf Stufe 2 und auf beide Backup-Boards | **erledigt, 2026-08-28** — H2 zeilengleich, `h1b`/`h2b` auf 3.17.0 und weiter auf Port 1884
+**7.** Winterexperiment vorbereiten: Freigabekriterium in der Steuerung festlegen, Mitschrieb einrichten | offen
 
 Byte 9 ist ohne Messung bekannt: blockiert, an beiden Anlagen.
 
@@ -335,18 +335,20 @@ M5 | `ForceHeater 0` | `0x59` → **`0x55`** | Active → **Inactive** | **unver
 Bitgruppe** — die Gruppen 1+2 (Zeitprogramm), 3+4 (HolidayMode) und 7+8 blieben
 auf `01` stehen.
 
-⚠️ **ForceHeater wird deutlich langsamer übernommen als Byte 9.** Die Flanke lag
-im Mitschnitt erst beim zehnten von zwölf Telegrammen, grob eine halbe Minute
-nach dem Kommando; ein `/tablerefresh` unmittelbar danach zeigte noch
-`Inactive`. Wer das Kommando prüft, darf nicht sofort nach dem Senden
-zurücklesen und daraus schließen, es sei verworfen worden. Die Ursache ist
-nicht gemessen — plausibel ist eine interne Prüfung in der Wärmepumpe.
+**ForceHeater wird langsamer übernommen als Byte 9** — die Flanke lag im
+Mitschnitt erst beim zehnten von zwölf Telegrammen, grob eine halbe Minute nach
+dem Kommando; ein `/tablerefresh` unmittelbar danach zeigte noch `Inactive`.
+**Das ist Bauart, kein Befund** (Owner-Einordnung): Die Wärmepumpe prüft erst
+ihre Randbedingungen und übernimmt den Wert dann; solche Wartezeiten sind bei
+Panasonic üblich. Fürs Prüfen heißt es trotzdem: nicht sofort nach dem Senden
+zurücklesen und daraus auf ein verworfenes Kommando schließen.
 
 **TOP60 `Internal_Heater_State` blieb während M4 auf `Inactive`, TOP90 auf
-267 h** — in den rund zwei Minuten mit gesetztem ForceHeater lief der Heizstab
-nicht an. Was das Kommando bei ausgeschalteter Anlage tatsächlich bewirkt, ist
-damit **nicht** belegt; belegt ist nur, dass die Anlage das Bit annimmt und
-zurückmeldet.
+267 h** — der Heizstab lief nicht an. Auch dafür gibt es die Erklärung: Die
+Außentemperatur des Tages erzeugte keinen Heizbedarf. Am Bedienpanel wurde der
+Heizstab mit kurz auf 40 °C angehobener Zieltemperatur sehr wohl aktiv. Der
+Messlauf belegt also die Übertragung des Bits; das Anlaufen des Stabs hängt
+weiter an den Bedingungen der Anlage.
 
 **Ausgangszustand wiederhergestellt:** Byte 9 = `0x56`, Byte 5 = `0x55`, TOP59
 `Free`, TOP58 `Blocked`, TOP68 `Inactive`, TOP90 unverändert 267 h.

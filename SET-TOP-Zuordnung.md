@@ -322,22 +322,22 @@ Kommando | Byte | Rohbyte | Rücklesen | Nachbarn
 Bitgruppen 1+2 und 3+4 stehen auf `01`. Ohne Maske wäre das Byte auf `0x02`
 zusammengefallen und hätte drei Felder auf einmal umgelegt.
 
-⚠️ **SET39 wird verzögert übernommen** — die Flanke lag erst beim zehnten von
-zwölf Telegrammen des Mitschnitts, grob eine halbe Minute nach dem Kommando; ein
-Rücklesen unmittelbar danach zeigte noch `Inactive`. Bei Byte 9 lag sie nach
-zwei Telegrammen. Wer zu früh zurückliest, hält ein angekommenes Kommando für
-verworfen.
+**SET39 wird verzögert übernommen** — die Flanke lag erst beim zehnten von zwölf
+Telegrammen des Mitschnitts, grob eine halbe Minute nach dem Kommando; bei
+Byte 9 lag sie nach zwei. Das ist Bauart und nicht auf dieses Kommando
+beschränkt: Die Wärmepumpe prüft erst ihre Randbedingungen und übernimmt dann.
+Fürs Prüfen heißt es, nicht sofort nach dem Senden zurückzulesen — sonst hält
+man ein angekommenes Kommando für verworfen.
 
 Zusätzlich ohne Gerät belegt: [`test/byte9_test.cpp`](test/byte9_test.cpp) legt
 die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus `decode.cpp`
 nebeneinander, samt Gegenprobe ohne Maske. Einzelheiten und der volle Ablauf:
 [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), Abschnitt 8.
 
-**„Frei" heißt nicht „an" — und an dieser Anlage steht es längst auf „frei".**
-Beim Messlauf zeigte sich, dass TOP59 an **beiden** Stufen bereits `Free`
-meldet (an H2 auch TOP58) und TOP90 an H1 267 Betriebsstunden zählt. Der
-Heizstab ist also nicht über diesen Schalter deaktiviert. TOP59 meldet die
-Freigabe, nicht den laufenden Heizstab. Ob er wirklich läuft, zeigen TOP60
+**„Frei" heißt nicht „an".** TOP59 meldet die Freigabe, nicht den laufenden
+Heizstab. Beim Messlauf stand TOP59 an beiden Stufen auf `Free` — das war die
+Testfreigabe des Owners am Bedienpanel und damit zugleich eine Bestätigung der
+Zuordnung: Byte 9 zeigte genau, was am Panel eingestellt war. Ob er wirklich läuft, zeigen TOP60
 `Internal_Heater_State` und TOP90 `Room_Heater_Operations_Hours`; die
 Wärmepumpe entscheidet über fünf weitere Bedingungen mit (Servicehandbuch
 12.6.1), von denen nur die Außentemperaturschwelle über SET20
