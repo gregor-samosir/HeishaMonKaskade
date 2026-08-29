@@ -112,10 +112,20 @@ alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort �
 GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
 danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
 
-**GRÜN heißt zurückgelesen, nicht „es wird warm".** Fehlt die KNX-Freigabe für
-den Kompressor, meldet der Knopf GRÜN und die Anlage bleibt bei 0 Hz — genau so
-beobachtet in Etappe 5. Erst Etappe 6 hat mit freigegebenem Kompressor die ganze
+**GRÜN heißt zurückgelesen, nicht „es wird warm".** Der Knopf meldet GRÜN,
+sobald alle Schritte bestätigt sind — ob daraus Wärme wird, entscheidet die
+Wärmepumpe. In Etappe 5 blieb die Anlage bei 0 Hz, weil die KNX-Freigabe für den
+Kompressor fehlte; erst Etappe 6 hat mit freigegebenem Kompressor die ganze
 Kette gezeigt: Knopf → Kurve → Wärme.
+
+**Seit dem 2026-08-29 ist genau dieser Fall der Ausnahmefall** (Owner-Entscheid):
+Der KNX-Kanal der Kompressorfreigabe steht dauerhaft auf True. Umgebaut wurde
+nichts — der Kanal lässt sich im Flow weiter abschalten, und **für Wartung ist
+das jetzt sein einziger Zweck**. Wer im Notbetrieb GRÜN sieht und die Anlage
+bleibt trotzdem kalt, sucht deshalb nicht mehr zuerst beim Kompressorkontakt,
+sondern fragt: Steht die Wartungsabschaltung? Aus demselben Grund nennt das
+grüne Panel den Kompressor nicht mehr (neuer Wortlaut vom Familienrat,
+2026-08-29, ausgeliefert mit der nächsten Version).
 
 ---
 

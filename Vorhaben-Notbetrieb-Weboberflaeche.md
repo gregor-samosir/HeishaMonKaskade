@@ -795,9 +795,13 @@ dieses Repos, die unten ausdrücklich als offen markiert sind.
   Freigabebedingung, eigenem Zugang und den vier Läufen an der Anlage.
 * ✔ [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`,
   die Sperre über TOP101 und der eigene Zugang.
-* **OFFEN:** Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen, Passwort, der
-  KNX-Taster für die Kompressorfreigabe, und der Hinweis, dass im Kurvenbetrieb
-  „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt. **Dazu der obere
+* **OFFEN:** Die Offline-Anleitung der Familie — Schrittfolge, IP-Adressen,
+  Passwort und der Hinweis, dass im Kurvenbetrieb
+  „+1 am Bedienpanel" die ganze Kurve um 1 K verschiebt. ~~Der KNX-Taster für
+  die Kompressorfreigabe~~ **gehört seit dem 2026-08-29 nicht mehr hinein**: Die
+  Freigabe steht dauerhaft an, der Kanal dient nur noch der Wartungsabschaltung
+  (`Analyse-Relais-statt-KNX.md` Abschnitt 13). Wer die Anleitung schreibt,
+  lässt den Punkt also weg. **Dazu der obere
   Kurvenpunkt mit seiner Zahl:** nach dem Umschalten auf Kurve ist
   `TargetHigh` auf 34 °C zu setzen, sonst bleibt die Werksvorgabe 55 °C stehen
   (Abschnitt 6a).

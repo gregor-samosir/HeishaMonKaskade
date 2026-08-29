@@ -937,10 +937,11 @@ Client-IDs bei schnellen Reconnects.
   <em><b>Zehn Ampere auf dem Gehäuse, MAX 5A auf dem Silkscreen — und in dieser
   Anlage schaltet keines der beiden Relais irgendetwas.</b> Naheliegend wäre
   gewesen, ihnen den KNX-Aktor abzunehmen. Ausgerechnet wurde es trotzdem, und
-  zwar bevor jemand zum Schraubendreher griff: Der Kompressorkontakt ist in
-  dieser Kaskade funktionslos — abgeschaltet wird über <code>set/Heatpump</code>.
-  Und der Heat/Cool-Kontakt bleibt am KNX, weil der Notbetrieb bewusst auf den
-  Winter beschränkt ist. Zwei blaue Kästchen, die ihren Dienst dadurch tun, dass
+  zwar bevor jemand zum Schraubendreher griff: Der Kompressorkontakt steuert im
+  Regelbetrieb nichts — abgeschaltet wird über <code>set/Heatpump</code>, und
+  seit dem 2026-08-29 steht seine Freigabe dauerhaft an; geöffnet wird er nur
+  noch für Wartungsarbeiten. Und der Heat/Cool-Kontakt bleibt am KNX, weil der
+  Notbetrieb bewusst auf den Winter beschränkt ist. Zwei blaue Kästchen, die ihren Dienst dadurch tun, dass
   sie stillstehen.</em>
 </p>
 
