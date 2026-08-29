@@ -803,7 +803,13 @@ static const char notbetriebJS[] PROGMEM =
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
-    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist eingeschaltet. Die Wärmepumpe läuft jetzt selbst weiter.</p><p>Wird es trotzdem nicht warm, fehlt die KNX-Freigabe für den Kompressor - siehe Anleitung.</p>';}"
+    // Der Wortlaut bei GRUEN ist vom Familienrat vorgegeben (2026-08-29).
+    // Der frueher hier stehende KNX-Hinweis ist bewusst raus: Wer im Notbetrieb
+    // vor der Seite steht, soll nur zwei Dinge wissen - wo die Temperatur
+    // nachzustellen ist und dass die Anlage von selbst zurueckkehrt. Der
+    // Sonderfall "GRUEN, aber 0 Hz mangels Kompressorfreigabe" steht weiterhin
+    // in Ablauf-Notbetrieb.md und im README, nicht mehr auf dem Panel.
+    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';}"
     // Bei ROT entscheidet der Abbruchgrund, was zu tun ist: Bleibt die
     // Hydraulik auf 2-stufig, fuehrt der Weg ueber den Schalter im Waschraum
     // und NICHT ueber das Bedienfeld der Waermepumpe - dort ist nichts
