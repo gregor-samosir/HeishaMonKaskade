@@ -398,3 +398,104 @@ will, was gerade gilt, liest `Heating_Mode` (TOP76) auf der Startseite.
 den Winter beschränkt (Owner-Entscheidung 2026-08-23): TOP101 muss sauber auf 0
 stehen, sonst bleibt der Knopf gesperrt. Im Sommer trägt Stufe 2 mit Warmwasser,
 und die läuft auch im Kühlbetrieb.
+
+---
+
+# 6. Memo: Was die Steuerungsseite vom Notbetrieb mitbekommt
+
+**Stand: 2026-08-29.** Dieser Abschnitt beschreibt keine Firmware. Er hält fest,
+wie der Notbetrieb von der anderen Seite aussieht — seit dort ein Wächter auf
+denselben Topics sitzt, die dieses Dokument beschreibt. Aufgeschrieben, weil
+zwei der Topics, mit denen der Ablauf oben arbeitet, dort neuerdings ausgewertet
+werden und im Notbetriebsfall zwangsläufig anschlagen.
+
+## Wer mitliest
+
+`script.js.common.kaskade.WP_Befehls_Waechter` (V1.2.0, ioBroker `javascript.0`,
+60-s-Takt) vergleicht je Stufe sieben abgesetzte Kommandos mit ihrer
+Rückmeldung. Rein beobachtend: kein Nachsenden, kein Eingriff, er schreibt nur
+vier eigene Datenpunkte. **Zwei der sieben Kanäle gibt es erst, seit 3.10.0
+TOP103 und TOP104 dekodiert** — vorher waren sie über Hilfsgrößen behelfsmäßig
+angenähert.
+
+Kanal | Soll | Ist | seit
+:--- | :--- | :--- | :---
+Heatpump | `set/Heatpump` | TOP0 | V1.0.0
+OpMode | `set/OperationMode` | TOP4 | V1.0.0
+HeatTarget | `set/Z1HeatRequestTemperature` | TOP27 | V1.0.0
+CoolTarget | `set/Z1CoolRequestTemperature` | TOP28 | V1.0.0
+QuietMode | `set/QuietMode` | TOP18 | V1.0.0
+**WaterPump** | `set/WaterPump` | **TOP104** | **V1.2.0 (2026-08-29)**
+**WaterPumpSpeed** | `set/WaterPumpSpeed` | **TOP103** | **V1.2.0 (2026-08-29)**
+
+Jeder Kanal hat 5 min Karenz, bevor eine Abweichung gemeldet wird. Auf die
+Ist-Seite wirkt zusätzlich ein Stale-Guard von 20 min, und die LWT der Bridge
+ist vorgeschaltet: Ist sie „Offline", gibt es eine Bridge-Meldung statt sieben
+Kanal-Meldungen.
+
+## Gemessen 2026-08-29: TOP103 und TOP104 antworten nach 7,1 s
+
+Kaskadenmodus 2 (Umpumpen, Pumpe auf Fix) → 4 → 2, beide Flanken an **beiden**
+Stufen mitgeschnitten:
+
+Flanke | Kommando | Rückmeldung folgt nach
+:--- | :--- | ---:
+Fix → Auto | `WaterPump` 1→0, `WaterPumpSpeed` 100→125 | **7,1 s**
+Auto → Fix | `WaterPump` 0→1, `WaterPumpSpeed` 125→100 | **7,1 s**
+
+Die 7,1 s waren über alle acht Messungen identisch — das ist der Publish-Takt
+der Bridge, nicht die Antwortzeit der Wärmepumpe. Das ergänzt den Abschnitt
+[„Die Umwälzpumpe gehört mit zurück"](#die-umwälzpumpe-gehört-mit-zurück): Dort
+steht die Flanke, hier steht ihre Zeit. Für Schritt 8 der Folge heißt das, dass
+die Bestätigung lange vor dem nächsten Schrittabstand von 8 s vorliegt.
+
+**Nebenbefund für die Messpraxis: `WaterPump = 0` heißt bedarfsgeregelt, nicht
+aus.** Im selben Lauf modulierte TOP92 `Pump_Duty` über 40 s von 100 auf 80
+herunter (TOP65 2350 → 1500 1/min, Fluss 16,2 → 10,2 l/min, Anlage in Betrieb),
+während TOP103 `Pump_Duty_Max` unverändert auf der Vorgabe 125 stand. Bei `Fix`
+lag der Ist-Duty dagegen exakt auf der Grenze. **Wer prüfen will, ob ein
+Pumpenkommando angekommen ist, liest deshalb TOP103/TOP104 — nicht TOP92.** Der
+Ist-Duty ist im Auto-Betrieb eine Regelgröße und sagt über das Kommando nichts.
+
+## Warum der Notbetrieb Meldungen auslöst — abgeleitet, nicht gemessen
+
+Die Firmware **abonniert** die `set/`-Topics, sie publiziert nicht auf ihnen: Die
+Notbetriebsschritte gehen per UART an die Wärmepumpe, zurück kommen nur die
+TOP-States. Der letzte Sollwert der Kaskadensteuerung bleibt derweil in
+`mqtt.0…set/*` stehen — die Steuerung ist im Notbetriebsfall ja gerade weg.
+Soll- und Ist-Seite laufen damit auseinander, und der Wächter meldet das nach
+seiner Karenz:
+
+Auslöser im Ablauf | betroffener Kanal | Abweichung
+:--- | :--- | :---
+Schritt 2 `OperationMode` = 0 | OpMode | solange die Steuerung zuletzt etwas anderes wollte
+Schritt 3, Werks-Reset TOP27 → 35 | HeatTarget | bis der Re-Assert die Sollwerte zurückholt
+Schritt 3, Werks-Reset TOP28 → 10 | CoolTarget | dito
+**Schritt 8 `WaterPump` = 0** | **WaterPump** | **neu — bis V1.1.0 blieb dieser Fall unsichtbar**
+Schritt 9 `Heatpump` = 1 | Heatpump | falls die Steuerung zuletzt 0 gesendet hatte
+
+**Das ist kein Fehlalarm.** Die Meldung sagt zutreffend: „Der Sollwert der
+Steuerung ist nicht mehr wirksam" — im Notbetrieb ist genau das der Zweck. Sie
+quittiert sich beim Re-Assert von allein, im selben Zug, in dem
+[Abschnitt 3](#3-rückkehr-der-übergeordneten-steuerung) die Anlage zurückholt.
+Wer nach einem Notbetriebslauf ins ioBroker-Log sieht, findet dort also
+`WP*.WaterPump NICHT ausgeführt` und einige Geschwister — **Wartungssignatur,
+kein Befund.**
+
+⚠️ Diese Tabelle ist aus dem Code beider Seiten abgeleitet, **nicht in einem
+Notbetriebslauf gemessen.** Sie steht hier als Erwartung, nicht als Beleg; beim
+nächsten Lauf ist sie zu prüfen.
+
+## Und der Fall, in dem der Wächter schweigt
+
+Fällt der **Broker** aus (nicht nur Node-RED), frieren alle `mqtt.0.*`-States
+auf ihrem letzten Wert ein — Soll- **und** Ist-Seite gleichermaßen. Der Wächter
+findet sie damit deckungsgleich und meldet „alles quittiert", obwohl er nichts
+mehr sieht. Erst nach 20 min greift der Stale-Guard und stuft die Kanäle auf
+„nicht bewertbar" zurück. Die LWT hilft in diesem Fenster nicht: Sie steht als
+eingefrorener State ebenfalls noch auf „Online".
+
+Das ist dieselbe Falle, die Etappe 6 schon für die Messung festgehalten hat —
+**im Ausfallfall ist der ioBroker keine gültige Quelle**, auch nicht über den
+Umweg eines Wächters, der auf ihm sitzt. Was gilt, gibt die Bridge über
+`/tablerefresh` heraus.
