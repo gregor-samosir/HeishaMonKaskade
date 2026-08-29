@@ -5,6 +5,11 @@ Eine Variante von [HeishaMon](https://github.com/Egyras/HeishaMon) für den
 Steuerung (Node-RED/ioBroker). Läuft auf dem offiziellen
 HeishaMon-ESP32-S3-Board.
 
+> **Zugeschnitten heißt nicht festgelegt.** Set-Kommandos und Topics stehen in
+> je einer Tabelle, Gerätespezifisches in Build-Flags — ein eigenes Topic ist
+> eine Zeile, kein Umbau. Wie das geht, steht unter
+> [Anpassen ist der Normalfall](#anpassen-ist-der-normalfall-nicht-der-sonderfall).
+
 <p align="center">
   <img src="pictures/hmon_pcb/HeishamonV6_pcb.jpeg" width="520"
        alt="HeishaMon-v6-Platine: ESP32-S3-Modul, zwei blaue Relais, Anschlussbuchsen für Wärmepumpe und CZ-TAW, unbestückter Sockel für die Ethernet-Platine">
@@ -42,12 +47,15 @@ concern instead of four parallel arrays, no heap allocation in the decode path,
 per-unit configuration via build flags, a CDN-free authenticated web UI, and a
 set of diagnostic tools under `test/`.
 
-**This is not a drop-in replacement.** It is tailored to one specific
-installation (two units, no zone 2, a Node-RED cascade controller). Topic
-numbering has deliberate gaps, zone 2 is gone, and the defaults are ours. Take
-the ideas and the measurements, not the binary. Everything is documented — the
-changelog in [`src/version.h`](src/version.h) explains not just *what* changed
-but *why*, and what was measured to confirm it.
+**Not a drop-in replacement — but built to be re-cut.** It is tailored to one
+specific installation (two units, no zone 2, a Node-RED cascade controller),
+topic numbering has deliberate gaps, and the defaults are ours. Re-cutting it is
+the easy part, though: every set command is one row in `setCommands[]` (byte,
+bit mask, conversion, topic name, min, max), every published value one row in
+`stateTopics[]`, and per-unit names live in build flags rather than in the code.
+Take the ideas and the measurements, not the binary. Everything is documented —
+the changelog in [`src/version.h`](src/version.h) explains not just *what*
+changed but *why*, and what was measured to confirm it.
 
 Documentation is in German from here on. The MQTT reference
 [`MQTT-Topics.md`](MQTT-Topics.md) is in English.
@@ -97,14 +105,65 @@ und wiederholt den kompletten Sollzustand **alle 5 Minuten** (Re-Assert). Genau
 dieses Muster hat Fehler sichtbar gemacht, die im Einzelbetrieb mit
 Handbedienung niemandem auffallen.
 
+## Anpassen ist der Normalfall, nicht der Sonderfall
+
+Diese Firmware ist für *eine* Anlage konfiguriert — aber sie ist so gebaut, dass
+das Umkonfigurieren die leichteste Übung daran ist. Ein Set-Kommando sieht hier
+vollständig so aus ([`src/commands.cpp`](src/commands.cpp)):
+
+```c
+// Nr pos mask conversion    topic-name     min  max  param
+{ 3,  7, 0xFF, CONV_MUL_INC, "QuietMode",     0,   3,   8}, // level -> (n+1)*8
+```
+
+Protokollbyte 7, Bitmaske, Umrechnung, Topic-Name, erlaubter Bereich — mehr
+nicht. Das Abonnement läuft über dieselbe Tabelle, die Bereichsprüfung auch.
+Im Original wollte ein neues Kommando an vier Stellen gepflegt werden, und wer
+eine davon vergaß, bekam *keinen* Compilerfehler: Das Topic war einfach stumm.
+
+Die gelesenen Werte genauso — eine Zeile je Topic in `stateTopics[]`
+([`src/decode.cpp`](src/decode.cpp)), mit Byte, Dekodierer und Klartextliste.
+Und was ein Gerät von seinem Nachbarn unterscheidet (MQTT-Präfix, Hostname,
+Titel der Weboberfläche), steht in Build-Flags in `platformio.ini`, nicht im
+Quelltext.
+
+Was heißt das praktisch?
+
+| Vorhaben | Aufwand |
+| --- | --- |
+| Eigene Topic-Namen, eigenes MQTT-Präfix | Build-Flags, kein Code |
+| Ein Set-Kommando ergänzen | eine Zeile in `commands.cpp` |
+| Ein Topic ergänzen | eine Zeile in `decode.cpp` + Zeilenzahl in `decode.h` |
+| Zone 2 zurückholen | die entfernten Tabellenzeilen wieder eintragen |
+
+Die Zeilenzahl in `decode.h` von Hand nachzuziehen klingt nach Fußangel, ist
+aber Absicht: Ein `static_assert` vergleicht sie mit der Tabelle, ein Vertippen
+fällt also beim Übersetzen auf und nicht im Betrieb.
+
+Und wenn unklar ist, *welches* Byte man überhaupt braucht: Dafür liegen die
+Werkzeuge in [`test/`](test/README.md) bereit. `byte_monitor.py` zeigt am
+laufenden Gerät, welches Byte sich bewegt, wenn man am Bedienteil etwas
+verstellt: Das mitwandernde Byte trägt den Wert, alles andere ist Vermutung.
+`top_watch.py` schreibt den Verlauf im 5-Sekunden-Takt mit, `tablesnap.py` macht
+die Abnahme nach dem Flashen zu einem `diff`. Genau so sind die
+Wertebereiche in diesem Repo entstanden: gemessen, nicht abgeschrieben.
+
+Dazu die Doku: [`MQTT-Topics.md`](MQTT-Topics.md) listet jedes Set-Kommando
+mit Protokollbyte und Wertebereich und jedes Sensor-Topic mit seiner Bedeutung,
+[`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) sagt zu jedem Set-Kommando, woran
+man sein Ankommen abliest, und der Changelog in
+[`src/version.h`](src/version.h) nennt zu jeder Änderung das Problem, den
+Nachweis und den Preis in RAM und Flash. Man muss hier nichts raten.
+
 ## Für wen das interessant sein könnte
 
 Dieses Repo ist **öffentlich, aber nicht allgemeingültig**. Es ist auf eine
 konkrete Anlage zugeschnitten: zwei Geräte, keine Zone 2, feste MQTT-Präfixe,
-eine bestimmte Steuerung dahinter. Wer es unverändert flasht, bekommt mit hoher
-Wahrscheinlichkeit nicht das, was er braucht.
+eine bestimmte Steuerung dahinter. Wer es für die eigene Anlage nutzen will,
+fasst vorher zwei Tabellen und drei Build-Flags an — der Weg dahin steht oben,
+und er ist keine Operation am offenen Herzen.
 
-Nützlich ist es trotzdem — für alle, die eine eigene Umsetzung bauen:
+Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 
 * **Der Bitmasken-Fund** betrifft jede Installation, die mehr als ein
   Set-Kommando gleichzeitig schickt. Er ist hier belegt und behoben.
