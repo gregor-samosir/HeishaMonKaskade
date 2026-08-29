@@ -806,9 +806,13 @@ static const char notbetriebJS[] PROGMEM =
     // Der Wortlaut bei GRUEN ist vom Familienrat vorgegeben (2026-08-29).
     // Der frueher hier stehende KNX-Hinweis ist bewusst raus: Wer im Notbetrieb
     // vor der Seite steht, soll nur zwei Dinge wissen - wo die Temperatur
-    // nachzustellen ist und dass die Anlage von selbst zurueckkehrt. Der
-    // Sonderfall "GRUEN, aber 0 Hz mangels Kompressorfreigabe" steht weiterhin
-    // in Ablauf-Notbetrieb.md und im README, nicht mehr auf dem Panel.
+    // nachzustellen ist und dass die Anlage von selbst zurueckkehrt.
+    //
+    // Der Hinweis hat auch seinen Anlass verloren: Seit dem 2026-08-29 steht
+    // die Kompressorfreigabe dauerhaft an (Owner-Entscheid, KNX-Kanal bleibt
+    // und wird nur noch fuer Wartung geoeffnet). "GRUEN, aber 0 Hz mangels
+    // Freigabe" ist damit der Wartungsfall und kein Regelfall mehr - er steht
+    // in Ablauf-Notbetrieb.md und Analyse-Relais-statt-KNX.md Abschnitt 13.
     "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';}"
     // Bei ROT entscheidet der Abbruchgrund, was zu tun ist: Bleibt die
     // Hydraulik auf 2-stufig, fuehrt der Weg ueber den Schalter im Waschraum

@@ -12,11 +12,16 @@ Kompressorkontakt ist in dieser Kaskade funktionslos — die Abschaltung läuft
 Notbetrieb ist bewusst auf den Winter beschränkt, im Kühlbetrieb soll er nicht
 schalten. **Abschnitt 12 führt das aus und ersetzt die Empfehlung in 8.4.**
 
+**Ausgeführt am 2026-08-29 (Abschnitt 13):** Die Kompressorfreigabe steht
+dauerhaft auf True — der KNX-Kanal bleibt bestehen und dient nur noch der
+Wartungsabschaltung. Kein Umbau, kein Menüeingriff, und die Kontaktlogik aus
+Abschnitt 10 bleibt damit Betriebswissen statt Archivwissen.
+
 **Ursprüngliche Kurzantwort:** Die Idee trägt, aber nicht als *ein* Vorhaben.
 Die beiden Relais sind zwei völlig verschiedene Fälle mit gegenläufigem
 Risiko, und der Gewinn liegt woanders, als die Ausgangsfrage vermutet.
 
-> **⚠ Die Abschnitte 10 bis 12 sind der aktuelle Stand.** Die Handbuchangabe zur
+> **⚠ Die Abschnitte 10 bis 13 sind der aktuelle Stand.** Die Handbuchangabe zur
 > Kontaktlogik des Kompressorschalters ist an dieser Anlage **falsch herum**
 > (Owner-Messung 2026-08-23). Überall, wo unten „offen = Kompressor frei"
 > steht, gilt das Gegenteil. Die Verdrahtungsempfehlung ändert sich dadurch
@@ -887,3 +892,51 @@ Und der Notbetrieb steht am Ende besser da als vorher: Sein letzter offener
 Punkt aus Abschnitt 9 des Vorhabens — „der KNX-Taster für die
 Kompressorfreigabe" — löst sich nicht durch Hardware, sondern dadurch, dass
 die Freigabe verschwindet.
+
+---
+
+## 13. Nachtrag 2026-08-29 — Schritt 1 ist ausgeführt, auf einem dritten Weg
+
+Der Owner hat die Kompressorfreigabe dauerhaft gesetzt. Abschnitt 12.3 hatte
+dafür zwei Wege genannt, Drahtbrücke oder Installateurmenü — geworden ist es
+keiner von beiden:
+
+**Der KNX-Aktorkanal bleibt und sendet dauerhaft True.** Kein Umbau, kein
+Menüeingriff. Abschalten lässt sich die Freigabe weiterhin im Flow, und **für
+Wartungsarbeiten ist das ihr einziger verbliebener Zweck**.
+
+Der dritte Weg ist den beiden vorgeschlagenen überlegen, und zwar aus drei
+Gründen:
+
+* **Kein toter Draht** (der Einwand gegen die Drahtbrücke) und **kein
+  Menüeingriff an der Wärmepumpe** — letzterer müsste sonst beim Tausch auf ein
+  Backup-Board mitgedacht werden, wo er niemandem auffiele.
+* **Die Wartungssperre bleibt.** Ein Weg, den Kompressor stillzulegen, ohne
+  sich auf die Steuerung zu verlassen, ist bei Arbeiten an der Anlage etwas
+  wert. Die Drahtbrücke hätte ihn ersatzlos gestrichen.
+* **Reversibel in beide Richtungen**, ohne Schraubendreher und ohne
+  Installateurcode.
+
+Was dadurch **nicht** hinfällig wird:
+
+* **Abschnitt 10 gilt unverändert.** Der Eingang wird weiter benutzt, nur
+  selten — geschlossen gibt frei, offen sperrt, gegen die Handbuchzeile. Wer die
+  Wartungsabschaltung baut, prüft oder in fünf Jahren wiederfindet, braucht
+  genau diesen Befund. Wäre der Draht verschwunden, wäre er Archivwissen
+  geworden; so bleibt er Betriebswissen.
+* **Relais 1 bleibt entbehrlich** (12.1) — die Freigabe steht jetzt sogar
+  konstant, damit hat die Firmware dort erst recht nichts zu schalten.
+* **Ein Statusbyte gibt es weiterhin nicht.** Dass die Freigabe dauerhaft
+  ansteht, macht sie nicht messbar; die Gegenprobe bleibt `Compressor_Freq`
+  unter Last, nie das Handbuch.
+
+Die in 12.1 empfohlene **Winter-Gegenprobe verliert ihre Dringlichkeit**: Sie
+sollte absichern, dass der Draht gefahrlos verschwinden kann. Er verschwindet
+nicht.
+
+**Folge für den Notbetrieb:** Die Fremdabhängigkeit, die Entscheidung 4 des
+Notbetriebsvorhabens fordert, ist im Regelbetrieb weg — GRÜN und Wärme fallen
+jetzt zusammen. Der Restfall heißt nicht mehr „der Kontakt steht falsch",
+sondern „es läuft gerade eine Wartung". Deshalb nennt das grüne Panel den
+Kompressor nicht mehr; der Vorbehalt steht weiterhin, neu eingeordnet, in
+`Ablauf-Notbetrieb.md`.

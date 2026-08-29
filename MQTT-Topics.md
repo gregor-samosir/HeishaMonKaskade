@@ -204,6 +204,13 @@ difference or a menu option is unknown. Since there is no status byte, nothing
 in the telegram contradicts a wrong assumption here - so verify the contact
 against `Compressor_Freq` under load rather than against the manual.
 
+**Since 2026-08-29 that channel is driven true permanently on this
+installation** - the compressor is released at all times, and the contact is
+only opened for maintenance. That does not retire the finding above, it moves
+where it matters: the inverted logic is now what somebody needs before taking
+the compressor off line for service, and getting it backwards would release the
+machine instead of blocking it.
+
 **The Heat/Cool switch is a separate question, and there the manual is
 right.** Checked the same way on 2026-08-23: that KNX channel is also a
 normally-open contact, driven true to close for cooling - so *open = heat,
@@ -255,6 +262,11 @@ wurde bisher kein Statusbyte gefunden. Er wurde bei den Messungen am
 Antworttelegramms (byteweiser Vergleich mit `test/frame_diff.py`). Der
 naheliegende Weg – Frames vergleichen, während der Schalter umgelegt wird – ist
 damit ausgereizt; ihn zu finden bräuchte einen anderen Ansatz.*
+
+*Seit dem 2026-08-29 steht dieser Kanal **dauerhaft auf Freigabe** und wird nur
+noch für Wartungsarbeiten geöffnet (Owner-Entscheid, kein Umbau). Die
+umgekehrte Kontaktlogik oben bleibt deshalb wichtig – sie entscheidet dann
+darüber, ob ein Handgriff den Kompressor sperrt oder freigibt.*
 
 ### TOP101 end to end: from the switch command to the broker (2026-08-16)
 
