@@ -243,6 +243,14 @@ der Schritt im Ablauf steht in
 
 ### Der Heizstab lässt sich schalten — und was er dabei tut (3.17.0)
 
+**Wozu das gut ist — und wozu nicht.** Der Heizstab ist eine Ersatzwärmequelle,
+keine Alternative zum Verdichter: Er macht aus 3 kW Strom 3 kW Wärme, der
+Verdichter aus 1 kW Strom drei bis vier. Wer bei laufendem Verdichter mit dem
+Stab heizt, zahlt das Drei- bis Vierfache für dieselbe Wärme. Interessant wird
+er, wenn der Verdichter **nicht** kann oder nicht soll — und dann ist es gut,
+wenn das Kommando erprobt ist, statt im Ernstfall zum ersten Mal benutzt zu
+werden.
+
 Drei Set-Kommandos für den internen Heizstab: SET37 `RoomHeaterState` und
 SET38 `DHWHeaterState` geben ihn frei (Byte 9), SET39 `ForceHeater` schaltet
 ihn an (Byte 5). Die Kommandos gibt es auch im Original-Projekt; hier sind sie
@@ -302,7 +310,53 @@ Drei Dinge, die dieser Lauf zeigt:
 
 Ein Zähler taugt dafür übrigens nicht: TOP90 `Room_Heater_Operations_Hours`
 blieb über den ganzen Lauf stehen. Für kurze Läufe sind TOP60 und TOP16 die
-Zeugen.
+Zeugen. **Er ist dabei nicht blind, sondern träge**: Am 2026-08-30 sprang er
+mitten in einem Takt von 269 auf 270 — er summiert die Laufzeit und springt bei
+der vollen Stunde. Kurze Läufe sind darin unsichtbar, aber nicht verloren.
+
+#### Die Sperre gilt in beide Richtungen
+
+`SET39` wird nur bei **ausgeschalteter** Einheit angenommen — das Bedienpanel
+sagt es im Klartext, wenn man es bei laufender Anlage versucht. Die Umkehrung
+steht nirgends und ist die teurere Falle:
+
+> **Solange `ForceHeater` steht, bleibt ein `Heatpump = 1` wirkungslos.** Die
+> Wärmepumpe schaltet nicht ein, verwirft stattdessen den Heizstab-Auftrag und
+> lässt den Einschaltwunsch fallen. **Ohne Fehlermeldung** — auf dem
+> Protokollweg bewirkt das Kommando einfach nichts.
+
+Am 2026-08-30 in zwei Varianten gemessen:
+
+| Ausgangslage | Kommando | Ergebnis |
+| :--- | :--- | :--- |
+| TOP68 = 1, Kommando allein | `Heatpump = 1` | TOP0 bleibt 0 über 48 s, TOP68 fällt nach 10 s **von selbst** auf 0 |
+| TOP68 = 1, `ForceHeater = 0` **im selben Telegramm** | `Heatpump = 1` | TOP0 geht 6 s auf 1 und **fällt zurück** — an beiden Stufen parallel |
+| TOP68 = 0 | `Heatpump = 1` | TOP0 geht nach 10 s auf 1 und bleibt |
+
+**Es genügt also nicht, die Rücknahme vor das Einschalten zu stellen — sie
+braucht zeitlichen Abstand.** Kommandos, die binnen zwei Sekunden eintreffen,
+fasst diese Firmware zu *einem* Telegramm zusammen (siehe Sammelfenster); aus
+Reihenfolge wird dann Gleichzeitigkeit. Rund zehn Sekunden reichen: Die
+Rücknahme ist nach sieben Sekunden zurückgelesen. Der Notbetrieb löst das über
+den Abstand seiner Schritte ([Abschnitt oben](#der-notbetrieb-nimmt-den-heizstab-zurück-3180)).
+
+#### TOP68 ist der Auftrag, TOP60 die Wirkung
+
+Zwei Topics, die man nicht verwechseln darf — belegt an einem Lauf über
+63 Minuten am 2026-08-30:
+
+| | TOP68 `Force_Heater_State` | TOP60 `Internal_Heater_State` |
+| :--- | :--- | :--- |
+| bedeutet | der von der WP übernommene **Auftrag** | ob der Stab **gerade heizt** |
+| im Lauf | **keine einzige Flanke** | vier Wechsel |
+| taugt für | Befehlsquittierung | Wirkungsbeobachtung, Takten |
+
+**Wer prüfen will, ob ein Kommando angekommen ist, liest TOP68.** Eine
+Überwachung auf TOP60 hätte in diesem einen Lauf zwei Fehlalarme geworfen, denn
+der Stab taktet von selbst: Die Vorlaufregelung der Anlage schaltete ihn bei
+25,5 und 25,8 °C ab und bei 24,0 und 23,5 °C wieder ein, der Verdichter stand
+dabei durchgehend auf 0 Hz. Zwischen Abschalten und Wiedereinschalten liegen
+**20 Minuten Sperrzeit** — im Lauf auf die Sekunde 20:01 min.
 
 Ablauf, Rohwerte und die Herleitung aus dem Servicehandbuch stehen in
 [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), die Wiederholung des Laufs in
