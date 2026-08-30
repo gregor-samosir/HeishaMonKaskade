@@ -12,8 +12,9 @@ einem Vollarchiv aller `firmware.bin` — beides wird nicht mehr gepflegt. Der
 ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)).
 
-**Beide Backup-Boards stehen seit dem 2026-08-27** mit 3.16.0, Port 1884 und
-eigenem Hostnamen (Protokoll unten).
+**Beide Backup-Boards stehen seit dem 2026-08-27** mit Port 1884 und eigenem
+Hostnamen (Protokoll unten). **Firmware: 3.18.0** — nachgezogen am 2026-08-30
+über die reservierten IPs, Port und Hostname dabei unverändert geprüft.
 
 Die Rückfallebene ist damit **zweiteilig**, und beide Teile werden gebraucht:
 die Boards gegen den Hardware-Ausfall, das Abbild der Vorversion gegen einen
@@ -132,6 +133,12 @@ Board | USB-Port | MAC | IP | Ergebnis
 :--- | :--- | :--- | :--- | :---
 `HeishaMon32_h1b` | `usbmodem11301` | `e8:f6:0a:80:1d:48` | 192.168.2.194 | 3.16.0, Heisha Stufe 1, Port 1884
 `HeishaMon32_h2b` | `usbmodem11401` | `1c:db:d4:bc:61:c8` | 192.168.2.166 | 3.16.0, Heisha Stufe 2, Port 1884
+
+Seither nachgezogen: **3.17.0** (2026-08-28) und **3.18.0** (2026-08-30), beide
+Male per OTA über die reservierte IP, ohne die Boards zu öffnen. Die Prüfung
+nach dem Nachziehen ist immer dieselbe: Version, Hostname, `mqtt_port = 1884`.
+Ein Board ohne Broker meldet auf `/notbetrieb/status` erwartungsgemäß fehlende
+Werte und Sperre 1 — das ist der stillgelegte Zustand, kein Befund.
 
 Beide gemeinsame Werte: Broker `192.168.2.147`, Hydraulik-Switch
 `192.168.2.180`, MQTT-Benutzer und -Passwort leer — abgelesen an den laufenden
