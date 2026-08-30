@@ -198,8 +198,48 @@ Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 | Byte 110 | nicht dekodiert | vier Topics mit den Ist-Zuständen (heizt/kühlt tatsächlich) |
 | Broker weg | nur eine Zeile im MQTT-Log, die niemanden erreicht | die Weboberfläche sagt es: „Hausteuerung seit 14 Minuten nicht erreichbar" |
 | Steuerung rechnet nicht mehr | fällt gar nicht auf, von außen sieht alles gesund aus | erkannt am ausbleibenden 5-min-Re-Assert, eigener Text auf der Seite |
+| Heizstab-Auftrag beim Notbetrieb | kennt keinen Notbetrieb | wird als eigener Schritt zurückgenommen, bevor die Anlage anläuft |
 
 Im Detail:
+
+### Der Notbetrieb nimmt den Heizstab zurück (3.18.0)
+
+Seit dem 2026-08-30 benutzt die Kaskadensteuerung SET39 `ForceHeater` im
+**Regelbetrieb**: Drei Heizmodi ersetzen den Verdichter durch den Backup-Heizstab
+der Wärmepumpen — 3 kW an einer Stufe, 6 kW mit beiden. Sie schalten die Einheit
+dafür aus, denn die Wärmepumpe nimmt SET39 nur bei ausgeschalteter Einheit an.
+
+Damit war der Notbetriebsknopf plötzlich in einer Lage, für die er nicht gebaut
+war. Seine Schrittfolge kannte SET39 nicht und endet mit `Heatpump = 1` — sie
+hätte **eine Anlage eingeschaltet, an der der Heizstab-Auftrag noch steht**.
+Zurückgenommen hätte ihn niemand: Die Firmware hat keinen Rückschaltpfad, und im
+eigentlichen Notbetriebsfall ist die Steuerung ja gerade weg.
+
+**Der eigentliche Schaden wäre die Umwälzpumpe gewesen.** Sie hängt am Kommando,
+nicht am Heizstab (gemessen 2026-08-28): Sie startet mit SET39, läuft weiter,
+nachdem der Stab thermisch abgeschaltet hat, und stoppt erst mit
+`ForceHeater = 0`. Ein vergessenes Kommando lässt sie dauerhaft laufen.
+
+Beide Schrittfolgen haben deshalb an **Position 2** einen Schritt
+`ForceHeater = 0` — hinter der Hydraulik, vor allem anderen an der Wärmepumpe.
+Die Stelle ist mit Absicht so früh: Bricht der Lauf dort ab, tut die Anlage
+nichts mehr — Stab aus, Pumpe aus, Wärmepumpe aus, und an der Wärmepumpe ist
+nichts verstellt.
+
+* **Im Regelfall kostet er 8 s.** Wer nie einen Heizstab-Modus fährt, hat TOP68
+  ohnehin auf 0; der Schritt ist dann nach der Mindestwartezeit bestätigt. Ein
+  Heizen-Lauf dauert damit 80 s statt 72, ein Warmwasser-Lauf 48 statt 40.
+* **Das Timeout bleibt bei 20 s.** Beim *Einschalten* braucht SET39 bis zu einer
+  halben Minute — die Wärmepumpe prüft erst ihre eigenen Bedingungen. Die
+  *Rücknahme*, um die es hier geht, lag bei 7 s an beiden Stufen.
+* **Lief die Anlage mit 6 kW, gehört der Knopf an beide Bridges.** Jede spricht
+  nur mit ihrer eigenen Wärmepumpe. Sonst bleibt an der anderen Stufe der
+  Auftrag stehen und ihre Umwälzpumpe läuft weiter.
+
+Der Auftrag kam von der Steuerungsseite und ist samt Antwort in
+[`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md) nachlesbar;
+der Schritt im Ablauf steht in
+[`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 1b.
 
 ### Der Heizstab lässt sich schalten — und was er dabei tut (3.17.0)
 

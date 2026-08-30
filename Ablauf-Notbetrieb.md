@@ -4,8 +4,8 @@ Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
 passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
-**Stand:** 2026-08-27, Firmware 3.15.0 (Hydraulikschritt; 3.14.1 lief seit dem
-2026-08-23 auf beiden Stufen).
+**Stand:** 2026-08-30, Firmware 3.18.0 (Heizstabschritt; 3.17.0 lief seit dem
+2026-08-28 auf allen vier Boards).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in
@@ -25,17 +25,18 @@ trägt das ganze Dokument:
 
 Ereignis | Dauer | Wer treibt den Ablauf
 :--- | ---: | :---
-Notbetrieb einschalten, Stufe 1 (Heizen) | **72 s** | die Firmware, Schritt für Schritt
-Notbetrieb einschalten, Stufe 2 (Warmwasser) | **40 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 1 (Heizen) | **80 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 2 (Warmwasser) | **48 s** | die Firmware, Schritt für Schritt
 Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
 
 ---
 
 # 1. Notbetrieb einschalten — Stufe 1, Rolle Heizen
 
-Neun Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
-die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), die übrigen acht
-gehen an die Wärmepumpe.
+Zehn Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
+die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), **Schritt 2 nimmt seit
+3.18.0 den Heizstab zurück** ([Abschnitt 1b](#1b-der-heizstabschritt)), die
+übrigen acht gehen an die Wärmepumpe.
 
 ## Phase 1 — Auslösen (t = 0)
 
@@ -62,11 +63,11 @@ Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
 versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
 Aufbau der Seite und dem Klick können Minuten liegen.
 
-## Phase 2 — Die Schrittfolge (0 bis 72 s)
+## Phase 2 — Die Schrittfolge (0 bis 80 s)
 
 ### Der Rhythmus eines einzelnen Schritts
 
-Jeder der acht **Set-Schritte** durchläuft dieselben Stationen; der
+Jeder der neun **Set-Schritte** durchläuft dieselben Stationen; der
 Hydraulikschritt hat seinen eigenen Rhythmus und steht in Abschnitt 1a. Die
 Zeitangaben sind relativ zum Beginn des Schritts.
 
@@ -84,20 +85,21 @@ der sieben Kommandos hintereinander absetzt, packt sie alle in *ein* Telegramm �
 dann konkurriert das Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und
 welcher gewinnt, ist unbekannt.
 
-### Die neun Schritte
+### Die zehn Schritte
 
 Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 ---: | ---: | :--- | ---: | :---
 **1** | **0 s** | **Hydraulik auf AUS (1-stufig)** | — | **Ganz vorn**: Bricht er ab, ist an der Wärmepumpe noch nichts verstellt. Bestätigt durch `{"POWER":"OFF"}` vom Switch
-2 | +8 s | `OperationMode` = 0 (Heat only) | 4 | Vor allem anderen an der WP, sonst schaltet der Knopf am Ende eine Anlage ein, die auf Kühlen steht
-3 | +16 s | `HeatingMode` = 0 (Comp. Curve) | 76 | Der Moduswechsel setzt die Kurvenpunkte auf die Panasonic-Werksvorgaben zurück — deshalb **vor** der Kurve
-4 | +24 s | `Z1HeatCurveTargetHighTemp` („VL kalt") | 29 | Erst jetzt hält die Kurve; vorher geschrieben wäre sie umsonst
-5 | +32 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
-6 | +40 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
-7 | +48 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
-8 | +56 s | `WaterPump` = 0 (auto) | 104 | Die Steuerung lässt die Pumpe im Umpumpbetrieb auf **Fix** laufen; im Notbetrieb gehört sie zurück auf bedarfsgeregelt. **Hinter** allen Moduswechseln, damit keiner sie zurückstellt
-9 | +64 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Betriebsart, Kurve und Pumpe stehen, darf die Anlage anlaufen
-— | **+72 s** | **GRÜN** | | alle neun Schritte bestätigt
+**2** | **+8 s** | **`ForceHeater` = 0 (Heizstab aus)** | **68** | **Vor allem anderen an der WP**: Bricht er ab, tut die Anlage nichts mehr — Stab aus, Umwälzpumpe aus, Wärmepumpe aus. Siehe [Abschnitt 1b](#1b-der-heizstabschritt)
+3 | +16 s | `OperationMode` = 0 (Heat only) | 4 | Sonst schaltet der Knopf am Ende eine Anlage ein, die auf Kühlen steht
+4 | +24 s | `HeatingMode` = 0 (Comp. Curve) | 76 | Der Moduswechsel setzt die Kurvenpunkte auf die Panasonic-Werksvorgaben zurück — deshalb **vor** der Kurve
+5 | +32 s | `Z1HeatCurveTargetHighTemp` („VL kalt") | 29 | Erst jetzt hält die Kurve; vorher geschrieben wäre sie umsonst
+6 | +40 s | `Z1HeatCurveTargetLowTemp` („VL warm") | 30 |
+7 | +48 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
+8 | +56 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
+9 | +64 s | `WaterPump` = 0 (auto) | 104 | Die Steuerung lässt die Pumpe im Umpumpbetrieb auf **Fix** laufen; im Notbetrieb gehört sie zurück auf bedarfsgeregelt. **Hinter** allen Moduswechseln, damit keiner sie zurückstellt
+10 | +72 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Heizstab, Betriebsart, Kurve und Pumpe stehen, darf die Anlage anlaufen
+— | **+80 s** | **GRÜN** | | alle zehn Schritte bestätigt
 
 Legt jemand den KNX-Schalter mitten im Lauf auf Kühlen, bricht der Lauf sofort
 ab — noch vor jeder anderen Prüfung. Ein bestätigter Schritt ist in einer
@@ -107,7 +109,7 @@ kühlenden Anlage nichts wert.
 
 t | Was passiert
 :--- | :---
-+72 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
++80 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
 alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort — auch die Sperre, der Knopf gibt sich also von selbst frei
 GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
 danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
@@ -195,7 +197,7 @@ allen anderen Werten.
 ## Warum die 90 s keine Wartezeit erzwingen
 
 Das Relais bestätigt sich sofort, die beiden motorischen Stellantriebe brauchen
-je 90 s, und `Heatpump = 1` geht an Stufe 2 schon nach 24 s raus. **Der
+je 90 s, und `Heatpump = 1` geht an Stufe 2 schon nach 40 s raus. **Der
 Kompressor braucht trotzdem länger als die Ventile:** Nach dem Einschalten
 vergehen rund drei Minuten, bis die Wärmepumpe ihn hochfährt; zunächst läuft nur
 die Umwälzpumpe an (Owner, 2026-08-26).
@@ -203,8 +205,8 @@ die Umwälzpumpe an (Owner, 2026-08-26).
 **Der Beleg ist der Normalbetrieb selbst.** Dort sendet die Kaskadensteuerung
 ihre Kommandos an die Wärmepumpen **gleichzeitig** mit dem Switch-Kommando —
 dieselbe Konstellation, seit jeher, ohne Schaden. Der Notbetrieb ist der
-günstigere Fall: Zwischen Hydraulikschritt und `Heatpump = 1` liegen 16 s
-(Stufe 2) beziehungsweise 48 s (Stufe 1) zusätzlicher Vorsprung.
+günstigere Fall: Zwischen Hydraulikschritt und `Heatpump = 1` liegen 40 s
+(Stufe 2) beziehungsweise 72 s (Stufe 1) zusätzlicher Vorsprung.
 
 ## Warum der Request `loop()` blockieren darf
 
@@ -270,6 +272,124 @@ Schaden von oben, nur von der anderen Seite verursacht.
 
 ---
 
+# 1b. Der Heizstabschritt
+
+Er steht seit 3.18.0 in **beiden** Schrittfolgen an Position 2 — direkt hinter
+der Hydraulik und vor jedem anderen Kommando an die Wärmepumpe.
+
+## Warum er sein muss
+
+Seit dem 2026-08-30 benutzt die Kaskadensteuerung `SET39 ForceHeater` im
+**Regelbetrieb**. Drei Heizmodi (App-Menü 9/10/11) ersetzen den Verdichter durch
+den Backup-Heizstab der Wärmepumpen: 3 kW an einer Stufe, 6 kW mit beiden.
+
+App-Modus | Hauptmodus | `SET39` an | `SET1 Heatpump`
+:--- | ---: | :--- | :---
+9 · Heizstab 3 kW | 5 | H1 | **0** an beiden
+10 · Heizstab 3 kW HH-Boost | 5 | H1 | **0** an beiden
+11 · Heizstab 6 kW | 6 | H1 + H2 | **0** an beiden
+
+**`Heatpump = 0` ist dabei Voraussetzung, nicht Nebenwirkung**: Die Wärmepumpe
+nimmt `SET39` nur bei ausgeschalteter Einheit an (Messung 2026-08-28,
+[`MQTT-Topics.md`](MQTT-Topics.md); am Bedienpanel wird die Anforderung bei
+laufender Einheit abgelehnt).
+
+Genau das ist die Lage, in der der Notbetriebsknopf gefährlich wurde. Bis 3.17.0
+kam `SET39` in keiner der beiden Schrittfolgen vor, und beide enden mit
+`Heatpump = 1`. Läuft die Anlage im Heizstab-Modus und drückt jemand den Knopf,
+**stünde `ForceHeater` weiter auf 1, während die Firmware die Anlage einschaltet.**
+
+Zwei Fälle, die sich unterscheiden:
+
+* **Die Steuerung lebt.** Der Notbetrieb wird ohnehin binnen ≤ 5 min vom
+  Re-Assert überschrieben — bekanntes Verhalten, es betrifft alle Kanäle. Neu
+  ist nur, dass dabei auch `SET39 = 1` wieder gesetzt wird.
+* **Die Steuerung ist tot** — der eigentliche Notbetriebsfall. Dann nimmt
+  niemand `SET39` zurück. **`SET39` ist ein Zustand, den niemand automatisch
+  räumt**, und die Firmware hat keinen Rückschaltpfad (Entscheidung 7).
+
+## Die Umwälzpumpe ist der eigentliche Schaden
+
+**Sie hängt am Kommando, nicht am Heizstab** (gemessen 2026-08-28): Sie startet
+mit `SET39`, läuft weiter, nachdem der Stab thermisch abgeschaltet hat, und
+stoppt erst mit `ForceHeater = 0`. Ein vergessenes Kommando lässt sie also
+dauerhaft laufen — dieselbe Art von Befund wie beim Umpumpbetrieb, der den
+Schritt `WaterPump = 0` ans Ende der Folge gebracht hat.
+
+## Was er tut
+
+Ein gewöhnlicher Set-Schritt: `set/ForceHeater` = 0, zurückgelesen an **TOP68**
+`Force_Heater_State`, Mindestwartezeit 8 s, Timeout 20 s. Nichts an ihm ist
+Sonderfall — das ist Absicht.
+
+Lage beim Drücken | Was passiert | Kosten
+:--- | :--- | ---:
+TOP68 steht auf 0 (kein Heizstab-Modus lief) | der Schritt ist nach der Mindestwarte bestätigt | 8 s
+TOP68 steht auf 1 | das Kommando geht raus, TOP68 fällt auf 0 | 8 s
+TOP68 bleibt auf 1 | **ROT**, kein weiteres Kommando an die WP | 20 s
+
+**Der Regelfall kostet also 8 s und sonst nichts.** Wer nie einen Heizstab-Modus
+fährt, merkt von diesem Schritt nur die acht Sekunden längere Laufzeit.
+
+## Warum das Timeout bei 20 s bleibt
+
+`SET39` ist unser langsamstes Kommando — aber nur in einer Richtung. **Beim
+Einschalten** lag die Übernahme in einem Lauf bei einer knappen halben Minute
+(`MQTT-Topics.md`, 2026-08-28): Die Wärmepumpe prüft erst ihre eigenen
+Bedingungen und übernimmt den Wert dann. **Die Rücknahme**, um die es hier allein
+geht, lag im Erstlauf der Steuerungsseite bei **7 s an beiden Stufen**
+(`nodered-flows/HEIZSTAB-MODI.md` §5, 2026-08-30) — innerhalb der Mindestwarte
+von 8 s, die der Schritt ohnehin absitzt.
+
+Kommt sie wider Erwarten nicht zurück, ist **ROT die richtige Antwort**: An der
+Wärmepumpe ist in diesem Moment nichts verstellt, die Anlage steht so da wie
+vorher, und der Mensch drückt erneut — dieselbe Logik wie beim Hydraulikschritt.
+Ein Wiederholungsversuch der Firmware wäre der schlechtere Weg.
+
+## Was er nicht kann: die andere Stufe
+
+**Jede Bridge spricht nur mit ihrer eigenen Wärmepumpe.** Lief die Anlage im
+6-kW-Modus (App-Modus 11), steht `SET39` auch an der anderen Stufe — dieser Lauf
+erreicht sie nicht.
+
+> **Lief die Anlage mit Heizstab, gehört der Knopf an BEIDEN Bridges gedrückt.**
+> Sonst bleibt an der anderen Stufe der Heizstab-Auftrag stehen und ihre
+> Umwälzpumpe läuft weiter.
+
+Das steht bewusst **nur hier und im README**, nicht im grünen Panel: Dessen
+Wortlaut kommt vom Familienrat (2026-08-29) und soll knapp bleiben — ein Satz,
+der bei jedem Lauf erscheint, aber nur im Heizstabfall gilt, verwässert ihn
+(Owner-Entscheid 2026-08-30).
+
+**Der 1-stufige Hydraulikschritt entkoppelt die zweite Stufe zusätzlich** —
+Modus 11 fährt 2-stufig, der Notbetrieb stellt in Schritt 1 auf 1-stufig. Deren
+Heizstab arbeitete danach in einen abgekoppelten Kreis.
+
+## Was der Notbetrieb ebenfalls nicht zurückholt
+
+**Modus 10 (HH-Boost) schließt den Mischer und schaltet die VH-Pumpe ab.** Beides
+hängt an der Kaskadensteuerung und nicht an der Firmware — der Notbetrieb kann es
+so wenig zurücknehmen wie irgendetwas anderes außerhalb der Wärmepumpe. Wer aus
+Modus 10 heraus in den Notbetrieb geht, bekommt Wärme, aber weiterhin vorrangig
+ins Hinterhaus. Der Hydraulikschritt ist die einzige Ausnahme, und er ist es aus
+einem Grund: Ohne ihn schiebt der Warmwasserbetrieb bis zu 57 °C in die
+Fußbodenheizung.
+
+## Wer `SET39` wieder setzt
+
+**Die Kaskadensteuerung, wie bei allen anderen Werten auch.** Der Kanal liegt im
+Hauptmodus-Verteiler und damit im 5-Minuten-Re-Assert; in allen Modi außer 9/10/11
+sendet sie aktiv `SET39 = 0`.
+
+Steht beim Re-Assert weiterhin ein Heizstab-Modus, setzt sie `SET39 = 1` zurück —
+und das trifft eine Anlage, die der Notbetrieb gerade eingeschaltet hat. Es löst
+sich von selbst auf: Die Modi 5/6 senden `heatpump` **vor** `heater`, die Einheit
+geht also zuerst wieder aus, und dann wird `SET39` angenommen
+(`HEIZSTAB-MODI.md` §4). Der Rest ist der übliche Kreislauf — Notbetrieb setzt,
+Re-Assert holt zurück.
+
+---
+
 # 2. Notbetrieb einschalten — Stufe 2, Rolle Warmwasser
 
 Derselbe Automat, dieselben Regelzeiten, nur eine kürzere Folge: Warmwasser
@@ -278,16 +398,17 @@ braucht keine Kurve.
 Nr | t ab Klick | Kommando | TOP | Anmerkung
 ---: | ---: | :--- | ---: | :---
 **1** | **0 s** | **Hydraulik auf AUS (1-stufig)** | — | derselbe Schritt wie an Stufe 1 — und hier der wichtigere, siehe Abschnitt 1a
-2 | +8 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
-3 | +16 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
-4 | +24 s | `WaterPump` = 0 (auto) | 104 | wie an Stufe 1 — die Pumpe zurück auf bedarfsgeregelt
-5 | +32 s | `Heatpump` = 1 | 0 |
-— | **+40 s** | **GRÜN** | | an H2 gemessen: **GRÜN nach 43 s** (2026-08-27)
+**2** | **+8 s** | **`ForceHeater` = 0 (Heizstab aus)** | **68** | derselbe Schritt wie an Stufe 1: Der 6-kW-Modus setzt `SET39` an **beiden** Stufen, siehe Abschnitt 1b
+3 | +16 s | `OperationMode` = 3 (DHW only) | 4 | trägt auch im Kühlbetrieb — am 2026-08-20 an H2 gemessen (M3)
+4 | +24 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
+5 | +32 s | `WaterPump` = 0 (auto) | 104 | wie an Stufe 1 — die Pumpe zurück auf bedarfsgeregelt
+6 | +40 s | `Heatpump` = 1 | 0 |
+— | **+48 s** | **GRÜN** | | vor dem Heizstabschritt an H2 gemessen: GRÜN nach 43 s bei 40 s Regelzeit (2026-08-27)
 
 **Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
 Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
 die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
-liegt hier bei 100 s statt 180 s, weil er sich aus der Schrittzahl ableitet.
+liegt hier bei 120 s statt 200 s, weil er sich aus der Schrittzahl ableitet.
 
 ---
 
@@ -351,9 +472,9 @@ Abschnitt 10.
 **Sie stammen aus der Zeit vor dem Hydraulikschritt** (Firmware 3.12.0), also
 aus sieben- bzw. dreischrittigen Folgen. Ihre Aussage trägt trotzdem: Was sie
 belegen, ist der Rhythmus von 8 s je Schritt und die Herkunft der Kurvenwerte
-aus dem RAM — beides hat 3.15.0 nicht angefasst. Die Gesamtzeiten liegen seither
-um zwei Schritte höher (72 s statt 56 s, 40 s statt 24 s) — Hydraulik am Anfang,
-Umwälzpumpe vor dem Einschalten.
+aus dem RAM — daran haben weder 3.15.0 noch 3.18.0 etwas geändert. Die
+Gesamtzeiten liegen seither um drei Schritte höher (80 s statt 56 s, 48 s statt
+24 s) — Hydraulik am Anfang, Heizstab dahinter, Umwälzpumpe vor dem Einschalten.
 
 Lauf | Datum | Was er belegt | Ergebnis
 :--- | :--- | :--- | :---
@@ -427,6 +548,13 @@ CoolTarget | `set/Z1CoolRequestTemperature` | TOP28 | V1.0.0
 QuietMode | `set/QuietMode` | TOP18 | V1.0.0
 **WaterPump** | `set/WaterPump` | **TOP104** | **V1.2.0 (2026-08-29)**
 **WaterPumpSpeed** | `set/WaterPumpSpeed` | **TOP103** | **V1.2.0 (2026-08-29)**
+**ForceHeater** | `set/ForceHeater` | **TOP68** | **2026-08-30**
+
+Der achte Kanal kam mit den Heizstab-Modi der Steuerung dazu und vergleicht
+**Auftrag gegen Auftrag**: TOP68 meldet den von der Wärmepumpe übernommenen
+Auftrag und bleibt stehen, solange `SET39` steht — auch wenn der Stab thermisch
+abgeschaltet hat. Ob er tatsächlich heizt, sagt TOP60 (`HEIZSTAB-MODI.md` §6a);
+in einer Befehlsquittierung wäre dort jedes normale Takten eine Abweichung.
 
 Jeder Kanal hat 5 min Karenz, bevor eine Abweichung gemeldet wird. Auf die
 Ist-Seite wirkt zusätzlich ein Stale-Guard von 20 min, und die LWT der Bridge
@@ -468,11 +596,12 @@ seiner Karenz:
 
 Auslöser im Ablauf | betroffener Kanal | Abweichung
 :--- | :--- | :---
-Schritt 2 `OperationMode` = 0 | OpMode | solange die Steuerung zuletzt etwas anderes wollte
-Schritt 3, Werks-Reset TOP27 → 35 | HeatTarget | bis der Re-Assert die Sollwerte zurückholt
-Schritt 3, Werks-Reset TOP28 → 10 | CoolTarget | dito
-**Schritt 8 `WaterPump` = 0** | **WaterPump** | **neu — bis V1.1.0 blieb dieser Fall unsichtbar**
-Schritt 9 `Heatpump` = 1 | Heatpump | falls die Steuerung zuletzt 0 gesendet hatte
+**Schritt 2 `ForceHeater` = 0** | **ForceHeater** | **neu in 3.18.0 — nur wenn ein Heizstab-Modus lief; sonst sind Soll und Ist ohnehin beide 0**
+Schritt 3 `OperationMode` = 0 | OpMode | solange die Steuerung zuletzt etwas anderes wollte
+Schritt 4, Werks-Reset TOP27 → 35 | HeatTarget | bis der Re-Assert die Sollwerte zurückholt
+Schritt 4, Werks-Reset TOP28 → 10 | CoolTarget | dito
+**Schritt 9 `WaterPump` = 0** | **WaterPump** | **neu — bis V1.1.0 blieb dieser Fall unsichtbar**
+Schritt 10 `Heatpump` = 1 | Heatpump | falls die Steuerung zuletzt 0 gesendet hatte
 
 **Das ist kein Fehlalarm.** Die Meldung sagt zutreffend: „Der Sollwert der
 Steuerung ist nicht mehr wirksam" — im Notbetrieb ist genau das der Zweck. Sie

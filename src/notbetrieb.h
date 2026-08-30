@@ -40,8 +40,17 @@ enum NotbetriebRolle
 /*                                                                           */
 /* Die Waermepumpe uebernimmt ein Kommando in 2-8 s (KNX-Messung 2026-08-16),*/
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
-/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.15.0 72 s    */
-/* (neun Schritte, davon der erste die Hydraulik).                           */
+/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.18.0 80 s    */
+/* (zehn Schritte, davon der erste die Hydraulik), ein Warmwasser-Lauf 48 s. */
+/*                                                                           */
+/* DER LANGSAMSTE KANAL IST SEIT 3.18.0 SET39 ForceHeater. Beim EINSCHALTEN  */
+/* lag die Uebernahme in einem Lauf bei einer knappen halben Minute          */
+/* (MQTT-Topics.md, 2026-08-28) - die Waermepumpe prueft dort erst ihre      */
+/* eigenen Bedingungen. Die RUECKNAHME, um die es im Notbetrieb allein geht, */
+/* lag dagegen bei 7 s an beiden Stufen (nodered-flows/HEIZSTAB-MODI.md §5,  */
+/* 2026-08-30). Die 20 s bleiben deshalb unveraendert: Kommt die Ruecknahme  */
+/* wider Erwarten nicht zurueck, ist ROT die richtige Antwort - an der       */
+/* Waermepumpe ist dann nichts verstellt, und der Mensch drueckt erneut.     */
 /*                                                                           */
 /* Der Gesamtdeckel ist ABGELEITET (Schrittzahl * Schritt-Timeout) und nicht */
 /* frei gewaehlt. Ein kleinerer Deckel wuerde einen Lauf abbrechen, den die  */
@@ -66,8 +75,8 @@ enum NotbetriebRolle
 /*                                                                            */
 /* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
 /* Reserve ab. Das ist der Preis dafuer, dass GRUEN wirklich "zurueckgelesen" */
-/* heisst. Der Gesamtdeckel folgt der Schrittzahl und liegt seit 3.15.0 bei   */
-/* 180 s (Heizen, neun Schritte) bzw. 100 s (Wasser, fuenf).                  */
+/* heisst. Der Gesamtdeckel folgt der Schrittzahl und liegt seit 3.18.0 bei   */
+/* 200 s (Heizen, zehn Schritte) bzw. 120 s (Wasser, sechs).                  */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -237,9 +246,41 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* gemessen - an dieser Stelle kann er ihn jedenfalls nicht mehr             */
 /* ueberschreiben. Dieselbe Vorsicht wie bei den Kurvenpunkten, und aus      */
 /* demselben Grund: Der Werks-Reset des Moduswechsels ist belegt.            */
+/*                                                                          */
+/* DER HEIZSTAB WIRD SEIT 3.18.0 ZURUECKGENOMMEN (ForceHeater = 0, Position  */
+/* 2 in beiden Folgen). Seit dem 2026-08-30 benutzt die Kaskadensteuerung    */
+/* SET39 im Regelbetrieb: Drei Heizmodi ersetzen den Verdichter durch den    */
+/* Backup-Heizstab (3 kW je Stufe, 6 kW mit beiden). Sie setzen dabei        */
+/* Heatpump = 0, weil die Waermepumpe SET39 nur bei ausgeschalteter Einheit  */
+/* annimmt - das Abschalten ist dort Zweck, nicht Nebenwirkung.             */
+/*                                                                          */
+/* SET39 IST EIN ZUSTAND, DEN NIEMAND AUTOMATISCH ZURUECKNIMMT. Ohne diesen  */
+/* Schritt stuende ForceHeater weiter auf 1, waehrend der letzte Schritt die */
+/* Anlage einschaltet - und die Umwaelzpumpe haengt am Kommando, nicht am    */
+/* Stab: Sie laeuft weiter, auch nachdem der Heizstab thermisch abgeschaltet */
+/* hat, und stoppt erst mit ForceHeater = 0 (gemessen 2026-08-28). Im        */
+/* eigentlichen Notbetriebsfall - die Steuerung ist tot - raeumt das sonst   */
+/* niemand auf.                                                             */
+/*                                                                          */
+/* WARUM POSITION 2 und nicht weiter hinten: Bricht der Lauf hier ab, tut    */
+/* die Anlage nichts mehr - Stab aus, Pumpe aus, Waermepumpe aus. Das ist    */
+/* die sichere Seite. Ein etwaiger Werks-Reset der folgenden Moduswechsel    */
+/* kann diesen Wert ausserdem nicht zerstoeren: Er wirkte in dieselbe        */
+/* Richtung. Deshalb gilt hier NICHT die Vorsicht der Kurvenpunkte, die      */
+/* hinter den Moduswechsel gehoeren.                                        */
+/*                                                                          */
+/* DER SCHRITT KOSTET IM REGELFALL 8 s. Steht TOP68 schon auf 0 - also       */
+/* immer, wenn kein Heizstab-Modus lief -, ist er nach der Mindestwarte      */
+/* bestaetigt und die Folge laeuft weiter.                                  */
+/*                                                                          */
+/* WAS ER NICHT KANN: Die Bridge spricht nur mit IHRER Waermepumpe. Lief die */
+/* Anlage im 6-kW-Modus, steht SET39 auch an der anderen Stufe - dort muss   */
+/* der Knopf ebenfalls gedrueckt werden, sonst laeuft deren Umwaelzpumpe     */
+/* weiter (Ablauf-Notbetrieb.md, Abschnitt 1b).                             */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
+    {NB_SCHRITT_SET, "ForceHeater", 68, NOTBETRIEB_FESTER_WERT, 0}, // Heizstab zurueck
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only
     {NB_SCHRITT_SET, "HeatingMode", 76, NOTBETRIEB_FESTER_WERT, 0},  // dann umschalten
     {NB_SCHRITT_SET, "Z1HeatCurveTargetHighTemp", 29, 0, 0},         // dann die Kurve: "VL kalt"
@@ -254,9 +295,14 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
 /* OperationMode 3 (DHW only) traegt auch dann, wenn die Anlage vom          */
 /* KNX-Aktor auf Kuehlen steht - also im Sommerfall, fuer den der Notbetrieb */
 /* an Stufe 2 ueberhaupt gedacht ist (gemessen 2026-08-20 an H2, M3).        */
+/*                                                                          */
+/* Der Heizstabschritt steht auch hier an Position 2: Der 6-kW-Modus setzt   */
+/* SET39 an BEIDEN Stufen, und welchen Knopf jemand zuerst drueckt, weiss    */
+/* niemand - dieselbe Ueberlegung wie beim Hydraulikschritt.                 */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
+    {NB_SCHRITT_SET, "ForceHeater", 68, NOTBETRIEB_FESTER_WERT, 0}, // Heizstab zurueck
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
     {NB_SCHRITT_SET, "DHWTemp", 9, 0, 0},
     {NB_SCHRITT_SET, "WaterPump", 104, NOTBETRIEB_FESTER_WERT, 0}, // Pumpe auf auto

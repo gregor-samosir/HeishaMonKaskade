@@ -356,6 +356,13 @@ gegengeprüft: bei **ausgeschalteter** Wärmepumpe lässt er sich auch ohne
 anliegende Störung einschalten, bei laufendem Betrieb wird die Anforderung
 abgelehnt.
 
+**Seit 3.18.0 nimmt der Notbetrieb SET39 selbst zurück** (Position 2 beider
+Schrittfolgen, zurückgelesen an TOP68). Anlass ist die Kaskadensteuerung, die
+den Kanal seit dem 2026-08-30 im Regelbetrieb fährt: Ohne den Schritt schaltete
+der Notbetriebsknopf eine Anlage ein, an der der Heizstab-Auftrag noch steht —
+samt der Umwälzpumpe, die daran hängt. Siehe
+[`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 1b.
+
 ## 2. Set-Kommandos ohne Rückmeldung (2)
 
 SET | Kommando | Byte | Bits | Lage

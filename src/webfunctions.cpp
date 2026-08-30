@@ -802,7 +802,11 @@ static const char notbetriebJS[] PROGMEM =
     "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
-    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu einer Minute.</p>';}"
+    // "bis zu anderthalb Minuten" deckt beide Rollen ab: Der Heizen-Lauf
+    // braucht seit 3.18.0 80 s (zehn Schritte), der Warmwasser-Lauf 48 s. Die
+    // Angabe steht bewusst ueber der laengeren der beiden - wer laenger wartet
+    // als angekuendigt, glaubt an einen Fehler, wo keiner ist.
+    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu anderthalb Minuten.</p>';}"
     // Der Wortlaut bei GRUEN ist vom Familienrat vorgegeben (2026-08-29).
     // Der frueher hier stehende KNX-Hinweis ist bewusst raus: Wer im Notbetrieb
     // vor der Seite steht, soll nur zwei Dinge wissen - wo die Temperatur
