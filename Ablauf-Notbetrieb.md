@@ -346,6 +346,51 @@ Wärmepumpe ist in diesem Moment nichts verstellt, die Anlage steht so da wie
 vorher, und der Mensch drückt erneut — dieselbe Logik wie beim Hydraulikschritt.
 Ein Wiederholungsversuch der Firmware wäre der schlechtere Weg.
 
+## An der Anlage belegt — 2026-08-30, beide Rollen
+
+Zwei Läufe unmittelbar nach dem Rollout von 3.18.0, **mit tatsächlich laufendem
+Heizstab als Ausgangslage**: App-Modus 11 (6 kW), TOP68 und TOP60 an beiden
+Stufen auf 1, beide Verdichter aus, Umwälzpumpen auf `Fix`, KNX auf Heizen.
+
+**Lauf 1 — Stufe 2, Rolle Warmwasser** (Klick ≈ 16:52:25)
+
+Zeit | Was zurückkam | Schritt
+:--- | :--- | :---
+16:52:39 | **TOP68 1 → 0, TOP60 1 → 0** — der Stab geht aus | **2**
+16:52:48 | TOP4 4 → 3 (DHW only) | 3
+16:53:05 | TOP104 → 0 (Auto) | 5
+16:53:10 | TOP0 0 → 1 — die Anlage geht an | 6
+**16:53:13** | Status `2;7;6;0;0` — **GRÜN nach rund 48 s** | —
+
+**Lauf 2 — Stufe 1, Rolle Heizen** (Klick ≈ 16:55:59)
+
+Zeit | Was zurückkam | Schritt
+:--- | :--- | :---
+16:56:15 | **TOP68 1 → 0, TOP60 1 → 0** | **2**
+16:56:21 bis 17:57:16 | Schrittzähler 3 → 10, jeder Schritt drei Abfragen à 3 s | 3–10
+**16:57:19** | Status `2;11;10;0;0` — **GRÜN nach rund 80 s** | —
+
+Endzustand an H1: TOP0 `On`, TOP4 `Heat`, TOP76 `Comp. Curve`, Kurve
+**34 / 26 / 15 / −10** aus dem RAM, TOP68 und TOP60 `Inactive`, TOP104 `Auto`,
+Tasmota `{"POWER":"OFF"}`.
+
+**Drei Befunde:**
+
+* **Die Rücknahme kam nach 6 bis 8 s zurück** (Abtastung 4 s) — also innerhalb
+  der Mindestwartezeit von 8 s, die der Schritt ohnehin absitzt. Die 7 s der
+  Steuerungsseite sind damit unabhängig bestätigt, und die 20 s Timeout haben
+  reichlich Luft.
+* **Der Stab war aus, bevor die Anlage anlief** — 34 s Vorsprung an Stufe 2,
+  64 s an Stufe 1. Genau das ist der Zweck des Schritts.
+* **Die andere Stufe bleibt unberührt.** Während des Laufs an H2 stand H1
+  durchgehend auf TOP68 = 1 und TOP60 = 1, der Stab dort heizte weiter. Das ist
+  keine Beobachtungslücke, sondern der Befund aus dem Abschnitt unten — hier
+  einmal an der Anlage gesehen.
+
+**Der Re-Assert um 16:55:29 hat den Kreislauf mitbelegt:** Er stellte Modus 11
+wieder her, TOP68 an H2 ging zurück auf 1 und der Verdichter wieder aus — die
+Steuerung holt den Kanal zurück wie jeden anderen auch.
+
 ## Was er nicht kann: die andere Stufe
 
 **Jede Bridge spricht nur mit ihrer eigenen Wärmepumpe.** Lief die Anlage im
@@ -484,6 +529,11 @@ Etappe 5, Rückweg | 2026-08-21 | Die Rückkehr durch den Re-Assert | 9 s nach d
 Etappe 6 | 2026-08-21 | Der Knopf **ohne Broker** | **GRÜN nach 58 s**, Kompressor 26 → 33 Hz
 Etappe 6, Rückweg | 2026-08-21 | Reconnect nach 8 min Ausfall | 52 s Backoff, Re-Assert 39 s später, Sollwerte nach 6:17 min
 Warmwasser an H2 | 2026-08-21 | Die kurze Folge im Kühlbetrieb | **GRÜN nach 24 s**
+**Heizstab an H2** | **2026-08-30** | **Die Rücknahme von SET39, Rolle Warmwasser** | **GRÜN nach 48 s**, TOP68 1 → 0 in Schritt 2
+**Heizstab an H1** | **2026-08-30** | **Dieselbe Rücknahme, Rolle Heizen** | **GRÜN nach 80 s**, Stab 64 s vor dem Einschalten aus
+
+Die beiden Läufe vom 2026-08-30 stehen mit allen Zeiten in
+[Abschnitt 1b](#an-der-anlage-belegt--2026-08-30-beide-rollen).
 
 **Der tragende Beleg ist in beiden Läufen die 34.** Diesen Kurvenwert schreibt
 sonst niemand — `kurven_sync.py` lässt ihn im Direktbetrieb bewusst aus, und vor

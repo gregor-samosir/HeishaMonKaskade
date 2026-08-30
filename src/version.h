@@ -53,6 +53,21 @@
 //         statt "eine Minute" - er stimmte schon fuer die 72 s aus 3.15.0
 //         nicht mehr.
 //
+//         AN DER ANLAGE BELEGT (2026-08-30, beide Rollen). Ausgangslage war
+//         App-Modus 11 mit tatsaechlich LAUFENDEM Heizstab an beiden Stufen
+//         (TOP68 und TOP60 auf 1, beide Verdichter aus, Pumpen auf Fix):
+//           Stufe 2, Rolle Warmwasser: TOP68 1 -> 0 in Schritt 2,
+//             GRUEN nach rund 48 s, Stab 34 s vor dem Einschalten aus.
+//           Stufe 1, Rolle Heizen:     TOP68 1 -> 0 in Schritt 2,
+//             GRUEN nach rund 80 s, Stab 64 s vor dem Einschalten aus.
+//             Endzustand: TOP4 Heat, TOP76 Comp. Curve, Kurve 34/26/15/-10
+//             aus dem RAM, TOP104 Auto, Switch OFF.
+//         Die Ruecknahme kam in 6 bis 8 s zurueck (Abtastung 4 s) - innerhalb
+//         der Mindestwarte, die der Schritt ohnehin absitzt. Und: Waehrend des
+//         Laufs an H2 blieb H1 auf TOP68 = 1 und heizte weiter - die
+//         Einschraenkung "jede Bridge raeumt nur ihre eigene Waermepumpe" ist
+//         damit ebenfalls gemessen, nicht nur abgeleitet.
+//
 //         KEINE ABKEHR VON 3.17.0. Dort steht "keine Anbindung an den
 //         Notbetrieb" - das galt und gilt der NUTZUNG des Stabs als
 //         Notheizung. Hier wird nichts eingeschaltet, sondern ein Zustand
