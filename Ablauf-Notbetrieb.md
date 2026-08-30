@@ -366,11 +366,26 @@ endete nach 20 s in ROT. An Position 2 ist der Auftrag acht Schritte vorher
 geräumt, und das Einschalten trifft auf eine Einheit, die es annehmen kann.
 Genau so lief es in den beiden Läufen eine Dreiviertelstunde zuvor.
 
-⚠️ **Nicht gemessen ist der Fall, dass beide Kommandos im selben Telegramm
-stehen.** Hier gingen sie einzeln raus, rund 15 s auseinander. Beim Moduswechsel
-der Kaskadensteuerung liegen `heatpump` und `heater` dagegen im selben
-Sammelfenster und damit in einem Telegramm; wie die Wärmepumpe das auflöst, ist
-offen.
+**Auch der Fall „beide Kommandos in einem Telegramm" ist inzwischen gemessen** —
+noch am selben Abend, an der Steuerungsseite. Beim Moduswechsel aus dem
+Heizstab-Modus gingen `Heatpump = 1` und `ForceHeater = 0` gemeinsam raus:
+
+```
+h1  18:46:36  SET1 Heatpump: 1 / SET39 ForceHeater: 0   (ein Telegramm)
+    18:46:43  TOP0 Heatpump_State: 1     ← geht an
+    18:46:49  TOP0 Heatpump_State: 0     ← und 6 s später wieder aus
+```
+
+An beiden Stufen, auf die Sekunde parallel. **Die Wärmepumpe nimmt das
+Einschalten also auch dann nicht an, wenn der Heizstab im selben Telegramm
+beendet wird** — sie schaltet kurz ein und fällt zurück. Ein „`heater` steht
+vorn in der Warteschlange" genügt nicht; es braucht zeitlichen Abstand, weil das
+Sammelfenster der Bridge alles binnen 2 s zu einem Telegramm zusammenfasst.
+
+**Für den Notbetrieb ist das ohne Belang** — zwischen Schritt 2 und dem
+Einschalten liegen acht Schritte, also 64 s. Die Kaskadensteuerung hat daraus
+`Hauptmodus-Verteiler V6.8` gemacht: Sie hält `heatpump = ON` zurück, bis der
+Heizstab-Ausstieg 10 s her ist (`nodered-flows/HEIZSTAB-MODI.md` §4).
 
 ## Die Umwälzpumpe ist der eigentliche Schaden
 
