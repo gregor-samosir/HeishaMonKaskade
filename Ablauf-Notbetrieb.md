@@ -254,6 +254,29 @@ Minuten der Verfallszeit abzuwarten: Die Seite blendet ihn nur bei „läuft" un
 GRÜN aus. Wer den Schalter von Hand legt und zurückkommt, drückt erneut — der
 Lesevorgang meldet dann `"OFF"`, und die Folge läuft durch.
 
+## Im Test stellt die lebende Steuerung binnen 20 s zurück
+
+Am 2026-08-30 im ioBroker-Log gesehen, beide Läufe:
+
+Zeit | Meldung
+:--- | :---
+16:52:22 | `HydrStatus`: Relais AUS, WP2 meldet aber 2-stufig-fähig — der Hydraulikschritt hat geschaltet
+**16:52:44** | `WegeVentilRelais`: „Hydraulik steht auf AUS/1-stufig, Soll ist EIN/2-stufig (WP2-Modus 4) — wird nachgestellt"
+16:55:59 | derselbe Ablauf beim Lauf an Stufe 1
+**16:57:44** | wieder nachgestellt
+
+**Nach rund 20 s war die Hydraulik wieder auf 2-stufig** — mitten im laufenden
+Notbetrieb. Das ist **kein Fehler, sondern die Testbedingung**: Die Steuerung
+lebte, ihre Frische-Bedingung war erfüllt, und sie tat genau das, wofür sie
+gebaut ist. Im echten Notbetriebsfall ist sie weg, dann bleibt es bei
+1-stufig.
+
+Für die Bewertung eines Testlaufs heißt das: **Der Hydraulikschritt lässt sich
+mit lebender Steuerung nicht auf Dauerwirkung prüfen**, nur auf Ausführung.
+Dass er geschaltet hat, steht in der ersten Zeile; dass es nicht hielt, ist die
+Antwort der Gegenseite und in Abschnitt „Wer zurück auf 2-stufig schaltet"
+beschrieben.
+
 ## Wer zurück auf 2-stufig schaltet
 
 **Die Kaskadensteuerung, nicht die Firmware** — wie bei allen anderen Werten
@@ -352,7 +375,8 @@ Zwei Läufe unmittelbar nach dem Rollout von 3.18.0, **mit tatsächlich laufende
 Heizstab als Ausgangslage**: App-Modus 11 (6 kW), TOP68 und TOP60 an beiden
 Stufen auf 1, beide Verdichter aus, Umwälzpumpen auf `Fix`, KNX auf Heizen.
 
-**Lauf 1 — Stufe 2, Rolle Warmwasser** (Klick ≈ 16:52:25)
+**Lauf 1 — Stufe 2, Rolle Warmwasser** (Klick 16:52:21, abgelesen an der
+Switch-Meldung im ioBroker-Log um 16:52:22,976)
 
 Zeit | Was zurückkam | Schritt
 :--- | :--- | :---
@@ -360,15 +384,15 @@ Zeit | Was zurückkam | Schritt
 16:52:48 | TOP4 4 → 3 (DHW only) | 3
 16:53:05 | TOP104 → 0 (Auto) | 5
 16:53:10 | TOP0 0 → 1 — die Anlage geht an | 6
-**16:53:13** | Status `2;7;6;0;0` — **GRÜN nach rund 48 s** | —
+**16:53:13** | Status `2;7;6;0;0` — **GRÜN nach 52 s** (Regelzeit 48 s, dazu bis zu 3 s Abfragetakt) | —
 
-**Lauf 2 — Stufe 1, Rolle Heizen** (Klick ≈ 16:55:59)
+**Lauf 2 — Stufe 1, Rolle Heizen** (Klick 16:55:58, ebenso abgelesen)
 
 Zeit | Was zurückkam | Schritt
 :--- | :--- | :---
 16:56:15 | **TOP68 1 → 0, TOP60 1 → 0** | **2**
 16:56:21 bis 17:57:16 | Schrittzähler 3 → 10, jeder Schritt drei Abfragen à 3 s | 3–10
-**16:57:19** | Status `2;11;10;0;0` — **GRÜN nach rund 80 s** | —
+**16:57:19** | Status `2;11;10;0;0` — **GRÜN nach 81 s** bei 80 s Regelzeit | —
 
 Endzustand an H1: TOP0 `On`, TOP4 `Heat`, TOP76 `Comp. Curve`, Kurve
 **34 / 26 / 15 / −10** aus dem RAM, TOP68 und TOP60 `Inactive`, TOP104 `Auto`,
@@ -661,9 +685,44 @@ Wer nach einem Notbetriebslauf ins ioBroker-Log sieht, findet dort also
 `WP*.WaterPump NICHT ausgeführt` und einige Geschwister — **Wartungssignatur,
 kein Befund.**
 
-⚠️ Diese Tabelle ist aus dem Code beider Seiten abgeleitet, **nicht in einem
-Notbetriebslauf gemessen.** Sie steht hier als Erwartung, nicht als Beleg; beim
-nächsten Lauf ist sie zu prüfen.
+## Am 2026-08-30 geprüft — zwei Kanäle auf den Punkt, der Rest schweigt zu Recht
+
+Die Tabelle war bis dahin aus dem Code beider Seiten abgeleitet. Das ioBroker-Log
+der beiden Läufe hat sie eingelöst:
+
+```
+17:02:14  WP1.HeatTarget NICHT ausgeführt – soll 20, ist 35 (seit 5 min, Karenz 5 min)
+17:02:14  WP1.CoolTarget NICHT ausgeführt – soll 20, ist 10 (seit 5 min, Karenz 5 min)
+17:06:14  WP1.HeatTarget wieder quittiert (Abweichung bestand 9 min)
+17:06:14  WP1.CoolTarget wieder quittiert (Abweichung bestand 9 min)
+```
+
+**Die Ist-Werte sind exakt die vorhergesagten: 35 und 10** — die
+Panasonic-Werksvorgaben, die der Moduswechsel in Schritt 4 setzt. Die Tabelle
+hatte sie ohne Messung genannt; hier stehen sie im Klartext. Und die Dauer
+passt zu [Abschnitt 3](#3-rückkehr-der-übergeordneten-steuerung): Die Meldung
+quittierte sich selbst, als der übernächste Re-Assert die Sollwerte zurückholte.
+
+**Die übrigen Kanäle blieben stumm — und auch das ist die Vorhersage**, nur von
+der anderen Seite: Ihre Abweichungen endeten, bevor die Karenz von 5 Minuten
+ablief.
+
+Kanal | Abweichung ab | endete durch | Dauer
+:--- | :--- | :--- | ---:
+ForceHeater | 16:56:15 (Schritt 2 an H1) | Moduswechsel auf 0 um 16:58:19 | **2 min**
+Heatpump | 16:57:19 (Schritt 10) | Re-Assert um 17:00:29 | **3 min**
+OpMode | — | keine: Soll und Ist waren beide `Heat` | —
+WaterPump | — | keine: der Moduswechsel setzte den Soll auf denselben Wert | —
+
+**Was daraus für den Ernstfall folgt:** Die kurzen Abweichungen blieben hier nur
+deshalb unter der Karenz, weil die Steuerung lebte und den Modus zurückstellte.
+Im echten Notbetriebsfall — die Steuerung ist weg — passiert das nicht; dann
+schlagen nach fünf Minuten alle betroffenen Kanäle an. Die Tabelle oben gilt
+also weiter, nur ist ihr Auslöser der Ausfall selbst und nicht der Knopf.
+
+⚠️ Noch offen bleibt der **ForceHeater-Kanal in voller Länge**: Dass er nach
+fünf Minuten tatsächlich meldet, ist wegen des Moduswechsels nach zwei Minuten
+nicht gesehen worden.
 
 ## Und der Fall, in dem der Wächter schweigt
 
