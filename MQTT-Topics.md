@@ -483,6 +483,22 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 > That is how the unit works - it checks its own conditions first and only then
 > takes the value - so do not mistake it for a rejected command.
 >
+> **TOP68 and TOP60 are two different things — measured over an hour on
+> 2026-08-30.** In a 63-minute heater run TOP68 `Force_Heater_State` never
+> changed once, while TOP60 `Internal_Heater_State` switched four times (on
+> 21:32, off 21:46, on 22:06, off 22:31). **TOP68 is the accepted request,
+> TOP60 is whether the element actually heats.** The unit's own outlet control
+> drives the cycling: it stopped at 25.5 and 25.8 °C and restarted at 24.0 and
+> 23.5 °C, with the compressor at 0 Hz throughout. The 20-minute lockout after
+> a stop is real — the gap measured 20:01 min. TOP90
+> `Room_Heater_Operations_Hours` counts cumulative runtime and stepped 269 →
+> 270 in the middle of a cycle, so short runs are invisible in it but not lost.
+>
+> *Deutsch: TOP68 ist der übernommene Auftrag und bleibt stehen, TOP60 sagt, ob
+> der Stab gerade heizt — in 63 Minuten keine einzige TOP68-Flanke bei vier
+> TOP60-Wechseln. Wer prüfen will, ob ein Heizstab-Kommando angekommen ist,
+> liest TOP68; wer die Wirkung sucht, TOP60.*
+>
 > ⚠️ **SET39 also starts the water pump.** Measured on 2026-08-28 with the unit
 > switched off: the pump starts as soon as TOP68 goes `Active`, keeps running
 > after the heater itself has switched off, and only stops when SET39 is taken
