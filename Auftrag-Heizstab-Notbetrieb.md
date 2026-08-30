@@ -10,10 +10,21 @@
 > **Zu euren drei offenen Fragen aus §4:**
 >
 > 1. *Wie die Wärmepumpe reagiert, wenn `Heatpump = 1` gesetzt wird, während
->    `SET39` noch steht* — die Frage stellt sich nicht mehr. Der Schritt steht
->    acht Schritte vor dem Einschalten; wird die Rücknahme nicht bestätigt,
->    endet der Lauf dort in ROT und es geht **kein** weiteres Kommando an die
->    Wärmepumpe.
+>    `SET39` noch steht* — **am 2026-08-30 abends gemessen, und die Antwort ist
+>    schärfer als gedacht: Sie schaltet nicht ein.** Bei stehendem TOP68 blieb
+>    `Heatpump = 1` über 48 s wirkungslos; die Wärmepumpe verwarf stattdessen
+>    den Heizstab-Auftrag (TOP68 fiel nach 10 s von selbst auf 0) und blieb aus.
+>    Unmittelbar danach mit TOP68 = 0 wiederholt, schaltete dasselbe Kommando
+>    binnen 10 s ein. **Die Sperre „nur bei ausgeschalteter Einheit" gilt also in
+>    beide Richtungen** — auf dem Protokollweg nur ohne Meldung, das Kommando
+>    bewirkt schlicht nichts.
+>
+>    **Damit war euer Auftrag dringender, als wir beide dachten.** Ohne den
+>    neuen Schritt wäre der Notbetrieb aus einem Heizstab-Modus heraus nicht
+>    etwa „gelaufen, aber mit stehendem Stab" — er hätte **den letzten Schritt
+>    nie bestätigt bekommen und nach 20 s in ROT geendet, ohne die Anlage
+>    einzuschalten.** Mit dem Schritt an Position 2 ist der Auftrag acht
+>    Schritte vorher geräumt, und genau so sind die beiden Läufe durchgelaufen.
 > 2. *Ob `SET39 = 0` bei laufender Einheit angenommen wird* — im Notbetriebsfall
 >    irrelevant, und zwar aus eurem eigenen §3: Die Modi 5/6 setzen
 >    `Heatpump = 0`, die Einheit ist beim Drücken also aus. Ungemessen bleibt der

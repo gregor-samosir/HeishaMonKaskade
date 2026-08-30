@@ -319,8 +319,15 @@ laufender Einheit abgelehnt).
 
 Genau das ist die Lage, in der der Notbetriebsknopf gefährlich wurde. Bis 3.17.0
 kam `SET39` in keiner der beiden Schrittfolgen vor, und beide enden mit
-`Heatpump = 1`. Läuft die Anlage im Heizstab-Modus und drückt jemand den Knopf,
-**stünde `ForceHeater` weiter auf 1, während die Firmware die Anlage einschaltet.**
+`Heatpump = 1`.
+
+**Und dieser letzte Schritt hätte gar nicht gewirkt** — am 2026-08-30 gemessen,
+siehe [unten](#die-wärmepumpe-schaltet-mit-stehendem-heizstab-nicht-ein). Die
+Wärmepumpe nimmt kein Einschaltkommando an, solange der Heizstab-Auftrag steht.
+Der Notbetrieb aus einem Heizstab-Modus heraus wäre also nicht etwa „gelaufen,
+aber mit stehendem Stab", sondern hätte **nach 20 s in ROT geendet, ohne die
+Anlage einzuschalten** — ausgerechnet in der Lage, in der jemand auf ihn
+angewiesen ist.
 
 Zwei Fälle, die sich unterscheiden:
 
@@ -330,6 +337,40 @@ Zwei Fälle, die sich unterscheiden:
 * **Die Steuerung ist tot** — der eigentliche Notbetriebsfall. Dann nimmt
   niemand `SET39` zurück. **`SET39` ist ein Zustand, den niemand automatisch
   räumt**, und die Firmware hat keinen Rückschaltpfad (Entscheidung 7).
+
+## Die Wärmepumpe schaltet mit stehendem Heizstab nicht ein
+
+**Gemessen am 2026-08-30, 17:32 bis 17:35 an Stufe 2**, Anlage aus, Betriebsart
+`DHW`, zwei Versuche unter sonst gleichen Bedingungen. Die Kommandos gingen
+einzeln über MQTT, nicht über das Bedienpanel:
+
+Versuch | Ausgangslage | Kommando | Ergebnis
+:--- | :--- | :--- | :---
+1 | TOP68 = 1 (`Active`) | `Heatpump = 1` um 17:32:56 | **TOP0 bleibt 0 über 48 s.** TOP68 fällt dabei um 17:33:06 **von selbst auf 0**
+2 | TOP68 = 0 | `Heatpump = 1` um 17:34:48 | **TOP0 geht nach 10 s auf 1**
+
+Die Wärmepumpe **verweigert das Einschalten, solange der Heizstab-Auftrag
+steht** — und räumt den Auftrag dabei ab, ohne selbst anzulaufen. Der
+Einschaltwunsch ist damit verbraucht; er müsste erneut gesendet werden.
+
+Das ergänzt, was bisher nur für die Gegenrichtung bekannt war: Das Bedienpanel
+lehnt eine Heizstab-Anforderung bei laufender Einheit mit einem Hinweis ab
+(„die Anlage muss ausgeschaltet sein", Owner am Panel geprüft). **Die Sperre
+gilt in beide Richtungen** — nur meldet sie sich auf dem Protokollweg nicht,
+sondern äußert sich als Kommando, das nichts bewirkt.
+
+**Für die Schrittfolge ist das der eigentliche Grund, warum der Schritt weit
+vorn steht.** Stünde er hinten oder gar nicht, träfe `Heatpump = 1` auf eine
+Wärmepumpe, die es nicht annimmt — der Schritt käme nicht zurück, und der Lauf
+endete nach 20 s in ROT. An Position 2 ist der Auftrag acht Schritte vorher
+geräumt, und das Einschalten trifft auf eine Einheit, die es annehmen kann.
+Genau so lief es in den beiden Läufen eine Dreiviertelstunde zuvor.
+
+⚠️ **Nicht gemessen ist der Fall, dass beide Kommandos im selben Telegramm
+stehen.** Hier gingen sie einzeln raus, rund 15 s auseinander. Beim Moduswechsel
+der Kaskadensteuerung liegen `heatpump` und `heater` dagegen im selben
+Sammelfenster und damit in einem Telegramm; wie die Wärmepumpe das auflöst, ist
+offen.
 
 ## Die Umwälzpumpe ist der eigentliche Schaden
 

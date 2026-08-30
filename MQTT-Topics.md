@@ -522,6 +522,22 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 >
 > *Deutsch: Seit 3.18.0 nimmt der Notbetrieb SET39 selbst zurück — Position 2 in
 > beiden Schrittfolgen, siehe `Ablauf-Notbetrieb.md` Abschnitt 1b.*
+>
+> ⚠️ **The lock works both ways — measured 2026-08-30 on stage 2.** With TOP68
+> `Active`, a `Heatpump = 1` command has **no effect**: the unit stays off and
+> instead **drops the heater request by itself** (TOP68 fell to 0 ten seconds
+> later, TOP0 never moved over 48 s). Repeated right afterwards with TOP68 = 0,
+> the same command switched the unit on within 10 s. So the unit refuses to
+> start while a force-heater request stands, and the start command is consumed
+> in the process — it has to be sent again.
+>
+> *Deutsch: Die Sperre gilt in BEIDE Richtungen. Bei stehendem `ForceHeater`
+> bleibt `Heatpump = 1` wirkungslos — die Wärmepumpe schaltet nicht ein und
+> verwirft stattdessen den Heizstab-Auftrag. Das Bedienpanel meldet die
+> Gegenrichtung mit einem Hinweis; auf dem Protokollweg gibt es keine Meldung,
+> das Kommando bewirkt schlicht nichts. Deshalb steht `ForceHeater = 0` im
+> Notbetrieb an Position 2 und nicht hinten: Sonst käme der letzte Schritt
+> `Heatpump = 1` nie zurück und der Lauf endete in ROT.*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 

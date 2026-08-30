@@ -68,6 +68,26 @@
 //         Einschraenkung "jede Bridge raeumt nur ihre eigene Waermepumpe" ist
 //         damit ebenfalls gemessen, nicht nur abgeleitet.
 //
+//         NACHTRAG VOM SELBEN ABEND: DIE WP SCHALTET MIT STEHENDEM HEIZSTAB
+//         GAR NICHT EIN. Zwei Versuche an Stufe 2 unter sonst gleichen
+//         Bedingungen, Kommandos einzeln ueber MQTT:
+//           TOP68 = 1 -> "Heatpump = 1" blieb ueber 48 s wirkungslos, TOP0
+//             ruehrte sich nicht, und TOP68 fiel nach 10 s VON SELBST auf 0.
+//           TOP68 = 0 -> dasselbe Kommando schaltete binnen 10 s ein.
+//         Die Sperre "nur bei ausgeschalteter Einheit" gilt also in BEIDE
+//         Richtungen; auf dem Protokollweg meldet sie sich nur nicht, das
+//         Kommando bewirkt schlicht nichts.
+//
+//         DAS AENDERT DIE BEGRUENDUNG DIESER VERSION. Ohne den Schritt waere
+//         der Notbetrieb aus einem Heizstab-Modus heraus nicht "gelaufen, aber
+//         mit stehendem Stab" - der LETZTE Schritt haette nie bestaetigt
+//         werden koennen, und der Lauf haette nach 20 s in ROT geendet, ohne
+//         die Anlage einzuschalten. Genau in der Lage, in der jemand auf den
+//         Knopf angewiesen ist. Die Position weit vorn ist damit nicht nur die
+//         sichere Seite, sondern Voraussetzung dafuer, dass der Knopf ueberhaupt
+//         funktioniert. Ungemessen bleibt der Fall, dass beide Kommandos im
+//         SELBEN Telegramm stehen - hier lagen 15 s dazwischen.
+//
 //         KEINE ABKEHR VON 3.17.0. Dort steht "keine Anbindung an den
 //         Notbetrieb" - das galt und gilt der NUTZUNG des Stabs als
 //         Notheizung. Hier wird nichts eingeschaltet, sondern ein Zustand

@@ -357,7 +357,11 @@ anliegende Störung einschalten, bei laufendem Betrieb wird die Anforderung
 abgelehnt.
 
 **Seit 3.18.0 nimmt der Notbetrieb SET39 selbst zurück** (Position 2 beider
-Schrittfolgen, zurückgelesen an TOP68). Anlass ist die Kaskadensteuerung, die
+Schrittfolgen, zurückgelesen an TOP68). **Die Sperre „nur bei ausgeschalteter
+Einheit" gilt dabei in beide Richtungen** — am 2026-08-30 an Stufe 2 gemessen:
+Bei stehendem TOP68 bleibt `Heatpump = 1` wirkungslos, die Anlage geht nicht an
+und verwirft stattdessen den Heizstab-Auftrag; unmittelbar danach mit TOP68 = 0
+wiederholt, schaltete dasselbe Kommando binnen 10 s ein. Anlass ist die Kaskadensteuerung, die
 den Kanal seit dem 2026-08-30 im Regelbetrieb fährt: Ohne den Schritt schaltete
 der Notbetriebsknopf eine Anlage ein, an der der Heizstab-Auftrag noch steht —
 samt der Umwälzpumpe, die daran hängt. Siehe
