@@ -414,7 +414,9 @@ Anlage belegt: TOP104 `1 Fix` → `0 Auto`, Pump_Flow 16,24 → 0,13 l/min. Der
 Re-Assert stellt beides hinterher wieder her — derselbe Kreislauf wie bei allen
 anderen Werten.
 
-Damit sind es **neun Schritte (Heizen, 72 s)** und **fünf (Warmwasser, 40 s)**;
+Damit waren es **neun Schritte (Heizen, 72 s)** und **fünf (Warmwasser, 40 s)**;
+seit 3.18.0 sind es zehn bzw. sechs (80 s / 48 s) — der Heizstabschritt kam an
+Position 2 dazu, siehe `Ablauf-Notbetrieb.md` Abschnitt 1b;
 an H2 gemessen: GRÜN nach 43 s.
 
 ### Ein Hinweis für spätere Läufe

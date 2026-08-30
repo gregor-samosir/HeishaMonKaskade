@@ -160,7 +160,7 @@ static void test_grenzen()
   int wert = 0;
   NotbetriebLauf lauf;
   notbetrieb_lauf_leeren(&lauf);
-  lauf.schritt = 3; // Index 3 traegt TargetHigh (seit die Hydraulik vorn steht)
+  lauf.schritt = 4; // Index 4 traegt TargetHigh (Hydraulik und Heizstab stehen davor)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "Wert liegt vor");
   pruefe_zahl(wert, 55, "nach abgelehnter 56 steht weiterhin 55");
 
@@ -234,53 +234,60 @@ static void test_schrittfolge()
 {
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 9, "Heizen hat neun Schritte");
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 5, "Wasser hat fuenf Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 10, "Heizen hat zehn Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 6, "Wasser hat sechs Schritte");
 
-  // Die Reihenfolge traegt vierfach: erst die Hydraulik (sonst schiebt der
-  // Warmwasserbetrieb bis zu 57 C in die Fussbodenheizung), dann die
-  // Betriebsart (sonst schaltet der Knopf eine Anlage ein, die auf Kuehlen
-  // steht), dann der Moduswechsel, dann die Kurve - andersherum schreibt der
-  // Werks-Reset des Moduswechsels sie sofort wieder ueber.
+  // Die Reihenfolge traegt fuenffach: erst die Hydraulik (sonst schiebt der
+  // Warmwasserbetrieb bis zu 57 C in die Fussbodenheizung), dann die Ruecknahme
+  // des Heizstabs (sonst schaltet der Knopf eine Anlage ein, an der ForceHeater
+  // noch steht), dann die Betriebsart (sonst schaltet er eine Anlage ein, die
+  // auf Kuehlen steht), dann der Moduswechsel, dann die Kurve - andersherum
+  // schreibt der Werks-Reset des Moduswechsels sie sofort wieder ueber.
   const NotbetriebSchritt *h0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 0);
   pruefe_zahl(h0->typ, NB_SCHRITT_HYDRAULIK, "Heizen Schritt 1 stellt die Hydraulik");
   pruefe_text(h0->set_name, NOTBETRIEB_HYDRAULIK_NAME, "und heisst so in der Logzeile");
   pruefe_zahl(h0->top, -1, "er liest an keinem TOP zurueck");
 
-  const NotbetriebSchritt *s0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1);
-  pruefe_zahl(s0->typ, NB_SCHRITT_SET, "Heizen Schritt 2 ist ein Set-Kommando");
-  pruefe_text(s0->set_name, "OperationMode", "Heizen Schritt 2 setzt die Betriebsart");
+  const NotbetriebSchritt *hz = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1);
+  pruefe_zahl(hz->typ, NB_SCHRITT_SET, "Heizen Schritt 2 ist ein Set-Kommando");
+  pruefe_text(hz->set_name, "ForceHeater", "Heizen Schritt 2 nimmt den Heizstab zurueck");
+  pruefe_zahl(hz->fester_wert, 0, "ForceHeater auf 0 = aus");
+  pruefe_zahl(hz->top, 68, "rueckgelesen an TOP68");
+
+  const NotbetriebSchritt *s0 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2);
+  pruefe_zahl(s0->typ, NB_SCHRITT_SET, "Heizen Schritt 3 ist ein Set-Kommando");
+  pruefe_text(s0->set_name, "OperationMode", "Heizen Schritt 3 setzt die Betriebsart");
   pruefe_zahl(s0->fester_wert, 0, "OperationMode auf 0 = Heat only");
   pruefe_zahl(s0->top, 4, "rueckgelesen an TOP4");
 
-  const NotbetriebSchritt *s1 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2);
-  pruefe_text(s1->set_name, "HeatingMode", "Heizen Schritt 3 schaltet auf Kurve");
+  const NotbetriebSchritt *s1 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3);
+  pruefe_text(s1->set_name, "HeatingMode", "Heizen Schritt 4 schaltet auf Kurve");
   pruefe_zahl(s1->fester_wert, 0, "HeatingMode auf 0 = Kurve");
   pruefe_zahl(s1->top, 76, "rueckgelesen an TOP76");
 
-  const NotbetriebSchritt *s2 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3);
-  pruefe_text(s2->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 4 ist der Vorlauf bei Kaelte");
+  const NotbetriebSchritt *s2 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 4);
+  pruefe_text(s2->set_name, "Z1HeatCurveTargetHighTemp", "Schritt 5 ist der Vorlauf bei Kaelte");
   pruefe_zahl(s2->top, 29, "rueckgelesen an TOP29");
 
   // Die Betriebsart muss VOR der Kurve stehen: Ob ein Moduswechsel die
   // Kurvenpunkte anfasst, ist nicht gemessen - hinter ihr waere es ein Risiko.
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 1)->set_name[0] == 'O' &&
-             notbetrieb_schritt(NOTBETRIEB_HEIZEN, 3)->wert_index == 0,
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 2)->set_name[0] == 'O' &&
+             notbetrieb_schritt(NOTBETRIEB_HEIZEN, 4)->wert_index == 0,
          "Betriebsart steht vor dem ersten gehaltenen Wert");
 
   // Die Pumpe kommt VOR dem Einschalten und HINTER allen Moduswechseln:
   // Nach dem Umpumpen steht sie auf Fix und liefe sonst dauerhaft durch.
-  const NotbetriebSchritt *sp = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 7);
-  pruefe_text(sp->set_name, "WaterPump", "Heizen Schritt 8 stellt die Pumpe auf auto");
+  const NotbetriebSchritt *sp = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 8);
+  pruefe_text(sp->set_name, "WaterPump", "Heizen Schritt 9 stellt die Pumpe auf auto");
   pruefe_zahl(sp->fester_wert, 0, "WaterPump auf 0 = auto");
   pruefe_zahl(sp->top, 104, "rueckgelesen an TOP104");
 
-  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 8);
-  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 9 schaltet die Anlage ein");
+  const NotbetriebSchritt *s6 = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 9);
+  pruefe_text(s6->set_name, "Heatpump", "Heizen Schritt 10 schaltet die Anlage ein");
   pruefe_zahl(s6->fester_wert, 1, "Heatpump auf 1");
   pruefe_zahl(s6->top, 0, "rueckgelesen an TOP0");
 
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 9) == 0, "hinter dem letzten Schritt ist Schluss");
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 10) == 0, "hinter dem letzten Schritt ist Schluss");
 
   // Wasser: derselbe Hydraulikschritt vorn - welchen Knopf jemand zuerst
   // drueckt, weiss niemand, und ein doppeltes AUS schadet nicht
@@ -288,19 +295,27 @@ static void test_schrittfolge()
   pruefe_zahl(v0->typ, NB_SCHRITT_HYDRAULIK, "Wasser Schritt 1 stellt ebenfalls die Hydraulik");
   pruefe_zahl(v0->top, -1, "auch er liest an keinem TOP zurueck");
 
+  // Wasser: der Heizstabschritt steht auch hier an Position 2 - der
+  // 6-kW-Modus setzt SET39 an BEIDEN Stufen, und welchen Knopf jemand zuerst
+  // drueckt, weiss niemand.
+  const NotbetriebSchritt *wz = notbetrieb_schritt(NOTBETRIEB_WASSER, 1);
+  pruefe_text(wz->set_name, "ForceHeater", "Wasser Schritt 2 nimmt ebenfalls den Heizstab zurueck");
+  pruefe_zahl(wz->fester_wert, 0, "auch hier ForceHeater auf 0");
+  pruefe_zahl(wz->top, 68, "auch hier rueckgelesen an TOP68");
+
   // Wasser: OperationMode 3 traegt auch im KNX-Kuehlbetrieb (M3, 2026-08-20)
-  const NotbetriebSchritt *w0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 1);
-  pruefe_text(w0->set_name, "OperationMode", "Wasser Schritt 2 setzt den Betriebsmodus");
+  const NotbetriebSchritt *w0 = notbetrieb_schritt(NOTBETRIEB_WASSER, 2);
+  pruefe_text(w0->set_name, "OperationMode", "Wasser Schritt 3 setzt den Betriebsmodus");
   pruefe_zahl(w0->fester_wert, 3, "OperationMode auf 3 = DHW only");
   pruefe_zahl(w0->top, 4, "rueckgelesen an TOP4");
 
-  const NotbetriebSchritt *wp = notbetrieb_schritt(NOTBETRIEB_WASSER, 3);
-  pruefe_text(wp->set_name, "WaterPump", "Wasser Schritt 4 stellt die Pumpe auf auto");
+  const NotbetriebSchritt *wp = notbetrieb_schritt(NOTBETRIEB_WASSER, 4);
+  pruefe_text(wp->set_name, "WaterPump", "Wasser Schritt 5 stellt die Pumpe auf auto");
   pruefe_zahl(wp->fester_wert, 0, "WaterPump auf 0 = auto");
   pruefe_zahl(wp->top, 104, "rueckgelesen an TOP104");
 
-  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 4);
-  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 5 schaltet die Anlage ein");
+  const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 5);
+  pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 6 schaltet die Anlage ein");
 
   // In BEIDEN Rollen steht die Pumpe unmittelbar vor dem Einschalten - ein
   // Moduswechsel dahinter koennte sie sonst wieder auf Fix zurueckstellen.
@@ -329,6 +344,41 @@ static void test_schrittfolge()
     pruefe_zahl((int)hydraulisch, 1,
                 (r == 0) ? "Heizen hat genau einen Hydraulikschritt"
                          : "Wasser hat genau einen Hydraulikschritt");
+  }
+
+  // Der Heizstab wird in BEIDEN Rollen genau einmal zurueckgenommen, und zwar
+  // vor jedem anderen Kommando an die Waermepumpe. Bricht der Lauf dort ab,
+  // tut die Anlage nichts mehr - Stab aus, Pumpe aus, Waermepumpe aus. Ein
+  // ForceHeater HINTER dem Einschalten waere der gefaehrliche Fall: Die
+  // Waermepumpe nimmt SET39 nur bei ausgeschalteter Einheit an, die Ruecknahme
+  // liefe also womoeglich ins Leere, und die Umwaelzpumpe bliebe am Kommando
+  // haengen (gemessen 2026-08-28).
+  for (unsigned r = 0; r < 2; r++)
+  {
+    NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
+    unsigned heizstab = 0;
+    int pos_heizstab = -1;
+    int pos_heatpump = -1;
+    for (unsigned i = 0; i < notbetrieb_schritt_anzahl(rolle); i++)
+    {
+      const NotbetriebSchritt *s = notbetrieb_schritt(rolle, i);
+      if (strcmp(s->set_name, "ForceHeater") == 0)
+      {
+        heizstab++;
+        pos_heizstab = (int)i;
+      }
+      if (strcmp(s->set_name, "Heatpump") == 0)
+        pos_heatpump = (int)i;
+    }
+    pruefe_zahl((int)heizstab, 1,
+                (r == 0) ? "Heizen nimmt den Heizstab genau einmal zurueck"
+                         : "Wasser nimmt den Heizstab genau einmal zurueck");
+    pruefe_zahl(pos_heizstab, 1,
+                (r == 0) ? "Heizen: der Heizstab steht an Position 2"
+                         : "Wasser: der Heizstab steht an Position 2");
+    pruefe(pos_heizstab >= 0 && pos_heatpump > pos_heizstab,
+           (r == 0) ? "Heizen: Heizstab aus, bevor die Anlage eingeschaltet wird"
+                    : "Wasser: Heizstab aus, bevor die Anlage eingeschaltet wird");
   }
 
   // Jeder Schritt mit gehaltenem Wert muss auf einen gueltigen Index zeigen
@@ -541,9 +591,9 @@ static void test_automat()
 
   // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN),
-              (int)(9u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 9 x Schritt-Timeout");
+              (int)(10u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 10 x Schritt-Timeout");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
-              (int)(5u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 5 x Schritt-Timeout");
+              (int)(6u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 6 x Schritt-Timeout");
 }
 
 /*****************************************************************************/
@@ -570,18 +620,18 @@ static void test_mindestwarte()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
               "Lauf mit Sofortbestaetigung wird GRUEN");
-  const uint32_t mindestens = 9u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-  pruefe(dauer >= mindestens, "aber nicht schneller als 9 x Mindestwarte");
+  const uint32_t mindestens = 10u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 10 x Mindestwarte");
   printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
 
   // Der Hydraulikschritt haelt die Mindestwarte mit ein, obwohl er in
   // Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
   // 8 s fallen ohnehin in die 90 s der beiden Stellantriebe.
   //
-  // Gegenprobe Wasser: fuenf Schritte
+  // Gegenprobe Wasser: sechs Schritte
   (void)lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 0, &dauer);
-  pruefe(dauer >= 5u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
-         "Wasser ebenso, mit fuenf Schritten");
+  pruefe(dauer >= 6u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
+         "Wasser ebenso, mit sechs Schritten");
 
   // Die Regel muss in sich stimmig bleiben, sonst endet jeder Lauf in ROT
   pruefe(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -637,14 +687,18 @@ static void test_schritt_wert()
   // fester Wert braucht keinen Speicher
   lauf.schritt = 1;
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "fester Wert immer verfuegbar");
-  pruefe_zahl(wert, 0, "OperationMode 0 = Heat only");
+  pruefe_zahl(wert, 0, "ForceHeater 0 = Heizstab aus");
 
   lauf.schritt = 2;
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "auch Schritt 3 ist fest");
+  pruefe_zahl(wert, 0, "OperationMode 0 = Heat only");
+
+  lauf.schritt = 3;
+  pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "auch Schritt 4 ist fest");
   pruefe_zahl(wert, 0, "HeatingMode 0 = Kurve");
 
   // gehaltener Wert fehlt noch
-  lauf.schritt = 3;
+  lauf.schritt = 4;
   pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
          "fehlender gehaltener Wert wird gemeldet");
 
@@ -656,7 +710,7 @@ static void test_schritt_wert()
   // negative Werte muessen durchkommen
   notbetrieb_speicher_leeren(&sp);
   pruefe(annehmen(&sp, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10), "OutsideLow gesetzt");
-  lauf.schritt = 5; // Index 5 traegt OutsideLow (seit die Hydraulik vorn steht)
+  lauf.schritt = 6; // Index 6 traegt OutsideLow (Hydraulik und Heizstab stehen davor)
   pruefe(notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert), "negativer Wert verfuegbar");
   pruefe_zahl(wert, -10, "OutsideLow -10 kommt unveraendert durch");
 
@@ -851,7 +905,7 @@ static void test_hydraulikschritt()
 
   pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER,
                               1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, ""),
-              NOTBETRIEB_SENDEN, "nach der Mindestwarte geht es zu OperationMode weiter");
+              NOTBETRIEB_SENDEN, "nach der Mindestwarte geht es zum Heizstabschritt weiter");
   pruefe_zahl(ok.schritt, 1, "Schrittzaehler auf 1");
   pruefe_zahl(ok.grund, NOTBETRIEB_GRUND_KEINER, "und kein Abbruchgrund unterwegs");
 

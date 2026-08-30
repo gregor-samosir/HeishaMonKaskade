@@ -99,6 +99,17 @@ den Notbetrieb nur unnötig komplex machen, und Komforteinbußen im Notbetrieb
 sind akzeptiert. `NOTBETRIEB_WERTE_HEIZEN[]` in `src/notbetrieb.h` bleibt
 unverändert.
 
+> **Präzisierung vom 2026-08-30 (3.18.0):** Diese Abgrenzung gilt weiter — sie
+> betrifft die **Nutzung** des Heizstabs als Notheizung. Der Notbetrieb schaltet
+> ihn nach wie vor nicht ein, und die gehaltenen Werte sind unverändert.
+> Umgekehrt nimmt er ihn seit 3.18.0 aber **zurück**: Beide Schrittfolgen
+> beginnen an Position 2 mit `ForceHeater = 0`. Anlass ist die Steuerungsseite,
+> die SET39 seit dem 2026-08-30 im Regelbetrieb fährt — ein stehender
+> Heizstab-Auftrag träfe sonst auf eine Anlage, die der Notbetrieb gerade
+> einschaltet, und die Umwälzpumpe hängt am Kommando. Aufräumen ist keine
+> Anbindung. Siehe [`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md)
+> und [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 1b.
+
 **`SetReset` (Byte 8, Bit 0) wird nicht übernommen.** Das Kommando quittiert
 verriegelte Fehlercodes aus der Ferne (Äquivalent der Reset-Taste am
 Bedienteil). Läuft die Anlage in einen Fehler, der einen Reset braucht, ist ein
@@ -427,6 +438,11 @@ halten.
 Das ist **keine Anbindung an den Notbetrieb** und soll auch keine werden — die
 Abgrenzung aus Abschnitt 2 bleibt bestehen. Aber es ist der Grund, warum SET39
 in 3.17.0 gebaut wurde, und er ist jetzt gemessen statt vermutet.
+
+Genau dieser Befund — die Pumpe hängt am Kommando, nicht am Stab — ist zwei Tage
+später zum Anlass für 3.18.0 geworden: Der Notbetrieb **nimmt** SET39 jetzt
+zurück, weil ihn sonst niemand zurücknähme. Siehe die Präzisierung in
+Abschnitt 2.
 
 ### Das Winterexperiment
 

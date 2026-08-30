@@ -1,5 +1,57 @@
 # Auftrag: Der Notbetrieb muss `SET39 ForceHeater` zurücknehmen
 
+> **Beantwortet am 2026-08-30 — angenommen, gebaut und ausgeliefert in 3.18.0.**
+> Der Befund stimmt in allen Punkten: `SET39` kam in keiner der beiden
+> Schrittfolgen vor, und niemand hätte den Zustand zurückgenommen. Beide Folgen
+> haben jetzt an **Position 2** den Schritt `ForceHeater = 0` — genau dort, wo
+> ihr ihn vorgeschlagen habt: hinter der Hydraulik, vor `OperationMode`.
+> Heizen dauert damit 80 s (zehn Schritte), Warmwasser 48 s (sechs).
+>
+> **Zu euren drei offenen Fragen aus §4:**
+>
+> 1. *Wie die Wärmepumpe reagiert, wenn `Heatpump = 1` gesetzt wird, während
+>    `SET39` noch steht* — die Frage stellt sich nicht mehr. Der Schritt steht
+>    acht Schritte vor dem Einschalten; wird die Rücknahme nicht bestätigt,
+>    endet der Lauf dort in ROT und es geht **kein** weiteres Kommando an die
+>    Wärmepumpe.
+> 2. *Ob `SET39 = 0` bei laufender Einheit angenommen wird* — im Notbetriebsfall
+>    irrelevant, und zwar aus eurem eigenen §3: Die Modi 5/6 setzen
+>    `Heatpump = 0`, die Einheit ist beim Drücken also aus. Ungemessen bleibt der
+>    Randfall „Einheit läuft **und** `SET39` steht", der nur durch einen
+>    Handeingriff entstehen kann. Er kostet dort ein ROT und einen zweiten
+>    Druck — die Anlage bleibt dabei unangetastet.
+> 3. *Modus 11, 2-stufig gegen 1-stufig* — relevant, aber nicht firmwareseitig
+>    lösbar: **Jede Bridge spricht nur mit ihrer eigenen Wärmepumpe.** Lief die
+>    Anlage mit 6 kW, muss der Knopf an **beiden** Bridges gedrückt werden, sonst
+>    bleibt an der anderen Stufe der Auftrag stehen und **ihre Umwälzpumpe läuft
+>    weiter** — die hängt am Kommando, nicht am Stab (unsere Messung 2026-08-28).
+>    Das steht jetzt in `Ablauf-Notbetrieb.md` §1b und im README; ins grüne Panel
+>    kommt es bewusst nicht (Owner-Entscheid 2026-08-30).
+>
+> **Zwei Dinge, die euer Auftrag nicht wissen konnte:**
+>
+> * **Das Schritt-Timeout liegt bei 20 s** und bleibt dort. `MQTT-Topics.md`
+>   hält für `SET39` eine Übernahme von bis zu einer halben Minute fest — das
+>   galt dem **Einschalten**. Für die **Rücknahme** nennt euer Erstlauf (§5) 7 s
+>   an beiden Stufen, und das liegt innerhalb der Mindestwartezeit von 8 s, die
+>   der Schritt ohnehin absitzt.
+> * **Modus 10 bleibt außen vor.** Mischer zu und VH-Pumpe aus hängen an eurer
+>   Seite; der Notbetrieb kann sie nicht zurückholen. Wer aus Modus 10 heraus
+>   drückt, bekommt Wärme — weiterhin vorrangig ins Hinterhaus. Nur dokumentiert.
+>
+> **Zu §5 (umgekehrte Richtung): nein, kein Sperren.** Eure Begründung trägt —
+> der Knopf muss gerade dann funktionieren, wenn die Steuerung nicht mehr
+> antwortet. Eine Notbetriebs-Sperre, die von einer lebenden Steuerung abhängt,
+> wäre an dieser Stelle das Gegenteil einer Absicherung. Zurücknehmen statt
+> sperren, wie vorgeschlagen.
+>
+> **Was ihr auf eurer Seite nicht ändern müsst:** nichts. Der Re-Assert darf
+> `SET39` nach einem Notbetriebslauf ruhig wieder setzen; weil die Modi 5/6
+> `heatpump` vor `heater` senden, geht die Einheit dabei zuerst wieder aus und
+> das Kommando wird angenommen. Der achte Wächter-Kanal wird im Notbetrieb
+> anschlagen — das ist Wartungssignatur, kein Befund, und steht jetzt so in
+> `Ablauf-Notbetrieb.md` §6.
+
 > **Absender:** Repo `nodered-flows`, 2026-08-30. **Zu prüfen:** ob der
 > Notbetriebsablauf einen zusätzlichen Schritt braucht — und wo er hingehört.
 > Owner-Einschätzung beim Übergeben: ja, vor dem Notbetrieb ausschalten.

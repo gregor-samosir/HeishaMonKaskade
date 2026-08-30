@@ -1,5 +1,78 @@
 #pragma once
 // Changelog:
+// 3.18.0 - DER NOTBETRIEB NIMMT DEN HEIZSTAB ZURUECK. Beide Schrittfolgen
+//         bekommen an Position 2 den Schritt SET39 ForceHeater = 0, direkt
+//         hinter der Hydraulik und vor allem anderen an der Waermepumpe.
+//         Auftrag-Heizstab-Notbetrieb.md, Ablauf-Notbetrieb.md Abschnitt 1b.
+//
+//         WARUM JETZT. Seit dem 2026-08-30 benutzt die Kaskadensteuerung SET39
+//         im REGELBETRIEB: Drei Heizmodi (App-Menue 9/10/11) ersetzen den
+//         Verdichter durch den Backup-Heizstab, 3 kW an einer Stufe, 6 kW mit
+//         beiden. Bis 3.17.0 war ForceHeater ein Kommando, das ausser bei
+//         Messlaeufen niemand gesetzt hat - seither ist es ein Zustand, den die
+//         Anlage im Alltag traegt. Der Notbetrieb kannte ihn nicht.
+//
+//         WAS OHNE DEN SCHRITT PASSIERT. Die Heizstab-Modi setzen Heatpump = 0,
+//         weil die Waermepumpe SET39 nur bei ausgeschalteter Einheit annimmt.
+//         Wird in dieser Lage der Notbetriebsknopf gedrueckt, schaltet der
+//         letzte Schritt die Anlage EIN, waehrend ForceHeater weiter auf 1
+//         steht. Niemand nimmt das zurueck: Die Firmware hat keinen
+//         Rueckschaltpfad, und im eigentlichen Notbetriebsfall ist die
+//         Steuerung tot. Dazu kommt die Umwaelzpumpe - sie haengt am KOMMANDO,
+//         nicht am Stab: Sie laeuft weiter, nachdem der Heizstab thermisch
+//         abgeschaltet hat, und stoppt erst mit ForceHeater = 0 (gemessen
+//         2026-08-28).
+//
+//         WARUM POSITION 2. Bricht der Lauf dort ab, tut die Anlage nichts
+//         mehr - Stab aus, Pumpe aus, Waermepumpe aus. Das ist die sichere
+//         Seite, und es ist dieselbe Ueberlegung wie beim Hydraulikschritt an
+//         Position 1. Anders als bei den Kurvenpunkten muss dieser Wert NICHT
+//         hinter die Moduswechsel: Ein Werks-Reset wirkte hier in dieselbe
+//         Richtung und koennte nichts zerstoeren.
+//
+//         DAS SCHRITT-TIMEOUT BLEIBT BEI 20 s. Beim EINSCHALTEN braucht SET39
+//         bis zu einer halben Minute (MQTT-Topics.md, 2026-08-28) - die
+//         Waermepumpe prueft erst ihre eigenen Bedingungen. Die RUECKNAHME, um
+//         die es hier allein geht, lag bei 7 s an beiden Stufen (Erstlauf der
+//         Steuerungsseite, 2026-08-30). Kommt sie wider Erwarten nicht
+//         zurueck, ist ROT die richtige Antwort: An der Waermepumpe ist nichts
+//         verstellt, und der Mensch drueckt erneut.
+//
+//         WAS DER SCHRITT NICHT KANN. Jede Bridge spricht nur mit IHRER
+//         Waermepumpe. Lief die Anlage im 6-kW-Modus, steht SET39 auch an der
+//         anderen Stufe - dort muss der Knopf ebenfalls gedrueckt werden. Ohne
+//         das laeuft deren Umwaelzpumpe weiter. Bewusst nur dokumentiert und
+//         nicht ins Panel geschrieben (Owner-Entscheid 2026-08-30): Der
+//         Wortlaut bei GRUEN kommt vom Familienrat und soll knapp bleiben.
+//
+//         LAUFZEITEN. Heizen 72 -> 80 s (zehn Schritte), Warmwasser 40 -> 48 s
+//         (sechs). Steht TOP68 schon auf 0 - immer, wenn kein Heizstab-Modus
+//         lief -, kostet der Schritt nur die Mindestwarte von 8 s. Der
+//         Gesamtdeckel leitet sich weiter aus der Schrittzahl ab und waechst
+//         auf 200 bzw. 120 s. Der Panel-Text nennt jetzt "anderthalb Minuten"
+//         statt "eine Minute" - er stimmte schon fuer die 72 s aus 3.15.0
+//         nicht mehr.
+//
+//         AN DER ANLAGE BELEGT (2026-08-30, beide Rollen). Ausgangslage war
+//         App-Modus 11 mit tatsaechlich LAUFENDEM Heizstab an beiden Stufen
+//         (TOP68 und TOP60 auf 1, beide Verdichter aus, Pumpen auf Fix):
+//           Stufe 2, Rolle Warmwasser: TOP68 1 -> 0 in Schritt 2,
+//             GRUEN nach rund 48 s, Stab 34 s vor dem Einschalten aus.
+//           Stufe 1, Rolle Heizen:     TOP68 1 -> 0 in Schritt 2,
+//             GRUEN nach rund 80 s, Stab 64 s vor dem Einschalten aus.
+//             Endzustand: TOP4 Heat, TOP76 Comp. Curve, Kurve 34/26/15/-10
+//             aus dem RAM, TOP104 Auto, Switch OFF.
+//         Die Ruecknahme kam in 6 bis 8 s zurueck (Abtastung 4 s) - innerhalb
+//         der Mindestwarte, die der Schritt ohnehin absitzt. Und: Waehrend des
+//         Laufs an H2 blieb H1 auf TOP68 = 1 und heizte weiter - die
+//         Einschraenkung "jede Bridge raeumt nur ihre eigene Waermepumpe" ist
+//         damit ebenfalls gemessen, nicht nur abgeleitet.
+//
+//         KEINE ABKEHR VON 3.17.0. Dort steht "keine Anbindung an den
+//         Notbetrieb" - das galt und gilt der NUTZUNG des Stabs als
+//         Notheizung. Hier wird nichts eingeschaltet, sondern ein Zustand
+//         geraeumt, den sonst niemand raeumt.
+//
 // 3.17.0 - HEIZSTAB PER MQTT. Drei neue Set-Kommandos: SET37 RoomHeaterState
 //         und SET38 DHWHeaterState geben den internen Heizstab frei (Byte 9),
 //         SET39 ForceHeater schaltet die Ersatzwaermequelle (Byte 5).
@@ -1536,4 +1609,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.17.0";
+static const char* heishamon_version = "3.18.0";

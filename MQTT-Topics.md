@@ -509,6 +509,19 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 > Abtauen mit. SET39 `ForceHeater` ist ein Zustand, den niemand automatisch
 > zurücknimmt; er lässt sich bei ausgeschalteter Wärmepumpe auch ohne Störung
 > einschalten, bei laufendem Betrieb wird er abgelehnt.*
+>
+> **Since 3.18.0 the emergency mode takes SET39 back by itself.** Both step
+> sequences carry `ForceHeater = 0` at position 2 — right after the hydraulics
+> step and before anything else reaches the heat pump. The reason is the control
+> side: since 2026-08-30 it uses SET39 in normal operation (three heating modes
+> that replace the compressor with the backup heater), and the emergency
+> sequence ends with `Heatpump = 1`. Without that step the button would switch
+> on a unit that still carries a standing heater command — and the water pump
+> hangs on the command, not on the heater. Read back via TOP68, 20 s timeout;
+> the take-back was measured at 7 s on both stages (2026-08-30).
+>
+> *Deutsch: Seit 3.18.0 nimmt der Notbetrieb SET39 selbst zurück — Position 2 in
+> beiden Schrittfolgen, siehe `Ablauf-Notbetrieb.md` Abschnitt 1b.*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 
