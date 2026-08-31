@@ -13,8 +13,9 @@ ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)).
 
 **Beide Backup-Boards stehen seit dem 2026-08-27** mit Port 1884 und eigenem
-Hostnamen (Protokoll unten). **Firmware: 3.18.0** — nachgezogen am 2026-08-30
-über die reservierten IPs, Port und Hostname dabei unverändert geprüft.
+Hostnamen (Protokoll unten). **Firmware: 3.19.0** — nachgezogen am 2026-08-31
+über die reservierten IPs, Port und Hostname dabei unverändert geprüft
+(`h1b` → 1884, `h2b` → 1884, beide mit ihrem eigenen Hostnamen).
 
 Die Rückfallebene ist damit **zweiteilig**, und beide Teile werden gebraucht:
 die Boards gegen den Hardware-Ausfall, das Abbild der Vorversion gegen einen

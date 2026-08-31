@@ -454,17 +454,36 @@ menu, which is what makes them checkable at all:
 
 Byte / bits | Menu entry | Unit 1 | Unit 2
 :--- | :--- | :--- | :---
-25 · 3&4 | 8 · Base pan heater | not captured yet | `None`
-25 · 5&6 | 3 · Heater capacity | not captured yet | `3 kW`
-25 · 7&8 | 7 · Tank heater | not captured yet | `Internal`
-23 · 1&2 | 16 · External compressor SW | not captured yet | `Enabled`
-23 · 3&4 | 13 · External error signal | not captured yet | `Disabled`
-23 · 5&6 | 18 · Heat-Cool SW | not captured yet | `Enabled`
-23 · 7&8 | 11 · External SW | not captured yet | `Disabled`
+25 · 3&4 | 8 · Base pan heater | `None` | `None`
+25 · 5&6 | 3 · Heater capacity | **`9 kW`** | `3 kW`
+25 · 7&8 | 7 · Tank heater | **`External`** | `Internal`
+23 · 1&2 | 16 · External compressor SW | `Enabled` | `Enabled`
+23 · 3&4 | 13 · External error signal | `Disabled` | `Disabled`
+23 · 5&6 | 18 · Heat-Cool SW | `Enabled` | `Enabled`
+23 · 7&8 | 11 · External SW | `Disabled` | `Disabled`
 
-Unit 1 is not urgent for the DHW entry - only unit 2 runs hot water, it uncouples
-itself from the hydraulics for a DHW run while unit 1 keeps heating. The other
-six still belong in the table; the column is left open rather than guessed.
+Read off both units on 2026-08-31, minutes after the rollout of 3.19.0. **The
+four byte 23 values are identical on both units and match the wiring** - which
+is a second, independent confirmation of that byte: the compressor and heat/cool
+contacts sit on the KNX actor on both units, the other two inputs are unused on
+both.
+
+**The two differences in byte 25 are the point of the exercise**, and neither
+was visible before:
+
+* **Tank heater `External` on unit 1 as well.** So the wrong value that took
+  unit 2 down was not a one-off slip at commissioning - both units left it in
+  the same state. On unit 1 it is currently harmless: there is no DHW tank on
+  that stage (TOP10 reads -128, TOP58 `Blocked`, TOP91 zero hours), and only
+  unit 2 runs hot water - it uncouples itself from the hydraulics for a DHW run
+  while unit 1 keeps heating. It becomes live the moment a tank is configured
+  there, which is worth knowing before that day and not after it.
+* **Heater capacity reads `9 kW` on unit 1 against `3 kW` on unit 2.** This is
+  unresolved. The rest of this repository assumes 3 kW per stage and 6 kW with
+  both, and that figure is measured - but on **unit 2** only (3000 W electrical
+  at TOP16 on 2026-08-28). The heater output of unit 1 has never been measured.
+  Either the setting is wrong or the assumption is; the topic only shows that
+  the two disagree.
 
 *Deutsch: Bis 3.18.0 hatte keine Installer-Einstellung ein Topic, mit der
 Begründung, sie werde einmal gesetzt und nie wieder angefasst. Am 2026-08-31

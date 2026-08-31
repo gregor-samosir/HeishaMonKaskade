@@ -45,6 +45,24 @@
 //         wuerde eine undeutbare Zahl veroeffentlichen. Es steht im Kommentar
 //         ueber der Tabelle, nicht in MQTT.
 //
+//         WAS DER ROLLOUT SOFORT ZEIGTE (2026-08-31, alle vier Boards auf
+//         3.19.0). Byte 23 liest an BEIDEN Stufen dasselbe und passt zur
+//         Verdrahtung - eine zweite, unabhaengige Bestaetigung dieses Bytes.
+//         In Byte 25 stehen dagegen zwei Abweichungen, die vorher niemand
+//         sehen konnte:
+//           - Der Speicher-Heizstab steht auch an WP1 auf EXTERN. Der Fehlstand
+//             an WP2 war also kein Ausrutscher bei der Inbetriebnahme, sondern
+//             der gemeinsame Ausgangszustand beider Anlagen. An WP1 ist er
+//             derzeit folgenlos: dort haengt kein Speicher (TOP10 = -128, TOP58
+//             Blocked, TOP91 = 0 Stunden). Er wird scharf, sobald dort ein Tank
+//             konfiguriert wird.
+//           - Die Heizstab-Leistung liest an WP1 9 kW, an WP2 3 kW. UNGEKLAERT.
+//             Das ganze Repo rechnet mit 3 kW je Stufe, und diese Zahl ist
+//             gemessen - aber nur an WP2 (3000 W an TOP16 am 2026-08-28). Die
+//             Heizstableistung von WP1 ist nie gemessen worden. Entweder stimmt
+//             die Einstellung nicht oder die Annahme; das Topic zeigt nur, dass
+//             beide sich widersprechen.
+//
 // 3.18.0 - DER NOTBETRIEB NIMMT DEN HEIZSTAB ZURUECK. Beide Schrittfolgen
 //         bekommen an Position 2 den Schritt SET39 ForceHeater = 0, direkt
 //         hinter der Hydraulik und vor allem anderen an der Waermepumpe.
