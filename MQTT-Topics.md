@@ -480,6 +480,14 @@ was visible before:
   unit 2 runs hot water - it uncouples itself from the hydraulics for a DHW run
   while unit 1 keeps heating. It becomes live the moment a tank is configured
   there, which is worth knowing before that day and not after it.
+
+  **It stays as it is, deliberately** (owner, 2026-08-31). Correcting it is not
+  possible without first enabling the tank connection on unit 1 - and that would
+  mean configuring hardware that is not there, which is precisely the fault that
+  took unit 2 down that morning. Tidying the value would risk the very failure
+  the value documents. The topic is what makes leaving it safe: it reports the
+  setting without anyone having to open a menu, so if a tank is ever fitted
+  there, the state is known before it is needed rather than after.
 * **Heater capacity read `9 kW` on unit 1 against `3 kW` on unit 2** - and this
   one turned out to be the sharpest argument for reading these bytes at all.
   This model only ships with a 3 kW backup heater, so unit 1 was configured for
