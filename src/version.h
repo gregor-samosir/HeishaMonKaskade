@@ -56,14 +56,21 @@
 //             derzeit folgenlos: dort haengt kein Speicher (TOP10 = -128, TOP58
 //             Blocked, TOP91 = 0 Stunden). Er wird scharf, sobald dort ein Tank
 //             konfiguriert wird.
-//           - Die Heizstab-Leistung liest an WP1 9 kW, an WP2 3 kW. Die
-//             EINSTELLUNG ist falsch: Diesen Geraetetyp gibt es nur mit 3 kW
-//             (Owner, 2026-08-31). WP1 ist also auf Hardware konfiguriert, die
-//             es dort nicht gibt - dieselbe Fehlerklasse wie der H91-Fall,
-//             gefunden auf demselben Weg. Woher der Wert stammt, ist unbekannt;
-//             absichtlich gesetzt hat ihn niemand. Schaden ist bisher keiner
-//             entstanden, und die Heizstableistung von WP1 ist nie gemessen
-//             worden - nur die von WP2 (3000 W an TOP16 am 2026-08-28).
+//           - Die Heizstab-Leistung las an WP1 9 kW, an WP2 3 kW - und dieser
+//             Befund ist das schaerfste Argument fuer die ganze Aenderung.
+//             Diesen Geraetetyp gibt es nur mit 3 kW; WP1 war also auf Hardware
+//             konfiguriert, die es dort nicht gibt. DER WERT WAR UEBER DAS
+//             BEDIENTEIL GAR NICHT HERSTELLBAR: Beim Aufrufen des Menuepunkts
+//             am 2026-08-31 stand genau eine Auswahl zur Verfuegung, 3 kW. Das
+//             Bestaetigen genuegte, Byte 25 ging 0x9E -> 0x96 und TOP106 zog
+//             auf 3 kW nach. Ein nie aufgerufener Menuepunkt trug also einen
+//             Wert, den das Panel nicht einmal anbietet - an der Anlage war er
+//             nirgends zu sehen. Woher er stammt, ist unbekannt.
+//             Die Korrektur ist zugleich der dritte Umschaltnachweis, diesmal
+//             an WP1, und sie deckt das Bitpaar ab, das in beiden Mitschnitten
+//             stillstand. Von Byte 25 ist damit nur noch das Pad-Heater-Feld
+//             ungeprueft. Elektrisch gemessen ist die Heizstableistung von WP1
+//             weiter nicht - nur die von WP2 (3000 W an TOP16 am 2026-08-28).
 //
 // 3.18.0 - DER NOTBETRIEB NIMMT DEN HEIZSTAB ZURUECK. Beide Schrittfolgen
 //         bekommen an Position 2 den Schritt SET39 ForceHeater = 0, direkt

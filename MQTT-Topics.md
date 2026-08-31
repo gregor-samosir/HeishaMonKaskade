@@ -426,17 +426,19 @@ shows in the plant's behaviour, and takes nothing down. They stay out.
 **Measured, not copied.** Both bytes were proven the same way as bytes 45 and 4
 before them - change the menu entry, watch the raw byte, put it back:
 
-Menu entry | changed | byte | raw value | capture
-:--- | ---: | ---: | ---: | :---
-7 · Tank heater | Internal → External → Internal | 25 | `0x95` → `0x96` → `0x95` | `test/h2.log`
-16 · External compressor SW | Yes → No → Yes | 23 | `0x99` → `0x59` → `0x99` | `test/h2_ext.log`
+Menu entry | unit | changed | byte | raw value | evidence
+:--- | :--- | ---: | ---: | ---: | :---
+7 · Tank heater | 2 | Internal → External → Internal | 25 | `0x95` → `0x96` → `0x95` | `test/h2.log`
+16 · External compressor SW | 2 | Yes → No → Yes | 23 | `0x99` → `0x59` → `0x99` | `test/h2_ext.log`
+3 · Heater capacity | 1 | 9 kW → 3 kW | 25 | `0x9E` → `0x96` | TOP105-107, see below
 
 In both captures the *only* configuration byte that moved was the one under
 test; everything else was measured values and the checksum. The second run also
 settles the field order: what moved was the **top** bit pair, so the reference
 table is not mirrored at this position.
 
-**What is not measured.** The remaining three fields per byte were not toggled.
+**What is not measured.** The pad heater field of byte 25 and three of the four
+fields of byte 23 were not toggled.
 Two of them sit on unconnected inputs, and *activating* those is exactly the
 trap that produced H91. Their meaning comes from the reference and is
 cross-checked against the known plant - byte 23 = `0x99` on unit 2 reads
@@ -455,7 +457,7 @@ menu, which is what makes them checkable at all:
 Byte / bits | Menu entry | Unit 1 | Unit 2
 :--- | :--- | :--- | :---
 25 · 3&4 | 8 · Base pan heater | `None` | `None`
-25 · 5&6 | 3 · Heater capacity | **`9 kW`** | `3 kW`
+25 · 5&6 | 3 · Heater capacity | `3 kW` (was `9 kW`) | `3 kW`
 25 · 7&8 | 7 · Tank heater | **`External`** | `Internal`
 23 · 1&2 | 16 · External compressor SW | `Enabled` | `Enabled`
 23 · 3&4 | 13 · External error signal | `Disabled` | `Disabled`
@@ -478,13 +480,23 @@ was visible before:
   unit 2 runs hot water - it uncouples itself from the hydraulics for a DHW run
   while unit 1 keeps heating. It becomes live the moment a tank is configured
   there, which is worth knowing before that day and not after it.
-* **Heater capacity reads `9 kW` on unit 1 against `3 kW` on unit 2.** The
-  setting is wrong: this model only ships with a 3 kW backup heater (owner,
-  2026-08-31), so unit 1 is configured for hardware it does not have - the same
-  class of fault as the H91 case, found the same way. Nothing has gone wrong
-  because of it so far; the heater output of unit 1 has never been measured
-  either, only unit 2's (3000 W electrical at TOP16 on 2026-08-28). Where the
-  value came from is unknown - it is not a state anyone set deliberately.
+* **Heater capacity read `9 kW` on unit 1 against `3 kW` on unit 2** - and this
+  one turned out to be the sharpest argument for reading these bytes at all.
+  This model only ships with a 3 kW backup heater, so unit 1 was configured for
+  hardware it does not have: the same class of fault as the H91 case, found the
+  same way, one day after deciding to read these bytes.
+
+  **The value could not be produced through the controller.** Opening the menu
+  entry on 2026-08-31 offered exactly one choice - 3 kW. Confirming it was
+  enough: byte 25 went `0x9E` → `0x96` and TOP106 followed to `3 kW`. So a menu
+  entry nobody had ever opened carried a value the panel does not even offer,
+  and no amount of looking at the plant would have shown it. Where it came from
+  is unknown.
+
+  The fix doubles as the third toggle proof, this time on unit 1, and it covers
+  the bit pair that neither capture had moved. Of byte 25 only the pad heater
+  field is now unproven. The heater output of unit 1 has still never been
+  measured electrically - only unit 2's (3000 W at TOP16 on 2026-08-28).
 
 *Deutsch: Bis 3.18.0 hatte keine Installer-Einstellung ein Topic, mit der
 Begründung, sie werde einmal gesetzt und nie wieder angefasst. Am 2026-08-31

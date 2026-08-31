@@ -202,7 +202,9 @@ produktive Board seiner Stufe.
   Die CI baut seitdem sechs Envs.
 * **Das Binärarchiv der Rückfallstände** — als *Archiv*. Am 2026-08-27 auf zwei
   Releases eingedampft: das aktuelle und das davor. Elf ältere Releases samt ihren
-  Tags und 62 lokale Abbilder sind gelöscht, 60 MB auf 5,8 MB.
+  Tags und 62 lokale Abbilder sind gelöscht, 60 MB auf 5,8 MB. Am 2026-08-31
+  wieder auf zwei gebracht (v3.19.0 und v3.18.0; v3.15.0 bis v3.17.0 samt Tags
+  entfernt) — die Regel gilt fortlaufend, nicht einmalig.
 
 ### Richtigstellung (2026-08-27): ein Rückfallstand bleibt nötig
 
