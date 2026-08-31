@@ -130,6 +130,13 @@ TOP101 | Heat_Cool_SW_State | Actual heat/cool state of the unit (0=heat, 1=cool
 TOP102 | External_SW_State | External switch state (0=off, 1=on)
 TOP103 | Pump_Duty_Max | Upper limit the water pump may modulate up to (duty) - the readback of SET15
 TOP104 | Water_Pump_Mode | Water pump mode (0=auto, 1=fix, 2=air purge) - the readback of SET14
+TOP105 | Pad_Heater_Type | Base pan heater configured (0=none, 1=type A, 2=type B) - installer setting
+TOP106 | Internal_Heater_Power | Power of the internal backup heater (0=3 kW, 1=6 kW, 2=9 kW) - installer setting
+TOP107 | DHW_Heater_Type | Tank heater the unit expects (0=internal, 1=external) - installer setting
+TOP108 | External_Compressor_Config | External compressor switch configured (0=no, 1=yes) - installer setting
+TOP109 | External_Error_Signal_Config | External error signal configured (0=no, 1=yes) - installer setting
+TOP110 | Heat_Cool_SW_Config | External heat/cool switch configured (0=no, 1=yes) - installer setting
+TOP111 | External_Control_Config | External on/off switch configured (0=no, 1=yes) - installer setting
 
 ### Actual states from byte 110 (TOP99 - TOP102, new in 3.7.0)
 
@@ -378,6 +385,132 @@ Kompatibilitätsgründen stehen. **TOP104 meldet den wirksamen Zustand**, nicht
 den Wunsch: Beim Umschalten auf `Fix` lief die Pumpe tatsächlich an. Der dritte
 Zustand `Air purge` ist NICHT gemessen - ihn herzustellen hieße, an einer
 intakten Anlage eine Entlüftungsroutine auszulösen.*
+
+### Installer settings as topics - and where the line is (TOP105 - TOP111, new in 3.19.0)
+
+Until 3.18.0 no installer setting had a topic, on the grounds that it is set
+once and never touched again. On 2026-08-31 that reasoning cost a plant.
+
+**What happened.** Unit 2 had its tank heater set to **external** although only
+the internal one exists - most likely since commissioning, since the factory
+state is internal. It stayed harmless as long as the backup heater was blocked.
+With the release built in 3.17.0 the unit asked for the external heater on the
+first hot water run of the morning, did not find its overload protector, and
+shut down with **H91 - tank heater OLP abnormality**. Circulation pump stopped,
+stage 2 dead in *every* operating mode until the menu entry was corrected.
+
+The failure itself is not the point. Its timing is: the run that triggered it
+was the heater mode built for the case where the compressor fails. At 22 °C
+outside this costs a cold shower. In winter, on a broken compressor, the same
+misconfiguration would take out the stage that is supposed to carry the
+emergency run.
+
+**Why the old rule does not hold.** "Set once, so it needs no topic" measures
+how *often* a value changes. The quantity that matters is what an unnoticed
+wrong value costs. Here the frequency is zero and the price is a dead stage -
+the combination that is worst at drawing attention to itself. A value that
+never changes is a value nobody ever looks at.
+
+**The rule that replaces it.** An installer byte becomes a topic when **all
+three** hold:
+
+1. It configures a function this firmware actively drives (a `set/` command) or
+   that the emergency sequence relies on.
+2. A wrong value produces a **fault or an outage**, not merely worse control.
+3. The assignment is **measured**, not copied from `ProtocolByteDecrypt.md`.
+
+Byte 25 and byte 23 meet all three. Heating curves, zone types, buffer delta-T
+and sensor assignments do not: a wrong value there costs efficiency or comfort,
+shows in the plant's behaviour, and takes nothing down. They stay out.
+
+**Measured, not copied.** Both bytes were proven the same way as bytes 45 and 4
+before them - change the menu entry, watch the raw byte, put it back:
+
+Menu entry | changed | byte | raw value | capture
+:--- | ---: | ---: | ---: | :---
+7 · Tank heater | Internal → External → Internal | 25 | `0x95` → `0x96` → `0x95` | `test/h2.log`
+16 · External compressor SW | Yes → No → Yes | 23 | `0x99` → `0x59` → `0x99` | `test/h2_ext.log`
+
+In both captures the *only* configuration byte that moved was the one under
+test; everything else was measured values and the checksum. The second run also
+settles the field order: what moved was the **top** bit pair, so the reference
+table is not mirrored at this position.
+
+**What is not measured.** The remaining three fields per byte were not toggled.
+Two of them sit on unconnected inputs, and *activating* those is exactly the
+trap that produced H91. Their meaning comes from the reference and is
+cross-checked against the known plant - byte 23 = `0x99` on unit 2 reads
+compressor contact on (KNX channel), error signal off (not wired), heat/cool on
+(KNX), external control off. The last one agrees with the caveat recorded for
+TOP102 a year earlier, from an unrelated measurement. Four hits, no
+contradiction - but not a measurement.
+
+**The top bit pair of byte 25** (constant `b10` on unit 2) has no documented
+meaning and deliberately gets no topic. A topic publishing an undecodable
+number is ballast, not a finding.
+
+**Target state.** Both bytes map one to one onto the installer's system setup
+menu, which is what makes them checkable at all:
+
+Byte / bits | Menu entry | Unit 1 | Unit 2
+:--- | :--- | :--- | :---
+25 · 3&4 | 8 · Base pan heater | `None` | `None`
+25 · 5&6 | 3 · Heater capacity | **`9 kW`** | `3 kW`
+25 · 7&8 | 7 · Tank heater | **`External`** | `Internal`
+23 · 1&2 | 16 · External compressor SW | `Enabled` | `Enabled`
+23 · 3&4 | 13 · External error signal | `Disabled` | `Disabled`
+23 · 5&6 | 18 · Heat-Cool SW | `Enabled` | `Enabled`
+23 · 7&8 | 11 · External SW | `Disabled` | `Disabled`
+
+Read off both units on 2026-08-31, minutes after the rollout of 3.19.0. **The
+four byte 23 values are identical on both units and match the wiring** - which
+is a second, independent confirmation of that byte: the compressor and heat/cool
+contacts sit on the KNX actor on both units, the other two inputs are unused on
+both.
+
+**The two differences in byte 25 are the point of the exercise**, and neither
+was visible before:
+
+* **Tank heater `External` on unit 1 as well.** So the wrong value that took
+  unit 2 down was not a one-off slip at commissioning - both units left it in
+  the same state. On unit 1 it is currently harmless: there is no DHW tank on
+  that stage (TOP10 reads -128, TOP58 `Blocked`, TOP91 zero hours), and only
+  unit 2 runs hot water - it uncouples itself from the hydraulics for a DHW run
+  while unit 1 keeps heating. It becomes live the moment a tank is configured
+  there, which is worth knowing before that day and not after it.
+* **Heater capacity reads `9 kW` on unit 1 against `3 kW` on unit 2.** The
+  setting is wrong: this model only ships with a 3 kW backup heater (owner,
+  2026-08-31), so unit 1 is configured for hardware it does not have - the same
+  class of fault as the H91 case, found the same way. Nothing has gone wrong
+  because of it so far; the heater output of unit 1 has never been measured
+  either, only unit 2's (3000 W electrical at TOP16 on 2026-08-28). Where the
+  value came from is unknown - it is not a state anyone set deliberately.
+
+*Deutsch: Bis 3.18.0 hatte keine Installer-Einstellung ein Topic, mit der
+Begründung, sie werde einmal gesetzt und nie wieder angefasst. Am 2026-08-31
+hat das eine Anlage gekostet: An Stufe 2 stand der Speicher-Heizstab auf
+**extern**, obwohl es nur den internen gibt - vermutlich seit der
+Inbetriebnahme, der Werksstand wäre intern. Folgenlos, solange der Heizstab
+gesperrt war; mit der Freigabe aus 3.17.0 forderte die Anlage beim ersten
+Warmwasserlauf den externen Stab an, fand dessen Überlastschutz nicht und ging
+mit **H91** aus - Umwälzpumpe still, Stufe 2 in jeder Betriebsart tot. Das
+Schwere daran ist nicht der Ausfall, sondern sein Zeitpunkt: Ausgelöst hat ihn
+der Modus, der für den Ausfall des Verdichters gebaut ist. Die alte Begründung
+misst die Änderungshäufigkeit; entscheidend ist der Preis einer unbemerkten
+Abweichung, und der ist hier Anlagenstillstand bei einer Häufigkeit von null.
+**Die Regel:** Ein Installer-Byte wird Topic, wenn alle drei Punkte zutreffen -
+(1) es konfiguriert eine Funktion, die diese Firmware ansteuert oder auf die
+sich der Notbetrieb verlässt, (2) ein falscher Wert erzeugt Störung oder
+Ausfall statt nur schlechterer Regelung, (3) die Zuordnung ist gemessen, nicht
+aus der Referenz übernommen. Byte 25 und Byte 23 erfüllen alle drei,
+Heizkurven und Zonentypen nicht - die bleiben draußen. Beide Bytes sind nach
+demselben Verfahren wie Byte 45 und Byte 4 ausgemessen worden (Tabelle oben);
+in beiden Mitschnitten bewegte sich als einziges Konfigurationsbyte das
+geprüfte. Die übrigen drei Felder je Byte sind NICHT umgeschaltet - zwei davon
+hängen an nicht belegten Eingängen, und sie zu aktivieren ist genau die Falle,
+die H91 ausgelöst hat; ihre Bedeutung ist gegen die bekannte Beschaltung
+gegengeprüft, aber nicht gemessen. Das oberste Bitpaar von Byte 25 bekommt
+bewusst kein Topic, weil ihm die Bedeutung fehlt.*
 
 ## Command Topics:
 
