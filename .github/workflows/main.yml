@@ -135,6 +135,11 @@ jobs:
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
+      # byte23_25_test:  Die sieben Installer-Topics (TOP105-111) aus Byte 25
+      #                  und Byte 23 gegen die am 2026-08-31 gemessenen
+      #                  Rohbytes. Byte 25 traegt drei Topics, Byte 23 vier -
+      #                  ein Dekodierer zwei Bit daneben liefert Werte, die
+      #                  plausibel aussehen und trotzdem falsch sind.
       # css_klassen:     Jede benutzte w3-Klasse muss im eingebetteten CSS
       #                  definiert sein und jede Farbklasse hinter .w3-button
       #                  stehen. Ein Compiler prüft davon nichts: Die Seite lädt
@@ -157,6 +162,7 @@ jobs:
           /tmp/verbindung_test
           ./test/decode_hosttest.sh
           ./test/decode_hosttest.sh test/byte9_test.cpp
+          ./test/decode_hosttest.sh test/byte23_25_test.cpp
           python3 test/css_klassen_test.py
 
       # Alle Envs bauen, nicht nur default_envs (= heishamon_esp32_h1_ota).

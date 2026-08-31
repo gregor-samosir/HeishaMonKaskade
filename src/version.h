@@ -1,5 +1,50 @@
 #pragma once
 // Changelog:
+// 3.19.0 - SIEBEN INSTALLER-EINSTELLUNGEN WERDEN TOPICS. TOP105-107 aus Byte
+//         25 (Bodenwannenheizung, Leistung des internen Heizstabs, Speicher-
+//         Heizstab intern/extern) und TOP108-111 aus Byte 23 (Kompressor-
+//         kontakt, externes Fehlersignal, Heat/Cool-Schalter, externer
+//         Steuerkontakt). NUMBEROFTOPICS 92 -> 99, neuer Hosttest
+//         test/byte23_25_test.cpp.
+//
+//         WARUM JETZT - EIN AUSFALL, DEN NIEMAND SEHEN KONNTE. Am 2026-08-31
+//         stand an WP2 der Speicher-Heizstab auf EXTERN, obwohl es nur den
+//         internen gibt. Vermutlich seit der Inbetriebnahme; der Werksstand
+//         waere INTERN gewesen. Folgenlos, solange der Heizstab gesperrt war -
+//         mit der Freigabe aus 3.17.0 forderte die Anlage beim ersten
+//         Warmwasserlauf den externen Stab an, fand dessen Ueberlastschutz
+//         nicht und ging mit H91 aus. Umwaelzpumpe still, Stufe 2 tot, in
+//         JEDER Betriebsart, bis der Menuepunkt korrigiert war.
+//
+//         DAS SCHWERE DARAN IST NICHT DER AUSFALL, SONDERN SEIN ZEITPUNKT.
+//         Ausgeloest hat ihn der Modus, der fuer den Ausfall des Verdichters
+//         gebaut ist. Bei 22 Grad Aussentemperatur kostet das eine kalte
+//         Dusche; im Winter mit defektem Verdichter haette dieselbe
+//         Fehlkonfiguration die Stufe stillgelegt, die den Notbetrieb tragen
+//         soll.
+//
+//         WARUM DIE ALTE BEGRUENDUNG NICHT MEHR TRAEGT. "Installer-Einstellung,
+//         wird einmal eingestellt, braucht kein Topic" misst die Aenderungs-
+//         haeufigkeit. Die entscheidende Groesse ist der Preis einer
+//         unbemerkten Abweichung. Hier ist die Haeufigkeit null und der Preis
+//         Anlagenstillstand - die Kombination, die am schlechtesten von selbst
+//         auffaellt. Die Regel, die daraus folgt, steht in MQTT-Topics.md und
+//         nennt drei Bedingungen; beide Bytes erfuellen alle drei, die
+//         Heizkurven und Zonentypen erfuellen sie nicht und bleiben draussen.
+//
+//         GEMESSEN, NICHT ABGESCHRIEBEN. Byte 25: "Tank heater" Internal <->
+//         External liess das Byte 0x95 <-> 0x96 wandern (test/h2.log). Byte 23:
+//         "External compressor SW" Yes <-> No liess es 0x99 <-> 0x59 wandern
+//         (test/h2_ext.log). Beide Male bewegte sich im ganzen Telegramm nur
+//         dieses eine Konfigurationsbyte. Der zweite Lauf belegt zusaetzlich
+//         die Feldreihenfolge: Bewegt hat sich das OBERSTE Bitpaar, die
+//         Referenztabelle ist an dieser Stelle also nicht gespiegelt.
+//
+//         WAS BEWUSST DRAUSSEN BLEIBT. Das oberste Bitpaar von Byte 25 (an WP2
+//         konstant b10) hat in der Referenz keine Bedeutung. Ein Topic dafuer
+//         wuerde eine undeutbare Zahl veroeffentlichen. Es steht im Kommentar
+//         ueber der Tabelle, nicht in MQTT.
+//
 // 3.18.0 - DER NOTBETRIEB NIMMT DEN HEIZSTAB ZURUECK. Beide Schrittfolgen
 //         bekommen an Position 2 den Schritt SET39 ForceHeater = 0, direkt
 //         hinter der Hydraulik und vor allem anderen an der Waermepumpe.
@@ -1629,4 +1674,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.18.0";
+static const char* heishamon_version = "3.19.0";

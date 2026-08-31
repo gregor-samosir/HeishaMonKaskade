@@ -58,6 +58,18 @@ static const char *HeatCoolActual[] = {"Heat", "Cool", "unknown", nullptr};
 // Anlage eine Entlueftungsroutine ausgeloest.
 static const char *WaterPumpMode[] = {"Auto", "Fix", "Air purge", nullptr};
 
+// Die Installer-Einstellungen aus Byte 25 und Byte 23 (3.19.0). Alle sechs
+// Listen haben drei Eintraege, weil die 2-Bit-Dekodierer den Bereich -1..2
+// liefern; b00 faellt ueber desc_text() auf den Leerstring.
+//
+// Byte 25 bildet drei Punkte der Systemeinstellungen ab. Die Klartexte sind
+// die des Bedienteils, nicht erfunden: "None/Type A/Type B" gehoert zur
+// Bodenwannenheizung, "3/6/9 kW" zur Leistung des internen Heizstabs,
+// "Internal/External" zum Speicher-Heizstab.
+static const char *PadHeaterType[] = {"None", "Type A", "Type B", nullptr};
+static const char *InternalHeaterPower[] = {"3 kW", "6 kW", "9 kW", nullptr};
+static const char *HeaterLocation[] = {"Internal", "External", "unknown", nullptr};
+
 
 /*****************************************************************************/
 /* Die State-Topic-Tabelle - eine Zeile pro Topic                            */
@@ -190,6 +202,50 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     //     11,95 l/min). Das Feld meldet also den wirksamen Zustand.
     {103,  45, "Pump_Duty_Max",                    getIntMinus1,         nullptr,                   Duty},
     {104,   4, "Water_Pump_Mode",                  getBit3and4,          nullptr,                   WaterPumpMode},
+
+    // Die Installer-Einstellungen der Systemeinstellungen (3.19.0). Sie stehen
+    // hier, weil eine falsche davon die Anlage STILLLEGT - nicht, weil sie
+    // interessant waeren. Am 2026-08-31 stand Byte 25 an WP2 auf "Speicher-
+    // Heizstab EXTERN", obwohl es nur den internen gibt. Folgenlos, solange der
+    // Heizstab gesperrt war; mit der Freigabe aus 3.17.0 forderte die Anlage
+    // beim ersten Warmwasserlauf den externen Stab an, fand dessen
+    // Ueberlastschutz nicht und ging mit H91 aus - Umwaelzpumpe still, Stufe 2
+    // tot, in JEDER Betriebsart. Die Regel, nach der beide Bytes aufgenommen
+    // wurden, steht in MQTT-Topics.md.
+    //
+    // Beide Bytes sind am 2026-08-31 an WP2 ausgemessen worden, nach dem
+    // Verfahren von Byte 45 und Byte 4 - Menuepunkt verstellt, Rohbyte im
+    // Hexlog beobachtet, zurueckgestellt:
+    //   Byte 25: "Tank heater" Internal -> External -> Internal liess das Byte
+    //     0x95 -> 0x96 -> 0x95 wandern (test/h2.log, fuenf Wechsel). Nur die
+    //     untersten zwei Bits bewegten sich, alles andere im Telegramm waren
+    //     Messwerte und die Pruefsumme.
+    //   Byte 23: "External compressor SW" Yes -> No -> Yes liess das Byte
+    //     0x99 -> 0x59 -> 0x99 wandern (test/h2_ext.log). Bewegt hat sich das
+    //     OBERSTE Bitpaar - damit ist auch belegt, dass die Feldreihenfolge
+    //     nicht gespiegelt ist, sondern wie bei jedem anderen Byte von Bit 7
+    //     abwaerts laeuft.
+    //
+    // NICHT umgeschaltet wurden die uebrigen drei Felder je Byte: Zwei davon
+    // haengen an nicht belegten Eingaengen, und sie zu AKTIVIEREN ist genau die
+    // Falle, die H91 ausgeloest hat. Ihre Bedeutung stammt aus
+    // ProtocolByteDecrypt.md und ist gegen die bekannte Anlage gegengeprueft -
+    // an WP2 ergibt Byte 23 = 0x99 der Reihe nach Kompressorkontakt EIN
+    // (KNX-Kanal), Fehlersignal AUS (nicht verdrahtet), Heat/Cool EIN (KNX),
+    // externer Steuerkontakt AUS. Das letzte deckt sich mit dem Vorbehalt zu
+    // TOP102 weiter oben, der ein Jahr aelter ist und aus anderem Anlass
+    // entstand. Vier Treffer, kein Widerspruch - aber eben kein Messwert.
+    //
+    // Das oberste Bitpaar von Byte 25 (an WP2 konstant b10) bleibt bewusst
+    // OHNE Topic: Die Referenz gibt ihm keine Bedeutung, und ein Topic, das
+    // eine undeutbare Zahl veroeffentlicht, ist kein Befund, sondern Ballast.
+    {105,  25, "Pad_Heater_Type",                  getBit3and4,          nullptr,                   PadHeaterType},
+    {106,  25, "Internal_Heater_Power",            getBit5and6,          nullptr,                   InternalHeaterPower},
+    {107,  25, "DHW_Heater_Type",                  getBit7and8,          nullptr,                   HeaterLocation},
+    {108,  23, "External_Compressor_Config",       getBit1and2,          nullptr,                   DisabledEnabled},
+    {109,  23, "External_Error_Signal_Config",     getBit3and4,          nullptr,                   DisabledEnabled},
+    {110,  23, "Heat_Cool_SW_Config",              getBit5and6,          nullptr,                   DisabledEnabled},
+    {111,  23, "External_Control_Config",          getBit7and8,          nullptr,                   DisabledEnabled},
 };
 
 // Haelt NUMBEROFTOPICS (Array-Groesse von actual_data) und die Tabelle zusammen
