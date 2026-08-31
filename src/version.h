@@ -56,12 +56,14 @@
 //             derzeit folgenlos: dort haengt kein Speicher (TOP10 = -128, TOP58
 //             Blocked, TOP91 = 0 Stunden). Er wird scharf, sobald dort ein Tank
 //             konfiguriert wird.
-//           - Die Heizstab-Leistung liest an WP1 9 kW, an WP2 3 kW. UNGEKLAERT.
-//             Das ganze Repo rechnet mit 3 kW je Stufe, und diese Zahl ist
-//             gemessen - aber nur an WP2 (3000 W an TOP16 am 2026-08-28). Die
-//             Heizstableistung von WP1 ist nie gemessen worden. Entweder stimmt
-//             die Einstellung nicht oder die Annahme; das Topic zeigt nur, dass
-//             beide sich widersprechen.
+//           - Die Heizstab-Leistung liest an WP1 9 kW, an WP2 3 kW. Die
+//             EINSTELLUNG ist falsch: Diesen Geraetetyp gibt es nur mit 3 kW
+//             (Owner, 2026-08-31). WP1 ist also auf Hardware konfiguriert, die
+//             es dort nicht gibt - dieselbe Fehlerklasse wie der H91-Fall,
+//             gefunden auf demselben Weg. Woher der Wert stammt, ist unbekannt;
+//             absichtlich gesetzt hat ihn niemand. Schaden ist bisher keiner
+//             entstanden, und die Heizstableistung von WP1 ist nie gemessen
+//             worden - nur die von WP2 (3000 W an TOP16 am 2026-08-28).
 //
 // 3.18.0 - DER NOTBETRIEB NIMMT DEN HEIZSTAB ZURUECK. Beide Schrittfolgen
 //         bekommen an Position 2 den Schritt SET39 ForceHeater = 0, direkt

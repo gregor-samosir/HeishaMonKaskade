@@ -478,12 +478,13 @@ was visible before:
   unit 2 runs hot water - it uncouples itself from the hydraulics for a DHW run
   while unit 1 keeps heating. It becomes live the moment a tank is configured
   there, which is worth knowing before that day and not after it.
-* **Heater capacity reads `9 kW` on unit 1 against `3 kW` on unit 2.** This is
-  unresolved. The rest of this repository assumes 3 kW per stage and 6 kW with
-  both, and that figure is measured - but on **unit 2** only (3000 W electrical
-  at TOP16 on 2026-08-28). The heater output of unit 1 has never been measured.
-  Either the setting is wrong or the assumption is; the topic only shows that
-  the two disagree.
+* **Heater capacity reads `9 kW` on unit 1 against `3 kW` on unit 2.** The
+  setting is wrong: this model only ships with a 3 kW backup heater (owner,
+  2026-08-31), so unit 1 is configured for hardware it does not have - the same
+  class of fault as the H91 case, found the same way. Nothing has gone wrong
+  because of it so far; the heater output of unit 1 has never been measured
+  either, only unit 2's (3000 W electrical at TOP16 on 2026-08-28). Where the
+  value came from is unknown - it is not a state anyone set deliberately.
 
 *Deutsch: Bis 3.18.0 hatte keine Installer-Einstellung ein Topic, mit der
 Begründung, sie werde einmal gesetzt und nie wieder angefasst. Am 2026-08-31
