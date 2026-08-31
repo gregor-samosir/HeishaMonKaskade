@@ -55,7 +55,12 @@
 //             der gemeinsame Ausgangszustand beider Anlagen. An WP1 ist er
 //             derzeit folgenlos: dort haengt kein Speicher (TOP10 = -128, TOP58
 //             Blocked, TOP91 = 0 Stunden). Er wird scharf, sobald dort ein Tank
-//             konfiguriert wird.
+//             konfiguriert wird - und BLEIBT BEWUSST STEHEN (Owner,
+//             2026-08-31): Den Menuepunkt gibt es erst nach Freigabe der
+//             Tank-Verbindung, und die freizugeben hiesse, Hardware zu
+//             konfigurieren, die es nicht gibt. Genau daran ist WP2 an diesem
+//             Morgen ausgefallen. Das Aufraeumen des Wertes wuerde also den
+//             Fehler riskieren, den der Wert dokumentiert.
 //           - Die Heizstab-Leistung las an WP1 9 kW, an WP2 3 kW - und dieser
 //             Befund ist das schaerfste Argument fuer die ganze Aenderung.
 //             Diesen Geraetetyp gibt es nur mit 3 kW; WP1 war also auf Hardware
