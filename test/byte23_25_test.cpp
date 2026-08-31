@@ -21,6 +21,8 @@
 //  3. Ergeben die AM 2026-08-31 GEMESSENEN Rohwerte die dokumentierten
 //     Klartexte? 0x95/0x96 auf Byte 25 und 0x99/0x59 auf Byte 23 sind keine
 //     Rechenbeispiele, sondern die Bytes aus test/h2.log und test/h2_ext.log.
+//     Dazu 0x9E/0x96 von WP1: die Heizstab-Leistung stand dort auf 9 kW an
+//     einem Geraet, das es nur mit 3 kW gibt.
 //  4. Bleibt die Web-Tabelle im Array, wenn ein Feld b11 oder b00 liefert?
 //
 // Bauen und ausfuehren:
@@ -159,6 +161,20 @@ int main()
     pruefe(strcmp(text_der_zeile(pad, 0x96), "None") == 0 &&
                strcmp(text_der_zeile(leistung, 0x96), "3 kW") == 0,
            "0x95 -> 0x96 laesst Pad-Heater und Leistung unveraendert");
+
+    // Der dritte Umschaltnachweis, an WP1 statt WP2: Der Menuepunkt
+    // "Heater capacity" stand dort auf 9 kW, obwohl es diesen Geraetetyp nur
+    // mit 3 kW gibt - ein Wert, den das Bedienteil gar nicht zur Auswahl
+    // stellt. Aufrufen und Bestaetigen genuegte, Byte 25 ging 0x9E -> 0x96
+    // (2026-08-31). Damit ist auch das mittlere Bitpaar gemessen, das in
+    // beiden Mitschnitten stillstand.
+    pruefe(strcmp(text_der_zeile(leistung, 0x9E), "9 kW") == 0,
+           "Byte 25 = 0x9E -> Internal_Heater_Power 9 kW (Fehlstand WP1)");
+    pruefe(strcmp(text_der_zeile(leistung, 0x96), "3 kW") == 0,
+           "Byte 25 = 0x96 -> Internal_Heater_Power 3 kW (nach der Korrektur)");
+    pruefe(strcmp(text_der_zeile(pad, 0x9E), "None") == 0 &&
+               strcmp(text_der_zeile(dhw, 0x9E), "External") == 0,
+           "0x9E -> 0x96 bewegt NUR die Heizstab-Leistung");
   }
 
   // Byte 23 aus test/h2_ext.log: Menuepunkt "External compressor SW" Yes <-> No.
