@@ -192,12 +192,13 @@ die im Notbetriebsfall weg ist.
 
 An der Anlage belegt: TOP104 `1 Fix` → `0 Auto`, Pump_Flow 16,24 → 0,13 l/min.
 Der Re-Assert stellt beides hinterher wieder her — derselbe Kreislauf wie bei
-allen anderen Werten.
+allen anderen Werten. Die Zahlenwerte sind nur eine Momentaufnahme. 
+Im Auto Modus läuft die Pumpe bedarfgerecht bis zur gespeicheten Pum_Duty.
 
 ## Warum die 90 s keine Wartezeit erzwingen
 
 Das Relais bestätigt sich sofort, die beiden motorischen Stellantriebe brauchen
-je 90 s, und `Heatpump = 1` geht an Stufe 2 schon nach 40 s raus. **Der
+je 40 s (gemessen), und `Heatpump = 1` geht an Stufe 2 schon nach 40 s raus. **Der
 Kompressor braucht trotzdem länger als die Ventile:** Nach dem Einschalten
 vergehen rund drei Minuten, bis die Wärmepumpe ihn hochfährt; zunächst läuft nur
 die Umwälzpumpe an (Owner, 2026-08-26).
