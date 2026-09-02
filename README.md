@@ -87,9 +87,11 @@ Kommandos in die Gegenrichtung.
   <em><b>Die Geschwister.</b> Sie sehen nicht nur gleich aus, sie tragen auch
   denselben Quelltext — der ganze Unterschied zwischen Stufe 1 und Stufe 2 sind
   drei Build-Flags (MQTT-Präfix, Web-Titel, Hostname). Im Projekt laufen sie
-  deshalb unter <code>…_h1_ota</code> und <code>…_h2_ota</code>, die beiden
-  Ersatzplatinen unter <code>…_h1b_ota</code> und <code>…_h2b_ota</code>; die
-  Aufkleber auf dem Foto sind nur für das Foto. Genau diese Verdopplung hat die
+  deshalb unter <code>…_h1_ota</code> und <code>…_h2_ota</code>. Die beiden
+  Ersatzplatinen tragen <b>denselben</b> Build wie ihre Stufe — eigene Envs
+  gibt es dafür nicht, sie unterscheiden sich nur im Hostnamen und in einem
+  toten MQTT-Port, der sie stilllegt. Die Aufkleber auf dem Foto sind nur für
+  das Foto. Genau diese Verdopplung hat die
   Fehler ans Licht gebracht, die weiter unten stehen: Ein Gerät, das jemand von
   Hand bedient, verzeiht vieles. Zwei Geräte, die alle fünf Minuten den
   kompletten Sollzustand aufgedrückt bekommen, verzeihen nichts.</em>
@@ -104,6 +106,12 @@ Steuerung schickt **mehrere Set-Kommandos gleichzeitig**, an **zwei Geräte**,
 und wiederholt den kompletten Sollzustand **alle 5 Minuten** (Re-Assert). Genau
 dieses Muster hat Fehler sichtbar gemacht, die im Einzelbetrieb mit
 Handbedienung niemandem auffallen.
+
+Und dann ist da noch die Zeitachse. Die beiden Bridges hängen im Keller, ohne
+Bildschirm, ohne dass jemand hinschaut, und sollen **Monate am Stück** laufen.
+Die spannende Frage ist dabei nicht „funktioniert es?" — sondern „würde ich es
+überhaupt mitbekommen, wenn nicht?". Was daraus geworden ist, steht unter
+[Damit es Monate durchhält](#damit-es-monate-durchhält--und-man-merkt-wenn-nicht-3200).
 
 ## Anpassen ist der Normalfall, nicht der Sonderfall
 
@@ -199,8 +207,150 @@ Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 | Broker weg | nur eine Zeile im MQTT-Log, die niemanden erreicht | die Weboberfläche sagt es: „Hausteuerung seit 14 Minuten nicht erreichbar" |
 | Steuerung rechnet nicht mehr | fällt gar nicht auf, von außen sieht alles gesund aus | erkannt am ausbleibenden 5-min-Re-Assert, eigener Text auf der Seite |
 | Heizstab-Auftrag beim Notbetrieb | kennt keinen Notbetrieb | wird als eigener Schritt zurückgenommen, bevor die Anlage anläuft |
+| Unbemerkte Neustarts | keine Spur — das Gerät ist binnen Sekunden wieder „Online" | Bootzähler und Reset-Ursache als Topics, ein Watchdog-Neustart fällt auf |
+| Speicherverbrauch | über Telnet als Prozentwert relativ zum Boot | vier Zahlen als Topics, in InfluxDB auftragbar |
+| Notbetriebswerte nach einem Neustart | kennt keinen Notbetrieb | überleben im RTC-Speicher; erst ein Stromausfall räumt sie weg |
+| Logzeilen bei weggefallenem Broker | verschwinden still | Ringpuffer im RAM, Route `/log`, zusätzlich Telnet |
+| Logzeitstempel | driften, kennen keine Sommerzeitumstellung | aus der von SNTP nachgeführten Systemuhr |
 
 Im Detail:
+
+### Damit es Monate durchhält — und man merkt, wenn nicht (3.20.0)
+
+Irgendwann ist der spannende Teil vorbei. Die Topics stimmen, die Kommandos
+kommen an, der Notbetriebsknopf tut, was er soll. Und dann steht das Ding im
+Keller und soll einfach laufen. Ein halbes Jahr. Ohne dass jemand hinschaut.
+
+Genau dafür ist die ganze Firmware im September 2026 noch einmal durchgelesen
+worden — nicht mit der Frage „ist das richtig?", sondern mit der deutlich
+unangenehmeren: **„was davon würde ich merken, wenn es schiefgeht?"** Der
+Befundbericht liegt als
+[`Massnahmenplan-Codedurchsicht-2026-09-02.md`](Massnahmenplan-Codedurchsicht-2026-09-02.md)
+im Repo, die Umsetzung samt Messprotokoll als
+[`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md).
+Herausgekommen sind vier Dinge.
+
+**Die Notbetriebswerte überleben jetzt einen Neustart.** Sie lagen bis dahin
+nur im RAM — mit der durchaus vernünftigen Begründung: Wenn die Bridge neu
+startet, während der Broker weg ist, war der Strom weg, und dann läuft ohnehin
+nichts. Nur stimmt das nicht mehr, seit die Firmware sich *selbst* neu startet:
+WLAN-Watchdog nach fünf Minuten ohne Netz, `/reboot`, jedes OTA. Der ungünstige
+Fall ist unangenehm konkret — der Server im Keller ist tot (das *ist* der
+Notbetriebsfall), und gleichzeitig zieht sich der Router ein Update rein, das
+länger als fünf Minuten dauert. Bridge startet neu, Werte weg, und der Knopf
+sagt „Nicht bereit" in genau dem Moment, für den er gebaut wurde.
+
+Jetzt liegt eine Kopie im RTC-Speicher — dem kleinen Stück RAM, das der ESP32
+über einen Software-Reset hinweg nicht anfasst. Sie überlebt Neustart, Watchdog
+und OTA, und **einen Stromausfall überlebt sie nicht**. Das ist kein Versehen,
+sondern die Grenze, die bewusst so gezogen wurde: kein Schreiben ins Flash,
+keine Datei, nichts, was Monate alte Werte in eine Anlage tragen könnte, die
+inzwischen ganz woanders steht. Die Prüfung, ob dem Inhalt zu trauen ist, steht
+arduino-frei in [`src/rtcspiegel.h`](src/rtcspiegel.h) und wird von
+[`test/rtcspiegel_test.cpp`](test/rtcspiegel_test.cpp) mit 42 Zusicherungen
+auseinandergenommen — Bitkipper, falsche Rolle, Spiegel der Vorversion nach
+einem Update, Zähler am Überlauf.
+
+**Das Gerät sagt jetzt, wenn es neu gestartet ist.** Vorher: gar nichts. Ein
+Watchdog-Neustart, ein Brownout, eine Panic — nichts davon hinterließ eine
+Spur, das LWT war binnen Sekunden wieder `Online`, und von außen sah alles
+gesund aus. Ein Gerät, das alle drei Tage neu startet, wäre schlicht nicht
+aufgefallen. Unter `<prefix>/info/` stehen deshalb jetzt acht Zahlen:
+Bootzähler, Reset-Ursache und Version einmal je Verbindung, dazu Laufzeit,
+freier Heap, kleinster je gesehener Heap, größter zusammenhängender Block und
+der Rest-Stack im Fünf-Minuten-Takt.
+
+Der Bootzähler liegt im selben RTC-Block wie die Notbetriebswerte und zählt
+damit genau das, was ein Stromausfall wegräumt. Steht er auf 1, war das Gerät
+stromlos. Steht er höher, hat die Firmware sich selbst neu gestartet — und die
+Reset-Ursache sagt, warum. Alles als einzelne Zahlen und nicht als JSON-Zeile,
+damit ioBroker sie als Zahlen führt und man sie in InfluxDB auftragen kann: Ein
+Sprung in der Kurve ist ein Neustart, ein über Tage fallender Heap-Tiefpunkt
+ein Leck.
+
+**Das Log verschwindet nicht mehr genau dann, wenn man es braucht.** Alle
+Meldungen des Notbetriebs — „Schritt 3/10", „ROT: … kam nicht zurück", die
+Antwort des Hydraulik-Schalters mit HTTP-Code — gingen ins MQTT-Log und sonst
+nirgends. Im echten Notbetriebsfall ist der Broker aber weg. Das Publish
+scheitert still, und nach dem 15-Minuten-Anzeigeverfall war nirgends mehr
+nachlesbar, warum ein Lauf rot war. Jetzt landet jede Ereigniszeile zuerst in
+einem Ringpuffer im RAM (32 Zeilen, fest, kein Heap), geht dann ins MQTT-Log —
+und wenn das nicht klappt, nach Telnet. Die letzten Meldungen stehen unter
+`/log`, hinter demselben Zugang wie der Notbetriebsknopf, verlinkt von dessen
+Seite. Der Ring überlebt keinen Neustart; dass es einen gab, sieht man jetzt ja
+am Bootzähler.
+
+**Und die Zeitstempel stimmen wieder.** Die Loguhr wurde beim Booten einmal
+gestellt und lief danach frei auf `millis()` weiter — über Monate driftet das,
+und die Umstellung im Oktober erreichte sie erst beim nächsten Neustart. Jetzt
+liest sie die Systemuhr, die im Hintergrund von SNTP nachgeführt wird. Und wenn
+gar keine Zeit da ist, stempeln die Zeilen auf die Laufzeit (`+01:23:45`) statt
+auf `1970-01-01` — was nach einem Stromausfall ohne Internet der Normalfall ist
+und die Zeilen sonst alle gleich aussehen ließe.
+
+#### Und dann kam die Messung dazwischen
+
+Der interessanteste Teil war nicht das Bauen, sondern der Versuch, den ersten
+Befund am Gerät nachzustellen. Es ging um das Karenzfenster aus
+[3.6.1](#der-broker-spielt-beim-verbinden-alles-wieder-ein-361): Nach jedem
+Verbinden schickt der ioBroker-Adapter den gespeicherten Wert *jedes*
+abonnierten Set-Topics hinterher, teils Monate alt, und die Firmware verwirft
+diesen Schwall fünf Sekunden lang. Der neue Befund lautete: Das Fenster startet
+in `setupMqtt()`, gelesen wird der Schwall aber erst nach `setup()` — und
+dazwischen wartet die Zeitsynchronisation bis zu 30 Sekunden auf einen
+Zeitserver. Ist das Fenster dann zu, läuft alles durch.
+
+Die im Bericht vorgeschlagene Prüfung war: Zeitserver unerreichbar machen,
+neu starten, mitschneiden. **Sie liefert grün — und prüft dabei nichts.** Zwei
+unabhängige Gründe, beide erst am Gerät sichtbar geworden:
+
+* Die **Systemuhr überlebt einen Software-Neustart**. Nach `/reboot` und nach
+  jedem OTA findet die Zeitsynchronisation sofort eine plausible Uhrzeit und
+  wartet gar nicht erst. Gemessen: Neustart 10:29:16, erste Logzeile 10:29:26 —
+  mit korrekter Uhrzeit, bei unroutbarem Zeitserver. Der Befund ist also
+  ausschließlich ein *Kaltstart*-Thema.
+* Und selbst der Kaltstart löst ihn nicht aus, solange der Broker mitspielt:
+  Der ioBroker-MQTT-Adapter **trennt stille Verbindungen nach rund 30 Sekunden**
+  von selbst. Die Bridge verliert die Verbindung also mitten in der Wartezeit,
+  verbindet danach neu — und das frische Abonnement armiert das Fenster wieder.
+
+Womit die Aussage im Bericht, der Keepalive rette hier nicht, schlicht falsch
+war. Der Befund selbst ist trotzdem echt: Mit einer auf 10 Sekunden verkürzten
+NTP-Frist endet der Start unterhalb der Trennschwelle, die Verbindung bleibt
+stehen, das Fenster ist wirklich abgelaufen — und dann läuft der Schwall
+vollständig durch. Fünfzehn ausgeführte Set-Kommandos im Log, die beiden
+Kurvenpunkte mittendrin. Dieselbe Lage mit 3.20.0: null ausgeführt, alle
+verworfen.
+
+Der Fix bleibt damit richtig, aber seine Begründung ist eine andere geworden.
+Er schützt nicht vor etwas, das hier ständig passiert — er macht die Firmware
+unabhängig davon, ob ein Broker stille Verbindungen aufräumt. Ein
+ioBroker-Update, ein anderer Broker, ein Zeitserver, der schon nach zwölf
+Sekunden aufgibt: Jedes davon nimmt diese unfreiwillige Rettung wieder weg.
+
+Nachgestellt wurde das alles auf einem **Backup-Board als Leihgabe** — eigener
+MQTT-Präfix, keine Wärmepumpe dran, und der Hydraulik-Schalter auf einen
+Platzhalter umgebogen, damit ein Testlauf nicht die echte Hydraulik des Hauses
+umlegt. Vier Prüfpunkte, mehrere Kaltstarts von Hand, danach das Board wieder
+in den Auslieferungszustand. Zwei Fehler in der neuen Firmware sind dabei noch
+aufgefallen und behoben worden, darunter Logzeilen, die vor dem Setzen der
+Zeitzone entstehen und deshalb zwei Stunden zurücksprangen — im Ringpuffer, der
+für die Nachschau nach einem Störfall gebaut ist, ausgerechnet.
+
+#### Was es gekostet hat
+
+RAM 57 528 → 61 608 Byte, davon 4 096 der Ringpuffer; der Rest hebt sich mit
+dem Wegfall der Zeitbibliothek auf. Flash 1 211 105 → 1 213 049 Byte. Die
+Abnahme auf beiden Stufen war zeilengleich bis auf laufende Messwerte, kein
+Sollwert hat sich bewegt.
+
+Und die ersten Zahlen aus dem Dauerbetrieb, seit es sie zu sehen gibt: freier
+Heap-Tiefpunkt 188 916 (Stufe 1) und 220 676 Byte (Stufe 2), größter Block
+172 020 bzw. 176 116, Rest-Stack 4 184 bzw. 4 036 von 8 192. Der Unterschied
+zwischen den Stufen ist der volle Dekodierpfad — das Testboard ohne Wärmepumpe
+lag rund 25 KB höher. Genau deshalb arbeitet der Wächter auf der ioBroker-Seite
+mit Grenzen, die sich pro Gerät selbst eichen, statt mit festen Zahlen aus
+einer Labormessung.
 
 ### Der Notbetrieb nimmt den Heizstab zurück (3.18.0)
 
