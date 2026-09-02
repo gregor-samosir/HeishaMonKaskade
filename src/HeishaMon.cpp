@@ -181,6 +181,62 @@ void setupOTA()
 }
 
 /*****************************************************************************/
+/* Der Zeitstempel der Logzeilen (3.20.0, K2)                                */
+/*                                                                           */
+/* Bis 3.19.0 kam er aus TimeLib: setupTime() setzte die Bibliotheksuhr beim */
+/* Boot EINMAL, danach lief now() frei auf millis(). Zwei Folgen bei einem   */
+/* Geraet, das monatelang laeuft: Der Stempel driftet um Minuten, und die    */
+/* Sommerzeit-Umstellung im Oktober erreicht ihn erst mit dem naechsten      */
+/* Neustart. Die SYSTEMuhr wird dagegen von SNTP im Hintergrund              */
+/* nachgefuehrt und kennt die Zeitzone (configTzTime mit TIME_ZONE) - also   */
+/* time() und localtime_r() statt TimeLib. Die Abhaengigkeit                 */
+/* paulstoffregen/Time ist damit ganz entfallen.                            */
+/*                                                                           */
+/* DER RUECKFALL AUF DIE LAUFZEIT ist kein Beiwerk, sondern gehoert zu M4.   */
+/* Ohne gueltige Zeit stuende in jeder Zeile "1970-01-01" - und genau das    */
+/* ist der Normalfall in der Lage, fuer die der Logring gebaut wird: Nach    */
+/* einem Stromausfall ohne Internet scheitert NTP, und die Zeilen, die       */
+/* danach jemand lesen will, waeren alle auf denselben Wert gestempelt und   */
+/* nicht einmal mehr zu ordnen. Steht die Uhr nicht plausibel, kommt         */
+/* deshalb die Laufzeit seit dem Start ("+01:23:45"): Sie ordnet die Zeilen  */
+/* und sagt zugleich, wie lange das Geraet schon laeuft.                     */
+/*****************************************************************************/
+#define ZEITSTEMPEL_LEN 20
+
+// 2000-01-01 00:00:00 UTC. Alles davor kann nur die Uhr eines Geraetes sein,
+// das noch nie mit einem Zeitserver gesprochen hat - der Zaehler startet bei
+// 1970. Frueher kam die Konstante als SECS_YR_2000 aus TimeLib.
+#define ZEIT_PLAUSIBEL_AB 946684800
+
+static void zeitstempel(char *out, size_t len)
+{
+  if (!out || len == 0)
+    return;
+
+  const time_t jetzt = time(nullptr);
+  if (jetzt >= ZEIT_PLAUSIBEL_AB)
+  {
+    struct tm lokal;
+    localtime_r(&jetzt, &lokal);
+    // snprintf und NICHT strftime: strftime zieht in newlib den ganzen
+    // Locale-Apparat mit und kostete im Abbild rund 12 KB Flash (gemessen
+    // 2026-09-02). Fuer ein festes Format ohne Sprach- oder Landesbezug ist
+    // das ein hoher Preis fuer nichts.
+    (void)snprintf(out, len, "%04d-%02d-%02d %02d:%02d:%02d",
+                   lokal.tm_year + 1900, lokal.tm_mon + 1, lokal.tm_mday,
+                   lokal.tm_hour, lokal.tm_min, lokal.tm_sec);
+    return;
+  }
+
+  // Rueckfall: Laufzeit statt Uhrzeit. esp_timer_get_time() und nicht
+  // millis() - der Ueberlauf nach 49,7 Tagen wuerde die Zeilen sonst
+  // ausgerechnet im Dauerbetrieb wieder durcheinanderbringen.
+  const uint64_t s = (uint64_t)esp_timer_get_time() / 1000000ULL;
+  (void)snprintf(out, len, "+%02u:%02u:%02u",
+                 (unsigned)(s / 3600ULL), (unsigned)((s / 60ULL) % 60ULL), (unsigned)(s % 60ULL));
+}
+
+/*****************************************************************************/
 /* Write to mqtt log                                                         */
 /*****************************************************************************/
 void write_mqtt_log(char *string)
@@ -191,7 +247,9 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    (void)TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] %s\n", year(), month(), day(), hour(), minute(), second(), string);
+    char zeit[ZEITSTEMPEL_LEN];
+    zeitstempel(zeit, sizeof(zeit));
+    (void)TelnetStream.printf("[%s] %s\n", zeit, string);
   }
 }
 
@@ -202,7 +260,9 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] \e[31m<DBG>\e[39m %s\n", year(), month(), day(), hour(), minute(), second(), string);
+    char zeit[ZEITSTEMPEL_LEN];
+    zeitstempel(zeit, sizeof(zeit));
+    TelnetStream.printf("[%s] \e[31m<DBG>\e[39m %s\n", zeit, string);
   }
 }
 
@@ -967,6 +1027,10 @@ void handle_telnetstream()
 {
   if (TelnetStream.available() > 0)
   {
+    // vor dem switch, damit die Auskunftstasten ihn ohne Sprung ueber eine
+    // Initialisierung hinweg benutzen koennen
+    char zeit[ZEITSTEMPEL_LEN];
+
     switch (TelnetStream.read())
     {
     // K1 (3.8.1): Kein Reboot mehr ueber Telnet. Port 23 ist unauthentifiziert,
@@ -995,13 +1059,16 @@ void handle_telnetstream()
       outputHexLog ^= true;
       break;
     case 'M':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> Memory: %d\n", zeit, getFreeMemory());
       break;
     case 'W':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> WiFi: %d\n", year(), month(), day(), hour(), minute(), second(), getWifiQuality());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> WiFi: %d\n", zeit, getWifiQuality());
       break;
     case 'I':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> localIP: %s\n", year(), month(), day(), hour(), minute(), second(), WiFi.localIP().toString().c_str());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> localIP: %s\n", zeit, WiFi.localIP().toString().c_str());
       break;
     }
   }
@@ -1012,25 +1079,32 @@ void handle_telnetstream()
 /*****************************************************************************/
 void setupTime()
 {
+  // Zeitzone samt Sommerzeitregel (TIME_ZONE) und Zeitserver an SNTP geben.
+  // Ab hier fuehrt SNTP die Systemuhr im Hintergrund nach - auch ueber die
+  // Umstellung im Oktober hinweg. Das Warten unten ist nur dafuer da, dass
+  // die ersten Logzeilen schon eine Uhrzeit tragen.
   configTzTime(TIME_ZONE, "0.de.pool.ntp.org");
+
   // wait max. 30 s for NTP, otherwise continue without valid time
-  // (timestamps then start at 1970, but heatpump polling must not be blocked)
+  // (heatpump polling must not be blocked). Ohne gueltige Uhr stempeln die
+  // Logzeilen bis zur ersten Antwort des Zeitservers auf die Laufzeit -
+  // siehe zeitstempel().
   unsigned long start = millis();
   time_t now = time(nullptr);
-  while ((now < SECS_YR_2000) && ((millis() - start) < NTPTIMEOUT))
+  while ((now < ZEIT_PLAUSIBEL_AB) && ((millis() - start) < NTPTIMEOUT))
   {
     delay(100);
     now = time(nullptr);
   }
-  if (now < SECS_YR_2000)
+  if (now < ZEIT_PLAUSIBEL_AB)
   {
     write_mqtt_log((char *)"Warning: NTP timeout, continuing without valid time");
-    return;
   }
-  // take local time incl. DST from the TZ database instead of fixed +3600
-  struct tm local;
-  localtime_r(&now, &local);
-  setTime(local.tm_hour, local.tm_min, local.tm_sec, local.tm_mday, local.tm_mon + 1, local.tm_year + 1900);
+
+  // Bis 3.19.0 wurde hier zusaetzlich die TimeLib-Uhr gestellt (setTime).
+  // Sie lief danach frei auf millis() weiter und driftete; die Logzeilen
+  // lesen jetzt direkt die Systemuhr. Nichts weiter zu tun - siehe K2 im
+  // Kopf von zeitstempel().
 }
 
 /*****************************************************************************/

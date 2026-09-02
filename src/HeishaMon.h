@@ -23,7 +23,6 @@
 // the core's own Ticker with a different API and break the timing chain.
 #include "Ticker.h"
 #include <TelnetStream.h>
-#include <TimeLib.h>
 
 // class names kept behind typedefs since the 3.0.0 port
 typedef WebServer WebServerClass;
