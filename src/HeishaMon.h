@@ -4,6 +4,7 @@
 #include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 #include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
 #include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
+#include "rtcspiegel.h" // Gueltigkeitsregel des Spiegels im RTC-Speicher
 #include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
@@ -98,7 +99,13 @@ extern Ticker Send_Pana_Mainquery_Timer;
 
 // Notbetrieb (notbetrieb.cpp). Die Regeln stehen arduino-frei in notbetrieb.h,
 // hier nur die Anbindung ans Geraet.
-void notbetrieb_init(void);
+//
+// spiegel_gueltig kommt aus rtc_spiegel_boot() und sagt, ob im RTC-Speicher
+// ein Wertesatz des vorigen Laufs steht. Der Parameter statt eines Aufrufs
+// von rtc_spiegel_boot() hier drin: Der Spiegel traegt auch den Bootzaehler,
+// der den Notbetrieb nichts angeht. Die Entscheidung "war da etwas" faellt
+// deshalb genau einmal in setup(), und beide Nutzer bekommen sie gereicht.
+void notbetrieb_init(bool spiegel_gueltig);
 bool notbetrieb_subscribe(PubSubClient &);
 // true, wenn das Topic in den Notbetriebszweig gehoerte - dann ist die
 // Nachricht abschliessend behandelt und laeuft NICHT weiter in den Set-Pfad
@@ -130,6 +137,13 @@ extern char hydraulik_switch[];
 extern const NotbetriebRolle notbetriebRolle;
 extern NotbetriebSpeicher notbetriebWerte;
 extern NotbetriebLauf notbetriebLauf;
+
+// Der Spiegel im RTC-Speicher (HeishaMon.cpp). Er liegt in HeishaMon.cpp und
+// nicht in notbetrieb.cpp, weil er zwei Dinge traegt, die sich nur den
+// Speicher teilen: die Notbetriebswerte (M2) und den Bootzaehler (M3). Ein
+// gemeinsamer Block heisst eine Pruefsumme und eine Gueltigkeitsfrage -
+// siehe rtcspiegel.h.
+extern RtcSpiegel rtcSpiegel;
 
 // Verbindungswacht (verbindung.h). Aus loop() nachgefuehrt, von den
 // Webseiten gelesen: Startseite und Notbetriebsseite melden daraus, ob die

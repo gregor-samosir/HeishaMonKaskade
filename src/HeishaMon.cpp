@@ -2,6 +2,7 @@
 #include "webfunctions.h"
 #include "decode.h"
 #include "commands.h"
+#include "version.h" // heishamon_version fuer info/version
 
 Ticker Send_Pana_Command_Timer(send_pana_command, COMMANDTIMER, 1);   // one time
 Ticker Send_Pana_Mainquery_Timer(send_pana_mainquery, QUERYTIMER, 1); // one time
@@ -120,6 +121,28 @@ unsigned int ignoredSetCommands = 0;
 // sonst waere auch die Weboberflaeche weg, die diese Auskunft anzeigen soll.
 VerbindungsWacht hausteuerung;
 
+/*****************************************************************************/
+/* Der Spiegel im RTC-Speicher (3.20.0, M2 und M3)                           */
+/*                                                                           */
+/* RTC_NOINIT_ATTR heisst: Der Startcode fasst diese Bytes NICHT an. Sie     */
+/* ueberstehen ESP.restart(), den Watchdog-Reset und jedes OTA und sind nach */
+/* dem Stromlosmachen zufaellig. Genau diese Trennlinie ist gewollt - die    */
+/* Begruendung steht im Kopf von rtcspiegel.h.                               */
+/*                                                                           */
+/* Deshalb darf hier auch KEIN Initialisierer stehen: Ein "= {}" wuerde die  */
+/* Struktur bei jedem Start ueberschreiben und den ganzen Zweck aufheben.    */
+/* Den definierten Anfangszustand stellt rtc_spiegel_boot() in setup() her,  */
+/* und zwar erst NACH der Pruefung.                                          */
+/*****************************************************************************/
+RTC_NOINIT_ATTR RtcSpiegel rtcSpiegel;
+
+// Zeitpunkt des letzten info/-Vollupdates. Eigener Takt und nicht der aus
+// publish_heatpump_data(): Jener laeuft nur nach einem GUELTIGEN
+// Antworttelegramm. Reisst die serielle Strecke ab - Kabel, Pegelwandler,
+// Waermepumpe aus -, verstummten Uptime, Heap und Stack ausgerechnet in dem
+// Zustand, in dem man sie ansehen will.
+unsigned long nextInfoTime = 0;
+
 // Dauer der zuletzt beendeten Stille, wartet aufs Loggen aus loop(). Der Wert
 // wird im MQTT-Callback gesetzt und NICHT dort geloggt - warum, steht an der
 // Setzstelle in mqtt_callback(). Gleiches Muster wie wifiOutageSeconds.
@@ -230,6 +253,131 @@ int getWifiQuality()
   if (dBm >= -50)
     return 100;
   return 2 * (dBm + 100);
+}
+
+/*****************************************************************************/
+/* Ein Topic unter <prefix>/info/ veroeffentlichen                           */
+/*                                                                           */
+/* Retained, wie alle Zustandswerte dieser Firmware: Wer sich spaeter        */
+/* verbindet, soll den letzten Stand sehen und nicht bis zum naechsten       */
+/* 5-min-Takt ins Leere schauen.                                             */
+/*****************************************************************************/
+static void publish_info(const char *blatt, const char *wert)
+{
+  char topic[128];
+  (void)snprintf(topic, sizeof(topic), "%s/%.32s", Topics::INFO.c_str(), blatt);
+  (void)mqtt_client.publish(topic, wert, MQTT_RETAIN_VALUES);
+}
+
+/*****************************************************************************/
+/* Reset-Ursache als Klartext                                                */
+/*                                                                           */
+/* Die Zahlen aus esp_reset_reason() sind ohne Nachschlagen nicht zu lesen,  */
+/* und der Wert wird von einem Menschen oder einem Waechter-Skript gelesen,  */
+/* nicht von der Firmware. Die Namen halten sich an die des Cores, damit man */
+/* sie notfalls dort nachschlagen kann.                                      */
+/*                                                                           */
+/* POWERON ist der Normalfall nach einem Stromausfall. SW ist /reboot oder   */
+/* das Ende eines OTA. TASK_WDT, INT_WDT und WDT sind Watchdogs, PANIC ist   */
+/* ein Absturz, BROWNOUT eine eingebrochene Versorgung - diese vier sind     */
+/* die, wegen derer M3 ueberhaupt gebaut wurde.                              */
+/*****************************************************************************/
+static const char *reset_ursache_text(esp_reset_reason_t grund)
+{
+  switch (grund)
+  {
+  case ESP_RST_POWERON:
+    return "POWERON";
+  case ESP_RST_EXT:
+    return "EXT";
+  case ESP_RST_SW:
+    return "SW";
+  case ESP_RST_PANIC:
+    return "PANIC";
+  case ESP_RST_INT_WDT:
+    return "INT_WDT";
+  case ESP_RST_TASK_WDT:
+    return "TASK_WDT";
+  case ESP_RST_WDT:
+    return "WDT";
+  case ESP_RST_DEEPSLEEP:
+    return "DEEPSLEEP";
+  case ESP_RST_BROWNOUT:
+    return "BROWNOUT";
+  case ESP_RST_SDIO:
+    return "SDIO";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+/*****************************************************************************/
+/* Was einmal je Verbindung gilt: Reset-Ursache, Bootzaehler, Version        */
+/*                                                                           */
+/* Aus mqtt_reconnect() aufgerufen, nachdem die Verbindung steht. Nicht aus  */
+/* setup(): Dort ist der Broker in genau dem Fall nicht da, der hier         */
+/* gemeldet werden soll - das Geraet hat neu gestartet, WEIL etwas nicht     */
+/* stimmte.                                                                  */
+/*                                                                           */
+/* Die drei Werte aendern sich zwischen zwei Neustarts nicht. Sie trotzdem   */
+/* bei JEDER Verbindung erneut zu schicken kostet drei Nachrichten je        */
+/* Reconnect und spart die Frage, ob der Broker sie noch hat: Der            */
+/* ioBroker-Adapter bedient neue Abonnenten aus seiner Objektdatenbank, ein  */
+/* geloeschtes Objekt kaeme sonst bis zum naechsten Neustart nicht wieder.   */
+/*                                                                           */
+/* Zaehler und Ursache stehen als EIGENE Topics und nicht zusammen in einer  */
+/* JSON-Zeile: Ein Zaehler, den der ioBroker als Zahl fuehrt, laesst sich in */
+/* InfluxDB auftragen - ein Sprung in der Kurve ist ein Neustart. Aus einem  */
+/* String bekommt man das nicht heraus.                                      */
+/*****************************************************************************/
+static void publish_info_boot()
+{
+  char wert[32];
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)rtcSpiegel.bootzaehler);
+  publish_info("boot_count", wert);
+  publish_info("boot_reason", reset_ursache_text(esp_reset_reason()));
+  publish_info("version", heishamon_version);
+}
+
+/*****************************************************************************/
+/* Was fortlaufend gilt: Uptime, Heap, Stack                                 */
+/*                                                                           */
+/* esp_timer_get_time() liefert Mikrosekunden in 64 Bit und kennt den        */
+/* millis()-Ueberlauf nach 49,7 Tagen nicht - bei einem Geraet, das          */
+/* monatelang laufen soll, ist das der Unterschied zwischen einer Laufzeit   */
+/* und einer Zufallszahl.                                                    */
+/*                                                                           */
+/* Vom Heap werden drei Zahlen gemeldet, weil sie drei verschiedene Fragen   */
+/* beantworten: "frei" ist der Augenblickswert, "min" der kleinste seit dem  */
+/* Start (faellt er ueber Tage, liegt ein Leck vor) und "maxblock" der       */
+/* groesste zusammenhaengende Block. Der letzte ist der Fragmentierungs-     */
+/* messwert: Faellt er, waehrend "frei" steht, zerfaellt der Heap - und      */
+/* genau das ist die offene Frage bei den String-Objekten der Webseiten.     */
+/*                                                                           */
+/* Der Stack-Wasserstand ist der KLEINSTE je verbliebene Rest des loopTask   */
+/* (8 KB). Die tiefste Verschachtelung ist der Hydraulikschritt mit          */
+/* HTTPClient auf dem Stack; die Codedurchsicht hielt das fuer unkritisch,   */
+/* aber ungemessen - hier ist die Messung.                                   */
+/*****************************************************************************/
+static void publish_info_laufzeit()
+{
+  char wert[32];
+
+  const uint64_t us = (uint64_t)esp_timer_get_time();
+  (void)snprintf(wert, sizeof(wert), "%llu", (unsigned long long)(us / 1000000ULL));
+  publish_info("uptime", wert);
+
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getFreeHeap());
+  publish_info("heap", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getMinFreeHeap());
+  publish_info("heap_min", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getMaxAllocHeap());
+  publish_info("heap_maxblock", wert);
+
+  // uxTaskGetStackHighWaterMark liefert auf dem ESP32 BYTES, nicht Woerter -
+  // anders als im FreeRTOS-Original. Kein Umrechnen.
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)uxTaskGetStackHighWaterMark(NULL));
+  publish_info("stack", wert);
 }
 
 /*****************************************************************************/
@@ -351,6 +499,16 @@ bool mqtt_reconnect()
     // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
     // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
     setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+
+    // Reset-Ursache, Bootzaehler und Version. Hier und nicht in setup(): Nach
+    // einem unbemerkten Neustart ist DIESE Verbindung die erste Gelegenheit,
+    // ueberhaupt etwas zu melden.
+    publish_info_boot();
+
+    // Die fortlaufenden Werte gleich mit, sonst steht der info-Zweig nach
+    // einem Reconnect bis zu fuenf Minuten auf dem Stand von davor.
+    publish_info_laufzeit();
+    nextInfoTime = millis();
 
     // ein waehrend des Ausfalls gemerkter WLAN-Abriss wird jetzt meldbar
     if (wifiOutageSeconds > 0)
@@ -883,8 +1041,14 @@ void setup()
   getFreeMemory();
   setupSerial();
 
+  // Den RTC-Spiegel als ALLERERSTES beurteilen - vor notbetrieb_init(), das
+  // die Werte daraus uebernehmen will, und vor allem, was selbst neu startet.
+  // Danach ist der Spiegel in jedem Fall gesiegelt und der Bootzaehler steht.
+  // Die Regeln stehen in rtcspiegel.h, hier faellt nur die Entscheidung.
+  const bool spiegelGueltig = rtc_spiegel_boot(&rtcSpiegel, notbetriebRolle);
+
   // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
-  notbetrieb_init();
+  notbetrieb_init(spiegelGueltig);
 
   // Anfangszustand der Verbindungswacht: getrennt und noch nie verbunden.
   // Muss VOR setupMqtt() stehen - dort faellt die erste Verbindung, und ein
@@ -1033,6 +1197,16 @@ void loop()
                    "%u wiedereingespielte Set-Kommandos nach dem Verbinden verworfen", ignoredSetCommands);
     write_mqtt_log(log_msg);
     ignoredSetCommands = 0;
+  }
+
+  // Langzeit-Telemetrie im 5-min-Takt (M3). Eigener Takt und nicht der aus
+  // publish_heatpump_data() - Begruendung bei nextInfoTime. Der Vergleich ist
+  // wie ueberall im Projekt ueberlaufsicher gerechnet: Die Differenz zweier
+  // unsigned long ist auch ueber die Naht nach 49,7 Tagen hinweg richtig.
+  if (mqtt_client.connected() && ((millis() - nextInfoTime) > UPDATEALLTIME))
+  {
+    nextInfoTime = millis();
+    publish_info_laufzeit();
   }
 
   Send_Pana_Command_Timer.update();   // trigger send_pana_command()   - send command or query from buffer
