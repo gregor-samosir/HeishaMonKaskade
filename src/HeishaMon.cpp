@@ -913,7 +913,31 @@ void setup()
   TelnetStream.begin();
 
   memcpy(cleanCommand, mainCommand, QUERYSIZE); // copy the empty command
-  Send_Pana_Mainquery_Timer.start();            // start only the query timer
+
+  // Das Karenzfenster ZUM ZWEITEN MAL setzen - es steht schon in setupMqtt().
+  //
+  // Dort wird es gesetzt, sobald die Set-Topics abonniert sind. Der
+  // Wiedereinspiel-Schwall des Brokers liegt danach im TCP-Puffer und wird
+  // erst vom ersten mqtt_client.loop() gelesen, also erst nach setup(). Dazwi-
+  // schen steht setupTime() und wartet bis zu NTPTIMEOUT (30 s) auf NTP.
+  // Braucht die Zeitsynchronisation laenger als SUBSCRIBE_GRACE, ist das
+  // Fenster beim ersten loop() bereits zu, und jedes wiedereingespielte
+  // Set-Kommando laeuft als frisches Kommando in die Waermepumpe - der Fall
+  // aus 3.6.1 (Vorlauf-Sollwert 55 C nach jedem Neustart), nur mit anderer
+  // Ursache.
+  //
+  // Das Szenario ist nicht konstruiert: Nach einem Stromausfall im Haus bootet
+  // die Bridge in Sekunden, der Router braucht Minuten fuer den Internetzugang.
+  // Ist der ioBroker schon da, das Internet aber noch nicht, scheitert NTP,
+  // der Schwall wartet 30 s im Puffer und wird dann ausgefuehrt.
+  //
+  // Hier neu armiert misst das Fenster ab dem ersten loop() - also ab dem
+  // Zeitpunkt, an dem der Schwall wirklich gelesen wird. Die Zeile in
+  // setupMqtt() bleibt trotzdem stehen: Sie deckt den Reconnect-Pfad ab, der
+  // ueber mqtt_reconnect() laeuft und diese Zeile nie sieht.
+  setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+
+  Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;
 }
