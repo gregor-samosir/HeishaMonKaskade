@@ -21,10 +21,10 @@ Rettungsanker `rettungsanker-2026-09-02` auf `4a2da3a`, Branch
 | ✔ | `32c048d` | Changelog 3.20.0, `MQTT-Topics.md`, veraltete Zahlen |
 | ✔ | `nodered-flows fd67900` | Wächter-Entwurf, Branch `bridge-waechter` |
 
-**Was noch aussteht: alles, wofür Hardware nötig ist.** Die Prüfstandskampagne
-P1–P4, der Rollout auf die vier Boards und die beiden Releases. Bis dahin ist
-kein Board angefasst, `main` ist unverändert, und nichts davon läuft an der
-Anlage.
+**Stand nach der Kampagne:** P1–P4 sind gefahren und bestanden (Ergebnisse
+ganz oben), dazu kam Commit `b523a6b` mit einer am Gerät gefundenen
+Korrektur. **Offen ist nur noch der Rollout** auf die vier Boards und die
+beiden Releases. `main` ist bis dahin unverändert.
 
 Größe gegen 3.19.0 (`heishamon_esp32_h1_ota`, Vergleichsbau aus dem
 Rettungsanker-Tag): RAM 57528 → 61608 Byte (+4080, davon 4096 der Logring —
@@ -40,6 +40,136 @@ stehen im jeweiligen Commit ausführlich und hier nur als Merkposten:
   einem gültigen Antworttelegramm) — deshalb ein eigener Takt.
 * `strftime` kostete 12 KB Flash, weil newlib den Locale-Apparat mitzieht —
   deshalb `snprintf` mit den `tm`-Feldern.
+
+## Ergebnis der Prüfstandskampagne (2026-09-02, Prüfling h1b)
+
+**Alle vier Prüfpunkte bestanden.** Prüfling war das Backup-Board `h1b`
+(192.168.2.194) über den Test-Prefix `panasonic_heat_pump32`, ohne
+Wärmepumpe, mit `hydraulik_switch` auf einem Tasmota-Ersatz am Mac statt auf
+der echten `192.168.2.180`. Rückgabe nach Abschnitt 4.3 des Vorhabens
+durchgeführt und gegengeprüft: Stufe 1, 3.19.0, Port 1884, Hostname
+`HeishaMon32_h1b`, Hydraulik wieder auf `192.168.2.180`. `h2b` blieb
+unangetastet.
+
+### P1 — das Karenzfenster: bestanden, mit einer Berichtigung des Berichts
+
+Der Nachweis im Maßnahmenplan (»NTP unerreichbar machen, Neustart«) **kann
+den Befund nicht auslösen**, und das ist die wichtigste Erkenntnis dieser
+Kampagne:
+
+* **Die Systemuhr überlebt `ESP.restart()`.** Nach `/reboot` und nach jedem
+  OTA findet `setupTime()` sofort eine plausible Zeit und kehrt zurück, ohne
+  zu warten. Gemessen: Neustart 10:29:16, erste Logzeile 10:29:26 mit
+  korrekter Uhrzeit, bei unroutbarem Zeitserver. M1 ist damit
+  **ausschließlich ein Kaltstart-Thema**. Ein Prüfer, der dem Plan folgt,
+  bekäme grün und hätte den Fix nie ausgelöst — genau das ist beim ersten
+  Versuch passiert.
+* **Auch der Kaltstart mit voller 30-s-Frist löst ihn nicht aus** — hier
+  aber aus einem zweiten Grund: Der ioBroker-MQTT-Adapter trennt stille
+  Verbindungen nach rund 30 s von selbst (unabhängig am eigenen Abonnenten
+  nachgemessen). Das Board verliert die Verbindung während der NTP-Wartezeit,
+  verbindet in `loop()` neu, und der frische `subscribe` armiert das Fenster
+  von selbst. Der Satz »Der Keepalive des Brokers rettet hier nicht« im
+  Maßnahmenplan **trifft nicht zu**.
+* **Der Befund ist trotzdem real.** Mit `NTPTIMEOUT` auf 10 s — `setup()`
+  endet dann unterhalb der Trennschwelle des Brokers, die Verbindung bleibt
+  stehen, das Fenster ist echt abgelaufen — lief der Schwall vollständig
+  durch: 15 `<SUB> SET…`-Zeilen im Log, darunter `SET5
+  Z1HeatRequestTemperature: 40`, `SET27/28` (die Kurvenpunkte) und `SET1
+  Heatpump: 0`. Das ist der Fall aus 3.6.1, nachgestellt.
+* **Gegenprobe mit 3.20.0 unter identischen Bedingungen: 0 ausgeführte
+  Kommandos**, 31 einzeln als `Verworfen (Wiedereinspielung nach Connect)`
+  protokolliert, dazu die Bilanzzeile.
+
+**Was daraus für den Fix folgt:** Er bleibt richtig und nötig, aber seine
+Begründung verschiebt sich. Er schützt nicht gegen etwas, das hier täglich
+passiert, sondern macht die Firmware unabhängig davon, ob ein Broker stille
+Verbindungen abräumt. Ein ioBroker-Update, ein anderer Broker oder ein NTP,
+das schon nach 12 s aufgibt, nehmen diese Rettung weg — und dann steht der
+Vorlauf-Sollwert wieder auf einem Monate alten Wert.
+
+Nebenbefund: **37 ist die Zahl aller abonnierten Set-Topics**, nicht die der
+hinterlegten Werte. Der Adapter spielt jedes abonnierte Topic ein, auch ohne
+gespeicherten Wert — die vier Notbetriebswerte kommen dabei mit leerem
+Payload und werden korrekt als »keine Zahl« verworfen.
+
+### P2 — die Notbetriebswerte über den Neustart: bestanden
+
+* Vier Kurvenwerte eingespielt, `fehlend = 0`. Nach `/reboot` weiterhin
+  `fehlend = 0` — und im Logring steht **kein** erneutes »Notbetrieb
+  einsatzbereit«, weil der Satz beim ersten wiedereingespielten Wert schon
+  vollständig war. Genau das Abnahmekriterium aus dem Maßnahmenplan.
+* **Der Ernstfall, gemessen:** MQTT-Server auf eine tote Adresse, Neustart —
+  `fehlend = 0`, `Sperre = 0`, **der Knopf ist bereit, ohne Broker**. Vor
+  3.20.0 stünde hier »Nicht bereit – es fehlen Werte«.
+* **Gegenprobe Stromausfall:** `fehlend = 1`, `Sperre = 1`, Bootzähler zurück
+  auf 1, Ring leer. Die Trennlinie des Owner-Entscheids vom 2026-08-20 sitzt
+  exakt dort, wo sie sitzen soll.
+* **Die Rollenprüfung greift mitgemessen:** Beim Umbau des Prüflings von
+  Heizen auf Warmwasser wurde der Spiegel als ganzer verworfen (Bootzähler
+  auf 1, `fehlend = 1`) — ein Wertesatz der anderen Stufe kommt nicht durch.
+
+### P3 — die Telemetrie: bestanden
+
+Alle acht Topics stehen am Broker. Erste echte Zahlen, zugleich die
+Eichgrundlage für die Schwellwerte des Wächters:
+
+| Topic | Wert (frischer Start, ohne Wärmepumpe) |
+| --- | --- |
+| `heap` | 216 616 |
+| `heap_min` | 214 000 – 216 392 |
+| `heap_maxblock` | 172 020 |
+| `stack` | 4 184 von 8 192 |
+
+**Die offene Annahme aus dem Commit ist damit bestätigt:**
+`uxTaskGetStackHighWaterMark` liefert **Bytes** — 4 184 von 8 192 ist
+plausibel, Wörter wären mehr als der Stack selbst.
+
+Der Bootzähler zählt wie entworfen: Kaltstart → 1, OTA (Software-Reset) → 2
+mit Grund `SW`, `/reboot` → 3, Rollenwechsel → zurück auf 1.
+
+### P4 — der Logring: bestanden
+
+Ein Notbetriebslauf **mit** Broker und einer **ohne**. In beiden Fällen trägt
+`/log` den vollständigen Lauf:
+
+```
+[2026-09-02 10:55:49] NOTBETRIEB ausgeloest ueber die Weboberflaeche
+[2026-09-02 10:55:49] Notbetrieb Schritt 1/6: Hydraulik 1-stufig
+[2026-09-02 10:55:49] Notbetrieb: Hydraulik stand bereits auf 1-stufig
+[2026-09-02 10:55:58] Notbetrieb Schritt 2/6: ForceHeater = 0
+[2026-09-02 10:55:58] <SUB> SET39 ForceHeater: 0
+[2026-09-02 10:56:18] Notbetrieb ROT: Schritt 2/6 (ForceHeater) kam nicht zurueck
+```
+
+Beim Lauf ohne Broker kamen dieselben sechs Zeilen **zusätzlich über den
+Telnet-Rückfall** — vor 3.20.0 wären sie spurlos verschwunden. Der leere Ring
+meldet sauber »(noch keine Meldung seit dem Start)«. Der Abbruch nach Schritt
+2 ist korrekt: ohne Wärmepumpe kommt kein Rücklesewert, Abbruchgrund 1
+(`TIMEOUT`), nicht Hydraulik.
+
+### Zwei Befunde an der neuen Firmware
+
+1. **UTC-Zeitstempel vor `setupTime()`** — behoben in `b523a6b` und am Gerät
+   nachgeprüft. Die erste Logzeile eines Boots entsteht in `setupMqtt()`, also
+   bevor `configTzTime()` die Zonenregel setzt; im Ring sah das aus wie ein
+   Sprung zwei Stunden zurück. Vor 3.20.0 fiel es nicht auf, weil die
+   TimeLib-Uhr dort noch auf 1970 stand und die Zeile erkennbar unbrauchbar
+   war.
+2. **Ein einmaliger `WDT`-Reset direkt nach einem OTA** (Bootzähler 2 → 3,
+   `boot_reason = WDT`). Beim nächsten regulären Neustart trat er nicht wieder
+   auf, der Zähler ging normal weiter. Nicht reproduziert, nicht erklärt —
+   **beim Rollout gezielt darauf achten**; genau dafür gibt es jetzt
+   `info/boot_reason`.
+
+### Was im ioBroker zurückbleibt
+
+24 Objekte unter `mqtt.0.panasonic_heat_pump32.*` (10 × `info`, 5 ×
+`notbetrieb`, 8 × `set`, plus `LWT`). Der Testbaum bleibt nach
+Owner-Entscheid ohnehin stehen; die Objekte sind über den Admin zu löschen,
+die simple-api kann das nicht.
+
+---
 
 ## Entscheidungen des Owners (2026-09-02)
 
