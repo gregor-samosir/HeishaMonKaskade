@@ -2,6 +2,7 @@
 #include "webfunctions.h"
 #include "decode.h"
 #include "commands.h"
+#include "version.h" // heishamon_version fuer info/version
 
 Ticker Send_Pana_Command_Timer(send_pana_command, COMMANDTIMER, 1);   // one time
 Ticker Send_Pana_Mainquery_Timer(send_pana_mainquery, QUERYTIMER, 1); // one time
@@ -120,6 +121,28 @@ unsigned int ignoredSetCommands = 0;
 // sonst waere auch die Weboberflaeche weg, die diese Auskunft anzeigen soll.
 VerbindungsWacht hausteuerung;
 
+/*****************************************************************************/
+/* Der Spiegel im RTC-Speicher (3.20.0, M2 und M3)                           */
+/*                                                                           */
+/* RTC_NOINIT_ATTR heisst: Der Startcode fasst diese Bytes NICHT an. Sie     */
+/* ueberstehen ESP.restart(), den Watchdog-Reset und jedes OTA und sind nach */
+/* dem Stromlosmachen zufaellig. Genau diese Trennlinie ist gewollt - die    */
+/* Begruendung steht im Kopf von rtcspiegel.h.                               */
+/*                                                                           */
+/* Deshalb darf hier auch KEIN Initialisierer stehen: Ein "= {}" wuerde die  */
+/* Struktur bei jedem Start ueberschreiben und den ganzen Zweck aufheben.    */
+/* Den definierten Anfangszustand stellt rtc_spiegel_boot() in setup() her,  */
+/* und zwar erst NACH der Pruefung.                                          */
+/*****************************************************************************/
+RTC_NOINIT_ATTR RtcSpiegel rtcSpiegel;
+
+// Zeitpunkt des letzten info/-Vollupdates. Eigener Takt und nicht der aus
+// publish_heatpump_data(): Jener laeuft nur nach einem GUELTIGEN
+// Antworttelegramm. Reisst die serielle Strecke ab - Kabel, Pegelwandler,
+// Waermepumpe aus -, verstummten Uptime, Heap und Stack ausgerechnet in dem
+// Zustand, in dem man sie ansehen will.
+unsigned long nextInfoTime = 0;
+
 // Dauer der zuletzt beendeten Stille, wartet aufs Loggen aus loop(). Der Wert
 // wird im MQTT-Callback gesetzt und NICHT dort geloggt - warum, steht an der
 // Setzstelle in mqtt_callback(). Gleiches Muster wie wifiOutageSeconds.
@@ -158,9 +181,153 @@ void setupOTA()
 }
 
 /*****************************************************************************/
+/* Der Zeitstempel der Logzeilen (3.20.0, K2)                                */
+/*                                                                           */
+/* Bis 3.19.0 kam er aus TimeLib: setupTime() setzte die Bibliotheksuhr beim */
+/* Boot EINMAL, danach lief now() frei auf millis(). Zwei Folgen bei einem   */
+/* Geraet, das monatelang laeuft: Der Stempel driftet um Minuten, und die    */
+/* Sommerzeit-Umstellung im Oktober erreicht ihn erst mit dem naechsten      */
+/* Neustart. Die SYSTEMuhr wird dagegen von SNTP im Hintergrund              */
+/* nachgefuehrt und kennt die Zeitzone (configTzTime mit TIME_ZONE) - also   */
+/* time() und localtime_r() statt TimeLib. Die Abhaengigkeit                 */
+/* paulstoffregen/Time ist damit ganz entfallen.                            */
+/*                                                                           */
+/* DER RUECKFALL AUF DIE LAUFZEIT ist kein Beiwerk, sondern gehoert zu M4.   */
+/* Ohne gueltige Zeit stuende in jeder Zeile "1970-01-01" - und genau das    */
+/* ist der Normalfall in der Lage, fuer die der Logring gebaut wird: Nach    */
+/* einem Stromausfall ohne Internet scheitert NTP, und die Zeilen, die       */
+/* danach jemand lesen will, waeren alle auf denselben Wert gestempelt und   */
+/* nicht einmal mehr zu ordnen. Steht die Uhr nicht plausibel, kommt         */
+/* deshalb die Laufzeit seit dem Start ("+01:23:45"): Sie ordnet die Zeilen  */
+/* und sagt zugleich, wie lange das Geraet schon laeuft.                     */
+/*****************************************************************************/
+#define ZEITSTEMPEL_LEN 20
+
+// 2000-01-01 00:00:00 UTC. Alles davor kann nur die Uhr eines Geraetes sein,
+// das noch nie mit einem Zeitserver gesprochen hat - der Zaehler startet bei
+// 1970. Frueher kam die Konstante als SECS_YR_2000 aus TimeLib.
+#define ZEIT_PLAUSIBEL_AB 946684800
+
+static void zeitstempel(char *out, size_t len)
+{
+  if (!out || len == 0)
+    return;
+
+  const time_t jetzt = time(nullptr);
+  if (jetzt >= ZEIT_PLAUSIBEL_AB)
+  {
+    struct tm lokal;
+    localtime_r(&jetzt, &lokal);
+    // snprintf und NICHT strftime: strftime zieht in newlib den ganzen
+    // Locale-Apparat mit und kostete im Abbild rund 12 KB Flash (gemessen
+    // 2026-09-02). Fuer ein festes Format ohne Sprach- oder Landesbezug ist
+    // das ein hoher Preis fuer nichts.
+    (void)snprintf(out, len, "%04d-%02d-%02d %02d:%02d:%02d",
+                   lokal.tm_year + 1900, lokal.tm_mon + 1, lokal.tm_mday,
+                   lokal.tm_hour, lokal.tm_min, lokal.tm_sec);
+    return;
+  }
+
+  // Rueckfall: Laufzeit statt Uhrzeit. esp_timer_get_time() und nicht
+  // millis() - der Ueberlauf nach 49,7 Tagen wuerde die Zeilen sonst
+  // ausgerechnet im Dauerbetrieb wieder durcheinanderbringen.
+  const uint64_t s = (uint64_t)esp_timer_get_time() / 1000000ULL;
+  (void)snprintf(out, len, "+%02u:%02u:%02u",
+                 (unsigned)(s / 3600ULL), (unsigned)((s / 60ULL) % 60ULL), (unsigned)(s % 60ULL));
+}
+
+/*****************************************************************************/
+/* Der Logring im RAM (3.20.0, M4)                                           */
+/*                                                                           */
+/* WARUM ES IHN GIBT: write_mqtt_log() publizierte bis 3.19.0 ins MQTT-Log   */
+/* und sonst nirgends. Alle Zeilen des Notbetriebs laufen darueber -         */
+/* "Notbetrieb Schritt 3/10", "ROT: ... kam nicht zurueck", die              */
+/* Hydraulik-Antwort mit HTTP-Code. Im eigentlichen Notbetriebsfall IST der  */
+/* Broker weg, das Publish scheitert still, und nach dem 15-min-             */
+/* Anzeigeverfall existierte keine Spur mehr, warum ein Lauf ROT war. Die    */
+/* erste Codedurchsicht hatte den Logpfad als "nur Diagnose" eingestuft; mit */
+/* dem Notbetrieb ist er zur einzigen Nachweisquelle eines                   */
+/* sicherheitsrelevanten Vorgangs geworden.                                  */
+/*                                                                           */
+/* 32 Zeilen a 128 Byte, statisch. Kein Heap: Der Logpfad laeuft auch dann,  */
+/* wenn sonst nichts mehr laeuft, und ist der letzte Ort, an dem eine        */
+/* Allokation scheitern darf. Der Ring ueberlebt keinen Neustart - mit M3    */
+/* ist der Neustart selbst aber sichtbar.                                    */
+/*                                                                           */
+/* WAS NICHT HINEINGEHOERT: die <PUB>-Zeilen der Messwerte. Sie kommen aus   */
+/* publish_heatpump_data() fuer JEDEN geaenderten Wert in JEDEM              */
+/* 5-Sekunden-Zyklus; Vorlauftemperatur, Durchfluss und                      */
+/* Kompressorfrequenz aendern sich praktisch immer. Ein Ring ueber 32 Zeilen */
+/* enthielte nach wenigen Sekunden nur noch Messwerte und haette genau die   */
+/* Notbetriebszeilen verdraengt, fuer die er gebaut ist. Diese eine          */
+/* Aufrufstelle geht deshalb ueber write_wert_log() - siehe dort. Der        */
+/* Telnet-Debuglog (write_telnet_log) bleibt aus demselben Grund draussen.   */
+/*****************************************************************************/
+#define LOGRING_ZEILEN 32
+#define LOGRING_BREITE 128
+
+static char logRing[LOGRING_ZEILEN][LOGRING_BREITE];
+static uint8_t logRingKopf = 0;   // naechster Schreibplatz
+static uint8_t logRingAnzahl = 0; // belegte Plaetze, waechst bis LOGRING_ZEILEN
+
+static void log_ring_anhaengen(const char *zeit, const char *text)
+{
+  // %.100s: Der Rest der Zeile gehoert dem Zeitstempel und den Klammern. Ohne
+  // die Laengenangabe schnitte snprintf zwar auch ab, aber erst nachdem es die
+  // ganze Zeichenkette formatiert hat.
+  (void)snprintf(logRing[logRingKopf], LOGRING_BREITE, "[%.19s] %.100s", zeit, text);
+
+  logRingKopf = (uint8_t)((logRingKopf + 1u) % LOGRING_ZEILEN);
+  if (logRingAnzahl < LOGRING_ZEILEN)
+    logRingAnzahl++;
+}
+
+/*****************************************************************************/
 /* Write to mqtt log                                                         */
+/*                                                                           */
+/* Drei Wege, in dieser Reihenfolge:                                         */
+/*   1. IMMER in den Ring - er ist das, was im Stoerfall uebrig bleibt.      */
+/*   2. ins MQTT-Log, wenn es eingeschaltet ist UND die Verbindung steht.    */
+/*   3. sonst nach Telnet, mit Zeitstempel.                                  */
+/*                                                                           */
+/* Schritt 3 ist neu (M4). Bis 3.19.0 entschied allein outputMqttLog, wohin  */
+/* die Zeile ging; war der Broker weg, verschwand sie. Das Verhalten bei     */
+/* ausgeschaltetem MQTT-Log bleibt unveraendert - dann ist "zugestellt" von  */
+/* vornherein false und die Zeile geht wie bisher nach Telnet.               */
 /*****************************************************************************/
 void write_mqtt_log(char *string)
+{
+  char zeit[ZEITSTEMPEL_LEN];
+  zeitstempel(zeit, sizeof(zeit));
+
+  log_ring_anhaengen(zeit, string);
+
+  bool zugestellt = false;
+  if (outputMqttLog && mqtt_client.connected())
+  {
+    zugestellt = mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+
+  if (!zugestellt)
+  {
+    (void)TelnetStream.printf("[%s] %s\n", zeit, string);
+  }
+}
+
+/*****************************************************************************/
+/* Write value changes to mqtt log                                           */
+/*                                                                           */
+/* Das Verhalten von write_mqtt_log() vor 3.20.0, und zwar fuer genau EINE   */
+/* Aufrufstelle: die <PUB>-Zeile in publish_heatpump_data(). Sie kommt bei   */
+/* jedem geaenderten Messwert in jedem Abfragezyklus und gehoert weder in    */
+/* den Ring noch in einen Telnet-Rueckfall - im Stoerfall waeren das         */
+/* Dutzende Zeilen je Minute ueber genau die Verbindung, an der ohnehin      */
+/* jemand mitliest.                                                          */
+/*                                                                           */
+/* Getrennte Funktion und keine Textpruefung auf "<PUB>" im Ring: Ein        */
+/* Praefixvergleich waere eine Zusicherung, die der Compiler nicht prueft.   */
+/*****************************************************************************/
+void write_wert_log(char *string)
 {
   if (outputMqttLog)
   {
@@ -168,8 +335,63 @@ void write_mqtt_log(char *string)
   }
   else
   {
-    (void)TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] %s\n", year(), month(), day(), hour(), minute(), second(), string);
+    char zeit[ZEITSTEMPEL_LEN];
+    zeitstempel(zeit, sizeof(zeit));
+    (void)TelnetStream.printf("[%s] %s\n", zeit, string);
   }
+}
+
+/*****************************************************************************/
+/* Die Route /log - der Ring als Text                                        */
+/*                                                                           */
+/* text/plain und keine gestaltete Seite: Wer sie aufruft, will lesen, was   */
+/* passiert ist, und zwar auch mit curl aus dem Mitschnitt heraus. Eine      */
+/* HTML-Seite haette ausserdem Klassen, die der CSS-Test pruefen muss, und   */
+/* die Zeilen muessten maskiert werden.                                      */
+/*                                                                           */
+/* Zeilenweise gesendet und NICHT als String zusammengebaut: 32 Zeilen a     */
+/* 128 Byte waeren 4 KB Heap in einem Webhandler - genau die Spitze, die     */
+/* info/heap_maxblock messen soll. setContentLength(CONTENT_LENGTH_UNKNOWN)  */
+/* laesst den WebServer chunked antworten, sendContent("") schliesst ab.     */
+/*                                                                           */
+/* Aelteste Zeile zuerst, damit die Datei von oben nach unten gelesen wird   */
+/* wie jedes andere Log auch.                                                */
+/*****************************************************************************/
+static void handle_log_ring(WebServerClass *server)
+{
+  char zeile[LOGRING_BREITE + 32];
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "text/plain", "");
+
+  // Kopfzeile: Ohne sie steht man vor einem Ring, dessen Zeilen im
+  // Rueckfallformat "+01:23:45" gestempelt sind, und weiss weder wie spaet
+  // es ist noch der wievielte Start das war.
+  char jetzt[ZEITSTEMPEL_LEN];
+  zeitstempel(jetzt, sizeof(jetzt));
+  (void)snprintf(zeile, sizeof(zeile),
+                 "HeishaMon %s, %s, Start Nr. %u, %u von %u Zeilen\n"
+                 "(nur Ereignismeldungen, keine Messwerte; verloren beim Neustart)\n\n",
+                 heishamon_version, jetzt, (unsigned)rtcSpiegel.bootzaehler,
+                 (unsigned)logRingAnzahl, (unsigned)LOGRING_ZEILEN);
+  server->sendContent(zeile);
+
+  // Aelteste zuerst: Kopf zeigt auf den naechsten Schreibplatz, also liegt
+  // die aelteste Zeile "Anzahl" Plaetze davor - modulo Ringlaenge.
+  for (unsigned i = 0; i < logRingAnzahl; i++)
+  {
+    const unsigned idx =
+        (logRingKopf + LOGRING_ZEILEN - logRingAnzahl + i) % LOGRING_ZEILEN;
+    (void)snprintf(zeile, sizeof(zeile), "%s\n", logRing[idx]);
+    server->sendContent(zeile);
+  }
+
+  if (logRingAnzahl == 0)
+  {
+    server->sendContent("(noch keine Meldung seit dem Start)\n");
+  }
+
+  server->sendContent(""); // Ende der chunked-Antwort
 }
 
 /*****************************************************************************/
@@ -179,7 +401,9 @@ void write_telnet_log(char *string)
 {
   if (outputTelnetLog)
   {
-    TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] \e[31m<DBG>\e[39m %s\n", year(), month(), day(), hour(), minute(), second(), string);
+    char zeit[ZEITSTEMPEL_LEN];
+    zeitstempel(zeit, sizeof(zeit));
+    TelnetStream.printf("[%s] \e[31m<DBG>\e[39m %s\n", zeit, string);
   }
 }
 
@@ -233,6 +457,131 @@ int getWifiQuality()
 }
 
 /*****************************************************************************/
+/* Ein Topic unter <prefix>/info/ veroeffentlichen                           */
+/*                                                                           */
+/* Retained, wie alle Zustandswerte dieser Firmware: Wer sich spaeter        */
+/* verbindet, soll den letzten Stand sehen und nicht bis zum naechsten       */
+/* 5-min-Takt ins Leere schauen.                                             */
+/*****************************************************************************/
+static void publish_info(const char *blatt, const char *wert)
+{
+  char topic[128];
+  (void)snprintf(topic, sizeof(topic), "%s/%.32s", Topics::INFO.c_str(), blatt);
+  (void)mqtt_client.publish(topic, wert, MQTT_RETAIN_VALUES);
+}
+
+/*****************************************************************************/
+/* Reset-Ursache als Klartext                                                */
+/*                                                                           */
+/* Die Zahlen aus esp_reset_reason() sind ohne Nachschlagen nicht zu lesen,  */
+/* und der Wert wird von einem Menschen oder einem Waechter-Skript gelesen,  */
+/* nicht von der Firmware. Die Namen halten sich an die des Cores, damit man */
+/* sie notfalls dort nachschlagen kann.                                      */
+/*                                                                           */
+/* POWERON ist der Normalfall nach einem Stromausfall. SW ist /reboot oder   */
+/* das Ende eines OTA. TASK_WDT, INT_WDT und WDT sind Watchdogs, PANIC ist   */
+/* ein Absturz, BROWNOUT eine eingebrochene Versorgung - diese vier sind     */
+/* die, wegen derer M3 ueberhaupt gebaut wurde.                              */
+/*****************************************************************************/
+static const char *reset_ursache_text(esp_reset_reason_t grund)
+{
+  switch (grund)
+  {
+  case ESP_RST_POWERON:
+    return "POWERON";
+  case ESP_RST_EXT:
+    return "EXT";
+  case ESP_RST_SW:
+    return "SW";
+  case ESP_RST_PANIC:
+    return "PANIC";
+  case ESP_RST_INT_WDT:
+    return "INT_WDT";
+  case ESP_RST_TASK_WDT:
+    return "TASK_WDT";
+  case ESP_RST_WDT:
+    return "WDT";
+  case ESP_RST_DEEPSLEEP:
+    return "DEEPSLEEP";
+  case ESP_RST_BROWNOUT:
+    return "BROWNOUT";
+  case ESP_RST_SDIO:
+    return "SDIO";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+/*****************************************************************************/
+/* Was einmal je Verbindung gilt: Reset-Ursache, Bootzaehler, Version        */
+/*                                                                           */
+/* Aus mqtt_reconnect() aufgerufen, nachdem die Verbindung steht. Nicht aus  */
+/* setup(): Dort ist der Broker in genau dem Fall nicht da, der hier         */
+/* gemeldet werden soll - das Geraet hat neu gestartet, WEIL etwas nicht     */
+/* stimmte.                                                                  */
+/*                                                                           */
+/* Die drei Werte aendern sich zwischen zwei Neustarts nicht. Sie trotzdem   */
+/* bei JEDER Verbindung erneut zu schicken kostet drei Nachrichten je        */
+/* Reconnect und spart die Frage, ob der Broker sie noch hat: Der            */
+/* ioBroker-Adapter bedient neue Abonnenten aus seiner Objektdatenbank, ein  */
+/* geloeschtes Objekt kaeme sonst bis zum naechsten Neustart nicht wieder.   */
+/*                                                                           */
+/* Zaehler und Ursache stehen als EIGENE Topics und nicht zusammen in einer  */
+/* JSON-Zeile: Ein Zaehler, den der ioBroker als Zahl fuehrt, laesst sich in */
+/* InfluxDB auftragen - ein Sprung in der Kurve ist ein Neustart. Aus einem  */
+/* String bekommt man das nicht heraus.                                      */
+/*****************************************************************************/
+static void publish_info_boot()
+{
+  char wert[32];
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)rtcSpiegel.bootzaehler);
+  publish_info("boot_count", wert);
+  publish_info("boot_reason", reset_ursache_text(esp_reset_reason()));
+  publish_info("version", heishamon_version);
+}
+
+/*****************************************************************************/
+/* Was fortlaufend gilt: Uptime, Heap, Stack                                 */
+/*                                                                           */
+/* esp_timer_get_time() liefert Mikrosekunden in 64 Bit und kennt den        */
+/* millis()-Ueberlauf nach 49,7 Tagen nicht - bei einem Geraet, das          */
+/* monatelang laufen soll, ist das der Unterschied zwischen einer Laufzeit   */
+/* und einer Zufallszahl.                                                    */
+/*                                                                           */
+/* Vom Heap werden drei Zahlen gemeldet, weil sie drei verschiedene Fragen   */
+/* beantworten: "frei" ist der Augenblickswert, "min" der kleinste seit dem  */
+/* Start (faellt er ueber Tage, liegt ein Leck vor) und "maxblock" der       */
+/* groesste zusammenhaengende Block. Der letzte ist der Fragmentierungs-     */
+/* messwert: Faellt er, waehrend "frei" steht, zerfaellt der Heap - und      */
+/* genau das ist die offene Frage bei den String-Objekten der Webseiten.     */
+/*                                                                           */
+/* Der Stack-Wasserstand ist der KLEINSTE je verbliebene Rest des loopTask   */
+/* (8 KB). Die tiefste Verschachtelung ist der Hydraulikschritt mit          */
+/* HTTPClient auf dem Stack; die Codedurchsicht hielt das fuer unkritisch,   */
+/* aber ungemessen - hier ist die Messung.                                   */
+/*****************************************************************************/
+static void publish_info_laufzeit()
+{
+  char wert[32];
+
+  const uint64_t us = (uint64_t)esp_timer_get_time();
+  (void)snprintf(wert, sizeof(wert), "%llu", (unsigned long long)(us / 1000000ULL));
+  publish_info("uptime", wert);
+
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getFreeHeap());
+  publish_info("heap", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getMinFreeHeap());
+  publish_info("heap_min", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)ESP.getMaxAllocHeap());
+  publish_info("heap_maxblock", wert);
+
+  // uxTaskGetStackHighWaterMark liefert auf dem ESP32 BYTES, nicht Woerter -
+  // anders als im FreeRTOS-Original. Kein Umrechnen.
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)uxTaskGetStackHighWaterMark(NULL));
+  publish_info("stack", wert);
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -277,6 +626,18 @@ void setupHttp()
     handleNotbetriebStart(&httpServer); });
   httpServer.on("/notbetrieb/status", []()
                 { handleNotbetriebStatus(&httpServer); });
+  // Der Logring (M4). Hinter dem NOTBETRIEBS-Zugang und nicht offen wie
+  // /notbetrieb/status: Diese Route gibt echte Meldungstexte heraus, nicht
+  // nur "Schritt 3 von 7". Der Zugang steht auf dem ausgedruckten
+  // Notfallblatt - die Familie kommt im Ernstfall also heran, und vom Link
+  // auf der Notbetriebsseite aus fragt der Browser nicht erneut nach.
+  httpServer.on("/log", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handle_log_ring(&httpServer); });
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
@@ -351,6 +712,16 @@ bool mqtt_reconnect()
     // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
     // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
     setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+
+    // Reset-Ursache, Bootzaehler und Version. Hier und nicht in setup(): Nach
+    // einem unbemerkten Neustart ist DIESE Verbindung die erste Gelegenheit,
+    // ueberhaupt etwas zu melden.
+    publish_info_boot();
+
+    // Die fortlaufenden Werte gleich mit, sonst steht der info-Zweig nach
+    // einem Reconnect bis zu fuenf Minuten auf dem Stand von davor.
+    publish_info_laufzeit();
+    nextInfoTime = millis();
 
     // ein waehrend des Ausfalls gemerkter WLAN-Abriss wird jetzt meldbar
     if (wifiOutageSeconds > 0)
@@ -809,6 +1180,10 @@ void handle_telnetstream()
 {
   if (TelnetStream.available() > 0)
   {
+    // vor dem switch, damit die Auskunftstasten ihn ohne Sprung ueber eine
+    // Initialisierung hinweg benutzen koennen
+    char zeit[ZEITSTEMPEL_LEN];
+
     switch (TelnetStream.read())
     {
     // K1 (3.8.1): Kein Reboot mehr ueber Telnet. Port 23 ist unauthentifiziert,
@@ -837,13 +1212,16 @@ void handle_telnetstream()
       outputHexLog ^= true;
       break;
     case 'M':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> Memory: %d\n", year(), month(), day(), hour(), minute(), second(), getFreeMemory());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> Memory: %d\n", zeit, getFreeMemory());
       break;
     case 'W':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> WiFi: %d\n", year(), month(), day(), hour(), minute(), second(), getWifiQuality());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> WiFi: %d\n", zeit, getWifiQuality());
       break;
     case 'I':
-      TelnetStream.printf("[%02d-%02d-%02d %02d:%02d:%02d] <INF> localIP: %s\n", year(), month(), day(), hour(), minute(), second(), WiFi.localIP().toString().c_str());
+      zeitstempel(zeit, sizeof(zeit));
+      TelnetStream.printf("[%s] <INF> localIP: %s\n", zeit, WiFi.localIP().toString().c_str());
       break;
     }
   }
@@ -854,25 +1232,32 @@ void handle_telnetstream()
 /*****************************************************************************/
 void setupTime()
 {
+  // Zeitzone samt Sommerzeitregel (TIME_ZONE) und Zeitserver an SNTP geben.
+  // Ab hier fuehrt SNTP die Systemuhr im Hintergrund nach - auch ueber die
+  // Umstellung im Oktober hinweg. Das Warten unten ist nur dafuer da, dass
+  // die ersten Logzeilen schon eine Uhrzeit tragen.
   configTzTime(TIME_ZONE, "0.de.pool.ntp.org");
+
   // wait max. 30 s for NTP, otherwise continue without valid time
-  // (timestamps then start at 1970, but heatpump polling must not be blocked)
+  // (heatpump polling must not be blocked). Ohne gueltige Uhr stempeln die
+  // Logzeilen bis zur ersten Antwort des Zeitservers auf die Laufzeit -
+  // siehe zeitstempel().
   unsigned long start = millis();
   time_t now = time(nullptr);
-  while ((now < SECS_YR_2000) && ((millis() - start) < NTPTIMEOUT))
+  while ((now < ZEIT_PLAUSIBEL_AB) && ((millis() - start) < NTPTIMEOUT))
   {
     delay(100);
     now = time(nullptr);
   }
-  if (now < SECS_YR_2000)
+  if (now < ZEIT_PLAUSIBEL_AB)
   {
     write_mqtt_log((char *)"Warning: NTP timeout, continuing without valid time");
-    return;
   }
-  // take local time incl. DST from the TZ database instead of fixed +3600
-  struct tm local;
-  localtime_r(&now, &local);
-  setTime(local.tm_hour, local.tm_min, local.tm_sec, local.tm_mday, local.tm_mon + 1, local.tm_year + 1900);
+
+  // Bis 3.19.0 wurde hier zusaetzlich die TimeLib-Uhr gestellt (setTime).
+  // Sie lief danach frei auf millis() weiter und driftete; die Logzeilen
+  // lesen jetzt direkt die Systemuhr. Nichts weiter zu tun - siehe K2 im
+  // Kopf von zeitstempel().
 }
 
 /*****************************************************************************/
@@ -883,8 +1268,28 @@ void setup()
   getFreeMemory();
   setupSerial();
 
+  // Den RTC-Spiegel als ALLERERSTES beurteilen - vor notbetrieb_init(), das
+  // die Werte daraus uebernehmen will, und vor allem, was selbst neu startet.
+  // Danach ist der Spiegel in jedem Fall gesiegelt und der Bootzaehler steht.
+  // Die Regeln stehen in rtcspiegel.h, hier faellt nur die Entscheidung.
+  const bool spiegelGueltig = rtc_spiegel_boot(&rtcSpiegel, notbetriebRolle);
+
+  // Die Zeitzone SOFORT setzen, nicht erst in setupTime() (3.20.0, am
+  // Pruefling gemessen). Nach einem Software-Reset laeuft die Systemuhr
+  // weiter, und die ersten Logzeilen entstehen schon in setupMqtt() - also
+  // VOR setupTime(), wo configTzTime() die Zonenregel bisher als Erstes
+  // gesetzt hat. Diese Zeilen trugen damit UTC, die folgenden Ortszeit:
+  //   [2026-09-02 08:49:19] Notbetrieb: Rolle Heizen, 4 Werte erwartet
+  //   [2026-09-02 10:49:24] 37 wiedereingespielte Set-Kommandos ... verworfen
+  // Im Logring, der fuer die Nachschau nach einem Stoerfall gebaut ist, sieht
+  // das aus wie ein Sprung zwei Stunden zurueck. setupTime() setzt die Zone
+  // gleich darauf noch einmal mit; das ist folgenlos und bleibt stehen, weil
+  // Zone und Zeitserver dort zusammengehoeren.
+  setenv("TZ", TIME_ZONE, 1);
+  tzset();
+
   // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
-  notbetrieb_init();
+  notbetrieb_init(spiegelGueltig);
 
   // Anfangszustand der Verbindungswacht: getrennt und noch nie verbunden.
   // Muss VOR setupMqtt() stehen - dort faellt die erste Verbindung, und ein
@@ -913,7 +1318,31 @@ void setup()
   TelnetStream.begin();
 
   memcpy(cleanCommand, mainCommand, QUERYSIZE); // copy the empty command
-  Send_Pana_Mainquery_Timer.start();            // start only the query timer
+
+  // Das Karenzfenster ZUM ZWEITEN MAL setzen - es steht schon in setupMqtt().
+  //
+  // Dort wird es gesetzt, sobald die Set-Topics abonniert sind. Der
+  // Wiedereinspiel-Schwall des Brokers liegt danach im TCP-Puffer und wird
+  // erst vom ersten mqtt_client.loop() gelesen, also erst nach setup(). Dazwi-
+  // schen steht setupTime() und wartet bis zu NTPTIMEOUT (30 s) auf NTP.
+  // Braucht die Zeitsynchronisation laenger als SUBSCRIBE_GRACE, ist das
+  // Fenster beim ersten loop() bereits zu, und jedes wiedereingespielte
+  // Set-Kommando laeuft als frisches Kommando in die Waermepumpe - der Fall
+  // aus 3.6.1 (Vorlauf-Sollwert 55 C nach jedem Neustart), nur mit anderer
+  // Ursache.
+  //
+  // Das Szenario ist nicht konstruiert: Nach einem Stromausfall im Haus bootet
+  // die Bridge in Sekunden, der Router braucht Minuten fuer den Internetzugang.
+  // Ist der ioBroker schon da, das Internet aber noch nicht, scheitert NTP,
+  // der Schwall wartet 30 s im Puffer und wird dann ausgefuehrt.
+  //
+  // Hier neu armiert misst das Fenster ab dem ersten loop() - also ab dem
+  // Zeitpunkt, an dem der Schwall wirklich gelesen wird. Die Zeile in
+  // setupMqtt() bleibt trotzdem stehen: Sie deckt den Reconnect-Pfad ab, der
+  // ueber mqtt_reconnect() laeuft und diese Zeile nie sieht.
+  setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+
+  Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;
 }
@@ -1009,6 +1438,16 @@ void loop()
                    "%u wiedereingespielte Set-Kommandos nach dem Verbinden verworfen", ignoredSetCommands);
     write_mqtt_log(log_msg);
     ignoredSetCommands = 0;
+  }
+
+  // Langzeit-Telemetrie im 5-min-Takt (M3). Eigener Takt und nicht der aus
+  // publish_heatpump_data() - Begruendung bei nextInfoTime. Der Vergleich ist
+  // wie ueberall im Projekt ueberlaufsicher gerechnet: Die Differenz zweier
+  // unsigned long ist auch ueber die Naht nach 49,7 Tagen hinweg richtig.
+  if (mqtt_client.connected() && ((millis() - nextInfoTime) > UPDATEALLTIME))
+  {
+    nextInfoTime = millis();
+    publish_info_laufzeit();
   }
 
   Send_Pana_Command_Timer.update();   // trigger send_pana_command()   - send command or query from buffer

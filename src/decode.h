@@ -94,7 +94,7 @@ extern const StateTopic stateTopics[NUMBEROFTOPICS];
 // Tabellenindex zu einer TOP-Nummer finden. Gebraucht vom Notbetrieb: Seine
 // Schritte nennen das TOP, an dem zurueckgelesen wird - actual_data[] wird
 // aber ueber den ZEILENINDEX adressiert, und der ist nicht die TOP-Nummer
-// (Luecken durch entfallene Topics, hoechste Nummer 104 bei 92 Zeilen).
+// (Luecken durch entfallene Topics, hoechste Nummer 111 bei 99 Zeilen).
 // -1, wenn es die Nummer nicht gibt.
 int state_topic_index(unsigned int top_number);
 

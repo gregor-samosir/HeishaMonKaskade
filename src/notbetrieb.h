@@ -89,7 +89,7 @@ enum NotbetriebRolle
 /* faellt die Anzeige deshalb auf BEREIT zurueck und der Knopf steht wieder   */
 /* da; im MQTT-Log bleibt der Lauf vollstaendig nachlesbar.                   */
 /*                                                                           */
-/* 15 Minuten sind laenger als jeder Lauf (Deckel 180 s) und kurz genug, dass */
+/* 15 Minuten sind laenger als jeder Lauf (Deckel 200 s) und kurz genug, dass */
 /* niemand ein fremdes Ergebnis fuer seines haelt.                            */
 /*****************************************************************************/
 #define NOTBETRIEB_ANZEIGE_VERFALL_MS 900000u

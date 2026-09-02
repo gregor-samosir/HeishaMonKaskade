@@ -298,7 +298,7 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
       if (changed)
       {
         (void)snprintf(pub_msg, sizeof(pub_msg), "<PUB> TOP%u %s: %s", topic.number, topic.name, top_value);
-        write_mqtt_log(pub_msg);
+        write_wert_log(pub_msg);
       }
       strlcpy(actual_data[index], top_value, MAXVALUELEN);
       (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topic.name);
@@ -544,9 +544,9 @@ void getErrorInfo(const StateTopic *, uint8_t *serial_data, char *out)
 /*                                                                           */
 /* stateTopics[] ist nach Zeilen indiziert, nicht nach TOP-Nummern - die      */
 /* Nummerierung hat Luecken (Zone 2 ist in 3.4.0 entfallen) und reicht bis    */
-/* 104 bei 92 Zeilen. Wer actual_data[] mit einer TOP-Nummer adressiert, liest*/
+/* 111 bei 99 Zeilen. Wer actual_data[] mit einer TOP-Nummer adressiert, liest*/
 /* die falsche Zeile oder faellt aus dem Array. Lineare Suche: Sie laeuft im  */
-/* Notbetrieb hoechstens sechs Mal je Tick ueber 92 Zeilen und faellt neben   */
+/* Notbetrieb hoechstens zehn Mal je Tick ueber 99 Zeilen und faellt neben    */
 /* dem 5-s-Abfragezyklus nicht ins Gewicht.                                   */
 /*****************************************************************************/
 int state_topic_index(unsigned int top_number)

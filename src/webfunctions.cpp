@@ -962,7 +962,20 @@ void handleNotbetrieb(WebServerClass *httpServer)
   }
   httptext += "</div>";
 
-  httptext += "<div id='nbstat'></div></div>";
+  httptext += "<div id='nbstat'></div>";
+
+  // Link auf den Logring (3.20.0, M4). Er steht GANZ UNTEN und klein: Wer den
+  // Knopf drueckt, braucht ihn nicht - er ist fuer die Nachschau danach, wenn
+  // ein Lauf ROT war und niemand mehr weiss, warum. Ohne ihn waere der Ring
+  // nur ueber eine Adresse erreichbar, die man kennen muss.
+  //
+  // Kein target='_blank': Die Familie liest die Seite im Ernstfall auf dem
+  // Telefon, und ein zweiter Tab ist dort eher Verlust als Gewinn - der
+  // Zurueck-Knopf fuehrt hierher.
+  httptext += "<p class='w3-small'><a href='/log'>Was zuletzt gemeldet wurde</a> "
+              "(die letzten Meldungen der Bridge, auch ohne Hausteuerung)</p>";
+
+  httptext += "</div>";
   httpServer->sendContent(httptext);
 
   httpServer->sendContent_P(webFooter);

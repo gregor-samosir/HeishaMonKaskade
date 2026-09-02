@@ -79,7 +79,7 @@ static int heizKuehlIndex = -1; // einmal in notbetrieb_init() nachgeschlagen
 static const char *heiz_kuehl_text(char actual[][MAXVALUELEN])
 {
   // Der Zeilenindex steht fest, sobald die Firmware laeuft. Ihn hier jedes Mal
-  // neu zu suchen hiesse, bei JEDEM Durchlauf von loop() linear ueber 92 Zeilen
+  // neu zu suchen hiesse, bei JEDEM Durchlauf von loop() linear ueber 99 Zeilen
   // zu gehen - der Sperrgrund wird ja nicht mehr nur waehrend eines Laufs
   // gebraucht, sondern staendig.
   return (heizKuehlIndex >= 0) ? actual[heizKuehlIndex] : "";
@@ -92,10 +92,63 @@ static const char *heiz_kuehl_text(char actual[][MAXVALUELEN])
 /* zufaellig hinterlassen hat - und der Knopf haette sich fuer freigegeben    */
 /* gehalten, ohne dass je ein Wert eingetroffen waere.                        */
 /*****************************************************************************/
-void notbetrieb_init(void)
+void notbetrieb_init(bool spiegel_gueltig)
 {
   notbetrieb_speicher_leeren(&notbetriebWerte);
   notbetrieb_lauf_leeren(&notbetriebLauf);
+
+  // Werte aus dem RTC-Spiegel zurueckholen (3.20.0, M2). Der Spiegel ist an
+  // dieser Stelle schon geprueft und gesiegelt - rtc_spiegel_boot() lief als
+  // Erstes in setup(). spiegel_gueltig heisst: Der Inhalt stammt aus dem Lauf
+  // davor, das Geraet hat also NICHT den Strom verloren.
+  //
+  // Jeder Wert laeuft trotzdem noch einmal durch set_command_range() und
+  // notbetrieb_wert_annehmen() - denselben Weg, den auch eine frische
+  // MQTT-Nachricht geht. Die Pruefsumme belegt nur, dass die Bytes die
+  // gleichen geblieben sind; ob die Zahl darin heute noch erlaubt ist, weiss
+  // allein setCommands[]. Nach einem OTA, das eine Grenze verschoben hat,
+  // faellt ein Wert hier heraus statt in die Waermepumpe zu laufen.
+  if (spiegel_gueltig)
+  {
+    unsigned uebernommen = 0;
+    unsigned verworfen = 0;
+    const unsigned n = notbetrieb_wert_anzahl(notbetriebRolle);
+
+    for (unsigned i = 0; i < n; i++)
+    {
+      if ((rtcSpiegel.gesetzt & (uint8_t)(1u << i)) == 0)
+        continue; // dieser Wert lag auch vor dem Neustart nicht vor
+
+      const char *name = notbetrieb_wert_name(notbetriebRolle, i);
+      int min_wert = 0, max_wert = 0;
+      if (name && set_command_range(name, &min_wert, &max_wert) &&
+          notbetrieb_wert_annehmen(&notbetriebWerte, notbetriebRolle, name,
+                                   (int)rtcSpiegel.werte[i], min_wert, max_wert))
+      {
+        uebernommen++;
+      }
+      else
+      {
+        verworfen++;
+      }
+    }
+
+    // Den Spiegel auf den Stand bringen, der wirklich uebernommen wurde. Ein
+    // beim Neustart verworfener Wert stuende sonst beim naechsten Boot erneut
+    // zur Uebernahme an und wuerde erneut verworfen.
+    rtc_werte_spiegeln(&rtcSpiegel, &notbetriebWerte, notbetriebRolle);
+
+    // MQTT laeuft in setup() noch nicht, deshalb Serial. Ins MQTT-Log kommt
+    // die Lage ohnehin: Bleibt der Satz vollstaendig, meldet
+    // notbetrieb_mqtt_annehmen() beim naechsten Reconnect KEIN erneutes
+    // "einsatzbereit" - genau daran ist am Geraet zu sehen, dass die Werte
+    // den Neustart ueberlebt haben.
+    char log_line[128];
+    (void)snprintf(log_line, sizeof(log_line),
+                   "Notbetrieb: %u Werte aus dem RTC-Spiegel uebernommen, %u verworfen",
+                   uebernommen, verworfen);
+    Serial.println(log_line);
+  }
 
   // Einmal pruefen, ob jeder Schritt sein Ruecklese-TOP ueberhaupt findet. Ein
   // Zahlendreher in der Schrittfolge faellt sonst erst im Ernstfall auf: Der
@@ -236,6 +289,13 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
   write_mqtt_log(log_line);
   return true;
   }
+
+  // Den RTC-Spiegel nachfuehren (3.20.0, M2). Erst hier, nach der Annahme:
+  // Gespiegelt wird nur, was auch im RAM steht. Der Aufruf kostet eine
+  // Pruefsummenrechnung ueber 24 Byte und laeuft nur, wenn wirklich ein
+  // Notbetriebswert eingetroffen ist - also einige Male je Reconnect, nicht
+  // im 5-Sekunden-Takt.
+  rtc_werte_spiegeln(&rtcSpiegel, &notbetriebWerte, notbetriebRolle);
 
   // Der einzelne Wert laeuft nur ins Telnet-Log: Nach jedem Reconnect spielt
   // der Broker alle Werte erneut ein, das MQTT-Log soll davon nicht volllaufen.
@@ -692,7 +752,7 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     // Schritt mit dem Sollwert 0.
     // ACHTUNG: s->top ist die TOP-NUMMER, actual_data[] wird ueber den
     // ZEILENINDEX adressiert. Beides ist nicht dasselbe - die Nummerierung hat
-    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 104 bei 92 Zeilen. Wer
+    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 111 bei 99 Zeilen. Wer
     // hier direkt mit der Nummer indiziert, liest die falsche Zeile.
     const int index = (s->top >= 0) ? state_topic_index((unsigned)s->top) : -1;
     bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;

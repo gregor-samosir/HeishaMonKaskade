@@ -122,6 +122,19 @@ jobs:
       #                  warum dieser Test in der CI steht: wird sie vergessen,
       #                  funktioniert der Knopf im Labor und nach jedem Neustart
       #                  nicht mehr - auffallen würde das erst im Ernstfall.
+      # rtcspiegel_test: Gueltigkeitsregel des RTC-Spiegels aus 3.20.0 - Magic
+      #                  samt Layoutnummer, Rolle, Maskenbreite, Pruefsumme und
+      #                  die Saettigung des Bootzaehlers. Der Grund, warum
+      #                  dieser Test in der CI steht: Der Spiegel liegt in einem
+      #                  Speicher, den die Firmware NIE initialisiert
+      #                  (RTC_NOINIT_ATTR). Was dort nach einem Reset steht,
+      #                  entscheidet allein diese Regel. Zu grosszuegig heisst,
+      #                  dass der Notbetrieb Bitmuster als Kurvenwerte
+      #                  uebernimmt - im Lauf, in dem der Knopf gebraucht wird.
+      #                  Zu streng heisst, dass die Werte nach jedem Neustart
+      #                  weg sind, ohne dass es auffaellt, weil der Broker sie
+      #                  binnen Sekunden nachliefert, solange er da ist. Beide
+      #                  Fehler sind am Geraet nicht zu sehen.
       # verbindung_test: Zeitregeln der Verbindungswacht aus 3.13.0 - Karenz von
       #                  5 Minuten, der Sonderfall "seit dem Neustart nie
       #                  verbunden" und der millis()-Überlauf nach 49,7 Tagen.
@@ -160,6 +173,8 @@ jobs:
           /tmp/notbetrieb_test
           c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test test/verbindung_test.cpp
           /tmp/verbindung_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/rtcspiegel_test test/rtcspiegel_test.cpp
+          /tmp/rtcspiegel_test
           ./test/decode_hosttest.sh
           ./test/decode_hosttest.sh test/byte9_test.cpp
           ./test/decode_hosttest.sh test/byte23_25_test.cpp

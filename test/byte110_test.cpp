@@ -31,6 +31,7 @@
 // decode.cpp loggt beim Publizieren - hier nicht gebraucht
 void write_telnet_log(char *) {}
 void write_mqtt_log(char *) {}
+void write_wert_log(char *) {} // seit 3.20.0, siehe stubs/HeishaMon.h
 
 static int fehler = 0;
 
