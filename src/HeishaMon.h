@@ -82,6 +82,10 @@ void timeout_serial(void);
 void flush_serial_input(void);
 void check_wifi(void);
 void write_mqtt_log(char *);
+// Nur fuer die <PUB>-Zeile in publish_heatpump_data(): wie write_mqtt_log()
+// vor 3.20.0, aber ohne Logring und ohne Telnet-Rueckfall. Begruendung an
+// der Definition in HeishaMon.cpp.
+void write_wert_log(char *);
 void write_telnet_log(char *);
 void register_new_command(void);
 

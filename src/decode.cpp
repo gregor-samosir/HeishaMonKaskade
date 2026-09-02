@@ -298,7 +298,7 @@ void publish_heatpump_data(uint8_t *serial_data, char actual_data[][MAXVALUELEN]
       if (changed)
       {
         (void)snprintf(pub_msg, sizeof(pub_msg), "<PUB> TOP%u %s: %s", topic.number, topic.name, top_value);
-        write_mqtt_log(pub_msg);
+        write_wert_log(pub_msg);
       }
       strlcpy(actual_data[index], top_value, MAXVALUELEN);
       (void)snprintf(mqtt_topic, sizeof(mqtt_topic), "%s/%s", Topics::STATE.c_str(), topic.name);

@@ -237,9 +237,97 @@ static void zeitstempel(char *out, size_t len)
 }
 
 /*****************************************************************************/
+/* Der Logring im RAM (3.20.0, M4)                                           */
+/*                                                                           */
+/* WARUM ES IHN GIBT: write_mqtt_log() publizierte bis 3.19.0 ins MQTT-Log   */
+/* und sonst nirgends. Alle Zeilen des Notbetriebs laufen darueber -         */
+/* "Notbetrieb Schritt 3/10", "ROT: ... kam nicht zurueck", die              */
+/* Hydraulik-Antwort mit HTTP-Code. Im eigentlichen Notbetriebsfall IST der  */
+/* Broker weg, das Publish scheitert still, und nach dem 15-min-             */
+/* Anzeigeverfall existierte keine Spur mehr, warum ein Lauf ROT war. Die    */
+/* erste Codedurchsicht hatte den Logpfad als "nur Diagnose" eingestuft; mit */
+/* dem Notbetrieb ist er zur einzigen Nachweisquelle eines                   */
+/* sicherheitsrelevanten Vorgangs geworden.                                  */
+/*                                                                           */
+/* 32 Zeilen a 128 Byte, statisch. Kein Heap: Der Logpfad laeuft auch dann,  */
+/* wenn sonst nichts mehr laeuft, und ist der letzte Ort, an dem eine        */
+/* Allokation scheitern darf. Der Ring ueberlebt keinen Neustart - mit M3    */
+/* ist der Neustart selbst aber sichtbar.                                    */
+/*                                                                           */
+/* WAS NICHT HINEINGEHOERT: die <PUB>-Zeilen der Messwerte. Sie kommen aus   */
+/* publish_heatpump_data() fuer JEDEN geaenderten Wert in JEDEM              */
+/* 5-Sekunden-Zyklus; Vorlauftemperatur, Durchfluss und                      */
+/* Kompressorfrequenz aendern sich praktisch immer. Ein Ring ueber 32 Zeilen */
+/* enthielte nach wenigen Sekunden nur noch Messwerte und haette genau die   */
+/* Notbetriebszeilen verdraengt, fuer die er gebaut ist. Diese eine          */
+/* Aufrufstelle geht deshalb ueber write_wert_log() - siehe dort. Der        */
+/* Telnet-Debuglog (write_telnet_log) bleibt aus demselben Grund draussen.   */
+/*****************************************************************************/
+#define LOGRING_ZEILEN 32
+#define LOGRING_BREITE 128
+
+static char logRing[LOGRING_ZEILEN][LOGRING_BREITE];
+static uint8_t logRingKopf = 0;   // naechster Schreibplatz
+static uint8_t logRingAnzahl = 0; // belegte Plaetze, waechst bis LOGRING_ZEILEN
+
+static void log_ring_anhaengen(const char *zeit, const char *text)
+{
+  // %.100s: Der Rest der Zeile gehoert dem Zeitstempel und den Klammern. Ohne
+  // die Laengenangabe schnitte snprintf zwar auch ab, aber erst nachdem es die
+  // ganze Zeichenkette formatiert hat.
+  (void)snprintf(logRing[logRingKopf], LOGRING_BREITE, "[%.19s] %.100s", zeit, text);
+
+  logRingKopf = (uint8_t)((logRingKopf + 1u) % LOGRING_ZEILEN);
+  if (logRingAnzahl < LOGRING_ZEILEN)
+    logRingAnzahl++;
+}
+
+/*****************************************************************************/
 /* Write to mqtt log                                                         */
+/*                                                                           */
+/* Drei Wege, in dieser Reihenfolge:                                         */
+/*   1. IMMER in den Ring - er ist das, was im Stoerfall uebrig bleibt.      */
+/*   2. ins MQTT-Log, wenn es eingeschaltet ist UND die Verbindung steht.    */
+/*   3. sonst nach Telnet, mit Zeitstempel.                                  */
+/*                                                                           */
+/* Schritt 3 ist neu (M4). Bis 3.19.0 entschied allein outputMqttLog, wohin  */
+/* die Zeile ging; war der Broker weg, verschwand sie. Das Verhalten bei     */
+/* ausgeschaltetem MQTT-Log bleibt unveraendert - dann ist "zugestellt" von  */
+/* vornherein false und die Zeile geht wie bisher nach Telnet.               */
 /*****************************************************************************/
 void write_mqtt_log(char *string)
+{
+  char zeit[ZEITSTEMPEL_LEN];
+  zeitstempel(zeit, sizeof(zeit));
+
+  log_ring_anhaengen(zeit, string);
+
+  bool zugestellt = false;
+  if (outputMqttLog && mqtt_client.connected())
+  {
+    zugestellt = mqtt_client.publish(Topics::LOG.c_str(), string);
+  }
+
+  if (!zugestellt)
+  {
+    (void)TelnetStream.printf("[%s] %s\n", zeit, string);
+  }
+}
+
+/*****************************************************************************/
+/* Write value changes to mqtt log                                           */
+/*                                                                           */
+/* Das Verhalten von write_mqtt_log() vor 3.20.0, und zwar fuer genau EINE   */
+/* Aufrufstelle: die <PUB>-Zeile in publish_heatpump_data(). Sie kommt bei   */
+/* jedem geaenderten Messwert in jedem Abfragezyklus und gehoert weder in    */
+/* den Ring noch in einen Telnet-Rueckfall - im Stoerfall waeren das         */
+/* Dutzende Zeilen je Minute ueber genau die Verbindung, an der ohnehin      */
+/* jemand mitliest.                                                          */
+/*                                                                           */
+/* Getrennte Funktion und keine Textpruefung auf "<PUB>" im Ring: Ein        */
+/* Praefixvergleich waere eine Zusicherung, die der Compiler nicht prueft.   */
+/*****************************************************************************/
+void write_wert_log(char *string)
 {
   if (outputMqttLog)
   {
@@ -251,6 +339,59 @@ void write_mqtt_log(char *string)
     zeitstempel(zeit, sizeof(zeit));
     (void)TelnetStream.printf("[%s] %s\n", zeit, string);
   }
+}
+
+/*****************************************************************************/
+/* Die Route /log - der Ring als Text                                        */
+/*                                                                           */
+/* text/plain und keine gestaltete Seite: Wer sie aufruft, will lesen, was   */
+/* passiert ist, und zwar auch mit curl aus dem Mitschnitt heraus. Eine      */
+/* HTML-Seite haette ausserdem Klassen, die der CSS-Test pruefen muss, und   */
+/* die Zeilen muessten maskiert werden.                                      */
+/*                                                                           */
+/* Zeilenweise gesendet und NICHT als String zusammengebaut: 32 Zeilen a     */
+/* 128 Byte waeren 4 KB Heap in einem Webhandler - genau die Spitze, die     */
+/* info/heap_maxblock messen soll. setContentLength(CONTENT_LENGTH_UNKNOWN)  */
+/* laesst den WebServer chunked antworten, sendContent("") schliesst ab.     */
+/*                                                                           */
+/* Aelteste Zeile zuerst, damit die Datei von oben nach unten gelesen wird   */
+/* wie jedes andere Log auch.                                                */
+/*****************************************************************************/
+static void handle_log_ring(WebServerClass *server)
+{
+  char zeile[LOGRING_BREITE + 32];
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "text/plain", "");
+
+  // Kopfzeile: Ohne sie steht man vor einem Ring, dessen Zeilen im
+  // Rueckfallformat "+01:23:45" gestempelt sind, und weiss weder wie spaet
+  // es ist noch der wievielte Start das war.
+  char jetzt[ZEITSTEMPEL_LEN];
+  zeitstempel(jetzt, sizeof(jetzt));
+  (void)snprintf(zeile, sizeof(zeile),
+                 "HeishaMon %s, %s, Start Nr. %u, %u von %u Zeilen\n"
+                 "(nur Ereignismeldungen, keine Messwerte; verloren beim Neustart)\n\n",
+                 heishamon_version, jetzt, (unsigned)rtcSpiegel.bootzaehler,
+                 (unsigned)logRingAnzahl, (unsigned)LOGRING_ZEILEN);
+  server->sendContent(zeile);
+
+  // Aelteste zuerst: Kopf zeigt auf den naechsten Schreibplatz, also liegt
+  // die aelteste Zeile "Anzahl" Plaetze davor - modulo Ringlaenge.
+  for (unsigned i = 0; i < logRingAnzahl; i++)
+  {
+    const unsigned idx =
+        (logRingKopf + LOGRING_ZEILEN - logRingAnzahl + i) % LOGRING_ZEILEN;
+    (void)snprintf(zeile, sizeof(zeile), "%s\n", logRing[idx]);
+    server->sendContent(zeile);
+  }
+
+  if (logRingAnzahl == 0)
+  {
+    server->sendContent("(noch keine Meldung seit dem Start)\n");
+  }
+
+  server->sendContent(""); // Ende der chunked-Antwort
 }
 
 /*****************************************************************************/
@@ -485,6 +626,18 @@ void setupHttp()
     handleNotbetriebStart(&httpServer); });
   httpServer.on("/notbetrieb/status", []()
                 { handleNotbetriebStatus(&httpServer); });
+  // Der Logring (M4). Hinter dem NOTBETRIEBS-Zugang und nicht offen wie
+  // /notbetrieb/status: Diese Route gibt echte Meldungstexte heraus, nicht
+  // nur "Schritt 3 von 7". Der Zugang steht auf dem ausgedruckten
+  // Notfallblatt - die Familie kommt im Ernstfall also heran, und vom Link
+  // auf der Notbetriebsseite aus fragt der Browser nicht erneut nach.
+  httpServer.on("/log", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    handle_log_ring(&httpServer); });
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
