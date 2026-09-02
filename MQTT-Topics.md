@@ -20,6 +20,58 @@ ID | Topic | Response
 --- | --- | ---
 LOG1 | log | response from headpump (level switchable)
 
+## Info Topics (`<prefix>/info/`, new in 3.20.0)
+
+Long-term telemetry. All retained, all plain scalars - no JSON, so ioBroker
+keeps the numeric ones as numbers and InfluxDB can plot them.
+
+Topic | Content | Published
+--- | --- | ---
+`info/boot_count` | Restarts since the last power loss (see below) | once per broker connection
+`info/boot_reason` | `esp_reset_reason()` as text: `POWERON`, `SW`, `PANIC`, `TASK_WDT`, `INT_WDT`, `WDT`, `BROWNOUT`, `EXT`, `DEEPSLEEP`, `SDIO`, `UNKNOWN` | once per broker connection
+`info/version` | Firmware version, e.g. `3.20.0` | once per broker connection
+`info/uptime` | Seconds since boot, from `esp_timer_get_time()` (64 bit, no 49-day wrap) | every 5 min
+`info/heap` | Free heap right now, bytes | every 5 min
+`info/heap_min` | Smallest free heap seen since boot, bytes | every 5 min
+`info/heap_maxblock` | Largest contiguous allocatable block, bytes | every 5 min
+`info/stack` | Stack high water mark of the loopTask (8 KB stack), bytes | every 5 min
+
+### Warum es diesen Zweig gibt (deutsch)
+
+Über Monate waren zwei Fehlerbilder unsichtbar:
+
+**Unbemerkte Neustarts.** Ein Watchdog-Neustart, ein Brownout oder eine Panic
+hinterließen keine Spur. `WLAN war X s weg` wird nur gemeldet, wenn das Gerät
+die Zeit *ohne* Neustart überstanden hat; nach einem Neustart wusste niemand,
+dass es einen gab. Ein Gerät, das alle paar Tage neu startet, sah von außen
+gesund aus — das LWT kommt binnen Sekunden zurück.
+
+**Schleichender Heap-Verlust oder Fragmentierung.** Der freie Speicher war nur
+über Telnet `M` abrufbar, und auch dort nur als Prozentwert relativ zum Boot.
+Wer sich nicht per Telnet auflegte, sah nichts.
+
+**Der Bootzähler unterscheidet die beiden Ursachen.** Er liegt im RTC-Speicher
+(`src/rtcspiegel.h`) und überlebt damit genau das, was auch die
+Notbetriebswerte überleben: `ESP.restart()`, den WLAN-Watchdog und jedes OTA —
+**nicht** aber das Stromlosmachen. Steht er auf 1, war das Gerät stromlos.
+Steht er höher, hat die Firmware selbst neu gestartet, und `info/boot_reason`
+sagt warum. Er sättigt bei 65535, statt auf 0 zu springen.
+
+**Die drei Heap-Zahlen beantworten drei verschiedene Fragen.** `heap` ist der
+Augenblickswert. `heap_min` ist der kleinste seit dem Start — fällt er über
+Tage, liegt ein Leck vor. `heap_maxblock` ist der größte zusammenhängende
+Block: Fällt *er*, während `heap` steht, zerfällt der Heap. Das ist der Punkt,
+an dem die `String`-Objekte der Webseiten messbar werden, statt eine Annahme zu
+bleiben.
+
+`info/stack` ist der Wasserstand des loopTask. Die tiefste Verschachtelung ist
+der Hydraulikschritt mit `HTTPClient` auf dem Stack.
+
+**Der 5-min-Takt ist ein eigener** und hängt nicht am Vollupdate der
+Messwerte. Jenes läuft nur nach einem gültigen Antworttelegramm der
+Wärmepumpe; reißt die serielle Strecke ab, verstummten Uptime, Heap und Stack
+ausgerechnet dann, wenn man sie ansehen will.
+
 ## Sensor Topics:
 
 **Zone 2 was removed in 3.4.0** and the numbering has gaps as a result: TOP34,

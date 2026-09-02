@@ -79,7 +79,7 @@ static int heizKuehlIndex = -1; // einmal in notbetrieb_init() nachgeschlagen
 static const char *heiz_kuehl_text(char actual[][MAXVALUELEN])
 {
   // Der Zeilenindex steht fest, sobald die Firmware laeuft. Ihn hier jedes Mal
-  // neu zu suchen hiesse, bei JEDEM Durchlauf von loop() linear ueber 92 Zeilen
+  // neu zu suchen hiesse, bei JEDEM Durchlauf von loop() linear ueber 99 Zeilen
   // zu gehen - der Sperrgrund wird ja nicht mehr nur waehrend eines Laufs
   // gebraucht, sondern staendig.
   return (heizKuehlIndex >= 0) ? actual[heizKuehlIndex] : "";
@@ -752,7 +752,7 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     // Schritt mit dem Sollwert 0.
     // ACHTUNG: s->top ist die TOP-NUMMER, actual_data[] wird ueber den
     // ZEILENINDEX adressiert. Beides ist nicht dasselbe - die Nummerierung hat
-    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 104 bei 92 Zeilen. Wer
+    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 111 bei 99 Zeilen. Wer
     // hier direkt mit der Nummer indiziert, liest die falsche Zeile.
     const int index = (s->top >= 0) ? state_topic_index((unsigned)s->top) : -1;
     bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;

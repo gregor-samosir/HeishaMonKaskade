@@ -1,5 +1,149 @@
 #pragma once
 // Changelog:
+// 3.20.0 - ROBUSTHEIT UND LANGZEITSTABILITAET. Umsetzung von M1-M4 der
+//         Codedurchsicht 2026-09-02 in EINEM Versionsschnitt statt in drei
+//         (Owner-Entscheid): ein Pruefstandslauf, ein Rollout, ein Release.
+//         Die Massnahmen beruehren einander nicht, jede hat ihren eigenen
+//         Commit. Mitgefahren sind K2 und die veralteten Zahlen in den
+//         Kommentaren; K1 (Watchdog fuer loop()) und K3 (config.json atomar)
+//         bleiben liegen.
+//
+//         M1 - DAS KARENZFENSTER KONNTE ABGELAUFEN SEIN, BEVOR DER SCHWALL
+//         GELESEN WURDE. setupMqtt() setzt setCommandsIgnoredUntil, sobald die
+//         Set-Topics abonniert sind. Der Wiedereinspiel-Schwall des
+//         ioBroker-Adapters liegt danach im TCP-Puffer und wird erst vom ersten
+//         mqtt_client.loop() gelesen, also erst NACH setup(). Dazwischen steht
+//         setupTime() und wartet bis zu 30 s auf NTP. Braucht die
+//         Zeitsynchronisation laenger als die 5 s SUBSCRIBE_GRACE, ist das
+//         Fenster beim ersten loop() schon zu, und jedes wiedereingespielte
+//         Set-Kommando laeuft als frisches Kommando in die Waermepumpe - der
+//         Fall aus 3.6.1 (Vorlauf-Sollwert 55 C nach jedem Neustart), nur mit
+//         anderer Ursache.
+//         Im Normalfall (NTP in 1-3 s) hielt das Fenster, deshalb ist es nie
+//         aufgefallen. Konstruiert ist der Fall trotzdem nicht: Nach einem
+//         Stromausfall bootet die Bridge in Sekunden, der Router braucht
+//         Minuten fuer den Internetzugang. Ist der ioBroker schon da und das
+//         Internet noch nicht, scheitert NTP, der Schwall wartet 30 s im
+//         Puffer und wird dann ausgefuehrt. Der Keepalive rettet nicht: Die
+//         Nachrichten sind vor einem etwaigen Abbruch schon angekommen.
+//         Das Fenster wird jetzt am Ende von setup() ein zweites Mal gesetzt
+//         und misst ab dem Zeitpunkt, an dem der Schwall wirklich gelesen
+//         wird. Die Zeile in setupMqtt() bleibt stehen - sie deckt den
+//         Reconnect-Pfad ab, der ueber mqtt_reconnect() laeuft.
+//
+//         M2 - DIE NOTBETRIEBSWERTE UEBERLEBEN DEN SOFTWARE-RESET. Sie lagen
+//         seit 3.12.0 nur im RAM. Die Begruendung des Owner-Entscheids vom
+//         2026-08-20 war, dass ein Neustart bei weggefallenem Broker einen
+//         Stromausfall bedeutet - und der laeuft ohne Notbetrieb. DIESE
+//         ANNAHME TRAEGT NICHT MEHR, weil die Firmware selbst neu startet: der
+//         WLAN-Watchdog nach 5 min ohne WLAN (3.5.0, also aelter als der
+//         Notbetrieb), /reboot und jedes OTA. Der unguenstige Fall ist der
+//         Server im Keller tot - der Notbetriebsfall - waehrend der Router neu
+//         startet oder ein Update bekommt, das laenger als 5 min dauert. Die
+//         Bridge startet neu, die Werte sind weg, und der Knopf meldet "Nicht
+//         bereit - es fehlen Werte" genau dann, wenn jemand ihn braucht.
+//         Neu: ein Spiegel in RTC_NOINIT_ATTR (src/rtcspiegel.h, arduino-frei,
+//         test/rtcspiegel_test.cpp mit 42 Zusicherungen in der CI). DIE
+//         TRENNLINIE DES OWNER-ENTSCHEIDS BLEIBT EXAKT ERHALTEN: Der
+//         RTC-Speicher ueberlebt ESP.restart(), den Watchdog-Reset und das
+//         OTA, NICHT aber das Stromlosmachen. Kein Flash-Schreibzugriff, keine
+//         Datei, kein Verschleiss, nach echtem Stromausfall leer.
+//         Vier Bedingungen entscheiden ueber Gueltigkeit: Magic MIT
+//         LAYOUTNUMMER (nach einem OTA liegt dort der Spiegel der Vorversion,
+//         und die Pruefsumme faellt darauf herein, weil sie nur ueber die
+//         Felder rechnet, die diese Firmware kennt), dieselbe Rolle (die
+//         Backup-Boards tragen abwechselnd beide), keine Maskenbits jenseits
+//         der Wertezahl (sonst macht notbetrieb_vollstaendig() aus einem
+//         unvollstaendigen Satz ein "ja") und eine FELDWEISE gerechnete
+//         Pruefsumme (ueber den rohen Speicher gerechnet haenge sie am
+//         Padding und waere auf dem Geraet zufaellig, im Hosttest aber gruen).
+//         Jeder uebernommene Wert laeuft erneut durch set_command_range() und
+//         notbetrieb_wert_annehmen() - denselben Weg wie eine frische
+//         MQTT-Nachricht. Am Geraet zu sehen ist der Erfolg an einem
+//         AUSBLEIBEN: "Notbetrieb einsatzbereit" kommt nach dem Neustart nicht
+//         erneut, weil der Satz beim ersten eintreffenden Wert schon
+//         vollstaendig ist.
+//
+//         M3 - LANGZEIT-TELEMETRIE UNTER <prefix>/info/. Zwei Fehlerbilder
+//         waren ueber Monate unsichtbar. Erstens unbemerkte Neustarts: Ein
+//         Watchdog-Neustart, ein Brownout oder eine Panic hinterliessen keine
+//         Spur, und "WLAN war X s weg" wird nur gemeldet, wenn das Geraet die
+//         Zeit OHNE Neustart ueberstanden hat. Ein Geraet, das alle paar Tage
+//         neu startet, sah von aussen gesund aus - das LWT kommt binnen
+//         Sekunden zurueck. Zweitens schleichender Heap-Verlust: abrufbar nur
+//         ueber Telnet M, und dort nur als Prozentwert relativ zum Boot.
+//         Acht Topics, retained: boot_count, boot_reason und version einmal je
+//         Verbindung, uptime, heap, heap_min, heap_maxblock und stack im
+//         5-min-Takt. Der Bootzaehler liegt im selben RTC-Block wie die Werte
+//         aus M2 und zaehlt damit genau die Neustarts, die der Spiegel
+//         ueberlebt; steht er auf 1, war das Geraet stromlos. Zusammen mit
+//         boot_reason unterscheidet das "Strom war weg" von "die Firmware hat
+//         neu gestartet".
+//         ZWEI ABWEICHUNGEN VOM MASSNAHMENPLAN, beide mit Grund. (1) Acht
+//         Topics mit je EINEM Wert statt vier mit mehreren: Ein Zaehler, den
+//         der ioBroker als ZAHL fuehrt, laesst sich in InfluxDB auftragen - ein
+//         Sprung in der Kurve ist ein Neustart, ein fallendes heap_min ueber
+//         Tage ein Leck. Genau das soll der Waechter koennen, und aus einem
+//         JSON-String bekommt man es nicht heraus. (2) Die fortlaufenden Werte
+//         haengen NICHT am 5-min-Vollupdate in publish_heatpump_data(): Jenes
+//         laeuft nur nach einem gueltigen Antworttelegramm. Reisst die
+//         serielle Strecke ab, verstummten Uptime, Heap und Stack ausgerechnet
+//         in dem Zustand, in dem man sie ansehen will. Eigener,
+//         ueberlaufsicherer Takt in loop().
+//
+//         M4 - DIE DIAGNOSE GING GENAU IM STOERFALL VERLOREN.
+//         write_mqtt_log() publizierte ins MQTT-Log und sonst nirgends. Alle
+//         Zeilen des Notbetriebs laufen darueber - "Schritt 3/10", "ROT: ...
+//         kam nicht zurueck", die Hydraulik-Antwort mit HTTP-Code. Im
+//         eigentlichen Notbetriebsfall IST der Broker weg, das Publish
+//         scheitert still, und nach dem 15-min-Anzeigeverfall existierte keine
+//         Spur mehr, warum ein Lauf ROT war. K4 der ersten Codedurchsicht
+//         hatte den Logpfad als "nur Diagnose" eingestuft; mit dem Notbetrieb
+//         ist er zur einzigen Nachweisquelle eines sicherheitsrelevanten
+//         Vorgangs geworden.
+//         Jetzt drei Wege: immer in einen Ring aus 32 Zeilen a 128 Byte
+//         (statisch, kein Heap - der Logpfad ist der letzte Ort, an dem eine
+//         Allokation scheitern darf), dann ins MQTT-Log, sonst nach Telnet.
+//         Die Route /log gibt den Ring als text/plain heraus, zeilenweise
+//         gesendet statt als 4-KB-String, hinter dem NOTBETRIEBS-Zugang: Sie
+//         gibt echte Meldungstexte heraus, nicht nur "Schritt 3 von 7" wie
+//         /notbetrieb/status, und das Passwort steht auf dem ausgedruckten
+//         Notfallblatt. Link ganz unten auf der Notbetriebsseite - wer den
+//         Knopf drueckt, braucht ihn nicht, er ist fuer die Nachschau danach.
+//         DIE KORREKTUR AM MASSNAHMENPLAN: Der Ring darf nicht einfach in
+//         write_mqtt_log() haengen. Von 39 Aufrufstellen sind 38
+//         Ereignismeldungen, die 39. ist die <PUB>-Zeile aus
+//         publish_heatpump_data() - sie kommt fuer JEDEN geaenderten Messwert
+//         in JEDEM 5-s-Zyklus. Der Ring haette nach Sekunden nur noch
+//         Temperaturen enthalten. Diese eine Stelle geht deshalb ueber die
+//         neue Funktion write_wert_log().
+//
+//         K2 - DIE LOGZEITSTEMPEL KOMMEN AUS DER SYSTEMUHR. setupTime()
+//         stellte bis 3.19.0 die TimeLib-Uhr beim Boot EINMAL, danach lief
+//         now() frei auf millis(): Der Stempel driftete um Minuten, und die
+//         Sommerzeit-Umstellung erreichte ihn erst mit dem naechsten Neustart.
+//         Jetzt time() und localtime_r(); paulstoffregen/Time ist entfallen.
+//         Der Rueckfall auf die Laufzeit ("+01:23:45") gehoert zu M4: Ohne
+//         gueltige Uhr stuende in jeder Zeile "1970-01-01" - der Normalfall
+//         nach einem Stromausfall ohne Internet, also genau in der Lage, fuer
+//         die der Ring gebaut ist.
+//         MESSBEFUND: Der erste Entwurf benutzte strftime und kostete 12 KB
+//         Flash, weil newlib dabei den Locale-Apparat mitzieht. snprintf mit
+//         den tm-Feldern liegt ohnehin im Abbild.
+//
+//         AUFGERAEUMT: Tabellenlaenge 92 -> 99 und hoechste TOP-Nummer
+//         104 -> 111 in decode.h, decode.cpp und notbetrieb.cpp, Gesamtdeckel
+//         180 -> 200 s in notbetrieb.h. Nachgetragen in test/README.md:
+//         verbindung_test.cpp fehlte dort in der Werkzeugtabelle UND im
+//         Befehlsblock, obwohl es seit 3.13.0 in der CI steht - wer vor dem
+//         Flashen die Liste aus dem README abarbeitet, fuhr weniger als die CI.
+//
+//         GROESSE gegen 3.19.0 (heishamon_esp32_h1_ota):
+//         RAM 57528 -> 61608 Byte (+4080, 17,6 % -> 18,8 %) - davon 4096 der
+//         Logring, der Rest hebt sich mit dem Wegfall von TimeLib auf.
+//         Flash 1211105 -> 1213049 Byte (+1944, 61,6 % -> 61,7 %).
+//         text +1452, data +464, bss +4072.
+//
 // 3.19.0 - SIEBEN INSTALLER-EINSTELLUNGEN WERDEN TOPICS. TOP105-107 aus Byte
 //         25 (Bodenwannenheizung, Leistung des internen Heizstabs, Speicher-
 //         Heizstab intern/extern) und TOP108-111 aus Byte 23 (Kompressor-
@@ -1706,4 +1850,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.19.0";
+static const char* heishamon_version = "3.20.0";
