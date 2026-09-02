@@ -4,6 +4,43 @@ Umsetzung von M1–M4 aus `Massnahmenplan-Codedurchsicht-2026-09-02.md`.
 Ausgangsstand: 3.19.0, Commit `4a2da3a` auf `main`, alle vier Boards laufen
 3.19.0.
 
+## Stand 2026-09-02: der Code ist fertig, die Nachweise stehen aus
+
+Rettungsanker `rettungsanker-2026-09-02` auf `4a2da3a`, Branch
+`robustheit-langzeit`. **Alle sieben Commits sind gebaut**, alle sechs Envs
+übersetzen, alle elf Hosttests laufen grün:
+
+| | Commit | Inhalt |
+| --- | --- | --- |
+| ✔ | `1be74ad` | dieser Arbeitsplan |
+| ✔ | `feceeab` | M1 — Karenzfenster am Ende von `setup()` |
+| ✔ | `a26c2b9` | M2/M3 — `src/rtcspiegel.h` + Hosttest (42 Zusicherungen) |
+| ✔ | `df1b124` | M2/M3 — Anbindung, `info/`-Zweig mit acht Topics |
+| ✔ | `bbb49b3` | K2 — Zeitstempel aus der Systemuhr, TimeLib entfällt |
+| ✔ | `e989e1d` | M4 — Logring, Telnet-Rückfall, Route `/log` |
+| ✔ | `32c048d` | Changelog 3.20.0, `MQTT-Topics.md`, veraltete Zahlen |
+| ✔ | `nodered-flows fd67900` | Wächter-Entwurf, Branch `bridge-waechter` |
+
+**Was noch aussteht: alles, wofür Hardware nötig ist.** Die Prüfstandskampagne
+P1–P4, der Rollout auf die vier Boards und die beiden Releases. Bis dahin ist
+kein Board angefasst, `main` ist unverändert, und nichts davon läuft an der
+Anlage.
+
+Größe gegen 3.19.0 (`heishamon_esp32_h1_ota`, Vergleichsbau aus dem
+Rettungsanker-Tag): RAM 57528 → 61608 Byte (+4080, davon 4096 der Logring —
+der Rest hebt sich mit dem Wegfall von TimeLib auf), Flash 1211105 → 1213049
+Byte (+1944).
+
+Drei Dinge sind beim Bauen aufgefallen und haben den Plan berichtigt; sie
+stehen im jeweiligen Commit ausführlich und hier nur als Merkposten:
+
+* Der Logring durfte nicht an `write_mqtt_log()` allein hängen (die
+  `<PUB>`-Zeile hätte ihn geflutet) — deshalb `write_wert_log()`.
+* Die `info/`-Telemetrie durfte nicht am Vollupdate hängen (das läuft nur nach
+  einem gültigen Antworttelegramm) — deshalb ein eigener Takt.
+* `strftime` kostete 12 KB Flash, weil newlib den Locale-Apparat mitzieht —
+  deshalb `snprintf` mit den `tm`-Feldern.
+
 ## Entscheidungen des Owners (2026-09-02)
 
 1. **Ein Versionsschnitt, nicht drei.** M1–M4 gehen zusammen als 3.20.0 raus:
