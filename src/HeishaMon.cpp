@@ -1274,6 +1274,20 @@ void setup()
   // Die Regeln stehen in rtcspiegel.h, hier faellt nur die Entscheidung.
   const bool spiegelGueltig = rtc_spiegel_boot(&rtcSpiegel, notbetriebRolle);
 
+  // Die Zeitzone SOFORT setzen, nicht erst in setupTime() (3.20.0, am
+  // Pruefling gemessen). Nach einem Software-Reset laeuft die Systemuhr
+  // weiter, und die ersten Logzeilen entstehen schon in setupMqtt() - also
+  // VOR setupTime(), wo configTzTime() die Zonenregel bisher als Erstes
+  // gesetzt hat. Diese Zeilen trugen damit UTC, die folgenden Ortszeit:
+  //   [2026-09-02 08:49:19] Notbetrieb: Rolle Heizen, 4 Werte erwartet
+  //   [2026-09-02 10:49:24] 37 wiedereingespielte Set-Kommandos ... verworfen
+  // Im Logring, der fuer die Nachschau nach einem Stoerfall gebaut ist, sieht
+  // das aus wie ein Sprung zwei Stunden zurueck. setupTime() setzt die Zone
+  // gleich darauf noch einmal mit; das ist folgenlos und bleibt stehen, weil
+  // Zone und Zeitserver dort zusammengehoeren.
+  setenv("TZ", TIME_ZONE, 1);
+  tzset();
+
   // vor setupMqtt(): danach koennen schon Notbetriebswerte hereinkommen
   notbetrieb_init(spiegelGueltig);
 
