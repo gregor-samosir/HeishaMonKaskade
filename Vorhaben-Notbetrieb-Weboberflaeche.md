@@ -292,6 +292,45 @@ Damit entfallen: die Datei, der JSON-Parser im Notfallpfad, der Flash-Verschlei�
 und das Boot-Risiko. Der Kommentar bei `loadConfigValue()` beschreibt die Falle,
 die es damit gar nicht erst gibt.
 
+#### Der dritte Punkt ist seit 2026-09-05 gemessen, nicht mehr nur plausibel
+
+Die Kaltstart-Probe des Steuerungs-Repos (`~/nodered-flows/FEUERUEBUNG.md` §5)
+hat genau diesen Fall gefahren: Synology heruntergefahren, **beide Wärmepumpen
+über die Sicherungen stromlos** (damit auch die Bridges, sie hängen am CN-CNT),
+~10,5 min Pause, dann alles gleichzeitig wieder ein. Anlage im Heizbetrieb, damit
+die Sperre nicht schon über TOP101 greift.
+
+| Messpunkt | ab Einschalten |
+|---|---|
+| Bridges wieder im Netz (Ping) | 6 s |
+| Status direkt nach dem Boot | `Sperre = 1` (`NOTBETRIEB_SPERRE_WERTE`), `fehlendMaske` **15** (WP1) / **1** (WP2), `Lage = 1` |
+| **Knopf wieder scharf** | **3 min 09 s** |
+| erste WP-Zustandsdaten im Broker | 4 min 52 s |
+
+**Das Fenster existiert — im gemessenen Fall ist es folgenlos.** Der Knopf war
+3:08 gesperrt und damit **1:43 wieder frei, bevor die Wärmepumpen überhaupt
+wieder Daten lieferten**. Wer in der Lücke zur Bridge gelaufen wäre, hätte eine
+Anlage vorgefunden, die selbst noch nicht ansprechbar war. Der RAM-Verzicht auf
+LittleFS ist damit für diesen Fall belegt.
+
+Zwei Einschränkungen, die zum Ergebnis gehören:
+
+1. **„Liefert wieder Daten" ist nicht „ist arbeitsbereit".** Die Anlaufsperren der
+   Panasonic-Elektronik sind nicht gemessen worden, die Verdichter standen
+   (Umpumpen-Betrieb, 25 °C Außentemperatur). Die 4:52 sind eine **untere
+   Schranke** — die echte Bereitschaft liegt später. Das macht die Aussage nur
+   stärker.
+2. **Die Steuerung wurde geordnet heruntergefahren**, nicht hart abgerissen
+   (Fronttaster statt Sicherung, Owner-Vorgabe). Das ist die relevante
+   Einschränkung, denn **N4 hängt fast vollständig an der Hochlaufzeit der
+   Steuerung**: Der Knopf wird erst scharf, wenn ioBroker, der MQTT-Adapter und
+   der Node-RED-Sender wieder laufen. Nach einem echten Stromausfall kommt dort
+   eine Dateisystemprüfung dazu — dauert die Steuerung deutlich länger als die
+   gemessenen drei Minuten, während die Wärmepumpe unverändert nach etwa fünf
+   Minuten wieder ansprechbar ist, **kippt die Rechnung und das Fenster wird
+   real**. Ungeprüft; wer das schließen will, braucht entweder den harten Abriss
+   als Messung oder doch eine persistente Ablage der Werte.
+
 ### Der tragende Punkt: die Karenzzeit muss diesen Kanal ausnehmen
 
 Nach jedem Verbinden verwirft [`HeishaMon.cpp:320`](src/HeishaMon.cpp#L320) für
