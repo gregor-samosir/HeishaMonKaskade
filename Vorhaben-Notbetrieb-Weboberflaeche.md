@@ -932,6 +932,43 @@ nachgemessen. Und der Callback der Firmware müsste das Retain-Flag überhaupt
 erst durchreichen — heute tut er das nicht. Ein Fehlgriff hier bringt genau den
 55-°C-Vorlauf zurück, wegen dem die Karenzzeit entstanden ist.
 
+**Folgethema aus der Kaltstart-Probe (2026-09-05) — „Nicht bereit" schickt zu
+früh auf den Handweg.** Fehlen die gehaltenen Werte, endet der Sperrhinweis
+heute mit `NB_TXT_PLAN_B`: „Bitte nach der ausgedruckten Anleitung am Bedienfeld
+der Wärmepumpe weitermachen" ([`src/webfunctions.cpp:741`](src/webfunctions.cpp#L741)).
+Die Kaltstart-Probe des Steuerungs-Repos (`~/nodered-flows/FEUERUEBUNG.md` §5d)
+hat gezeigt, dass genau dieser Zustand nach einem Stromausfall **vorübergehend**
+ist: Der Knopf war 3:08 gesperrt und danach von allein wieder scharf, während
+die Wärmepumpen erst 1:43 später überhaupt wieder Daten lieferten. Wer dem Satz
+folgt, schaltet die Anlage aus und trägt vier Kurvenwerte von Hand ein — den
+riskanteren Weg, in einer Lage, die sich von selbst auflöst. Dasselbe steht im
+Familienblatt: `NOTBETRIEB.md` §7a sagt bei „Nicht bereit" ebenfalls „dann geht
+nur 7b".
+
+Verstärkend kommt dazu, dass die Verbindungszeile darüber in diesen Minuten
+„Hausteuerung: verbunden" zeigt — Lage 1 (Karenz) sieht auf der Seite bewusst
+aus wie verbunden, und nach einem Kaltstart dauert das fünf Minuten. Für den
+Menschen vor der Seite steht ein „verbunden" über einem „Nicht bereit".
+
+Die Form wäre klein: ein Satz vor Plan B, mit derselben Zahl, die `NOTBETRIEB.md`
+§0 seit dem 2026-09-05 nennt — sinngemäß „War gerade der Strom weg? Dann bitte
+zehn Minuten warten, der Knopf gibt sich meist von selbst frei." Dauerhaft
+bleibt der Zustand nur, wenn die Bridge neu startet, während die Steuerung
+dauerhaft aus ist; dann ist der Handweg richtig und der Hinweis kostet zehn
+Minuten. **Genauer wäre es über die Lage:** Bei 1, 2 oder 3 (Broker weg) ist
+„warten" plausibel, bei Lage 0 mit fehlenden Werten nicht — das kostet eine
+Bedingung mehr im Sperrhinweis. Bewusst kein eigener Durchlauf für die eine
+Zeile (Owner-Entscheidung 2026-09-05); der Punkt gehört in die nächste Runde,
+die diese Seite ohnehin anfasst.
+
+* **OFFEN, außerhalb dieses Repos (2026-09-05):** `NOTBETRIEB.md` §7a nennt
+  „Heizung neun Schritte, Warmwasser fünf" und „braucht gut eine Minute". Seit
+  3.18.0 sind es **zehn und sechs** Schritte
+  ([`src/notbetrieb.h:281`](src/notbetrieb.h#L281)) und rund anderthalb Minuten;
+  die Kaltstart-Probe hat es an der Statusroute mitgemessen (`0;1;10;…` an H1,
+  `0;1;6;…` an H2). Der Panel-Text der Firmware ist mit 3.18.0 nachgezogen
+  worden, das Familienblatt nicht.
+
 ---
 
 ## 10. Stand der Umsetzung — 2026-08-21, Etappen 5 und 6 erledigt
@@ -1523,6 +1560,18 @@ Verbindungskarenz. Der Takt ist gemessene 300,0 s, ein einzelner ausgefallener
 Takt ist noch kein Ausfall; zwölf Minuten decken zwei verpasste Takte samt
 Reserve ab. Dass sie größer ist als die Broker-Karenz, ist kein Zufall: Hier
 wird auf ein *Ausbleiben* gewartet, und das ist die unsicherere Aussage.
+
+**Der Kaltstart hat die Zahl von außen bestätigt (2026-09-05, abgeleitet aus den
+Zeitstempeln des Protokolls, nicht eigens gemessen).** In der Kaltstart-Probe des
+Steuerungs-Repos (`~/nodered-flows/FEUERUEBUNG.md` §5b) kam nach dem gemeinsamen
+Wiedereinschalten das erste `set`-Kommando erst um 12:57:55 — vier bis sechs
+Minuten, nachdem die Bridges wieder am Broker hingen (der Verbindungszeitpunkt
+liegt zwischen 12:52:06 und 12:53:39, dazwischen wurde nicht abgefragt). Auch
+nach einem Neustart hält Node-RED seinen 5-Minuten-Takt ein, statt sofort
+loszurechnen. Die Karenz lag damit nie in Gefahr, Reserve rund sechs Minuten:
+**Ein Stromausfall erzeugt keine Stumm-Meldung.** Das ist die Gegenprobe, die am
+Prüfstand nicht zu haben war — dort wird der Broker weggenommen, nicht der ganze
+Stack neu gestartet.
 
 ### Ein Befund aus der Gegenprobe, der eine Lücke aufdeckte
 
