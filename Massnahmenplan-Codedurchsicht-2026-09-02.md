@@ -31,7 +31,7 @@ Nachweis und RAM/Flash-Delta, Abnahme über `test/tablesnap.py`.
 | mittel | M4 Diagnose geht genau im Störfall verloren | Ausbau | halber Tag |
 | niedrig | K1 Kein Watchdog für `loop()` | Absicherung | Stunde, mit Vorbehalt |
 | niedrig | K2 Zeitstempel driften und kennen keine Sommerzeit-Umstellung | Fix | Stunde |
-| niedrig | K3 Parse-Fehler an der `config.json` löscht den WLAN-Zugang (die Atomarität entfällt, siehe Nachtrag) | Härtung | Stunde |
+| — | K3 Parse-Fehler an der `config.json` löscht den WLAN-Zugang | Härtung | **entfällt — geschlossen 2026-09-07** |
 | — | Veraltete Zahlen in Kommentaren | Aufräumen | Minuten |
 
 M2 und M3 teilen sich einen Mechanismus (RTC-Speicher, der einen Software-Reset
@@ -220,7 +220,7 @@ Hintergrund weiter nachgeführt und kennt die Zeitzone. Abhilfe: in
 `paulstoffregen/Time` kann dann entfallen. Betrifft nur die Lesbarkeit von
 Mitschnitten, nicht die Regelung.
 
-**K3 — `config.json` nicht atomar, harte Reaktion auf Parse-Fehler.** Die
+**K3 — `config.json` nicht atomar, harte Reaktion auf Parse-Fehler. — GESCHLOSSEN ohne Codeänderung (Owner-Entscheid 2026-09-07), Begründung im Nachtrag unten.** Die
 Datei wird mit `open("w")` überschrieben ([webfunctions.cpp:648](src/webfunctions.cpp#L648)).
 Ein Stromausfall in diesen Millisekunden hinterlässt eine leere oder halbe
 Datei; beim nächsten Boot greift dann `wifiManager.resetSettings()`
@@ -275,10 +275,28 @@ Zustand in einen, der jemanden in Funkreichweite verlangt. Der **zweite**
 `resetSettings()`-Aufruf ([webfunctions.cpp:182](src/webfunctions.cpp#L182),
 Datei fehlt ganz) gehört zum Erstboot und bleibt unangetastet.
 
-**Restaufwand K3 neu: nur noch der Parse-Fehler-Zweig** — Vorgaben behalten und
-loggen statt `resetSettings()`. Der Aufwandstreiber ist nicht die Änderung,
-sondern ihr Nachweis: Der Fall lässt sich nur mit einer Wegwerf-Firmware
-erzwingen, die einmalig Müll in die `config.json` schreibt.
+**Entscheid 2026-09-07: K3 wird ohne Codeänderung geschlossen.** Übrig
+geblieben wäre nur der Parse-Fehler-Zweig — Vorgaben behalten und loggen statt
+`resetSettings()`. Dagegen sprach die Prüfung der Auslöser: Nach dem Wegfall der
+Stromausfall-Theorie bleibt **kein plausibler Weg** mehr, auf dem eine
+vorhandene `config.json` unlesbar wird. Volles Dateisystem scheidet aus (192 KB
+für 250 Byte, sonst schreibt nichts darauf), der Überlauf beim Erzeugen der JSON
+wird seit 3.15.0 abgefangen, und geschrieben wird ohnehin nur, wenn jemand von
+Hand Settings speichert. In vier Boards Betrieb ist der Fall nie aufgetreten.
+Der Fix wäre damit Vorsorge gegen Unbekanntes — und hätte einen eigenen Preis:
+Die Bridge hinge im Fehlerfall mit dem einkompilierten Vorgabe-OTA-Passwort im
+Heimnetz, statt im WPA2-Hotspot zu landen.
+
+**Die beiden Nebenpunkte des Nachtrags fallen mit:** Die zweite Schreibstelle
+([webfunctions.cpp:271](src/webfunctions.cpp#L271)) war nur relevant, solange
+K3 umgesetzt werden sollte, und der ungeprüfte `serializeJson`-Rückgabewert
+zielt auf dasselbe unerreichbare Kurzschreiben. Beides ist notiert und
+entschieden, nicht übersehen.
+
+**Damit die Herleitung nicht ein drittes Mal anfällt:** Wer `open("w")` in
+diesem Projekt als Risiko meldet, prüft zuerst, ob littlefs oder ein
+trunkierendes Dateisystem darunter liegt. Hier ist es littlefs, und die Antwort
+steht oben.
 
 **Veraltete Zahlen in Kommentaren** (Tabellenlänge 92 → 99, Gesamtdeckel
 180 s → 200 s): [decode.h:97](src/decode.h#L97),
