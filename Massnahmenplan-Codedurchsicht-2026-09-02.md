@@ -31,7 +31,7 @@ Nachweis und RAM/Flash-Delta, Abnahme über `test/tablesnap.py`.
 | mittel | M4 Diagnose geht genau im Störfall verloren | Ausbau | halber Tag |
 | niedrig | K1 Kein Watchdog für `loop()` | Absicherung | Stunde, mit Vorbehalt |
 | niedrig | K2 Zeitstempel driften und kennen keine Sommerzeit-Umstellung | Fix | Stunde |
-| niedrig | K3 `config.json` wird nicht atomar geschrieben, Parse-Fehler löscht WLAN-Zugang | Härtung | Stunde |
+| niedrig | K3 Parse-Fehler an der `config.json` löscht den WLAN-Zugang (die Atomarität entfällt, siehe Nachtrag) | Härtung | Stunde |
 | — | Veraltete Zahlen in Kommentaren | Aufräumen | Minuten |
 
 M2 und M3 teilen sich einen Mechanismus (RTC-Speicher, der einen Software-Reset
@@ -231,6 +231,54 @@ winzig (geschrieben wird nur beim Speichern der Settings), die Folge aber
 ein Handeinsatz an der Anlage. Abhilfe: nach `config.tmp` schreiben und
 `LittleFS.rename()`; bei Parse-Fehler die Vorgaben behalten und nur loggen,
 statt den WLAN-Zugang zu verwerfen.
+
+**Nachtrag 2026-09-07 — die Begründung oben ist zur Hälfte entkräftet.**
+Die Atomarität ist kein Thema, der Parse-Fehler-Zweig sehr wohl. Im Einzelnen:
+
+*Was nicht trägt:* `open("w")` trunkiert auf littlefs **nur im RAM**. `lfs.c`
+setzt bei `LFS_O_TRUNC` lediglich ein Tag und `LFS_F_DIRTY` (Zeile 2905), ohne
+zu committen; von allen Datei-Funktionen schreibt ausschließlich
+`lfs_file_rawsync` (Zeile 3227) Metadaten, und die ruft erst `close()` auf. Bis
+dahin zeigt der Verzeichniseintrag unverändert auf den **alten** Inhalt, und
+der Commit selbst läuft CRC-gesichert über das Metadaten-Paar. Ein
+Stromausfall zwischen `open` und `close` lässt also die alte, gültige
+`config.json` stehen — genau das, was Schreiben nach `config.tmp` plus
+`LittleFS.rename()` erst herstellen soll. **Der Tmp-plus-Rename-Teil von K3
+entfällt damit; er kauft nichts, was das Dateisystem nicht schon liefert.**
+(Die Annahme „Trunkieren hinterlässt eine halbe Datei" stimmt für SPIFFS und
+FAT, nicht für littlefs.)
+
+*Was ebenfalls nicht zusammengehört:* `LittleFS.begin(true)` formatiert nur bei
+gescheitertem **Mount**. Eine kaputte `config.json` lässt das Dateisystem
+einwandfrei mounten — Autoformat und Parse-Fehler sind zwei unabhängige Pfade,
+die sich nicht addieren können. Wo formatiert wird, war die Konfiguration
+ohnehin unlesbar; das Autoformat kostet Forensik, keine Daten. Wer es entfernt,
+braucht einen Ersatzpfad für den echten Erstboot nach dem Flashen.
+
+*Was der Text oben übersieht:* Es gibt eine **zweite** Schreibstelle in
+`setupWifi` ([webfunctions.cpp:271](src/webfunctions.cpp#L271), Zweig
+`shouldSaveConfig`); oben ist nur die 648er zitiert. Und der Rückgabewert von
+`serializeJson` wird an **beiden** Stellen nicht geprüft — ein Kurzschreiben
+(I/O-Fehler, volles Dateisystem) committet eine halbe JSON sauber. Das ist der
+realistische Weg zur halben Datei, praktisch aber unerreichbar: `min_spiffs.csv`
+hält rund 192 KB für eine ~250-Byte-Datei bereit, und sonst schreibt nichts auf
+das Dateisystem.
+
+*Was bleibt — mit einer besseren Begründung als der oben genannten:* Die
+WLAN-Zugangsdaten liegen im **NVS**, nicht in der `config.json`. Ohne
+`resetSettings()` bliebe ein Gerät mit unlesbarer Konfiguration deshalb im WLAN,
+und `/settings` wäre erreichbar (Basic-Auth `admin` plus `ota_password`, das
+dann auf den einkompilierten Vorgabewert zurückfällt,
+[HeishaMon.cpp:604](src/HeishaMon.cpp#L604)). Aus dem Vor-Ort-Einsatz würde ein
+Browserfenster. Das `resetSettings()` verwandelt also erst einen reparierbaren
+Zustand in einen, der jemanden in Funkreichweite verlangt. Der **zweite**
+`resetSettings()`-Aufruf ([webfunctions.cpp:182](src/webfunctions.cpp#L182),
+Datei fehlt ganz) gehört zum Erstboot und bleibt unangetastet.
+
+**Restaufwand K3 neu: nur noch der Parse-Fehler-Zweig** — Vorgaben behalten und
+loggen statt `resetSettings()`. Der Aufwandstreiber ist nicht die Änderung,
+sondern ihr Nachweis: Der Fall lässt sich nur mit einer Wegwerf-Firmware
+erzwingen, die einmalig Müll in die `config.json` schreibt.
 
 **Veraltete Zahlen in Kommentaren** (Tabellenlänge 92 → 99, Gesamtdeckel
 180 s → 200 s): [decode.h:97](src/decode.h#L97),
