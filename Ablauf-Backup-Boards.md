@@ -112,10 +112,16 @@ Hostname nachweislich stehen.
    `/settings` muss Port **1884** und den Hostnamen `…_h1b`/`…_h2b` zeigen, die
    Startseite die richtige Stufe (`Heisha Stufe 1`/`2`) und die Version.
 7. **DHCP-Reservierung** im Router auf die MAC setzen.
-8. IP und das Notbetriebspasswort auf das ausgedruckte Notfallblatt der Familie
-   schreiben. Erst damit ist das Board fertig.
-9. Stromlos in den Schrank. Der Funktionsnachweis kommt bei jeder Änderung
-   ohnehin von selbst (Schritt 5 unten).
+8. **Etikett mit IP und Einbauposition auf das Board.** Blatt 3 (unten) wählt das
+   richtige Ersatz-Board über genau diese IP aus — ein Board ohne Etikett ist im
+   Ernstfall nicht zuzuordnen. IP und Notbetriebspasswort außerdem auf das
+   ausgedruckte Notfallblatt der Familie. Das **`admin`-Passwort (OTA)** gehört in
+   den Umschlag „Passwörter" der Notfallbox: Blatt 3 stellt damit den MQTT-Port um,
+   und `/settings` nimmt das Notbetriebspasswort nicht an. Erst damit ist das Board
+   fertig.
+9. Stromlos in die **Notfallbox**, zu den ausgedruckten Blättern (Stand
+   2026-09-09; Blatt 3 schickt die Familie genau dorthin). Der Funktionsnachweis
+   kommt bei jeder Änderung ohnehin von selbst (Schritt 5 unten).
 
 ### Warum der Umweg über die Test-Firmware
 
@@ -186,14 +192,28 @@ Parameter.
 
 ## Im Ernstfall
 
-Zwei Handgriffe, vom Handy aus machbar:
+Zwei Handgriffe — der erste am Board, der zweite vom Handy aus:
 
-1. Defektes Board stromlos, Backup an WP-Kabel und Strom.
+1. Am defekten Board den Stecker aus der Buchse `HEATPUMP` ziehen, am Backup
+   einstecken. Über denselben Stecker wird das Board versorgt — ein zweites
+   Kabel gibt es nicht, „stromlos" und „an WP-Kabel" sind derselbe Handgriff.
+   Das Kabel bleibt an der Wärmepumpe, und **die Wärmepumpe bleibt eingeschaltet**
+   (Owner-Bestätigung 2026-09-09); abgeschaltet werden muss sie dafür nicht.
 2. `http://<IP-Backup>/settings` öffnen, **MQTT-Port auf 1883** setzen, speichern.
+   Login ist **`admin` mit dem OTA-Passwort** — `/settings` hängt nicht am
+   Notbetriebs-Login.
 
 Der Hostname bleibt wie er ist. Danach im Router die Reservierung nicht
 anfassen — das Backup behält seine eigene Adresse und ist ab sofort das
 produktive Board seiner Stufe.
+
+**Für die Familie steht derselbe Ablauf als Blatt 3 in der Notfallbox:**
+`~/nodered-flows/doku/ernstfall/NOTFALL-3-ERSATZ-BOARD.md`. Es steigt beim Symptom
+ein (eine der beiden Bridge-Seiten `.120`/`.122` lädt nicht, die andere schon),
+wählt das Ersatz-Board über die IP auf dem Etikett, prüft die Stufe auf der
+Startseite gegen und stellt den Port über das Settings-Formular um. Blatt 1 und 2
+verweisen darauf. **Ändert sich hier etwas am Ablauf, muss Blatt 3 mit** — sonst
+steht in der Notfallbox ein Ausdruck, der nicht mehr stimmt.
 
 ## Was damit entfällt
 
