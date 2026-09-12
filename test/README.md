@@ -48,7 +48,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `top_watch.py` | Verlauf statt Momentaufnahme: ausgewaehlte TOPs im Takt abfragen und jede Aenderung mit Zeitstempel melden | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
-| `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung. `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator | KNX-IP-Schnittstelle (`selbsttest`: nein) |
+| `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung, `mischer` als Referenz des Notbetriebsschritts "Vorderhaus". `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator | KNX-IP-Schnittstelle (`selbsttest`: nein) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
@@ -1621,6 +1621,29 @@ der Lauf, ohne etwas gesendet zu haben.
 
 ```bash
 ./knx_tunnel.py lesen 192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe
+```
+
+**Wer antwortet auf ein Lesetelegramm? (seit 1.3.0: `lesen --alle`)** Auf
+6/4/12 antwortet ausser dem Mischeraktor (1.1.39) auch openknx (1.1.245) -
+aus seinem Zwischenspeicher, und schneller. Ohne `--alle` nimmt `lesen` die
+erste Antwort: Am 2026-09-12 war das openknx, und der Lauf meldete GRUEN,
+ohne dass der Aktor gefragt worden waere. Im Notbetriebsfall ist openknx gar
+nicht da. `--alle` wartet das ganze Fenster ab und nennt jede Quelle.
+
+**`mischer` (seit 1.4.0)** ist die Referenz des Firmwareschritts
+"Vorderhaus" (Weg A): eine kurze Verbindung fuer Zwangsstellung AUF/ZU = 0,
+Position 128 und Pumpe 1 samt Ruecklesung, dann alle 10 s eine eigene kurze
+Verbindung, die den Mischerstatus liest - Antworten von openknx zaehlen
+nicht. Zurueckgestellt wird nichts, das ist der Notbetrieb selbst.
+`--mithoeren` haelt fuer den ganzen Lauf einen passiven Tunnel mit Heartbeat
+offen und zeigt auch die spontane Meldung des Aktors am Ziel. Die
+Voreinstellungen sind die Gruppenadressen dieser Anlage.
+
+```bash
+./knx_tunnel.py mischer 192.168.2.127 --quelle 1.1.250 --mithoeren
+# danach den Stand von vorher einzeln wiederherstellen, am 2026-09-12 war das:
+./knx_tunnel.py schreiben 192.168.2.127 6/4/16 1           # Zwangsstellung ZU
+./knx_tunnel.py schreiben 192.168.2.127 6/4/13 46 --dpt 5  # Positionseingang wie vorher
 ```
 
 **Der Selbsttest belegt die Logik, nicht die Schnittstelle.** Die Rahmen

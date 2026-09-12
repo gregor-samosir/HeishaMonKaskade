@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimaler KNXnet/IP-Tunnel-Client - Vorabtest fuer den KNX-Schritt im Notbetrieb.
 
-Version 1.2.0 (2026-09-12)
+Version 1.4.0 (2026-09-12)
 
 Zweck: bevor der Notbetrieb das Vorderhaus per KNX versorgt (Mischer auf 50 %,
 Mischerpumpe ein), belegen, dass ein KURZLEBIGER Tunnel ohne Heartbeat an der
@@ -16,11 +16,14 @@ Entscheidungen und Testplan: Analyse-KNX-Vorderhaus.md.
   ./knx_tunnel.py schalten  192.168.2.127 6/4/20 6/4/21   # Stufe 2: umschalten, zuruecklesen, zurueckstellen
   ./knx_tunnel.py schreiben 192.168.2.127 6/4/20 1 --status 6/4/21   # manuell zurueckstellen
   ./knx_tunnel.py lesen     192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe
+  ./knx_tunnel.py lesen     192.168.2.127 6/4/12 --alle     # jede Antwort samt Quelle
+  ./knx_tunnel.py mischer   192.168.2.127 --mithoeren       # Referenz des Firmwareschritts "Vorderhaus"
 
 Optionen: --port (Standard 3671), --roh (jedes Datagramm als Hex),
 --quelle B.L.G (Quelladresse im Telegramm statt der Tunneladresse),
 --gegenprobe (zweiter Tunnel hoert mit und meldet, mit welcher Quelle die
-eigenen Telegramme auf dem Bus stehen), schreiben: --dpt 1|5 und --status GA
+eigenen Telegramme auf dem Bus stehen), lesen: --alle (das ganze Lesefenster
+abwarten und jede Antwort mit Quelle zeigen), schreiben: --dpt 1|5 und --status GA
 (Ruecklesung, nur DPT 1), schalten: --halten SEK (0-30, Standard 5).
 
 Rueckleseregel (aus Stufe 2, 2026-09-12): Die L_Data.con entscheidet nichts.
@@ -42,6 +45,19 @@ Schreibzugriff waehrend 'schalten' (bewusst NICHT zurueckgestellt),
 Nur Standardbibliothek. Kein KNX IP Secure (an dieser Anlage nicht aktiv).
 
 Changelog:
+  1.4.0 (2026-09-12) Neu 'mischer': der Firmwareschritt "Vorderhaus" nach
+                     Weg A als Referenz - eine kurze Verbindung fuer
+                     Zwangsstellungen, Position, Pumpe und Pumpenstatus, dann
+                     der Mischerstatus in eigenen kurzen Verbindungen, bis er
+                     die Position meldet. Antworten von openknx zaehlen nicht.
+                     '--mithoeren': passiver Tunnel mit Heartbeat fuer den
+                     ganzen Lauf. Simulator mit Mischermodell (proportionale
+                     Fahrt, Meldung erst am Ziel, Zwangsstellung vorrangig).
+  1.3.0 (2026-09-12) Das Lesen von 6/4/12 beantwortete openknx (1.1.245) aus
+                     seinem Zwischenspeicher, nicht der Aktor - und das
+                     Werkzeug nahm die erste Antwort. Neu 'lesen --alle': das
+                     ganze Lesefenster abwarten, jede Antwort mit Quelle.
+                     Bekannte Teilnehmer werden in der Ausgabe benannt.
   1.2.0 (2026-09-12) Nach dem Lauf mit --quelle 1.1.250: Die Schnittstelle
                      liefert bei vorgegebener Quelle keine L_Data.con. Eine
                      FEHLENDE con ist deshalb wie eine negative kein
@@ -87,6 +103,20 @@ APCI_RESPONSE = 0x040
 APCI_WRITE = 0x080
 APCI_NAME = {APCI_READ: "read", APCI_RESPONSE: "response", APCI_WRITE: "write"}
 
+# --- Bekannte Teilnehmer dieser Anlage (nur fuer die Ausgabe) ---------------
+# Gebaut wird fuer genau diese Anlage; die Namen machen Mitschnitte lesbar.
+# 1.1.245 ist openknx: Es beantwortet Lesetelegramme aus seinem
+# Zwischenspeicher (2026-09-12) - eine Antwort von dort ist NICHT der Aktor,
+# und im Notbetriebsfall ist sie gar nicht da.
+OPENKNX = 0x11F5  # 1.1.245
+BEKANNTE_QUELLEN = {OPENKNX: "openknx/ioBroker", 0x113C: "Aktor Pumpe VH",
+                    0x1127: "Aktor Mischer VH"}  # 1.1.39 beantwortete 6/4/12 selbst (2026-09-12)
+
+
+def quelle_text(ia: int) -> str:
+    name = BEKANNTE_QUELLEN.get(ia)
+    return f"{ia_text(ia)} = {name}" if name else ia_text(ia)
+
 # --- Statuscodes der Schnittstelle (CONNECT/CONNECTIONSTATE/ACK) -----------
 STATUS_NAME = {
     0x00: "E_NO_ERROR",
@@ -125,13 +155,20 @@ class KnxFehler(Exception):
 
 
 # --- Ausgabe ----------------------------------------------------------------
-# flush=True: die Ausgabe landet sonst bei Umleitung in eine Datei erst am
+# flush: die Ausgabe landet sonst bei Umleitung in eine Datei erst am
 # Prozessende dort (Python puffert) - ein laufender Test saehe leer aus.
+# Die Sperre haelt jede Zeile am Stueck: Gegenprobe und Mithoerer schreiben
+# aus eigenen Threads, und print() setzt Text und Zeilenende getrennt ab -
+# am 2026-09-12 liefen so zwei Zeilen ineinander.
 _START = time.monotonic()
+_AUSGABE = threading.Lock()
 
 
 def melde(text: str) -> None:
-    print(f"[{(time.monotonic() - _START) * 1000:7.0f} ms] {text}", flush=True)
+    zeile = f"[{(time.monotonic() - _START) * 1000:7.0f} ms] {text}\n"
+    with _AUSGABE:
+        sys.stdout.write(zeile)
+        sys.stdout.flush()
 
 
 # --- Adressen ---------------------------------------------------------------
@@ -607,6 +644,22 @@ class Tunnel:
                             "L-Flag (Lesen)?")
         return antwort
 
+    def lesen_alle(self, ga: int) -> list[Cemi]:
+        """Wie lesen(), wartet aber das ganze Lesefenster ab und liefert jede
+        Antwort. Mehrere sind normal, wenn ausser dem Aktor noch jemand das
+        Objekt mit L-Flag fuehrt - hier openknx (1.1.245). Wer nur die erste
+        nimmt, haelt dessen Zwischenspeicher fuer den Aktor."""
+        marke = len(self.inds)
+        self._sende_cemi(baue_cemi(L_DATA_REQ, self.quelle, ga, APCI_READ), ga)
+        self._warte(lambda: None, self.zeiten.lesen)  # quittiert weiter, sammelt alles
+        antworten = [r for r in self.inds[marke:]
+                     if r.gruppe and r.ziel == ga and r.apci == APCI_RESPONSE]
+        if not antworten:
+            raise KnxFehler(f"keine Antwort auf das Lesen von {ga_text(ga)} binnen "
+                            f"{self.zeiten.lesen:g} s - hat das Objekt in der ETS das "
+                            "L-Flag (Lesen)?")
+        return antworten
+
     def schreiben(self, ga: int, klein: int = 0, daten: bytes = b"") -> Cemi | None:
         con = self._sende_cemi(baue_cemi(L_DATA_REQ, self.quelle, ga, APCI_WRITE, klein, daten), ga)
         zustand = "fehlt" if con is None else ("positiv" if con.bestaetigt_ok else "negativ")
@@ -725,6 +778,48 @@ def _gegenprobe(a, erster: Tunnel, gas: tuple[int, ...]):
     return Gegenprobe(a, erster, gas) if a.gegenprobe else contextlib.nullcontext()
 
 
+class Mithoerer:
+    """Passiver Tunnel fuer die Dauer eines ganzen Laufs: meldet jedes
+    Telegramm auf den beobachteten GAs sofort, mit Zeit und Quelle - auch die
+    spontane Statusmeldung des Mischers am Ziel, die keine der kurzen
+    Abfrageverbindungen sieht.
+
+    Mit Heartbeat alle 30 s: Ein Mischerlauf dauert laenger als die 60 s,
+    nach denen der erste faellig ist. Eigener Thread aus demselben Grund wie
+    bei der Gegenprobe (Quittierfrist 1 s). Das darf das Werkzeug auf dem
+    Mac; die Firmware darf es nicht (Analyse, Abschnitt 8)."""
+
+    def __init__(self, a, gas: tuple[int, ...]):
+        self.zeiten = a.zeiten
+        self.t = Tunnel(a.ip, a.port, a.zeiten, False, gas, 0, praefix="Mithoerer: ")
+        self._stopp = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self) -> "Mithoerer":
+        self.t.verbinden()
+        self._thread = threading.Thread(target=self._lauf, daemon=True)
+        self._thread.start()
+        return self
+
+    def _lauf(self) -> None:
+        try:
+            while not self._stopp.is_set():
+                self.t._warte(lambda: True if self._stopp.is_set() else None, 30.0)
+                if not self._stopp.is_set():
+                    self.t.zustand_pruefen()  # Heartbeat
+        except (KnxFehler, OSError) as fehler:
+            melde(f"Mithoerer: gestoert - {fehler}")
+
+    def __exit__(self, *_) -> bool:
+        time.sleep(self.zeiten.nachlauf)
+        self._stopp.set()
+        # Laenger als eine Antwortfrist warten: Der Thread kann gerade im
+        # Heartbeat stecken; trennen() darf erst danach laufen.
+        self._thread.join(self.zeiten.antwort + 1)
+        self.t.trennen()
+        return False
+
+
 # --- Befehle ------------------------------------------------------------------
 def _tunnel(a, beobachtet: tuple[int, ...] = ()) -> Tunnel:
     return Tunnel(a.ip, a.port, a.zeiten, a.roh, beobachtet, a.quelle)
@@ -739,11 +834,18 @@ def befehl_verbinden(a) -> int:
 
 
 def befehl_lesen(a) -> int:
-    # Stufe 1: nur Lesetelegramme, kein Zustandswechsel
+    # Stufe 1: nur Lesetelegramme, kein Zustandswechsel. Mit --alle wird das
+    # ganze Lesefenster abgewartet - am 2026-09-12 beantwortete openknx das
+    # Lesen von 6/4/12 schneller als jeder Aktor, aus seinem Zwischenspeicher.
     with _tunnel(a, tuple(a.gas)) as t, _gegenprobe(a, t, tuple(a.gas)):
         for ga in a.gas:
-            r = t.lesen(ga)
-            melde(f"{ga_text(ga)} = {wert_text(r)}  (Antwort von {ia_text(r.quelle)})")
+            antworten = t.lesen_alle(ga) if a.alle else [t.lesen(ga)]
+            for r in antworten:
+                melde(f"{ga_text(ga)} = {wert_text(r)}  (Antwort von {quelle_text(r.quelle)})")
+            if a.alle:
+                quellen = sorted({r.quelle for r in antworten})
+                melde(f"{ga_text(ga)}: {len(antworten)} Antwort(en) von "
+                      f"{', '.join(quelle_text(q) for q in quellen)}")
     melde("GRUEN: alle Objekte haben geantwortet")
     return 0
 
@@ -775,22 +877,22 @@ def befehl_schreiben(a) -> int:
     return 4
 
 
-def _schalte(t: Tunnel, a, ziel: int) -> str:
+def _schalte(t: Tunnel, schalt: int, status: int, ziel: int) -> str:
     """Ein Schaltvorgang nach der Rueckleseregel, die auch der Firmwareschritt
     bekommen soll: schreiben, zuruecklesen, bei Abweichung genau einmal
     wiederholen. Die L_Data.con entscheidet nichts (Stufe 2, 2026-09-12).
     Ergebnis: 'ok', 'abweichung' oder 'fremd'."""
     for versuch in (1, 2):
         marke = len(t.inds)
-        t.schreiben(a.schalt, klein=ziel)
-        wert, quelle = t.warte_auf_status(a.status, ziel, marke)
+        t.schreiben(schalt, klein=ziel)
+        wert, quelle = t.warte_auf_status(status, ziel, marke)
         if wert == ziel:
-            melde(f"Rueckmeldung {ga_text(a.status)} = {wert} ({quelle}) - passt")
+            melde(f"Rueckmeldung {ga_text(status)} = {wert} ({quelle}) - passt")
             return "ok"
-        melde(f"Rueckmeldung {ga_text(a.status)} = {wert} ({quelle}) - PASST NICHT, erwartet {ziel}")
+        melde(f"Rueckmeldung {ga_text(status)} = {wert} ({quelle}) - PASST NICHT, erwartet {ziel}")
         # Vor einer Wiederholung: Hat inzwischen jemand anderes geschaltet,
         # gilt dessen Befehl - eine Wiederholung wuerde ihn ueberschreiben.
-        if t.fremde_schreiber(a.schalt):
+        if t.fremde_schreiber(schalt):
             return "fremd"
         if versuch == 1:
             melde("einmal wiederholen")
@@ -821,7 +923,7 @@ def befehl_schalten(a) -> int:
 
             # Hin: umschalten; gehalten wird nur, wenn der Aktor wirklich umsteht
             offen = ausgang
-            hin = _schalte(t, a, ziel)
+            hin = _schalte(t, a.schalt, a.status, ziel)
             if hin == "ok":
                 t.halten(a.halten)
 
@@ -838,7 +940,7 @@ def befehl_schalten(a) -> int:
 
             # Zurueck: auch nach einer Abweichung auf dem Hinweg, denn gesendet
             # wurde - der Aktor kann umstehen, ohne dass die Ruecklesung es zeigte.
-            zurueck = _schalte(t, a, ausgang)
+            zurueck = _schalte(t, a.schalt, a.status, ausgang)
             if zurueck == "fremd":
                 _melde_fremd(t, a)
                 offen = None
@@ -855,6 +957,83 @@ def befehl_schalten(a) -> int:
         if offen is not None:
             melde("ACHTUNG: Der Aktor steht moeglicherweise noch im Testzustand. "
                   f"Zurueckstellen mit:  {rueckstell}")
+
+
+def _mischerstatus(a) -> list[Cemi]:
+    """Eine kurze Verbindung, ein Lesetelegramm, alle Antworten VOM AKTOR.
+    openknx zaehlt nicht: Es antwortet aus seinem Zwischenspeicher und ist im
+    Notbetriebsfall nicht da (2026-09-12)."""
+    with _tunnel(a, (a.pos_status,)) as t:
+        antworten = t.lesen_alle(a.pos_status)
+    for r in antworten:
+        melde(f"  Antwort {ga_text(a.pos_status)} = {wert_text(r)} von {quelle_text(r.quelle)}"
+              + (" - zaehlt nicht" if r.quelle == OPENKNX else ""))
+    return [r for r in antworten if r.quelle != OPENKNX and r.laenge == 2]
+
+
+def befehl_mischer(a) -> int:
+    """Referenz fuer den Firmwareschritt "Vorderhaus", Weg A (Analyse,
+    Abschnitt 8): eine kurze Verbindung fuer beide Zwangsstellungen, die
+    Position, die Pumpe und deren Ruecklesung; dann der Mischerstatus in
+    eigenen kurzen Verbindungen, bis er die Position meldet.
+
+    Kein Tunnel bleibt offen - in der Firmware blockiert die MQTT-
+    Wiederverbindung loop() bis zu 2 s, ein offener Tunnel verpasste die
+    1-s-Quittierfrist. Zwischen den Abfragen ist hier deshalb keiner offen
+    (ausser dem optionalen Mithoerer, der nur fuer den Test da ist).
+    Zurueckgestellt wird NICHTS: Das ist der Notbetrieb selbst."""
+    gas = (a.zw_auf, a.zw_zu, a.pos, a.pos_status, a.pumpe, a.pumpe_status)
+    with (Mithoerer(a, gas) if a.mithoeren else contextlib.nullcontext()):
+        # Ausgangsstellung - nur fuer das Protokoll und die erwartete Fahrzeit
+        melde("Ausgangsstellung:")
+        vorher = _mischerstatus(a)
+
+        # 1. Eine kurze Verbindung fuer alle Befehle. Die Zwangsstellungen
+        #    zuerst: Sie gehen vor, ein Positionsbefehl allein bliebe wirkungslos.
+        with _tunnel(a, gas) as t:
+            t.schreiben(a.zw_auf, klein=0)
+            t.schreiben(a.zw_zu, klein=0)
+            t.schreiben(a.pos, daten=bytes((a.position,)))
+            pumpe = _schalte(t, a.pumpe, a.pumpe_status, 1)
+        start = time.monotonic()
+        if vorher:
+            fahrt = abs(vorher[0].daten[0] - a.position) / 255 * 120
+            melde(f"Mischer faehrt von {vorher[0].daten[0]} auf {a.position}: "
+                  f"erwartet rund {fahrt:.0f} s (120 s je vollem Hub)")
+
+        # 2. Mischerstatus: alle --takt Sekunden eine eigene kurze Verbindung.
+        #    Der Aktor meldet erst in der Zielstellung; bis dahin liefert das
+        #    Lesen die alte Stellung.
+        erreicht = None
+        while erreicht is None and time.monotonic() - start < a.frist:
+            time.sleep(a.takt)  # hier ist kein Tunnel offen
+            vergangen = time.monotonic() - start
+            melde(f"Abfrage nach {vergangen:.0f} s:")
+            try:
+                aktor = _mischerstatus(a)
+            except KnxFehler as fehler:
+                melde(f"  gescheitert: {fehler}")
+                continue
+            if not aktor:
+                melde("  nur openknx hat geantwortet - kein Beleg vom Aktor")
+                continue
+            if any(abs(r.daten[0] - a.position) <= a.toleranz for r in aktor):
+                erreicht = vergangen
+
+    # Ergebnis
+    if pumpe == "fremd":
+        melde("ROT: fremder Schreibzugriff auf die Pumpe - deren Befehl gilt, Zustand pruefen")
+        return 3
+    teile = []
+    if pumpe != "ok":
+        teile.append("Pumpe meldet nicht ein")
+    if erreicht is None:
+        teile.append(f"Mischer meldet {a.position} nicht binnen {a.frist:g} s")
+    if not teile:
+        melde(f"GRUEN: Pumpe ein, Mischer auf {a.position} (gemeldet bei der Abfrage nach {erreicht:.0f} s)")
+        return 0
+    melde("ROT: " + "; ".join(teile))
+    return 4
 
 
 def fuehre_aus(befehl, a) -> int:
@@ -887,12 +1066,16 @@ class Simulator(threading.Thread):
     ADRESSEN = (0x1194, 0x1195)  # 1.1.148, 1.1.149
     AKTOR = 0x113C               # 1.1.60 - Pumpenaktor
     FREMD = 0x11F5               # 1.1.245 - openknx
+    MISCHER_AKTOR = 0x1127       # 1.1.39 - beantwortet 6/4/12 (2026-09-12)
+    ZW_AUF, ZW_ZU, POS, POS_STATUS = 0x3411, 0x3410, 0x340D, 0x340C  # 6/4/17, 6/4/16, 6/4/13, 6/4/12
+    HUB_S = 1.2                  # voller Hub im Simulator (an der Anlage 120 s)
 
     def __init__(self, schalt: int, status: int, mischer: int, kanaele: int = 2, stumm=False,
                  stumm_nach_schreiben=0, ack_verlieren=False, fremd_schreiben=False,
                  con_negativ=False, schreib_verluste=0, negativ_zugestellt=False,
                  quelle_ersetzen=False, con_bei_fremder_quelle=False,
-                 lesen_antwortet=True, status_spontan=True):
+                 lesen_antwortet=True, status_spontan=True, openknx_antwortet=False,
+                 zwang_klemmt=False, mischer_lesen_antwortet=True):
         super().__init__(daemon=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
@@ -913,6 +1096,11 @@ class Simulator(threading.Thread):
         self.con_bei_fremder_quelle = con_bei_fremder_quelle  # abweichend von der Anlage doch eine con
         self.lesen_antwortet = lesen_antwortet
         self.status_spontan = status_spontan
+        self.openknx_antwortet = openknx_antwortet    # openknx beantwortet Lesen aus dem Speicher (2026-09-12)
+        self.zwang_klemmt = zwang_klemmt              # Zwangsstellung ZU laesst sich nicht zuruecknehmen
+        self.mischer_lesen_antwortet = mischer_lesen_antwortet
+        # Mischermodell, Stand wie am 2026-09-12: Zwangsstellung ZU aktiv, Stellung 0
+        self.m = {"auf": 0, "zu": 1, "eingang": 46, "status": 0, "ziel": None, "ankunft": 0.0}
         # Zustand und Protokoll fuer die Pruefungen
         self.verbindungen: dict[int, dict] = {}       # Kanal -> Endpunkt, Adresse, Zaehler
         self.gesendet: list[tuple[int, int]] = []     # (Kanal, Sequenz)
@@ -944,8 +1132,31 @@ class Simulator(threading.Thread):
         return self.stumm or (self.stumm_nach_schreiben > 0
                               and len(self.schreibvorgaenge) >= self.stumm_nach_schreiben)
 
+    def _mischer_neu(self) -> None:
+        # Zwangsstellung geht vor; sonst gilt der Positionseingang
+        m = self.m
+        ziel = 0 if m["zu"] else (255 if m["auf"] else m["eingang"])
+        if ziel == m["status"] and m["ziel"] is None:
+            # steht schon dort: sofort melden (an der Anlage nach 0,4 s)
+            self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.POS_STATUS, APCI_WRITE,
+                                    daten=bytes((ziel,))))
+            return
+        # Fahrt proportional zum Weg, vereinfacht ab der zuletzt gemeldeten Stellung
+        m["ziel"] = ziel
+        m["ankunft"] = time.monotonic() + abs(ziel - m["status"]) / 255 * self.HUB_S
+
+    def _mischer_tick(self) -> None:
+        # Am Ziel angekommen: Status uebernehmen und EINMAL spontan melden -
+        # wer gerade nicht verbunden ist, verpasst die Meldung (wie am Bus)
+        m = self.m
+        if m["ziel"] is not None and time.monotonic() >= m["ankunft"]:
+            m["status"], m["ziel"] = m["ziel"], None
+            self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.POS_STATUS, APCI_WRITE,
+                                    daten=bytes((m["status"],))))
+
     def run(self) -> None:
         while not self._stopp.is_set():
+            self._mischer_tick()
             try:
                 dg, absender = self.sock.recvfrom(1024)
             except socket.timeout:
@@ -1017,6 +1228,26 @@ class Simulator(threading.Thread):
             return
         # Das Telegramm steht auf dem Bus: Die anderen Tunnel sehen es.
         self._an_alle(baue_cemi(L_DATA_IND, quelle, r.ziel, r.apci, r.klein, r.daten), ausser=kanal)
+        if r.apci == APCI_READ and r.ziel == self.POS_STATUS:
+            # Mischerstatus: waehrend der Fahrt die ALTE Stellung
+            stellung = bytes((self.m["status"],))
+            if self.openknx_antwortet:
+                self._an_alle(baue_cemi(L_DATA_IND, self.FREMD, r.ziel, APCI_RESPONSE, daten=stellung))
+            if self.mischer_lesen_antwortet:
+                self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, r.ziel, APCI_RESPONSE,
+                                        daten=stellung))
+        if r.apci == APCI_WRITE and r.ziel in (self.ZW_AUF, self.ZW_ZU, self.POS):
+            if r.ziel == self.ZW_AUF:
+                self.m["auf"] = r.klein & 0x01
+            elif r.ziel == self.ZW_ZU and not (self.zwang_klemmt and not r.klein & 0x01):
+                self.m["zu"] = r.klein & 0x01
+            elif r.ziel == self.POS and r.daten:
+                self.m["eingang"] = r.daten[0]
+            self._mischer_neu()
+        if r.apci == APCI_READ and self.openknx_antwortet and r.ziel in self.werte:
+            # openknx ist schneller als der Aktor - so an der Anlage gesehen
+            klein, daten = self.werte[r.ziel]
+            self._an_alle(baue_cemi(L_DATA_IND, self.FREMD, r.ziel, APCI_RESPONSE, klein, daten))
         if r.apci == APCI_READ and self.lesen_antwortet and r.ziel in self.werte:
             klein, daten = self.werte[r.ziel]
             self._an_alle(baue_cemi(L_DATA_IND, self.AKTOR, r.ziel, APCI_RESPONSE, klein, daten))
@@ -1121,6 +1352,8 @@ def selbsttest() -> int:
         argumente.setdefault("gegenprobe", False)
         if befehl is befehl_schreiben:
             argumente.setdefault("status", None)
+        if befehl is befehl_lesen:
+            argumente.setdefault("alle", False)
         sim = Simulator(schalt, status, mischer, **sim_optionen)
         sim.start()
         ns = argparse.Namespace(ip="127.0.0.1", port=sim.port, zeiten=schnell, roh=False, **argumente)
@@ -1173,6 +1406,16 @@ def selbsttest() -> int:
     code, aus, sim = lauf({"con_bei_fremder_quelle": True, "quelle_ersetzen": True},
                           befehl_lesen, gas=[status], quelle=q250)
     pruefe("lesen --quelle, falls doch eine con kaeme: 'ERSETZT'", code == 0 and "ERSETZT" in aus, aus)
+
+    # Wer antwortet? openknx aus dem Speicher, der Aktor selbst - oder nur einer
+    code, aus, sim = lauf({"openknx_antwortet": True}, befehl_lesen, gas=[status], alle=True)
+    pruefe("lesen --alle: openknx UND Aktor antworten, beide benannt",
+           code == 0 and "2 Antwort(en) von 1.1.60 = Aktor Pumpe VH, 1.1.245 = openknx/ioBroker" in aus, aus)
+
+    code, aus, sim = lauf({"openknx_antwortet": True, "lesen_antwortet": False}, befehl_lesen,
+                          gas=[status], alle=True)
+    pruefe("lesen --alle: nur openknx antwortet -> sichtbar, dass der Aktor schweigt",
+           code == 0 and "1 Antwort(en) von 1.1.245 = openknx/ioBroker" in aus, aus)
 
     code, aus, sim = lauf({"kanaele": 1}, befehl_lesen, gas=[status], gegenprobe=True)
     pruefe("--gegenprobe ohne freien Tunnel -> Exit 1, nichts gesendet",
@@ -1246,6 +1489,28 @@ def selbsttest() -> int:
     code, aus, sim = lauf({"stumm": True}, befehl_verbinden)
     pruefe("verbinden: stumme Gegenstelle -> Exit 1", code == 1 and "keine CONNECT_RESPONSE" in aus, aus)
 
+    # Mischer (Weg A) - Simulator faehrt den vollen Hub in 1,2 s statt 120 s
+    mi = {"position": 128, "toleranz": 2, "takt": 0.3, "frist": 4.0, "mithoeren": False,
+          "zw_auf": Simulator.ZW_AUF, "zw_zu": Simulator.ZW_ZU, "pos": Simulator.POS,
+          "pos_status": Simulator.POS_STATUS, "pumpe": schalt, "pumpe_status": status}
+    code, aus, sim = lauf({"openknx_antwortet": True}, befehl_mischer, **mi)
+    pruefe("mischer: Zwangsstellung ZU zurueck, 128 gemeldet, Pumpe ein; openknx zaehlt nicht",
+           code == 0 and sim.m["zu"] == 0 and sim.m["status"] == 128 and sim.werte[schalt] == (1, b"")
+           and "zaehlt nicht" in aus and "erwartet rund 60 s" in aus and alles_quittiert(sim), aus)
+
+    code, aus, sim = lauf({}, befehl_mischer, **dict(mi, mithoeren=True))
+    pruefe("mischer --mithoeren: spontane Meldung am Ziel vom Mischeraktor gesehen",
+           code == 0 and "Mithoerer: Bus: 1.1.39 -> 6/4/12 write 128" in aus, aus)
+
+    code, aus, sim = lauf({"zwang_klemmt": True}, befehl_mischer, **dict(mi, frist=1.5))
+    pruefe("mischer: Zwangsstellung bleibt aktiv -> 128 nie gemeldet, Exit 4",
+           code == 4 and "Mischer meldet 128 nicht" in aus and sim.m["status"] == 0, aus)
+
+    code, aus, sim = lauf({"openknx_antwortet": True, "mischer_lesen_antwortet": False},
+                          befehl_mischer, **dict(mi, frist=1.5))
+    pruefe("mischer: nur openknx antwortet -> kein Beleg vom Aktor, Exit 4",
+           code == 4 and "kein Beleg vom Aktor" in aus, aus)
+
     print(f"\n{'GRUEN' if fehler == 0 else 'ROT'}: {fehler} Fehler", flush=True)
     return 0 if fehler == 0 else 1
 
@@ -1298,7 +1563,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Minimaler KNXnet/IP-Tunnel-Client (Vorabtest KNX-Notbetrieb)")
     sub = p.add_subparsers(dest="befehl", required=True)
 
-    def mit_ziel(name: str, hilfe: str, telegramme: bool = True):
+    def mit_ziel(name: str, hilfe: str, telegramme: bool = True, gegenprobe: bool = True):
         s = sub.add_parser(name, help=hilfe)
         s.add_argument("ip", type=arg_ip, help="KNX-IP-Schnittstelle")
         s.add_argument("--port", type=arg_port, default=3671)
@@ -1306,16 +1571,32 @@ def main() -> int:
         if telegramme:
             s.add_argument("--quelle", type=arg_ia, default=0, metavar="B.L.G",
                            help="Quelladresse im Telegramm (Standard: Tunneladresse der Schnittstelle)")
+        else:
+            s.set_defaults(quelle=0)
+        if telegramme and gegenprobe:
             s.add_argument("--gegenprobe", action="store_true",
                            help="zweiter Tunnel hoert mit und meldet die Quelle auf dem Bus")
         else:
-            s.set_defaults(quelle=0, gegenprobe=False)
+            s.set_defaults(gegenprobe=False)
         return s
+
+    def arg_bereich(unten: float, oben: float, typ=float):
+        def pruefe(text: str):
+            try:
+                wert = typ(text)
+            except ValueError:
+                raise argparse.ArgumentTypeError(f"'{text}' ist keine Zahl") from None
+            if not unten <= wert <= oben:
+                raise argparse.ArgumentTypeError(f"{wert} ausserhalb {unten:g}-{oben:g}")
+            return wert
+        return pruefe
 
     mit_ziel("verbinden", "Stufe 0: Tunnel auf- und abbauen, kein Bustelegramm",
              telegramme=False).set_defaults(fn=befehl_verbinden)
     s = mit_ziel("lesen", "Stufe 1: GroupValueRead auf eine oder mehrere GAs")
     s.add_argument("gas", type=arg_ga, nargs="+", metavar="GA")
+    s.add_argument("--alle", action="store_true",
+                   help="ganzes Lesefenster abwarten, jede Antwort mit Quelle zeigen")
     s.set_defaults(fn=befehl_lesen)
     s = mit_ziel("schreiben", "Einzelwert schreiben (z. B. manuelles Zurueckstellen)")
     s.add_argument("ga", type=arg_ga)
@@ -1329,6 +1610,23 @@ def main() -> int:
     s.add_argument("status", type=arg_ga, metavar="STATUS_GA")
     s.add_argument("--halten", type=arg_halten, default=5.0, help="Sekunden im Testzustand (0-30)")
     s.set_defaults(fn=befehl_schalten)
+    s = mit_ziel("mischer", "Referenz des Firmwareschritts Vorderhaus: Zwangsstellungen zurueck, "
+                 "Position, Pumpe ein, Mischerstatus abfragen", gegenprobe=False)
+    # Voreinstellungen: die Gruppenadressen dieser Anlage (Owner, 2026-09-12)
+    s.add_argument("--position", type=arg_bereich(0, 255, int), default=128, help="Rohwert 0-255, 128 = 50 %%")
+    s.add_argument("--toleranz", type=arg_bereich(0, 10, int), default=2)
+    s.add_argument("--takt", type=arg_bereich(2, 30), default=10.0, help="Sekunden zwischen den Abfragen")
+    # Obergrenze 110 s: Der Mithoerer haelt seinen Tunnel mit Heartbeat, die
+    # Abfragen sind kurz - aber ein halber Hub dauert 60 s, mehr braucht es nicht.
+    s.add_argument("--frist", type=arg_bereich(10, 110), default=90.0, help="Sekunden bis ROT")
+    s.add_argument("--mithoeren", action="store_true", help="passiver Tunnel fuer den ganzen Lauf")
+    s.add_argument("--zw-auf", dest="zw_auf", type=arg_ga, default=ga_aus_text("6/4/17"))
+    s.add_argument("--zw-zu", dest="zw_zu", type=arg_ga, default=ga_aus_text("6/4/16"))
+    s.add_argument("--pos", type=arg_ga, default=ga_aus_text("6/4/13"))
+    s.add_argument("--pos-status", dest="pos_status", type=arg_ga, default=ga_aus_text("6/4/12"))
+    s.add_argument("--pumpe", type=arg_ga, default=ga_aus_text("6/4/20"))
+    s.add_argument("--pumpe-status", dest="pumpe_status", type=arg_ga, default=ga_aus_text("6/4/21"))
+    s.set_defaults(fn=befehl_mischer)
     sub.add_parser("selbsttest", help="ohne Netz: Rahmen gegen xknx, Ablaeufe gegen Simulator")
 
     a = p.parse_args()

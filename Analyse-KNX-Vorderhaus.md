@@ -22,7 +22,12 @@ dass das Telegramm verloren ging** — die Rücklesung entscheidet. Die
 Quelladresse **1.1.250** lässt sich vorgeben und steht so auf dem Bus; sie
 kostet die Busbestätigung (Abschnitt 8).
 
-**Offen:** der Entwurf des Firmwareschritts (Abschnitt 8).
+**Entwurf steht, an der Anlage erprobt (Abschnitt 8):** ein Schritt am Ende
+der Heizen-Folge (Weg A). Der Mischerlauf mit genau dieser Folge war am
+2026-09-12 grün; der Mischer meldete 128 nach 59,2 s.
+
+**Offen:** die Umsetzung in der Firmware und der Re-Assert für die
+KNX-Befehle in `nodered-flows` (Abschnitt 9).
 
 ---
 
@@ -354,9 +359,60 @@ blockierenden Aufruf unterbrochen werden kann. Den Mischerstatus holt der
 Schritt deshalb durch aktives Lesen in eigenen kurzen Verbindungen, statt auf
 die spontane Meldung zu warten.
 
-**Voraussetzung, noch nicht belegt:** `MischerMotor_Position_Status`
-antwortet auf Lesen (L-Flag). Nachweis mit einem einzigen Lesetelegramm:
-`./knx_tunnel.py lesen 192.168.2.127 6/4/12`.
+**Belegt am 2026-09-12: Der Positionsstatus ist lesbar — aber nicht nur
+vom Aktor.** `lesen 192.168.2.127 6/4/12 6/4/21 --alle`, zwei
+Lesetelegramme, jeweils das ganze Fenster abgewartet:
+
+| GA | Antwort von | nach dem Senden |
+| --- | --- | --- |
+| 6/4/12 | 1.1.245 — **openknx**, aus seinem Zwischenspeicher | 28 ms |
+| 6/4/12 | **1.1.39** — der Mischeraktor | 75 ms |
+| 6/4/21 | 1.1.60 — der Pumpenaktor, sonst niemand | 55 ms |
+
+Ein erster Lauf ohne `--alle` hatte nur die schnellste Antwort genommen, die
+von openknx, und GRÜN gemeldet — eine Messfalle: Im Notbetriebsfall ist
+openknx gar nicht da, im Test antwortet es zuerst. **Der Firmwareschritt
+zählt deshalb nur Antworten der Aktoradressen** (1.1.39 Mischer, 1.1.60
+Pumpe).
+
+### Mischerlauf nach Weg A an der Anlage
+
+Am 2026-09-12 mit Owner-Freigabe gelaufen. Der Regler war gesperrt, die
+Zwangsstellung ZU aktiv. Aufruf: `knx_tunnel.py` 1.4.0, `mischer
+192.168.2.127 --quelle 1.1.250 --mithoeren`, also genau die Folge des
+geplanten Schritts, dazu ein mithörender Tunnel.
+
+| t | Ereignis |
+| ---: | :--- |
+| 0 s | Ausgangsstellung 0, gelesen vom Aktor 1.1.39 |
+| 4,0–7,1 s | 1.1.250 → 6/4/17 = 0, 6/4/16 = 0, 6/4/13 = 128, 6/4/20 = 1 — alle vom Mithörer auf dem Bus gesehen, keine L_Data.con |
+| 11,1 s | Pumpenstatus aktiv gelesen: 1 von 1.1.60. Auf das Schreiben desselben Werts kam keine spontane Meldung |
+| 22–64 s | vier Abfragen: Aktor **und** openknx melden weiter 0 — während der Fahrt steht die alte Stellung im Status |
+| **65,2 s** | **1.1.39 → 6/4/12 write 128**, die spontane Meldung am Ziel — **59,2 s** nach dem Positionsbefehl, erwartet 60,2 s |
+| 78 s | Abfrage: 128 von 1.1.39 → **GRÜN** |
+
+Damit ist belegt: **1.1.39 ist der Mischeraktor**, die Zwangsstellung lässt
+sich über den Bus zurücknehmen, und Weg A trägt an der Anlage so, wie er
+entworfen ist.
+
+**Zurückgestellt** in zwei einzelnen Aufrufen: erst Zwangsstellung ZU = 1
+(15:54:51 UTC), dann der Positionseingang auf 46, den letzten Wert des
+Reglers (15:55:07 UTC) — bei aktiver Zwangsstellung wird er nur hinterlegt.
+Der Mischer meldete 0 um 15:55:51, **60,1 s** nach dem ZU-Befehl (128 → 0,
+erwartet 60,2 s). Kontrolle in ioBroker und per `lesen --alle`: AUF 0, ZU 1,
+Eingang 46, Status 0, Pumpe 1, Regler weiter auf ForcedState 2 — wie vor dem
+Test.
+
+**Was daraus für die Firmware folgt:**
+
+- **Nur Antworten der Aktoren zählen**, deren Adressen in die Einstellungen
+  kommen — sonst meldet jeder Test mit lebendem ioBroker GRÜN aus dem
+  Zwischenspeicher.
+- **Bei Quelle 1.1.250 nicht auf die L_Data.con warten** — sie kommt nie. Im
+  Lauf kostete das vergebliche Warten 1 s je Telegramm.
+- **Die spontane Meldung am Ziel sieht keine kurze Abfrageverbindung**; die
+  aktive Abfrage findet die neue Stellung erst beim nächsten Takt. Bei 10 s
+  Takt kommt GRÜN also bis zu rund 14 s nach der Ankunft — verkraftbar.
 
 Rücklesung: `MischerPumpe_Status` = 1 passt in das Schritt-Timeout — das
 Objekt ist aktiv lesbar, und der Aktor meldet rund 120 ms nach dem Befehl
@@ -373,7 +429,7 @@ Für den Mischer gilt dieselbe Regel. Eine Bewegungsrichtung lässt sich nicht
 prüfen, weil der Aktor keine Zwischenwerte meldet — es bleibt die Endlage,
 und die ist nach höchstens rund 60 s erreicht.
 
-### Zwei Wege, den Schritt einzubauen — Owner-Entscheid offen
+### Zwei Wege, den Schritt einzubauen — entschieden: A (Owner, 2026-09-12)
 
 | | **A: ein Schritt am Ende** (empfohlen) | B: früh senden, am Ende prüfen |
 | --- | --- | --- |
@@ -391,11 +447,17 @@ Einschalten hochfährt. Die ROT-Meldung braucht dann einen eigenen Wortlaut,
 wie beim Hydraulikschritt: Die Wärmepumpen laufen, nur das Vorderhaus ließ
 sich nicht umstellen.
 
-Zwei weitere Punkte zum Entscheiden:
+**Entschieden am 2026-09-12:** Weg A, und die ROT-Meldung sagt: Die
+Wärmepumpen laufen im Notbetrieb, nur das Vorderhaus ließ sich nicht
+umstellen.
 
-- **Nicht eingerichtet** (keine KNX-Adresse in den Einstellungen): Vorschlag
-  „Schritt entfällt, mit Logzeile" statt ROT. Die Firmware ist öffentlich,
-  und nicht jede Anlage hat ein Vorderhaus.
+Außerdem:
+
+- **Nicht eingerichtet** (keine KNX-Adresse in den Einstellungen): **ROT**,
+  wie beim Hydraulikschritt ohne Switch-Adresse. Owner: gebaut wird für genau
+  diese Anlage, auf andere HeishaMon-Anwender wird keine Rücksicht genommen.
+  Mein Vorschlag, den Schritt dann still entfallen zu lassen, ist damit vom
+  Tisch.
 - **Die Zwangsstellungen haben kein Statusobjekt.** Ihr Zurücknehmen bleibt
   blind, wird aber mitgeprüft: Bleibt eine aktiv, erreicht der Mischer die
   128 nicht, und die Rücklesung scheitert.
@@ -480,11 +542,17 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   Normalzustand selbst wiederherstellt.
 - ~~**Mischeradressen aus openknx übernehmen**~~ — erledigt am 2026-09-12
   (Abschnitt 8).
-- **Positionsstatus lesbar?** `./knx_tunnel.py lesen 192.168.2.127 6/4/12`,
-  ein Lesetelegramm. Davon hängt ab, ob der Schritt die Endlage aktiv lesen
-  kann (Abschnitt 8).
-- **Owner-Entscheid:** Einbauweg A oder B, Verhalten ohne Einstellung,
-  Wortlaut der ROT-Meldung (Abschnitt 8).
+- ~~**Positionsstatus lesbar?**~~ — ja, vom Aktor 1.1.39 und von openknx;
+  nur der Aktor zählt (Abschnitt 8).
+- ~~**Owner-Entscheid**~~ — Weg A, ROT-Meldung wie vorgeschlagen, fehlende
+  Einstellung ist ROT (Abschnitt 8).
+- ~~**Mischerlauf nach Weg A an der Anlage**~~ — grün am 2026-09-12
+  (Abschnitt 8).
+- **Umsetzung in der Firmware:** neuer Schritttyp am Ende der Heizen-Folge,
+  Bau der Telegramme in einem arduino-freien Header mit Hosttest gegen die
+  Sollwerte aus `knx_tunnel.py`; Einstellungen für IP, Port, Quelle, die
+  sechs Gruppenadressen und die zwei Aktoradressen. Vorher Rettungsanker und
+  Branch.
 
 ## 10. Quellen
 
