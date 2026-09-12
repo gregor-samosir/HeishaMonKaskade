@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimaler KNXnet/IP-Tunnel-Client - Vorabtest fuer den KNX-Schritt im Notbetrieb.
 
-Version 1.5.0 (2026-09-12)
+Version 1.6.0 (2026-09-12)
 
 Zweck: bevor der Notbetrieb das Vorderhaus per KNX versorgt (Mischer auf 50 %,
 Mischerpumpe ein), belegen, dass ein KURZLEBIGER Tunnel ohne Heartbeat an der
@@ -18,7 +18,7 @@ Entscheidungen und Testplan: Analyse-KNX-Vorderhaus.md.
   ./knx_tunnel.py lesen     192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe
   ./knx_tunnel.py lesen     192.168.2.127 6/4/12 --alle     # jede Antwort samt Quelle
   ./knx_tunnel.py mischer   192.168.2.127 --mithoeren       # Referenz des Firmwareschritts "Vorderhaus"
-  ./knx_tunnel.py mischer   192.168.2.127 --bewegung --ohne-pumpe --mithoeren   # Bestaetigung ueber 6/4/14
+  ./knx_tunnel.py mischer   192.168.2.127 --bewegung --ohne-pumpe --mithoeren   # Rueckleseregel A (6/4/14)
 
 Optionen: --port (Standard 3671), --roh (jedes Datagramm als Hex),
 --quelle B.L.G (Quelladresse im Telegramm statt der Tunneladresse),
@@ -26,7 +26,7 @@ Optionen: --port (Standard 3671), --roh (jedes Datagramm als Hex),
 eigenen Telegramme auf dem Bus stehen), lesen: --alle (das ganze Lesefenster
 abwarten und jede Antwort mit Quelle zeigen), schreiben: --dpt 1|5 und --status GA
 (Ruecklesung, nur DPT 1), schalten: --halten SEK (0-30, Standard 5),
-mischer: --bewegung [GA] (schnelle Bestaetigung ueber die Bewegungsmeldung,
+mischer: --bewegung [GA] (Rueckleseregel A mit der Bewegungsmeldung,
 Standard 6/4/14), --ohne-pumpe, --ohne-zwang (Negativprobe), --mithoeren.
 
 Rueckleseregel (aus Stufe 2, 2026-09-12): Die L_Data.con entscheidet nichts.
@@ -48,6 +48,16 @@ Schreibzugriff waehrend 'schalten' (bewusst NICHT zurueckgestellt),
 Nur Standardbibliothek. Kein KNX IP Secure (an dieser Anlage nicht aktiv).
 
 Changelog:
+  1.6.0 (2026-09-12) Owner-Entscheid A: 'mischer --bewegung' setzt die
+                     Rueckleseregel A um und ist damit die Referenz des
+                     Firmwareschritts. Neu: Bewegung VOR den Befehlen lesen -
+                     faehrt der Mischer schon oder schweigt der Aktor, gilt die
+                     Endstellung mit Frist 220 s. Der Eingang ist Pflicht (keine
+                     Antwort = Abweichung). Bei ROT genau eine Wiederholung der
+                     Mischertelegramme. Simulator nach den Laeufen vom
+                     2026-09-12: Das Zuruecknehmen der Zwangsstellung allein
+                     faehrt nicht mehr (Option 'freigabe_faehrt' fuer den
+                     Gegenfall).
   1.5.0 (2026-09-12) Owner-Vorschlag: den Mischer ueber 'MischerMotor_Position_
                      Bewegung' (6/4/14, K/L/Ue, 1 = faehrt bis zum Ziel)
                      bestaetigen, statt bis zu 60 s auf die Endstellung zu
@@ -166,7 +176,8 @@ class Zeiten:
     con: float = 1.0       # L_Data.con - kam an der Anlage nach 22 ms; fehlt sie, entscheidet die Ruecklesung
     lesen: float = 3.0     # GroupValueResponse des Aktors
     status: float = 3.0    # spontane Statusmeldung nach dem Schalten, sonst aktiv lesen
-    bewegung: float = 2.0  # spontane Bewegungsmeldung des Mischers - kam in der Historie nach 230-330 ms
+    bewegung: float = 2.0  # spontane Bewegungsmeldung des Mischers - am Bus nach rund 0,1 s (2026-09-12)
+    endlauf: float = 220.0  # Regel A, Rueckfall: Endlagenlauf bis 144 s + halber Hub 60 s + Reserve
     zuordnung: float = 0.5  # Mindestabstand zweier eigener Telegramme, um ihr die Meldung zuzuordnen
     nachlauf: float = 0.3  # Gegenprobe: so lange nach dem letzten Telegramm weiter mithoeren
 
@@ -1017,27 +1028,36 @@ def _mischerstatus(a) -> list[Cemi]:
     return [r for r in antworten if _vom_aktor(r) and r.laenge == 2]
 
 
-def _bestaetigung(t: Tunnel, a, marke: int, gesendet: list[tuple[float, str]]) -> tuple[bool, str]:
-    """Kandidat fuer eine schnellere Rueckleseregel (Owner-Vorschlag
-    2026-09-12): noch in der Befehlsverbindung belegen, dass der Mischer auf
-    die Position faehrt, statt bis zu 60 s auf die Endstellung zu warten.
+def _bestaetigung(t: Tunnel, a, marke: int, gesendet: list[tuple[float, str]],
+                  schnell: bool) -> tuple[str, str]:
+    """Rueckleseregel A des Mischers (Owner-Entscheid 2026-09-12, Analyse
+    Abschnitt 8) - der Teil in der Befehlsverbindung. Belege nur vom
+    Mischeraktor:
+    - Eingang (6/4/13) = Position: Der Befehl steht im Aktor. Allein belegt
+      das nichts - der Aktor speichert die Position auch unter Zwangsstellung
+      (Lauf 4). Keine Antwort zaehlt wie eine Abweichung.
+    - Bewegung (6/4/14) = 1 seit den Befehlen, oder der Status (6/4/12) am
+      Ziel, wenn der Mischer schon dort steht (Lauf 2): Der Befehl wirkt.
+    Die schnelle Regel gilt nur, wenn die Bewegung VOR den Befehlen auf 0
+    stand ('schnell'). Faehrt der Mischer schon - Endlagenlauf nach einem
+    Zwangsstellungswechsel, bis 144 s -, stammt eine 1 nicht sicher von
+    diesen Befehlen; dann entscheidet die Endstellung.
+    Ergebnis: ('gruen' | 'rot' | 'endstellung', Begruendung)."""
+    # 1. Eingang - in beiden Faellen Pflicht
+    melde("Eingang lesen:")
+    eingang = _aktorwert(t, a.pos)
+    if eingang != a.position:
+        ist = "keine Antwort" if eingang is None else str(eingang)
+        return "rot", f"Eingang meldet {ist} statt {a.position} - der Positionsbefehl steht nicht im Aktor"
+    if not schnell:
+        return "endstellung", "Bewegung stand vor den Befehlen nicht auf 0 - die schnelle Regel gilt nicht"
 
-    Belege, alle nur vom Mischeraktor:
-    - Bewegung (6/4/14): spontan 1 seit Beginn der Verbindung, sonst aktiv
-      gelesen. Allein reicht sie nicht: Schon das Zuruecknehmen der
-      Zwangsstellung kann den Mischer losfahren lassen - auf den ALTEN
-      Eingangswert. Ginge der Positionsbefehl verloren, meldete sie trotzdem 1.
-    - Eingang (6/4/13): Steht die Position im Aktor? Schliesst genau diese
-      Luecke - sofern der Aktor den geschriebenen Wert zuruecklesen laesst.
-    - Status (6/4/12): Steht der Mischer schon am Ziel, faehrt er nicht;
-      dann belegt der Status.
-    Keine Wiederholung: Der Test soll das Verhalten des Aktors roh zeigen."""
     def bewegung_eins():
         return next((r for r in t.inds[marke:]
                      if r.gruppe and r.ziel == a.bewegung and _vom_aktor(r)
                      and r.apci == APCI_WRITE and r.laenge == 1 and r.klein == 1), None)
 
-    # 1. Kurz auf die spontane Meldung warten. Sie kann schon vor dem
+    # 2. Kurz auf die spontane Meldung warten. Sie kann schon vor dem
     #    Positionsbefehl gekommen sein - deshalb zaehlt alles seit 'marke'.
     spontan = t._warte(bewegung_eins, t.zeiten.bewegung)
     if spontan is None:
@@ -1046,7 +1066,7 @@ def _bestaetigung(t: Tunnel, a, marke: int, gesendet: list[tuple[float, str]]) -
         # Welches eigene Telegramm ging voraus? Das zeigt, ob schon das
         # Zuruecknehmen der Zwangsstellung den Mischer losfahren liess.
         # Gemessen wird die EMPFANGSzeit: Liegen zwei eigene Telegramme dichter
-        # als die Laufzeit der Meldung (230-330 ms), kommt die Meldung auf das
+        # als die Laufzeit der Meldung (am Bus rund 0,1 s), kommt die Meldung auf das
         # erste erst nach dem zweiten an. Mit --quelle 1.1.250 trennt sie die
         # vergebliche Wartezeit auf die con (1 s); ohne kommt die con nach 22 ms.
         vorher = [(z, text) for z, text in gesendet if z <= spontan.zeit]
@@ -1057,26 +1077,23 @@ def _bestaetigung(t: Tunnel, a, marke: int, gesendet: list[tuple[float, str]]) -
                       f"{vorher[-2][1]} gesendet, Zuordnung unsicher")
         melde(f"Bewegung 1 spontan vom Aktor{bezug}")
 
-    # 2. Aktiv lesen - jede Antwort sichtbar, es zaehlt nur der Aktor
-    melde("Eingang lesen:")
-    eingang = _aktorwert(t, a.pos)
-    melde("Bewegung lesen:")
-    bewegung = _aktorwert(t, a.bewegung)
+    # 3. Ohne spontane Meldung aktiv nachlesen - es zaehlt nur der Aktor
+    if spontan is None:
+        melde("Bewegung lesen:")
+        bewegt = _aktorwert(t, a.bewegung) == 1
+    else:
+        bewegt = True
+    if bewegt:
+        return "gruen", "Mischer faehrt, Eingang passt"
+
+    # 4. Keine Bewegung: Steht der Mischer schon am Ziel, faehrt er nicht
+    #    und meldet auch nichts (Lauf 2) - dann belegt der Status
     melde("Status lesen:")
     status = _aktorwert(t, a.pos_status)
-
-    # 3. Urteil. Ein abweichender Eingang schlaegt jede Bewegung: Dann faehrt
-    #    der Mischer, aber nicht auf unsere Position.
-    if eingang is not None and eingang != a.position:
-        return False, f"Eingang meldet {eingang} statt {a.position} - der Positionsbefehl steht nicht im Aktor"
-    if spontan is not None or bewegung == 1:
-        grund = "Mischer faehrt"
-    elif status is not None and abs(status - a.position) <= a.toleranz:
-        grund = f"Mischer steht schon am Ziel ({status})"
-    else:
-        return False, ("keine Bewegung und nicht am Ziel - Zwangsstellung noch aktiv "
-                       "oder Positionsbefehl nicht angekommen")
-    return True, grund + (", Eingang passt" if eingang is not None else ", Eingang nicht lesbar")
+    if status is not None and abs(status - a.position) <= a.toleranz:
+        return "gruen", f"Mischer steht schon am Ziel ({status}), Eingang passt"
+    return "rot", ("keine Bewegung und nicht am Ziel - Zwangsstellung noch aktiv "
+                   "oder Positionsbefehl nicht angekommen")
 
 
 def befehl_mischer(a) -> int:
@@ -1085,9 +1102,12 @@ def befehl_mischer(a) -> int:
     Position, die Pumpe und deren Ruecklesung; dann der Mischerstatus in
     eigenen kurzen Verbindungen, bis er die Position meldet.
 
-    Mit --bewegung zusaetzlich die schnelle Bestaetigung ueber 6/4/14 in der
-    Befehlsverbindung (_bestaetigung). Die Abfrage bis zur Endstellung laeuft
-    dann als Gegenkontrolle weiter und deckt ein falsches GRUEN auf.
+    Mit --bewegung gilt die entschiedene Rueckleseregel A (_bestaetigung):
+    Bewegung vor den Befehlen lesen, danach Eingang plus Bewegung oder
+    Status, bei ROT genau eine Wiederholung. Stand die Bewegung vorher nicht
+    auf 0, entscheidet die Endstellung mit verlaengerter Frist. Sonst laeuft
+    die Abfrage bis zur Endstellung als Gegenkontrolle weiter und deckt ein
+    falsches GRUEN auf.
 
     Kein Tunnel bleibt offen - in der Firmware blockiert die MQTT-
     Wiederverbindung loop() bis zu 2 s, ein offener Tunnel verpasste die
@@ -1108,24 +1128,39 @@ def befehl_mischer(a) -> int:
         #    zuerst: Sie gehen vor, ein Positionsbefehl allein bliebe wirkungslos.
         #    Die Sendezeiten braucht die Bestaetigung fuer ihre Laufzeiten.
         gesendet: list[tuple[float, str]] = []
-        bestaetigt = None      # (gruen, begruendung) - nur mit --bewegung
+        bestaetigt = None      # ('gruen'|'rot'|'endstellung', Begruendung) - nur mit --bewegung
         pumpe = "ausgelassen"  # bleibt so mit --ohne-pumpe
         with _tunnel(a, gas) as t:
-            marke = len(t.inds)
+            # Regel A, zuerst: Faehrt der Mischer schon, gilt die schnelle
+            # Regel nicht. Keine Antwort vom Aktor zaehlt wie "faehrt" - dann
+            # entscheidet die Endstellung, die sicherere Seite.
+            schnell = False
+            if a.bewegung is not None:
+                melde("Bewegung vor den Befehlen lesen:")
+                schnell = _aktorwert(t, a.bewegung) == 0
 
             def sende(ga: int, klein: int = 0, daten: bytes = b"") -> None:
                 gesendet.append((time.monotonic(), f"{ga_text(ga)} = {daten[0] if daten else klein}"))
                 t.schreiben(ga, klein=klein, daten=daten)
 
-            if a.ohne_zwang:
-                melde("Negativprobe: Zwangsstellungen bleiben stehen, der Mischer darf nicht fahren")
-            else:
-                sende(a.zw_auf)
-                sende(a.zw_zu)
-            sende(a.pos, daten=bytes((a.position,)))
-            start = gesendet[-1][0]  # Fahrzeit und Frist zaehlen ab dem Positionsbefehl
-            if a.bewegung is not None:
-                bestaetigt = _bestaetigung(t, a, marke, gesendet)
+            # Regel A: bei ROT genau eine Wiederholung der Mischertelegramme -
+            # dieselben Werte noch einmal zu schreiben ist unschaedlich
+            for versuch in (1, 2):
+                marke = len(t.inds)
+                if a.ohne_zwang:
+                    melde("Negativprobe: Zwangsstellungen bleiben stehen, der Mischer darf nicht fahren")
+                else:
+                    sende(a.zw_auf)
+                    sende(a.zw_zu)
+                sende(a.pos, daten=bytes((a.position,)))
+                start = gesendet[-1][0]  # Fahrzeit und Frist zaehlen ab dem letzten Positionsbefehl
+                if a.bewegung is None:
+                    break
+                bestaetigt = _bestaetigung(t, a, marke, gesendet, schnell)
+                if bestaetigt[0] != "rot":
+                    break
+                if versuch == 1:
+                    melde(f"Bestaetigung ROT ({bestaetigt[1]}) - einmal wiederholen")
             if not a.ohne_pumpe:
                 pumpe = _schalte(t, a.pumpe, a.pumpe_status, 1)
         if vorher and not a.ohne_zwang:
@@ -1136,8 +1171,15 @@ def befehl_mischer(a) -> int:
         # 2. Mischerstatus: alle --takt Sekunden eine eigene kurze Verbindung.
         #    Der Aktor meldet erst in der Zielstellung; bis dahin liefert das
         #    Lesen die alte Stellung.
+        # Regel A, Rueckfall: Fuhr der Mischer schon, ist die Endstellung das
+        # Urteil - mit einer Frist, die den laufenden Endlagenlauf (bis 144 s)
+        # und danach den Weg zur Position abdeckt.
+        frist = a.frist
+        if bestaetigt is not None and bestaetigt[0] == "endstellung":
+            frist = max(a.frist, a.zeiten.endlauf)
+            melde(f"Regel A: {bestaetigt[1]} - Urteil ueber die Endstellung, Frist {frist:g} s")
         erreicht = None
-        while erreicht is None and time.monotonic() - start < a.frist:
+        while erreicht is None and time.monotonic() - start < frist:
             time.sleep(a.takt)  # hier ist kein Tunnel offen
             vergangen = time.monotonic() - start
             melde(f"Abfrage nach {vergangen:.0f} s:")
@@ -1160,8 +1202,8 @@ def befehl_mischer(a) -> int:
     teile = []
     if pumpe not in ("ok", "ausgelassen"):
         teile.append("Pumpe meldet nicht ein")
-    if bestaetigt is not None:
-        gruen, grund = bestaetigt
+    if bestaetigt is not None and bestaetigt[0] != "endstellung":
+        gruen, grund = bestaetigt[0] == "gruen", bestaetigt[1]
         melde(f"Bestaetigung ueber {ga_text(a.bewegung)}: {'GRUEN' if gruen else 'ROT'} - {grund}")
         if gruen and erreicht is None:
             teile.append("Bestaetigung war GRUEN, der Mischer kam aber nicht an - FALSCHES GRUEN")
@@ -1170,7 +1212,7 @@ def befehl_mischer(a) -> int:
         elif not gruen:
             teile.append("Bestaetigung ROT")
     if erreicht is None:
-        teile.append(f"Mischer meldet {a.position} nicht binnen {a.frist:g} s")
+        teile.append(f"Mischer meldet {a.position} nicht binnen {frist:g} s")
     if not teile:
         melde(f"GRUEN: {'Pumpe ein, ' if pumpe == 'ok' else ''}Mischer auf {a.position} "
               f"(gemeldet bei der Abfrage nach {erreicht:.0f} s)")
@@ -1220,7 +1262,7 @@ class Simulator(threading.Thread):
                  quelle_ersetzen=False, con_bei_fremder_quelle=False,
                  lesen_antwortet=True, status_spontan=True, openknx_antwortet=False,
                  zwang_klemmt=False, mischer_lesen_antwortet=True, pos_verloren=False,
-                 mischer_start: dict | None = None):
+                 freigabe_faehrt=False, mischer_start: dict | None = None):
         super().__init__(daemon=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
@@ -1245,6 +1287,7 @@ class Simulator(threading.Thread):
         self.zwang_klemmt = zwang_klemmt              # Zwangsstellung ZU laesst sich nicht zuruecknehmen
         self.mischer_lesen_antwortet = mischer_lesen_antwortet
         self.pos_verloren = pos_verloren              # nur der Positionsbefehl erreicht den Aktor nicht
+        self.freigabe_faehrt = freigabe_faehrt        # Gegenfall: Freigabe faehrt auf den Eingang (Anlage: nein)
         # Mischermodell, Stand wie am 2026-09-12: Zwangsstellung ZU aktiv, Stellung 0
         self.m = {"auf": 0, "zu": 1, "eingang": 46, "status": 0, "ziel": None, "ankunft": 0.0}
         self.m.update(mischer_start or {})
@@ -1279,10 +1322,19 @@ class Simulator(threading.Thread):
         return self.stumm or (self.stumm_nach_schreiben > 0
                               and len(self.schreibvorgaenge) >= self.stumm_nach_schreiben)
 
-    def _mischer_neu(self) -> None:
-        # Zwangsstellung geht vor; sonst gilt der Positionseingang
+    def _mischer_neu(self, ga: int) -> None:
+        # Zwangsstellung geht vor; sonst gilt der Positionseingang - aber erst
+        # mit einem Positionsbefehl: Das Zuruecknehmen der Zwangsstellung
+        # allein liess den Aktor an der Anlage stehen (2026-09-12, Lauf 1).
+        # Was er mitten in einem Endlagenlauf tut, ist nicht gemessen; hier
+        # faehrt er sein altes Ziel weiter.
         m = self.m
-        ziel = 0 if m["zu"] else (255 if m["auf"] else m["eingang"])
+        if m["zu"] or m["auf"]:
+            ziel = 0 if m["zu"] else 255
+        elif ga == self.POS or self.freigabe_faehrt:
+            ziel = m["eingang"]
+        else:
+            return
         if ziel == m["status"] and m["ziel"] is None:
             # steht schon dort: sofort melden (an der Anlage nach 0,4 s)
             self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.POS_STATUS, APCI_WRITE,
@@ -1408,7 +1460,7 @@ class Simulator(threading.Thread):
                 self.m["zu"] = r.klein & 0x01
             elif r.ziel == self.POS and r.daten:
                 self.m["eingang"] = r.daten[0]
-            self._mischer_neu()
+            self._mischer_neu(r.ziel)
         if r.apci == APCI_READ and self.openknx_antwortet and r.ziel in self.werte:
             # openknx ist schneller als der Aktor - so an der Anlage gesehen
             klein, daten = self.werte[r.ziel]
@@ -1515,7 +1567,7 @@ def selbsttest() -> int:
     #    Fehlerfall-Laeufe so lange wie an der Anlage.
     schalt, status, mischer = ga_aus_text("6/4/20"), ga_aus_text("6/4/21"), ga_aus_text("6/4/30")
     schnell = Zeiten(antwort=1.0, trennen=0.5, ack=0.2, con=0.2, lesen=0.5, status=0.3, bewegung=0.3,
-                     zuordnung=0.1, nachlauf=0.1)
+                     zuordnung=0.1, endlauf=3.0, nachlauf=0.1)
 
     def lauf(sim_optionen: dict, befehl, **argumente):
         argumente.setdefault("quelle", 0)
@@ -1688,11 +1740,12 @@ def selbsttest() -> int:
     # Mit Quelle 1.1.250 wie an der Anlage: keine con, die Wartezeit darauf
     # trennt die Telegramme - nur so ist die Meldung ihrem Ausloeser zuzuordnen
     code, aus, sim = lauf({"openknx_antwortet": True}, befehl_mischer, **dict(mb, quelle=q250))
-    pruefe("mischer --bewegung --quelle 1.1.250: faehrt schon nach dem Zuruecknehmen von ZU, "
-           "Eingang passt, openknx-0 auf 6/4/14 zaehlt nicht",
+    pruefe("mischer --bewegung --quelle 1.1.250: Regel A schnell - Bewegung vorher 0, faehrt erst auf "
+           "den Positionsbefehl, Eingang passt, openknx-0 auf 6/4/14 zaehlt nicht",
            code == 0 and "Bestaetigung ueber 6/4/14: GRUEN - Mischer faehrt, Eingang passt" in aus
-           and "nach dem Senden von 6/4/16 = 0" in aus and "Zuordnung unsicher" not in aus
-           and "6/4/14 = 0 von 1.1.245" in aus and sim.m["status"] == 128 and alles_quittiert(sim), aus)
+           and "nach dem Senden von 6/4/13 = 128" in aus and "Zuordnung unsicher" not in aus
+           and "6/4/14 = 0 von 1.1.245" in aus and "wiederholen" not in aus
+           and sim.m["status"] == 128 and alles_quittiert(sim), aus)
 
     code, aus, sim = lauf({}, befehl_mischer, **mb)
     pruefe("mischer --bewegung ohne Quelle: Telegramme zu dicht -> Zuordnung als unsicher gemeldet",
@@ -1710,10 +1763,31 @@ def selbsttest() -> int:
            and not {Simulator.ZW_AUF, Simulator.ZW_ZU} & geschrieben(sim) and sim.m["zu"] == 1, aus)
 
     code, aus, sim = lauf({"pos_verloren": True}, befehl_mischer, **dict(mb, frist=1.5))
-    pruefe("mischer --bewegung: Positionsbefehl verloren, Mischer faehrt auf den alten Eingang -> "
-           "der Eingang deckt es auf",
-           code == 4 and "Eingang meldet 46 statt 128" in aus and "FALSCHES GRUEN" not in aus
-           and sim.m["status"] == 46, aus)
+    pruefe("mischer --bewegung: Positionsbefehl kommt nie an -> Eingang deckt es auf, "
+           "eine Wiederholung, ROT",
+           code == 4 and "Eingang meldet 46 statt 128" in aus and aus.count("einmal wiederholen") == 1
+           and "FALSCHES GRUEN" not in aus and sim.m["status"] == 0, aus)
+
+    code, aus, sim = lauf({"pos_verloren": True, "freigabe_faehrt": True}, befehl_mischer,
+                          **dict(mb, frist=1.5))
+    pruefe("mischer --bewegung: Gegenfall - Freigabe faehrt auf den alten Eingang, Positionsbefehl "
+           "verloren -> Bewegung 1, aber der Eingang deckt es auf",
+           code == 4 and "Eingang meldet 46 statt 128" in aus and sim.m["status"] == 46, aus)
+
+    code, aus, sim = lauf({"schreib_verluste": 3}, befehl_mischer, **dict(mb, quelle=q250, ohne_pumpe=True))
+    pruefe("mischer --bewegung: erster Satz Mischertelegramme verloren -> die eine Wiederholung "
+           "traegt, GRUEN",
+           code == 0 and aus.count("einmal wiederholen") == 1
+           and "GRUEN - Mischer faehrt, Eingang passt" in aus and sim.m["status"] == 128, aus)
+
+    # Regel A, Rueckfall: ankunft weit genug hinten, dass die Vorab-Lesung
+    # den Endlagenlauf noch sieht
+    fahrend = {"zu": 1, "status": 255, "ziel": 0, "ankunft": time.monotonic() + 3.0}
+    code, aus, sim = lauf({"mischer_start": fahrend}, befehl_mischer, **dict(mb, ohne_pumpe=True))
+    pruefe("mischer --bewegung: Mischer faehrt beim Start schon (Endlagenlauf) -> schnelle Regel "
+           "gilt nicht, Urteil ueber die Endstellung",
+           code == 0 and "die schnelle Regel gilt nicht" in aus and "Bestaetigung ueber" not in aus
+           and "Frist 4 s" in aus and sim.m["status"] == 128, aus)
 
     print(f"\n{'GRUEN' if fehler == 0 else 'ROT'}: {fehler} Fehler", flush=True)
     return 0 if fehler == 0 else 1
@@ -1825,7 +1899,7 @@ def main() -> int:
     s.add_argument("--frist", type=arg_bereich(10, 110), default=90.0, help="Sekunden bis ROT")
     s.add_argument("--mithoeren", action="store_true", help="passiver Tunnel fuer den ganzen Lauf")
     s.add_argument("--bewegung", nargs="?", type=arg_ga, const=ga_aus_text("6/4/14"), default=None,
-                   metavar="GA", help="schnelle Bestaetigung ueber die Bewegungsmeldung (ohne GA: 6/4/14)")
+                   metavar="GA", help="Rueckleseregel A ueber die Bewegungsmeldung (ohne GA: 6/4/14)")
     s.add_argument("--ohne-pumpe", dest="ohne_pumpe", action="store_true", help="Pumpe nicht schalten")
     s.add_argument("--ohne-zwang", dest="ohne_zwang", action="store_true",
                    help="Zwangsstellungen NICHT zuruecknehmen - Negativprobe, der Mischer darf nicht fahren")

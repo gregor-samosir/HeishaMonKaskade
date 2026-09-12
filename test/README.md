@@ -1646,12 +1646,13 @@ Voreinstellungen sind die Gruppenadressen dieser Anlage.
 ./knx_tunnel.py schreiben 192.168.2.127 6/4/13 46 --dpt 5  # Positionseingang wie vorher
 ```
 
-**`mischer --bewegung` (seit 1.5.0)** prueft den Owner-Vorschlag, den Mischer
-ueber `MischerMotor_Position_Bewegung` (6/4/14) zu bestaetigen statt ueber die
-Endstellung: noch in der Befehlsverbindung kurz auf die spontane
-Bewegungsmeldung warten, dann Eingang (6/4/13), Bewegung und Status vom Aktor
-lesen. Die Abfrage bis zur Endstellung laeuft als Gegenkontrolle weiter und
-meldet ein falsches GRUEN. `--ohne-zwang` laesst die Zwangsstellungen stehen
+**`mischer --bewegung` (seit 1.5.0, Regel A seit 1.6.0)** bestaetigt den
+Mischer ueber `MischerMotor_Position_Bewegung` (6/4/14) statt ueber die
+Endstellung, nach der entschiedenen Rueckleseregel A (Analyse, Abschnitt 8):
+Bewegung vor den Befehlen lesen, nach den Befehlen Eingang (6/4/13) plus
+Bewegung oder Status, bei ROT genau eine Wiederholung. Fuhr der Mischer
+schon, entscheidet die Endstellung (Frist 220 s). Sonst laeuft die Abfrage
+bis zur Endstellung als Gegenkontrolle weiter und meldet ein falsches GRUEN. `--ohne-zwang` laesst die Zwangsstellungen stehen
 (Negativprobe: der Mischer darf nicht fahren), `--ohne-pumpe` laesst die
 Pumpe in Ruhe. Die Laufzeit der Bewegungsmeldung ist nur mit
 `--quelle 1.1.250` ihrem Ausloeser zuzuordnen - ohne liegen die Telegramme
