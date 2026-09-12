@@ -15,8 +15,12 @@ arduino-freier Header in der Firmware.
 **Entschieden (Owner, 2026-09-12):** Der KNX-Teil kommt als zusätzlicher
 Schritt in die Schrittfolge des Notbetriebs (Abschnitt 5).
 
-**Offen:** die drei Stufen des Vorabtests an der Anlage (Abschnitt 7) und
-danach der Entwurf des Firmwareschritts (Abschnitt 8).
+**Vorabtest abgeschlossen (2026-09-12, Abschnitt 7):** Der kurzlebige Tunnel
+trägt, der Pumpenstatus ist aktiv lesbar, und Schalten samt Rücklesung
+funktioniert. Wichtigster Befund: Eine **negative Busbestätigung heißt nicht,
+dass das Telegramm verloren ging** — die Rücklesung entscheidet.
+
+**Offen:** der Entwurf des Firmwareschritts (Abschnitt 8).
 
 ---
 
@@ -242,7 +246,51 @@ einen realen Anlass.
 **Für Stufe 2 heißt das:** Die Pumpe läuft. Der Test schaltet sie für 5 s
 **aus** und danach wieder ein.
 
-Stufe 2: noch nicht gelaufen.
+**Stufe 2 — Ziel erreicht, das Werkzeug meldete trotzdem Fehler
+(2026-09-12, 14:43 UTC).** Die Pumpe war genau einmal 5,06 s aus und läuft
+wieder. Der Ablauf, aus dem Werkzeug und aus der InfluxDB-Historie von
+openknx:
+
+| Zeit (UTC) | Ereignis | Beleg |
+| --- | --- | --- |
+| 14:43:28,21 | Lesen: Status 1 | Werkzeug, Historie |
+| 14:43:28,21 | Schalten = 0, L_Data.con **positiv** (`9c`) | Werkzeug; openknx empfängt 0 |
+| 14:43:28,28 | Status 0, vom Aktor spontan gemeldet, 75 ms nach dem Befehl | Werkzeug, Historie |
+| bis 14:43:33,2 | 5 s halten; vier Telegramme anderer Gruppen quittiert, **kein** fremder Schreibzugriff auf 6/4/20 | Werkzeug |
+| 14:43:33,29 | Schalten = 1, L_Data.con **negativ** (`9d`, Bit 0 gesetzt) — das Werkzeug bricht ab und nennt die Rückstellzeile | Werkzeug; openknx empfängt 1 |
+| 14:43:33,35 | Status 1, 55 ms nach dem Befehl | Historie |
+| 14:44:06 | Kontrolle per `lesen`: Status 1 | Werkzeug, ioBroker |
+
+Die beiden Schreibtelegramme und ihre Bestätigungen:
+
+| Richtung | Rohbytes | Bedeutung |
+| --- | --- | --- |
+| → | `06 10 04 20 00 15 04 82 01 00 11 00 bc e0 00 00 34 14 01 00 80` | GroupValueWrite 6/4/20 = 0 |
+| ← | `06 10 04 20 00 15 04 82 03 00 2e 00 9c e0 11 94 34 14 01 00 80` | L_Data.con positiv |
+| → | `06 10 04 20 00 15 04 82 02 00 11 00 bc e0 00 00 34 14 01 00 81` | GroupValueWrite 6/4/20 = 1 |
+| ← | `06 10 04 20 00 15 04 82 08 00 2e 00 9d e0 11 94 34 14 01 00 81` | L_Data.con **negativ** |
+
+**Befund: Eine negative L_Data.con heißt nicht „nicht angekommen".** Das
+Rückstelltelegramm lag auf dem Bus — openknx hat es über seinen eigenen Tunnel
+empfangen, und der Aktor hat geschaltet. Warum die Schnittstelle trotzdem einen
+Fehler meldet, ist offen. Eine naheliegende, **ungeprüfte** Vermutung: Das
+Werkzeug sendet wie xknx mit gesetztem „nicht wiederholen"-Bit (ctrl1 `bc`,
+Bit 5). Fehlt dann ein einziges Layer-2-ACK auf dem TP-Bus, meldet die
+Schnittstelle sofort einen Fehler, statt das Telegramm zu wiederholen.
+
+**Folge für das Werkzeug:** `schalten` hat bei der negativen Bestätigung
+abgebrochen, statt zurückzulesen, und meldete „möglicherweise noch im
+Testzustand", obwohl die Pumpe schon wieder lief. Das ist sicher, sagt aber
+nichts über den tatsächlichen Zustand. Die Klärung kam erst aus einem zweiten
+`lesen` und aus ioBroker.
+
+**Folge für die Firmware:** siehe Abschnitt 8, Rückleseregel.
+
+**Messfalle in der Historie:** Die InfluxDB schreibt die openknx-Datenpunkte
+auch unverändert alle 60 s neu. Diese Einträge sind keine Telegramme. Ob
+wirklich geschaltet wurde, zeigt `ts` bzw. `lc` am Datenpunkt — `ts` von
+`MischerPumpe_Schalten` stand vor dem Test auf 12:53, obwohl die Historie
+jede Minute einen Eintrag hat.
 
 ## 8. Skizze des späteren Schritts — vorläufig
 
@@ -257,6 +305,14 @@ Heizkreis versorgt. Reihenfolge der Telegramme:
 Rücklesung: `MischerPumpe_Status` = 1 passt in das Schritt-Timeout — das
 Objekt ist aktiv lesbar, und der Aktor meldet rund 120 ms nach dem Befehl
 zurück (Stufe 1).
+
+**Rückleseregel aus Stufe 2: Die Rücklesung am Aktor ist das Urteil, nicht
+die L_Data.con.** Eine negative Bestätigung wird geloggt, danach wird trotzdem
+zurückgelesen. Passt der Status, ist der Schritt erledigt. Passt er nicht,
+wird das Telegramm einmal wiederholt — ein Schalttelegramm auf denselben Wert
+ist unschädlich. Erst wenn auch dann die Rücklesung nicht passt, endet der
+Schritt ROT. Ob das „nicht wiederholen"-Bit im Request gelöscht werden soll,
+damit die Schnittstelle selbst wiederholt, ist beim Umsetzen zu entscheiden.
 `MischerMotor_Position_Status` bewegt sich mit der Laufzeit des Stellmotors;
 ob der Schritt auf die Endlage wartet oder nur die Bewegungsrichtung prüft,
 ist nach dem Vorabtest festzulegen.
@@ -268,8 +324,9 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 
 ## 9. Folgeaufgaben
 
-- **Vorabtest Stufen 0–2** an der Anlage, einzeln aufgerufen; Ergebnisse in
-  Abschnitt 7 nachtragen.
+- ~~**Vorabtest Stufen 0–2**~~ — erledigt am 2026-09-12, Abschnitt 7.
+- **`knx_tunnel.py schalten`**: nach einer negativen Bestätigung zurücklesen,
+  statt abzubrechen, damit der Lauf den tatsächlichen Zustand meldet.
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
