@@ -294,15 +294,69 @@ wirklich geschaltet wurde, zeigt `ts` bzw. `lc` am Datenpunkt — `ts` von
 `MischerPumpe_Schalten` stand vor dem Test auf 12:53, obwohl die Historie
 jede Minute einen Eintrag hat.
 
-## 8. Skizze des späteren Schritts — vorläufig
+## 8. Entwurf des Firmwareschritts „Vorderhaus"
 
 Vorgesehen für die Folge der Stufe 1 (Rolle Heizen), weil nur sie den
-Heizkreis versorgt. Reihenfolge der Telegramme:
+Heizkreis versorgt.
 
-1. `MischerMotor_Zwangsstellung_AUF` = 0
-2. `MischerMotor_Zwangsstellung_ZU` = 0
-3. `MischerMotor_Position_Eingang` = 128
-4. `MischerPumpe_Schalten` = 1
+### Die Gruppenadressen
+
+Vom Owner am 2026-09-12 genannt; den Datentyp führt openknx:
+
+| Objekt | GA | DPT in openknx | im Notbetrieb |
+| --- | --- | --- | --- |
+| `MischerMotor_Zwangsstellung_AUF` (100 %) | 6/4/17 | 1.001 | 0 |
+| `MischerMotor_Zwangsstellung_ZU` (0 %) | 6/4/16 | 1.001 | 0 |
+| `MischerMotor_Position_Eingang` | 6/4/13 | 5.004, Rohwert 0–255 | **128** ≈ 50 % |
+| `MischerMotor_Position_Status` | 6/4/12 | 5.004 | Rücklesung |
+| `MischerPumpe_Schalten` | 6/4/20 | 1.001 | 1 |
+| `MischerPumpe_Status` | 6/4/21 | 1.001 | Rücklesung |
+
+Reihenfolge der Telegramme: erst beide Zwangsstellungen zurücknehmen — sie
+gehen vor (Owner-Antwort 2) —, dann die Position, dann die Pumpe.
+
+Wie nötig das Zurücknehmen ist, zeigt der Stand am Tag der Aufnahme: Seit
+12:53 UTC stand `Zwangsstellung_ZU` auf 1 und der Mischer auf 0. Die
+Steuerung wechselt im Sommer mehrmals täglich zwischen Zwangsstellung AUF und
+ZU. Ein Positionsbefehl allein bliebe dagegen wirkungslos.
+
+### Wie der Stellmotor meldet
+
+Aus der openknx-Historie vom 08. bis 12.09.:
+
+| Vorgang | Weg | Statusmeldung nach | proportional erwartet |
+| --- | --- | --- | --- |
+| Zwangsstellung ZU bzw. AUF (11.09. 06:50; 12.09. 09:12, 11:19, 12:53) | voller Hub | 120,3–120,4 s | 120 s |
+| Zwangsstellung AUF, 11.09. 07:00, von 46 | 209/255 | 98,7 s | 98,4 s |
+| Zwangsstellung erneut gesendet, Mischer steht schon dort | 0 | 0,4 s | sofort |
+| Regelung im Minutentakt, je 2/255 | 2/255 | rund 1 s | 0,9 s |
+
+**Der Motor fährt streng proportional, 120 s für den vollen Hub, und meldet
+erst in der Zielstellung** — Zwischenwerte gibt es nicht (Owner, bestätigt
+durch die Historie). Steht er schon am Ziel, meldet er sofort. Der gemeldete
+Wert trifft den Befehl exakt (250 → 250). Weil 50 % die Mitte ist, dauert der
+Weg dorthin **höchstens rund 60 s**, von welcher Endlage auch immer.
+
+### Warum der Schritt keinen Tunnel offen halten darf
+
+Im Notbetriebsfall fehlt der Broker, und `loop()` versucht laufend, ihn
+wieder zu erreichen: der erste Versuch nach 5 s, dann mit wachsendem Abstand
+bis zum Minutentakt (`MQTT_RECONNECT_MIN`/`_MAX`). Jeder Versuch blockiert
+bis zu 2 s (`MQTT_SOCKET_TIMEOUT_S`), je nach Ausfallart durch den
+TCP-Verbindungsaufbau womöglich länger. Ein offener Tunnel muss aber jedes
+Bustelegramm binnen 1 s quittieren; die Schnittstelle wiederholt einmal und
+trennt dann. **Ein Tunnel, der 60 s auf die Meldung des Mischers wartet,
+verpasste diese Frist fast sicher.**
+
+Daraus folgt die Bauregel: **nur kurze Verbindungen**, wie im Werkzeug — jede
+ein geschlossener Austausch von Zehntelsekunden, der nicht von einem anderen
+blockierenden Aufruf unterbrochen werden kann. Den Mischerstatus holt der
+Schritt deshalb durch aktives Lesen in eigenen kurzen Verbindungen, statt auf
+die spontane Meldung zu warten.
+
+**Voraussetzung, noch nicht belegt:** `MischerMotor_Position_Status`
+antwortet auf Lesen (L-Flag). Nachweis mit einem einzigen Lesetelegramm:
+`./knx_tunnel.py lesen 192.168.2.127 6/4/12`.
 
 Rücklesung: `MischerPumpe_Status` = 1 passt in das Schritt-Timeout — das
 Objekt ist aktiv lesbar, und der Aktor meldet rund 120 ms nach dem Befehl
@@ -315,9 +369,43 @@ wird das Telegramm einmal wiederholt — ein Schalttelegramm auf denselben Wert
 ist unschädlich. Erst wenn auch dann die Rücklesung nicht passt, endet der
 Schritt ROT. Ob das „nicht wiederholen"-Bit im Request gelöscht werden soll,
 damit die Schnittstelle selbst wiederholt, ist beim Umsetzen zu entscheiden.
-`MischerMotor_Position_Status` bewegt sich mit der Laufzeit des Stellmotors;
-ob der Schritt auf die Endlage wartet oder nur die Bewegungsrichtung prüft,
-ist nach dem Vorabtest festzulegen.
+Für den Mischer gilt dieselbe Regel. Eine Bewegungsrichtung lässt sich nicht
+prüfen, weil der Aktor keine Zwischenwerte meldet — es bleibt die Endlage,
+und die ist nach höchstens rund 60 s erreicht.
+
+### Zwei Wege, den Schritt einzubauen — Owner-Entscheid offen
+
+| | **A: ein Schritt am Ende** (empfohlen) | B: früh senden, am Ende prüfen |
+| --- | --- | --- |
+| Position | nach `Heatpump = 1` | Senden nach der Hydraulik, Prüfen nach `Heatpump = 1` |
+| Ablauf | eine kurze Verbindung: beide Zwangsstellungen, Position, Pumpe, Pumpenstatus zurücklesen; dann alle 10 s den Mischerstatus lesen, bis 128 ± 2, höchstens 90 s | wie A, nur läuft der Mischer während der übrigen Schritte (64 s dazwischen) |
+| Dauer des Laufs | rund 80 s plus bis zu 60 s | rund 88 s |
+| KNX-Fehler | ROT am Ende — die Wärmepumpen stehen dann schon im Notbetrieb | bricht den Lauf ab, bevor die Wärmepumpen umgestellt sind — außer der Automat lernt „Fehler ohne Abbruch" |
+| Automat | ein neuer Schritttyp mit eigenem Timeout | zwei neue Schritttypen, der zweite bezieht sich auf den ersten |
+
+**Empfehlung A.** Eine Störung am KNX — Schnittstelle, Bus, Einstellung —
+darf den Notbetrieb der Wärmepumpen nicht verhindern; der Hauptteil des
+Hauses bekäme sonst auch keine Wärme. Die zusätzliche Minute am Ende kostet
+nichts, weil der Kompressor ohnehin erst rund drei Minuten nach dem
+Einschalten hochfährt. Die ROT-Meldung braucht dann einen eigenen Wortlaut,
+wie beim Hydraulikschritt: Die Wärmepumpen laufen, nur das Vorderhaus ließ
+sich nicht umstellen.
+
+Zwei weitere Punkte zum Entscheiden:
+
+- **Nicht eingerichtet** (keine KNX-Adresse in den Einstellungen): Vorschlag
+  „Schritt entfällt, mit Logzeile" statt ROT. Die Firmware ist öffentlich,
+  und nicht jede Anlage hat ein Vorderhaus.
+- **Die Zwangsstellungen haben kein Statusobjekt.** Ihr Zurücknehmen bleibt
+  blind, wird aber mitgeprüft: Bleibt eine aktiv, erreicht der Mischer die
+  128 nicht, und die Rücklesung scheitert.
+
+**Test mit lebender Steuerung:** Steht `HKM_ForcedState_Input` auf Auto,
+regelt `HKMregelung.js` die Position beim nächsten Regelschritt wieder weg;
+steht eine Zwangsstellung an (wie am 12.09.), ist der Regler gesperrt, und
+die Steuerung setzt die Zwangsstellung erst beim nächsten Wechsel neu. Wie
+beim Hydraulikschritt lässt sich der Schritt mit lebender Steuerung also nur
+auf Ausführung prüfen, nicht auf Dauerwirkung.
 
 In der Firmware: IP, Port, Quelladresse und die sechs Gruppenadressen in den
 Einstellungen (wie `hydraulik_switch`).
@@ -390,9 +478,13 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
-- **Mischeradressen aus openknx übernehmen** (Zwangsstellung AUF/ZU,
-  Positionseingang, Positionsstatus).
-- **Rückleseregel für die Mischerposition** festlegen (Abschnitt 8).
+- ~~**Mischeradressen aus openknx übernehmen**~~ — erledigt am 2026-09-12
+  (Abschnitt 8).
+- **Positionsstatus lesbar?** `./knx_tunnel.py lesen 192.168.2.127 6/4/12`,
+  ein Lesetelegramm. Davon hängt ab, ob der Schritt die Endlage aktiv lesen
+  kann (Abschnitt 8).
+- **Owner-Entscheid:** Einbauweg A oder B, Verhalten ohne Einstellung,
+  Wortlaut der ROT-Meldung (Abschnitt 8).
 
 ## 10. Quellen
 
