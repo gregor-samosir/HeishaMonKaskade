@@ -201,7 +201,48 @@ muss aus der CONNECT_RESPONSE übernommen und darf nicht angenommen werden.
 Bustelegramme kamen in den 15 ms keine herein; über den Empfangspfad sagt
 Stufe 0 deshalb nichts, das belegt erst Stufe 1.
 
-Stufe 1 und 2: noch nicht gelaufen.
+**Stufe 1 — grün (2026-09-12, 14:40 UTC).** Ein Lesetelegramm an 6/4/21, die
+Pumpe lief (Status 1). Antwort vom Pumpenaktor 1.1.60 nach 55 ms, der ganze
+Lauf dauerte 71 ms.
+
+| Richtung | Rohbytes | Bedeutung |
+| --- | --- | --- |
+| → | `06 10 04 20 00 15 04 42 00 00 11 00 bc e0 00 00 34 15 01 00 00` | TUNNELING_REQUEST, Kanal 66, Sequenz 0: L_Data.req GroupValueRead 6/4/21 |
+| ← | `06 10 04 21 00 0a 04 42 00 00` | TUNNELING_ACK nach 2 ms |
+| ← | `06 10 04 20 00 15 04 42 00 00 2e 00 9c e0 11 94 34 15 01 00 00` | L_Data.con nach 22 ms: positiv, Quelle 1.1.148 eingesetzt |
+| → | `06 10 04 21 00 0a 04 42 00 00` | unser ACK |
+| ← | `06 10 04 20 00 15 04 42 01 00 29 00 bc e0 11 3c 34 15 01 00 41` | L_Data.ind nach 55 ms: GroupValueResponse 6/4/21 = 1 von 1.1.60 |
+| → | `06 10 04 21 00 0a 04 42 01 00` | unser ACK |
+
+Was daraus für die Firmware folgt:
+
+- **Das Statusobjekt der Pumpe hat das L-Flag.** Der Schritt kann aktiv
+  zurücklesen und muss nicht auf eine spontane Meldung warten — die offene
+  Entwurfsfrage aus Stufe 1 ist damit beantwortet.
+- **Die L_Data.con trägt ctrl1 = `9c`, nicht das gesendete `bc`.** Die
+  Schnittstelle ändert das Wiederholungsbit. Ob die Bestätigung positiv ist,
+  steht allein in Bit 0; ein Vergleich des ganzen Bytes würde eine positive
+  Bestätigung als Fehler lesen.
+- **Der Kanal wechselt bei jeder Verbindung** (Stufe 0: 226, jetzt 66), die
+  Tunneladresse 1.1.148 bleibt. Die Sequenzzähler beginnen in beiden
+  Richtungen je Verbindung bei 0.
+
+**Gegenprobe in ioBroker (simple-api, nur lesend):**
+`openknx.0.Kaskade.MischerPumpe_Status` stand auf `true`, Adresse 6/4/21,
+DPT 1.001; der Zeitstempel `ts` sprang auf 14:40:07,85 UTC, in das Fenster des
+Laufs — openknx hat die Antwort auf dem Bus mitgelesen.
+`MischerPumpe_Schalten` (6/4/20, DPT 1.001) stand auf `true`. Nebenbei ein
+Messwert, den openknx schon hatte: Die letzte Änderung des Schaltobjekts war
+09:12:40,768, die des Status 09:12:40,891 — **der Aktor meldet rund 120 ms
+nach dem Schaltbefehl zurück.** Und `ts` des Schaltobjekts wurde um 12:53
+ohne Wertänderung erneuert: Auf 6/4/20 kommen also auch zwischendurch
+Schreibtelegramme an, der Schutz gegen fremde Schreibzugriffe in Stufe 2 hat
+einen realen Anlass.
+
+**Für Stufe 2 heißt das:** Die Pumpe läuft. Der Test schaltet sie für 5 s
+**aus** und danach wieder ein.
+
+Stufe 2: noch nicht gelaufen.
 
 ## 8. Skizze des späteren Schritts — vorläufig
 
@@ -213,7 +254,9 @@ Heizkreis versorgt. Reihenfolge der Telegramme:
 3. `MischerMotor_Position_Eingang` = 128
 4. `MischerPumpe_Schalten` = 1
 
-Rücklesung: `MischerPumpe_Status` = 1 passt in das Schritt-Timeout.
+Rücklesung: `MischerPumpe_Status` = 1 passt in das Schritt-Timeout — das
+Objekt ist aktiv lesbar, und der Aktor meldet rund 120 ms nach dem Befehl
+zurück (Stufe 1).
 `MischerMotor_Position_Status` bewegt sich mit der Laufzeit des Stellmotors;
 ob der Schritt auf die Endlage wartet oder nur die Bewegungsrichtung prüft,
 ist nach dem Vorabtest festzulegen.
