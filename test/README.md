@@ -48,6 +48,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `top_watch.py` | Verlauf statt Momentaufnahme: ausgewaehlte TOPs im Takt abfragen und jede Aenderung mit Zeitstempel melden | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
+| `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung. `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator | KNX-IP-Schnittstelle (`selbsttest`: nein) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
@@ -1571,3 +1572,33 @@ umschaltet, bekommt die Werksvorgaben und muss anschliessend alle vier Punkte
 von Hand einstellen. Die Notfall-Unterlage braucht deshalb die Sollwerte
 vollstaendig - als Tabelle oder als Bild der beiden Kurvendialoge -, nicht nur
 den oberen Punkt.
+
+## KNX-Tunnel (knx_tunnel.py, 2026-09-12)
+
+Vorabtest fuer den geplanten KNX-Schritt im Notbetrieb (VH-Mischer auf 50 %,
+Mischerpumpe ein). Entscheidungen, Befunde und Testplan stehen in
+[`Analyse-KNX-Vorderhaus.md`](../Analyse-KNX-Vorderhaus.md); hier nur die
+Bedienung.
+
+```bash
+./knx_tunnel.py selbsttest                              # ohne Netz
+./knx_tunnel.py verbinden 192.168.2.127                 # Stufe 0: kein Bustelegramm
+./knx_tunnel.py lesen     192.168.2.127 6/4/21          # Stufe 1: nur lesen
+./knx_tunnel.py schalten  192.168.2.127 6/4/20 6/4/21   # Stufe 2: Pumpe hin und zurueck
+```
+
+Die Stufen **einzeln** aufrufen, nie in einer Kette - ein abgebrochener Aufruf
+nimmt ein bereits gesendetes Telegramm nicht zurueck.
+
+Der Tunnel lebt nur Sekunden und kommt ohne Heartbeat aus; `--halten` ist
+deshalb auf 30 s begrenzt. `schalten` stellt bei einem fremden Schreibzugriff
+auf die Schalt-GA **nicht** zurueck (Exit 3) - die Kaskaden Logik schreibt die
+Pumpe ereignisgesteuert, ein blindes Zurueckstellen ueberschriebe ihren
+neuen Befehl. Bei jedem Abbruch nach dem Umschalten nennt das Werkzeug die
+Zeile zum manuellen Zurueckstellen (`schreiben ... <Ausgangswert>`).
+
+**Der Selbsttest belegt die Logik, nicht die Schnittstelle.** Die Rahmen
+werden byteweise gegen die Rohbytes aus den Tests von xknx gehalten (eine
+unabhaengige Referenz), die Ablaeufe gegen einen Simulator, der nur abbildet,
+was das Werkzeug benutzt. Was die echte Schnittstelle tut, zeigen erst die
+Stufen 0-2.
