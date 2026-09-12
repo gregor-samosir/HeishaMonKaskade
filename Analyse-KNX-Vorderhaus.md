@@ -335,7 +335,33 @@ hier trägt:
   openknx wäre das `tunnelInterfaceAddress`, und das ist leer. Wird hier nicht
   gebraucht, solange der erste Weg trägt.
 
-Voraussetzung für beide: 1.1.250 ist an keinem anderen Gerät vergeben. Der Aufbau und das Zerlegen der Rahmen kommen in
+Voraussetzung für beide: 1.1.250 ist an keinem anderen Gerät vergeben —
+vom Owner am 2026-09-12 bestätigt.
+
+**Nachweis vom 2026-09-12: Das Telegramm geht raus, die Bestätigung bleibt
+aus.** `lesen 192.168.2.127 6/4/21 --quelle 1.1.250`, nur ein Lesetelegramm:
+
+| Richtung | Rohbytes | Bedeutung |
+| --- | --- | --- |
+| → | `06 10 04 20 00 15 04 92 00 00 11 00 bc e0 11 fa 34 15 01 00 00` | GroupValueRead 6/4/21, Quelle 1.1.250 |
+| ← | `06 10 04 21 00 0a 04 92 00 00` | TUNNELING_ACK nach 2 ms |
+| ← | `06 10 04 20 00 15 04 92 00 00 29 00 bc e0 11 3c 34 15 01 00 41` | Antwort des Pumpenaktors nach 55 ms: 6/4/21 = 1 |
+| — | — | **keine L_Data.con**, auch nicht nach 3 s |
+
+Das Lesetelegramm lag also auf dem Bus — der Aktor hat es beantwortet, mit
+derselben Laufzeit wie in Stufe 1. Die L_Data.con, die mit Quelle 0.0.0 in
+jedem Lauf kam, blieb aus; das Werkzeug meldete deshalb FEHLER. Die
+Schnittstelle stellt die Bestätigung offenbar nur zu, wenn die Quelle ihre
+Tunneladresse ist. openknx fällt das nicht auf: Es wartet laut Konfiguration
+gar nicht auf Bestätigungen (`waitForAck = False`).
+
+**Offen:** mit welcher Quelladresse das Telegramm auf dem Bus stand. Ohne con
+ist das vom eigenen Tunnel aus nicht zu sehen; klären lässt es sich über
+einen zweiten Tunnel, der mithört, oder über den ETS-Gruppenmonitor.
+
+**Folge für die Firmware:** Eine vorgegebene Quelle kostet die
+Busbestätigung. Nach der Rückleseregel ist das verkraftbar — dann darf aber
+auch eine **fehlende** con kein Abbruchgrund sein, nicht nur eine negative. Der Aufbau und das Zerlegen der Rahmen kommen in
 einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 `knx_tunnel.py`.
 
@@ -345,9 +371,9 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 - ~~**`knx_tunnel.py schalten`**: nach einer negativen Bestätigung
   zurücklesen~~ — erledigt in 1.1.0: Die Rücklesung entscheidet, bei
   Abweichung genau eine Wiederholung; `schreiben --status`; neu `--quelle`.
-- **Nachweis Quelladresse 1.1.250:** `./knx_tunnel.py lesen 192.168.2.127
-  6/4/21 --quelle 1.1.250` — nur ein Lesetelegramm. Die Ausgabe sagt, ob die
-  Schnittstelle die Adresse übernimmt (Abschnitt 8).
+- **Nachweis Quelladresse 1.1.250 — zur Hälfte:** Das Telegramm geht raus,
+  die L_Data.con bleibt aus (Abschnitt 8). Offen: welche Quelle auf dem Bus
+  stand — Gegenprobe über einen zweiten, mithörenden Tunnel.
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
