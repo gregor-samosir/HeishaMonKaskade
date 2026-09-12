@@ -26,7 +26,14 @@ kostet die Busbestätigung (Abschnitt 8).
 der Heizen-Folge (Weg A). Der Mischerlauf mit genau dieser Folge war am
 2026-09-12 grün; der Mischer meldete 128 nach 59,2 s.
 
-**Offen:** die Umsetzung in der Firmware und der Re-Assert für die
+**Bewegungsmeldung erprobt (2026-09-12 abends, Abschnitt 8):** Der Aktor
+meldet über 6/4/14 rund 0,1 s nach dem Positionsbefehl, dass er fährt. Damit
+lässt sich der Mischer in Sekunden bestätigen statt nach bis zu 60 s — sofern
+zusätzlich der Positionseingang zurückgelesen wird und die Bewegung vor den
+Befehlen auf 0 stand.
+
+**Offen:** der Entscheid über die schnellere Rückleseregel des Mischers
+(Abschnitt 8), die Umsetzung in der Firmware und der Re-Assert für die
 KNX-Befehle in `nodered-flows` (Abschnitt 9).
 
 ---
@@ -314,6 +321,7 @@ Vom Owner am 2026-09-12 genannt; den Datentyp führt openknx:
 | `MischerMotor_Zwangsstellung_ZU` (0 %) | 6/4/16 | 1.001 | 0 |
 | `MischerMotor_Position_Eingang` | 6/4/13 | 5.004, Rohwert 0–255 | **128** ≈ 50 % |
 | `MischerMotor_Position_Status` | 6/4/12 | 5.004 | Rücklesung |
+| `MischerMotor_Position_Bewegung` | 6/4/14 | 1.001, Flags K/L/Ü | Rücklesung — seit 2026-09-12 abends, siehe „Bestätigung über die Bewegungsmeldung“ |
 | `MischerPumpe_Schalten` | 6/4/20 | 1.001 | 1 |
 | `MischerPumpe_Status` | 6/4/21 | 1.001 | Rücklesung |
 
@@ -428,6 +436,89 @@ damit die Schnittstelle selbst wiederholt, ist beim Umsetzen zu entscheiden.
 Für den Mischer gilt dieselbe Regel. Eine Bewegungsrichtung lässt sich nicht
 prüfen, weil der Aktor keine Zwischenwerte meldet — es bleibt die Endlage,
 und die ist nach höchstens rund 60 s erreicht.
+
+### Bestätigung über die Bewegungsmeldung (6/4/14)
+
+**Owner-Vorschlag vom 2026-09-12 abends:** Der Aktor hat ein weiteres
+Objekt, `MischerMotor_Position_Bewegung` (6/4/14, DPT 1.001, Flags K/L/Ü),
+das von Losfahren bis Ziel auf 1 steht. Der Owner hat es in der ETS angelegt
+und per Download (18:43 UTC) aktiviert. Statt bis zu 60 s auf die
+Endstellung zu warten, soll der Schritt nur kurz auf diese Meldung warten.
+
+Erprobt mit `knx_tunnel.py` 1.5.0 (`mischer --bewegung`). Die Kaskade war
+aus, der Regler gesperrt (`HKM_ForcedState_Input` = 1, Zwangsstellung AUF,
+Mischer auf 255), die Pumpe blieb unberührt (`--ohne-pumpe`). Der Owner hat
+parallel im ETS-Busmonitor mitgelesen.
+
+**Vorab aus der openknx-Historie, ohne ein Schreibtelegramm:**
+
+- Bewegung 1 kam bei den Zwangsstellungswechseln des Abends 230–330 ms nach
+  dem Setzen in ioBroker. Darin steckt die Sendeverzögerung von openknx; am
+  Bus gemessen sind es rund 0,1 s (Läufe 1 und 3).
+- **In die Endlage fährt der Aktor immer die volle Zeit plus 20 %:** Status
+  nach der proportionalen Fahrzeit, Bewegung 0 erst nach 144 s — beim
+  vollen Hub (Status nach 120,4 s) wie beim halben (Lauf 3, Status nach
+  59,7 s). Zur Mitte gibt es keinen Nachlauf (Lauf 1).
+- **Der Download setzt den Aktor zurück:** Positionseingang 0 (ioBroker
+  führte noch 46) und `MischerMotor_Position_Ungültig` (6/4/18) = 1 von
+  18:43:44 bis 19:13:40 UTC. Die nächste Fahrt lief die volle Zeit samt
+  Nachlauf — auch nach einem Richtungswechsel —, erst dann meldete der Aktor
+  und nahm „ungültig“ zurück.
+- openknx beantwortet das Lesen von 6/4/14 dreifach aus seinem
+  Zwischenspeicher. Es zählt wie bei 6/4/12 nur der Aktor 1.1.39.
+
+**Die Läufe, jeder einzeln freigegeben.** Die Befehle gingen mit Quelle
+1.1.250 hinaus, wie später aus der Firmware; die beiden Rückstellungen ohne
+vorgegebene Quelle, damit die Busbestätigung kommt (Zwangsstellung und
+Eingang haben kein eigenes Statusobjekt).
+
+| Lauf | Was | Ergebnis |
+| --- | --- | --- |
+| 1 | Weg A ab 255: AUF 0, ZU 0, Position 128 | **GRÜN.** Auf das Zurücknehmen von AUF und ZU **keine** Bewegung, obwohl im Eingang 0 stand. Bewegung 1 **93 ms** nach dem Positionsbefehl (Bus). Eingang liest 128 zurück. Status 128 nach 59,65 s, Bewegung 0 100 ms danach |
+| 2 | derselbe Aufruf, Mischer schon auf 128 | **GRÜN über den Status.** Keine Bewegungsmeldung, auch keine spontane Statusmeldung |
+| 3 | Rückstellung AUF = 1, Busbestätigung positiv | Bewegung 1 nach 76 ms, Status 255 nach 59,7 s, Bewegung 0 erst nach **144,1 s** |
+| 4 | Negativprobe: nur Position 100, AUF bleibt aktiv | **ROT, wie erwartet:** keine Bewegung, Status 255. **Der Eingang liest 100 zurück** — der Aktor speichert die Position auch unter Zwangsstellung |
+| 5 | Rückstellung Eingang = 0, Busbestätigung positiv | Eingang 0, vom Aktor zurückgelesen |
+
+Endstand wie vor dem Test: AUF 1, ZU 0, Eingang 0, Status 255, Bewegung 0,
+Position gültig, Pumpe aus, Regler auf ForcedState 1.
+
+**Was daraus folgt:**
+
+- **Die Bewegung kommt schnell genug** für dieselbe kurze Verbindung, in der
+  die Befehle hinausgehen.
+- **Das Zurücknehmen der Zwangsstellung allein lässt den Mischer nicht
+  fahren** (Lauf 1). Eine Bewegung nach den Befehlen stammt also vom
+  Positionsbefehl — sofern der Mischer vorher stand.
+- **Die Bewegung allein reicht nicht; es braucht zwei Belege:**
+  - Eingang = 128: Der Positionsbefehl steht im Aktor. Weil der Aktor ihn
+    auch unter Zwangsstellung speichert (Lauf 4), belegt das allein nicht,
+    dass er wirkt.
+  - Bewegung = 1 — oder Status = 128, wenn der Mischer schon dort steht und
+    deshalb nicht fährt (Lauf 2): Der Befehl wirkt, die Zwangsstellung ist
+    zurückgenommen.
+- **Eine Lücke bleibt, wenn der Mischer beim Start schon fährt.** Nach einem
+  Zwangsstellungswechsel steht Bewegung bis zu 144 s auf 1. Ginge dann das
+  Zurücknehmen der Zwangsstellung verloren, läse der Schritt Bewegung 1 und
+  Eingang 128 und meldete GRÜN, während der Mischer in die Endlage fährt.
+  Schließen lässt sie sich, indem der Schritt die Bewegung **vor** den
+  Befehlen liest.
+
+**Vorschlag für die Rückleseregel des Mischers — Entscheid offen:**
+
+1. In der Befehlsverbindung zuerst die Bewegung lesen (nur 1.1.39).
+2. Zwangsstellungen zurücknehmen, Position senden.
+3. Eingang lesen. Weicht er ab: einmal wiederholen, dann ROT.
+4. Stand die Bewegung vorher auf 0: bis 2 s auf Bewegung 1 warten, sonst
+   den Status lesen. Bewegung 1 oder Status 128 ± 2 ist GRÜN; sonst einmal
+   wiederholen, dann ROT.
+5. Stand sie vorher auf 1: wie bisher in kurzen Verbindungen den Status
+   abfragen, bis er 128 meldet. Die Frist muss dann den laufenden
+   Endlagenlauf abdecken.
+
+Im Regelfall (Mischer steht) dauert der Mischerteil damit wenige Sekunden
+statt bis zu 60 s plus Abfragetakt. Die Firmware braucht dafür die
+Gruppenadresse 6/4/14 zusätzlich in den Einstellungen.
 
 ### Zwei Wege, den Schritt einzubauen — entschieden: A (Owner, 2026-09-12)
 
@@ -548,11 +639,17 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   Einstellung ist ROT (Abschnitt 8).
 - ~~**Mischerlauf nach Weg A an der Anlage**~~ — grün am 2026-09-12
   (Abschnitt 8).
+- ~~**Bestätigung über die Bewegungsmeldung 6/4/14 erproben**~~ — am
+  2026-09-12 abends in fünf Läufen erledigt (Abschnitt 8): trägt, braucht
+  aber das Zurücklesen des Eingangs und die Bewegung vor den Befehlen.
+- **Owner-Entscheid: Rückleseregel des Mischers** — schnelle Regel über
+  6/4/14 nach dem Vorschlag in Abschnitt 8, oder wie bisher über die
+  Endstellung.
 - **Umsetzung in der Firmware:** neuer Schritttyp am Ende der Heizen-Folge,
   Bau der Telegramme in einem arduino-freien Header mit Hosttest gegen die
   Sollwerte aus `knx_tunnel.py`; Einstellungen für IP, Port, Quelle, die
-  sechs Gruppenadressen und die zwei Aktoradressen. Vorher Rettungsanker und
-  Branch.
+  sechs Gruppenadressen (sieben mit 6/4/14) und die zwei Aktoradressen.
+  Vorher Rettungsanker und Branch.
 
 ## 10. Quellen
 
