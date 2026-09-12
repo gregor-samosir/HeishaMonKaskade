@@ -182,7 +182,26 @@ zurückkehren.
 
 ### Ergebnisse
 
-Noch nicht gelaufen.
+**Stufe 0 — grün (2026-09-12, vom Mac 192.168.2.142).** Die Schnittstelle
+nimmt den kurzlebigen Tunnel ohne Heartbeat an und gibt ihn sauber frei. Jede
+Antwort kam binnen 1–4 ms, der ganze Lauf dauerte 15 ms.
+
+| Richtung | Rohbytes | Bedeutung |
+| --- | --- | --- |
+| → | `06 10 02 05 00 1a 08 01 c0 a8 02 8e d6 ca 08 01 c0 a8 02 8e d6 ca 04 04 02 00` | CONNECT_REQUEST, Steuer- und Datenendpunkt 192.168.2.142:54986 |
+| ← | `06 10 02 06 00 14 e2 00 08 01 c0 a8 02 7f 0e 57 04 04 11 94` | CONNECT_RESPONSE: Kanal 226, Status ok, Datenendpunkt 192.168.2.127:3671, Tunneladresse 1.1.148 |
+| → | `06 10 02 07 00 10 e2 00 08 01 c0 a8 02 8e d6 ca` | CONNECTIONSTATE_REQUEST |
+| ← | `06 10 02 08 00 08 e2 00` | CONNECTIONSTATE_RESPONSE: ok |
+| → | `06 10 02 09 00 10 e2 00 08 01 c0 a8 02 8e d6 ca` | DISCONNECT_REQUEST |
+| ← | `06 10 02 0a 00 08 e2 00` | DISCONNECT_RESPONSE: ok |
+
+Zwei Dinge daraus für die Firmware: Die Schnittstelle vergibt den Kanal selbst
+(hier 226, nicht 1) und liefert den Datenendpunkt ausdrücklich mit — beides
+muss aus der CONNECT_RESPONSE übernommen und darf nicht angenommen werden.
+Bustelegramme kamen in den 15 ms keine herein; über den Empfangspfad sagt
+Stufe 0 deshalb nichts, das belegt erst Stufe 1.
+
+Stufe 1 und 2: noch nicht gelaufen.
 
 ## 8. Skizze des späteren Schritts — vorläufig
 
