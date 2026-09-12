@@ -1607,10 +1607,21 @@ einmal - dieselbe Regel soll der Firmwareschritt bekommen. `schreiben` ohne
 Exit 1 ("Zustellung unbekannt").
 
 `--quelle B.L.G` setzt eine eigene Quelladresse ins Telegramm, wie openknx es
-mit `eibadr` tut. Ob die Schnittstelle sie uebernimmt oder durch ihre
-Tunneladresse ersetzt, meldet das Werkzeug beim ersten Telegramm - die
-L_Data.con ist die Kopie des gesendeten Rahmens. Die Adresse darf an keinem
-anderen Geraet vergeben sein.
+mit `eibadr` tut. Die Adresse darf an keinem anderen Geraet vergeben sein.
+**An dieser Schnittstelle kommt dann keine L_Data.con** (2026-09-12) - seit
+1.2.0 ist deshalb auch eine fehlende Bestaetigung kein Abbruchgrund mehr.
+
+`--gegenprobe` oeffnet einen zweiten Tunnel, der mithoert, und meldet am Ende,
+mit welcher Quelladresse die eigenen Telegramme auf dem Bus standen - bei
+vorgegebener Quelle der einzige Weg, das zu sehen. Der zweite Tunnel laeuft in
+einem eigenen Thread, weil auch er jedes Bustelegramm binnen 1 s quittieren
+muss. Er belegt einen weiteren Tunnel (mit openknx dann 3 von 5) und
+verbindet sich, bevor das erste Telegramm rausgeht - ist keiner frei, endet
+der Lauf, ohne etwas gesendet zu haben.
+
+```bash
+./knx_tunnel.py lesen 192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe
+```
 
 **Der Selbsttest belegt die Logik, nicht die Schnittstelle.** Die Rahmen
 werden byteweise gegen die Rohbytes aus den Tests von xknx gehalten (eine

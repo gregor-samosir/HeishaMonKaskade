@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimaler KNXnet/IP-Tunnel-Client - Vorabtest fuer den KNX-Schritt im Notbetrieb.
 
-Version 1.1.0 (2026-09-12)
+Version 1.2.0 (2026-09-12)
 
 Zweck: bevor der Notbetrieb das Vorderhaus per KNX versorgt (Mischer auf 50 %,
 Mischerpumpe ein), belegen, dass ein KURZLEBIGER Tunnel ohne Heartbeat an der
@@ -15,29 +15,39 @@ Entscheidungen und Testplan: Analyse-KNX-Vorderhaus.md.
   ./knx_tunnel.py lesen     192.168.2.127 6/4/21          # Stufe 1: GroupValueRead
   ./knx_tunnel.py schalten  192.168.2.127 6/4/20 6/4/21   # Stufe 2: umschalten, zuruecklesen, zurueckstellen
   ./knx_tunnel.py schreiben 192.168.2.127 6/4/20 1 --status 6/4/21   # manuell zurueckstellen
+  ./knx_tunnel.py lesen     192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe
 
 Optionen: --port (Standard 3671), --roh (jedes Datagramm als Hex),
---quelle B.L.G (Quelladresse im Telegramm statt der Tunneladresse - ob die
-Schnittstelle sie uebernimmt, meldet das Werkzeug), schreiben: --dpt 1|5 und
---status GA (Ruecklesung, nur DPT 1), schalten: --halten SEK (0-30, Standard 5).
+--quelle B.L.G (Quelladresse im Telegramm statt der Tunneladresse),
+--gegenprobe (zweiter Tunnel hoert mit und meldet, mit welcher Quelle die
+eigenen Telegramme auf dem Bus stehen), schreiben: --dpt 1|5 und --status GA
+(Ruecklesung, nur DPT 1), schalten: --halten SEK (0-30, Standard 5).
 
-Rueckleseregel (aus Stufe 2, 2026-09-12): Eine negative L_Data.con heisst
-nicht, dass das Telegramm verloren ging - an der Anlage lag es trotzdem auf
-dem Bus, und der Aktor hat geschaltet. Das Urteil faellt deshalb die
+Rueckleseregel (aus Stufe 2, 2026-09-12): Die L_Data.con entscheidet nichts.
+Eine negative con hiess an der Anlage nicht "verloren" - das Telegramm lag
+auf dem Bus, der Aktor schaltete. Und mit vorgegebener Quelle liefert die
+Schnittstelle gar keine con. Das Urteil faellt deshalb die Antwort bzw. die
 Ruecklesung am Aktor; passt sie nicht, wird genau einmal wiederholt. Dieselbe
 Regel soll der Firmwareschritt bekommen.
 
 Was auf den Bus geht: 'verbinden' nichts; 'lesen' nur Lesetelegramme;
-'schreiben' und 'schalten' veraendern einen Aktor.
+'schreiben' und 'schalten' veraendern einen Aktor. '--gegenprobe' belegt
+einen zusaetzlichen Tunnel und sendet selbst nichts.
 
-Exit-Codes: 0 gruen, 1 Kommunikations- oder Protokollfehler (auch: negative
-Busbestaetigung bei 'schreiben' ohne --status), 2 Aufruffehler, 3 fremder
+Exit-Codes: 0 gruen, 1 Kommunikations- oder Protokollfehler (auch: 'schreiben'
+ohne --status, wenn die con negativ ist oder fehlt), 2 Aufruffehler, 3 fremder
 Schreibzugriff waehrend 'schalten' (bewusst NICHT zurueckgestellt),
 4 Ruecklesung passt nicht (bei 'schalten' auch nach der Wiederholung).
 
 Nur Standardbibliothek. Kein KNX IP Secure (an dieser Anlage nicht aktiv).
 
 Changelog:
+  1.2.0 (2026-09-12) Nach dem Lauf mit --quelle 1.1.250: Die Schnittstelle
+                     liefert bei vorgegebener Quelle keine L_Data.con. Eine
+                     FEHLENDE con ist deshalb wie eine negative kein
+                     Abbruchgrund mehr (Wartezeit 3 s -> 1 s). Neu
+                     '--gegenprobe': zweiter, mithoerender Tunnel in einem
+                     eigenen Thread. Simulator bedient zwei Tunnel.
   1.1.0 (2026-09-12) Nach Stufe 2: Eine negative L_Data.con bricht nicht mehr
                      ab. 'schalten' urteilt nach der Ruecklesung und
                      wiederholt bei Abweichung genau einmal; 'schreiben
@@ -104,9 +114,10 @@ class Zeiten:
     antwort: float = 10.0  # CONNECT-/CONNECTIONSTATE-Antwort (Spezifikation: 10 s)
     trennen: float = 2.0   # DISCONNECT_RESPONSE; danach wird der Socket trotzdem geschlossen
     ack: float = 1.0       # TUNNELING_ACK (Spezifikation: 1 s, genau eine Wiederholung)
-    con: float = 3.0       # L_Data.con - Bestaetigung der Schnittstelle vom Bus
+    con: float = 1.0       # L_Data.con - kam an der Anlage nach 22 ms; fehlt sie, entscheidet die Ruecklesung
     lesen: float = 3.0     # GroupValueResponse des Aktors
     status: float = 3.0    # spontane Statusmeldung nach dem Schalten, sonst aktiv lesen
+    nachlauf: float = 0.3  # Gegenprobe: so lange nach dem letzten Telegramm weiter mithoeren
 
 
 class KnxFehler(Exception):
@@ -217,7 +228,7 @@ def baue_cemi(code: int, quelle: int, ga: int, apci: int, klein: int = 0,
     ctrl1 0xBC: Standardrahmen, nicht wiederholen, Broadcast, Prioritaet low.
     ctrl2 0xE0: Zieladresse ist eine Gruppe, Routingzaehler 6.
     Quelle 0.0.0 im Request - die Schnittstelle setzt ihre Tunneladresse ein;
-    eine vorgegebene Quelle (--quelle) uebernimmt sie oder ersetzt sie.
+    bei einer vorgegebenen Quelle (--quelle) liefert sie keine L_Data.con.
     Werte bis 6 Bit (DPT 1) stecken im APCI-Byte, laengere folgen dahinter.
     """
     if daten:
@@ -332,16 +343,21 @@ class Tunnel:
     laeuft durch _empfange_einmal(), auch waehrend auf etwas anderes gewartet
     wird - die Schnittstelle schickt jedes Bustelegramm an jeden Tunnel und
     wiederholt es, wenn das ACK ausbleibt; nach der Wiederholung trennt sie.
+
+    Eine Instanz gehoert immer genau einem Thread (die Gegenprobe hat ihre
+    eigene).
     """
 
     def __init__(self, ip: str, port: int, zeiten: Zeiten | None = None,
-                 roh: bool = False, beobachtet: tuple[int, ...] = (), quelle: int = 0):
+                 roh: bool = False, beobachtet: tuple[int, ...] = (), quelle: int = 0,
+                 praefix: str = ""):
         self.ip = ip
         self.port = port
         self.zeiten = zeiten or Zeiten()
         self.roh = roh
         self.beobachtet = set(beobachtet)
         self.quelle = quelle                   # 0 = die Schnittstelle setzt ihre Tunneladresse
+        self.praefix = praefix                 # kennzeichnet die Ausgabe der Gegenprobe
         self.sock: socket.socket | None = None
         self.lokal: tuple[str, int] | None = None
         self.kanal: int | None = None
@@ -353,6 +369,7 @@ class Tunnel:
         self.acks: list[tuple[int, int]] = []  # (Sequenz, Status)
         self.cons: list[Cemi] = []
         self.inds: list[Cemi] = []
+        self.gesendet: list[tuple[int, int]] = []  # (Ziel-GA, APCI) jedes eigenen Telegramms
         self.sonstige = 0                      # mitgelesene fremde Bustelegramme
         self.gegenstelle_getrennt = False
         self._quelle_gemeldet = False
@@ -365,10 +382,13 @@ class Tunnel:
         self.trennen()
         return False
 
+    def _melde(self, text: str) -> None:
+        melde(self.praefix + text)
+
     # --- Senden und Empfangen ---------------------------------------------
     def _sende(self, dg: bytes, ziel: tuple[str, int]) -> None:
         if self.roh:
-            melde(">> " + dg.hex(" "))
+            self._melde(">> " + dg.hex(" "))
         self.sock.sendto(dg, ziel)
 
     def _warte(self, bedingung, frist: float, trennung_pruefen: bool = True):
@@ -394,14 +414,14 @@ class Tunnel:
         except socket.timeout:
             return
         if absender[0] != self.ip:
-            melde(f"Datagramm von fremder Adresse {absender[0]} verworfen")
+            self._melde(f"Datagramm von fremder Adresse {absender[0]} verworfen")
             return
         if self.roh:
-            melde("<< " + dg.hex(" "))
+            self._melde("<< " + dg.hex(" "))
         try:
             dienst, rumpf = zerlege_knxip(dg)
         except KnxFehler as fehler:
-            melde(f"unlesbares Datagramm verworfen: {fehler}")
+            self._melde(f"unlesbares Datagramm verworfen: {fehler}")
             return
         if dienst in (CONNECT_RESPONSE, CONNECTIONSTATE_RESPONSE, DISCONNECT_RESPONSE):
             self.antworten[dienst] = rumpf
@@ -415,7 +435,7 @@ class Tunnel:
                 self._sende(baue_disconnect_response(self.kanal), absender)
                 self.gegenstelle_getrennt = True
         else:
-            melde(f"Dienst 0x{dienst:04X} ignoriert")
+            self._melde(f"Dienst 0x{dienst:04X} ignoriert")
 
     def _tunnel_empfangen(self, rumpf: bytes, absender: tuple[str, int]) -> None:
         if len(rumpf) < 4 or rumpf[0] != 0x04 or rumpf[1] != self.kanal:
@@ -431,20 +451,20 @@ class Tunnel:
             self._sende(baue_tunneling_ack(self.kanal, seq), absender)
             return
         else:
-            melde(f"Sequenz {seq} statt {self.rx_seq} verworfen")
+            self._melde(f"Sequenz {seq} statt {self.rx_seq} verworfen")
             return
         try:
             r = zerlege_cemi(rumpf[4:])
         except KnxFehler as fehler:
-            melde(f"cEMI unlesbar: {fehler}")
+            self._melde(f"cEMI unlesbar: {fehler}")
             return
         if r.code == L_DATA_CON:
             self.cons.append(r)
         elif r.code == L_DATA_IND:
             self.inds.append(r)
             if r.gruppe and r.ziel in self.beobachtet:
-                melde(f"Bus: {ia_text(r.quelle)} -> {ga_text(r.ziel)} "
-                      f"{APCI_NAME.get(r.apci, hex(r.apci))} {wert_text(r)}")
+                self._melde(f"Bus: {ia_text(r.quelle)} -> {ga_text(r.ziel)} "
+                            f"{APCI_NAME.get(r.apci, hex(r.apci))} {wert_text(r)}")
             else:
                 self.sonstige += 1
 
@@ -475,8 +495,9 @@ class Tunnel:
                 self.daten_ep = (self.ip, self.port)
             else:
                 self.daten_ep = a.daten_ep
-            melde(f"verbunden: Kanal {self.kanal}, Tunneladresse {ia_text(self.adresse)}, "
-                  f"Datenendpunkt {self.daten_ep[0]}:{self.daten_ep[1]}, lokal {self.lokal[0]}:{self.lokal[1]}")
+            self._melde(f"verbunden: Kanal {self.kanal}, Tunneladresse {ia_text(self.adresse)}, "
+                        f"Datenendpunkt {self.daten_ep[0]}:{self.daten_ep[1]}, "
+                        f"lokal {self.lokal[0]}:{self.lokal[1]}")
         except BaseException:
             if self.sock is not None:
                 self.sock.close()
@@ -493,7 +514,7 @@ class Tunnel:
             raise KnxFehler("CONNECTIONSTATE_RESPONSE fuer einen fremden Kanal")
         if rumpf[1] != 0:
             raise KnxFehler(f"Verbindungszustand: {status_text(rumpf[1])}")
-        melde("Verbindungszustand ok")
+        self._melde("Verbindungszustand ok")
 
     def trennen(self) -> None:
         if self.sock is None:
@@ -504,28 +525,29 @@ class Tunnel:
                 rumpf = self._warte(lambda: self.antworten.pop(DISCONNECT_RESPONSE, None),
                                     self.zeiten.trennen, trennung_pruefen=False)
                 if rumpf is None:
-                    melde("keine DISCONNECT_RESPONSE - die Schnittstelle raeumt den Tunnel "
-                          "nach 120 s selbst ab")
+                    self._melde("keine DISCONNECT_RESPONSE - die Schnittstelle raeumt den Tunnel "
+                                "nach 120 s selbst ab")
                 else:
-                    melde("getrennt, Tunnel freigegeben")
+                    self._melde("getrennt, Tunnel freigegeben")
             if self.sonstige:
-                melde(f"{self.sonstige} weitere Bustelegramme mitgelesen und quittiert")
+                self._melde(f"{self.sonstige} weitere Bustelegramme mitgelesen und quittiert")
         except (OSError, KnxFehler) as fehler:
-            melde(f"Trennen gestoert: {fehler}")
+            self._melde(f"Trennen gestoert: {fehler}")
         finally:
             self.sock.close()
             self.sock = None
 
     # --- Gruppendienste -----------------------------------------------------
-    def _sende_cemi(self, cemi: bytes, ga: int) -> Cemi:
+    def _sende_cemi(self, cemi: bytes, ga: int) -> Cemi | None:
         """TUNNELING_REQUEST mit ACK (eine Wiederholung), dann L_Data.con.
 
         Die Reihenfolge von ACK und con ist nicht festgelegt - beide werden
-        unabhaengig voneinander eingesammelt. Fehlen ACK oder con ganz, ist
-        die Verbindung gestoert (KnxFehler). Eine NEGATIVE con dagegen ist kein
-        Abbruchgrund: An der Anlage lag ein so bestaetigtes Telegramm trotzdem
-        auf dem Bus (Stufe 2). Was sie bedeutet, entscheidet der Aufrufer.
+        unabhaengig voneinander eingesammelt. Fehlt das ACK, ist die
+        Verbindung gestoert (KnxFehler). Die con dagegen entscheidet nichts:
+        Eine negative lag an der Anlage trotzdem auf dem Bus (Stufe 2), und
+        bei vorgegebener Quelle kommt gar keine. Rueckgabe: die con oder None.
         """
+        self.gesendet.append((ga, zerlege_cemi(cemi).apci))
         marke = len(self.cons)
         self.acks.clear()
         ack = None
@@ -535,7 +557,7 @@ class Tunnel:
                               self.zeiten.ack)
             if ack is not None:
                 break
-            melde(f"kein TUNNELING_ACK auf Sequenz {self.tx_seq} (Versuch {versuch})")
+            self._melde(f"kein TUNNELING_ACK auf Sequenz {self.tx_seq} (Versuch {versuch})")
         if ack is None:
             raise KnxFehler("kein TUNNELING_ACK nach der Wiederholung")
         if ack[1] != 0:
@@ -544,11 +566,15 @@ class Tunnel:
         con = self._warte(lambda: next((r for r in self.cons[marke:] if r.ziel == ga), None),
                           self.zeiten.con)
         if con is None:
-            raise KnxFehler(f"keine L_Data.con fuer {ga_text(ga)} binnen {self.zeiten.con:g} s")
+            self._melde(f"keine L_Data.con fuer {ga_text(ga)} binnen {self.zeiten.con:g} s"
+                        + (" - bei vorgegebener Quelle liefert die Schnittstelle keine"
+                           if self.quelle else "")
+                        + "; die Ruecklesung entscheidet")
+            return None
         self._quelle_melden(con)
         if not con.bestaetigt_ok:
-            melde(f"Busbestaetigung fuer {ga_text(ga)} NEGATIV (L_Data.con) - "
-                  "Zustellung unbekannt, die Ruecklesung entscheidet")
+            self._melde(f"Busbestaetigung fuer {ga_text(ga)} NEGATIV (L_Data.con) - "
+                        "Zustellung unbekannt, die Ruecklesung entscheidet")
         return con
 
     def _quelle_melden(self, con: Cemi) -> None:
@@ -558,18 +584,18 @@ class Tunnel:
             return
         self._quelle_gemeldet = True
         if self.quelle == 0:
-            melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} (von der Schnittstelle eingesetzt)")
+            self._melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} (von der Schnittstelle eingesetzt)")
         elif con.quelle == self.quelle:
-            melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} - "
-                  "die Schnittstelle uebernimmt die vorgegebene Adresse")
+            self._melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} - "
+                        "die Schnittstelle uebernimmt die vorgegebene Adresse")
         else:
-            melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} - "
-                  f"die vorgegebene {ia_text(self.quelle)} wurde ERSETZT")
+            self._melde(f"Quelladresse auf dem Bus: {ia_text(con.quelle)} - "
+                        f"die vorgegebene {ia_text(self.quelle)} wurde ERSETZT")
 
     def lesen(self, ga: int) -> Cemi:
         # Marke VOR dem Senden: Die Antwort des Aktors darf auch vor der
-        # L_Data.con eintreffen und wird trotzdem gefunden. Nach einer
-        # negativen con wird trotzdem auf die Antwort gewartet.
+        # L_Data.con eintreffen und wird trotzdem gefunden. Ob eine con kam,
+        # ist fuer das Lesen gleich - es zaehlt die Antwort.
         marke = len(self.inds)
         self._sende_cemi(baue_cemi(L_DATA_REQ, self.quelle, ga, APCI_READ), ga)
         antwort = self._warte(lambda: next(
@@ -581,10 +607,10 @@ class Tunnel:
                             "L-Flag (Lesen)?")
         return antwort
 
-    def schreiben(self, ga: int, klein: int = 0, daten: bytes = b"") -> Cemi:
+    def schreiben(self, ga: int, klein: int = 0, daten: bytes = b"") -> Cemi | None:
         con = self._sende_cemi(baue_cemi(L_DATA_REQ, self.quelle, ga, APCI_WRITE, klein, daten), ga)
-        melde(f"geschrieben: {ga_text(ga)} = {daten[0] if daten else klein}, L_Data.con "
-              + ("positiv" if con.bestaetigt_ok else "negativ"))
+        zustand = "fehlt" if con is None else ("positiv" if con.bestaetigt_ok else "negativ")
+        self._melde(f"geschrieben: {ga_text(ga)} = {daten[0] if daten else klein}, L_Data.con {zustand}")
         return con
 
     def warte_auf_status(self, ga: int, erwartet: int, marke: int) -> tuple[int, str]:
@@ -617,6 +643,88 @@ class Tunnel:
                 and r.apci == APCI_WRITE and r.quelle not in eigene]
 
 
+# --- Gegenprobe: ein zweiter Tunnel hoert mit -----------------------------------
+class Gegenprobe:
+    """Zweiter Tunnel, der mithoert und meldet, mit welcher Quelladresse die
+    Telegramme des ersten auf dem Bus stehen.
+
+    Noetig, weil die Schnittstelle bei vorgegebener Quelle keine L_Data.con
+    liefert (2026-09-12) - der erste Tunnel sieht dann gar nicht, was er
+    gesendet hat. Die Schnittstelle reicht Telegramme eines Tunnels an die
+    anderen weiter; so hat openknx in Stufe 2 die Schaltbefehle gesehen.
+
+    Eigener Thread, weil auch dieser Tunnel jedes Bustelegramm binnen 1 s
+    quittieren muss - waehrend der erste wartet oder haelt, liefe sonst die
+    Wiederholung der Schnittstelle ins Leere, und sie trennte ihn. Die beiden
+    Threads teilen nichts; die Liste der mitgelesenen Telegramme liest der
+    Hauptthread erst, nachdem der Gegenprobe-Thread beendet ist.
+
+    Verbunden wird VOR dem ersten Telegramm. Ist kein Tunnel mehr frei,
+    endet der Lauf dort, ohne dass etwas gesendet wurde.
+    """
+
+    def __init__(self, a, erster: Tunnel, gas: tuple[int, ...]):
+        self.erster = erster
+        self.gas = set(gas)
+        self.zeiten = a.zeiten
+        # roh bleibt aus: Die Hex-Zeilen beider Tunnel liefen sonst ineinander.
+        self.t = Tunnel(a.ip, a.port, a.zeiten, False, (), 0, praefix="Gegenprobe: ")
+        self._stopp = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._fehler: Exception | None = None
+
+    def __enter__(self) -> "Gegenprobe":
+        self.t.verbinden()
+        self._thread = threading.Thread(target=self._lauf, daemon=True)
+        self._thread.start()
+        return self
+
+    def _lauf(self) -> None:
+        try:
+            # 60 s Obergrenze: laenger lebt kein Lauf (--halten max. 30 s), und
+            # ohne Heartbeat raeumt die Schnittstelle nach 120 s ab.
+            self.t._warte(lambda: True if self._stopp.is_set() else None, 60.0)
+        except (KnxFehler, OSError) as fehler:
+            self._fehler = fehler
+
+    def __exit__(self, *_) -> bool:
+        # Nachlauf: Das letzte Telegramm des ersten Tunnels muss hier noch
+        # ankommen, bevor der Thread endet.
+        time.sleep(self.zeiten.nachlauf)
+        self._stopp.set()
+        self._thread.join(2)
+        self.t.trennen()
+        self._bericht()
+        return False
+
+    def _bericht(self) -> None:
+        if self._fehler is not None:
+            melde(f"Gegenprobe: gestoert - {self._fehler}")
+        gesehen = [r for r in self.t.inds if r.gruppe and r.ziel in self.gas]
+        for r in gesehen:
+            melde(f"Gegenprobe sah: {ia_text(r.quelle)} -> {ga_text(r.ziel)} "
+                  f"{APCI_NAME.get(r.apci, hex(r.apci))} {wert_text(r)}")
+        # Welche davon hat der erste Tunnel gesendet? Erkennbar an Ziel und
+        # Dienst (Lesen/Schreiben); die Antworten kommen vom Aktor. Ein fremdes
+        # Telegramm mit gleichem Ziel und Dienst zaehlte mit - deshalb nennt
+        # das Urteil alle Quellen, statt eine zu unterstellen.
+        eigene = set(self.erster.gesendet)
+        quellen = sorted({r.quelle for r in gesehen if (r.ziel, r.apci) in eigene})
+        soll = self.erster.quelle or self.erster.adresse
+        art = "wie vorgegeben" if self.erster.quelle else "die Tunneladresse"
+        if not quellen:
+            melde("Gegenprobe: die eigenen Telegramme hat der zweite Tunnel NICHT gesehen")
+        elif quellen == [soll]:
+            melde(f"Gegenprobe: eigene Telegramme stehen mit {ia_text(soll)} auf dem Bus - {art}")
+        else:
+            melde(f"Gegenprobe: eigene Telegramme stehen mit {', '.join(ia_text(q) for q in quellen)} "
+                  f"auf dem Bus - erwartet war {ia_text(soll)} ({art})")
+
+
+def _gegenprobe(a, erster: Tunnel, gas: tuple[int, ...]):
+    return Gegenprobe(a, erster, gas) if a.gegenprobe else contextlib.nullcontext()
+
+
 # --- Befehle ------------------------------------------------------------------
 def _tunnel(a, beobachtet: tuple[int, ...] = ()) -> Tunnel:
     return Tunnel(a.ip, a.port, a.zeiten, a.roh, beobachtet, a.quelle)
@@ -632,7 +740,7 @@ def befehl_verbinden(a) -> int:
 
 def befehl_lesen(a) -> int:
     # Stufe 1: nur Lesetelegramme, kein Zustandswechsel
-    with _tunnel(a, tuple(a.gas)) as t:
+    with _tunnel(a, tuple(a.gas)) as t, _gegenprobe(a, t, tuple(a.gas)):
         for ga in a.gas:
             r = t.lesen(ga)
             melde(f"{ga_text(ga)} = {wert_text(r)}  (Antwort von {ia_text(r.quelle)})")
@@ -642,21 +750,24 @@ def befehl_lesen(a) -> int:
 
 def befehl_schreiben(a) -> int:
     # Einzelwert, vor allem fuer das manuelle Zurueckstellen. Mit --status
-    # liest es zurueck - ohne kann es eine negative Busbestaetigung nicht
-    # aufloesen und meldet dann "unbekannt" statt "gruen".
+    # liest es zurueck - ohne kann es eine negative oder fehlende
+    # Busbestaetigung nicht aufloesen und meldet dann "unbekannt".
     daten = bytes((a.wert,)) if a.dpt == 5 else b""
-    beobachtet = (a.ga,) if a.status is None else (a.ga, a.status)
-    with _tunnel(a, beobachtet) as t:
+    gas = (a.ga,) if a.status is None else (a.ga, a.status)
+    with _tunnel(a, gas) as t, _gegenprobe(a, t, gas):
         marke = len(t.inds)
         con = t.schreiben(a.ga, klein=a.wert if a.dpt == 1 else 0, daten=daten)
         if a.status is None:
-            if con.bestaetigt_ok:
-                melde("GRUEN: Schreibtelegramm vom Bus bestaetigt")
-                return 0
-            melde("ROT: Busbestaetigung negativ und keine Status-GA angegeben - "
-                  "Zustellung unbekannt. Zustand pruefen, z. B. mit --status")
-            return 1
-        wert, quelle = t.warte_auf_status(a.status, a.wert, marke)
+            wert = None
+        else:
+            wert, quelle = t.warte_auf_status(a.status, a.wert, marke)
+    if a.status is None:
+        if con is not None and con.bestaetigt_ok:
+            melde("GRUEN: Schreibtelegramm vom Bus bestaetigt")
+            return 0
+        melde("ROT: Busbestaetigung negativ oder fehlend und keine Status-GA angegeben - "
+              "Zustellung unbekannt. Zustand pruefen, z. B. mit --status")
+        return 1
     if wert == a.wert:
         melde(f"GRUEN: Rueckmeldung {ga_text(a.status)} = {wert} ({quelle})")
         return 0
@@ -696,8 +807,9 @@ def befehl_schalten(a) -> int:
     # Stufe 2: 1-Bit-Aktor umschalten, zuruecklesen, zurueckstellen, zuruecklesen.
     offen = None  # Wert, auf den noch zurueckgestellt werden muss
     rueckstell = None
+    gas = (a.schalt, a.status)
     try:
-        with _tunnel(a, (a.schalt, a.status)) as t:
+        with _tunnel(a, gas) as t, _gegenprobe(a, t, gas):
             r = t.lesen(a.status)
             if r.laenge != 1 or r.klein not in (0, 1):
                 raise KnxFehler(f"{ga_text(a.status)} liefert keinen 1-Bit-Wert: {wert_text(r)}")
@@ -765,18 +877,22 @@ class Simulator(threading.Thread):
 
     Bildet ab, was dieser Client benutzt - nicht mehr. Ein gruener
     Selbsttest belegt die Logik des Werkzeugs, nicht das Verhalten der echten
-    Schnittstelle; das belegen erst die Stufen 0-2 an der Anlage. Adressen
-    und ctrl1 der con sind der Anlage nachgebildet (Stufen 1 und 2).
+    Schnittstelle. Der Anlage nachgebildet (2026-09-12): Tunneladressen ab
+    1.1.148, ctrl1 der con 9c/9d, keine con bei vorgegebener Quelle, und
+    Telegramme eines Tunnels erscheinen bei den anderen als L_Data.ind.
+    Welche Quelle bei vorgegebener Adresse auf dem Bus steht, ist an der
+    Anlage noch offen - hier waehlbar ueber quelle_ersetzen.
     """
-    KANAL = 7
-    ADRESSE = 0x1194  # 1.1.148 - Tunneladresse, wie sie die echte Schnittstelle vergibt
-    AKTOR = 0x113C    # 1.1.60 - Pumpenaktor
-    FREMD = 0x11F5    # 1.1.245 - openknx
+    KANAELE = (7, 8)
+    ADRESSEN = (0x1194, 0x1195)  # 1.1.148, 1.1.149
+    AKTOR = 0x113C               # 1.1.60 - Pumpenaktor
+    FREMD = 0x11F5               # 1.1.245 - openknx
 
-    def __init__(self, schalt: int, status: int, mischer: int, stumm=False,
+    def __init__(self, schalt: int, status: int, mischer: int, kanaele: int = 2, stumm=False,
                  stumm_nach_schreiben=0, ack_verlieren=False, fremd_schreiben=False,
                  con_negativ=False, schreib_verluste=0, negativ_zugestellt=False,
-                 quelle_ersetzen=False, lesen_antwortet=True, status_spontan=True):
+                 quelle_ersetzen=False, con_bei_fremder_quelle=False,
+                 lesen_antwortet=True, status_spontan=True):
         super().__init__(daemon=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", 0))
@@ -784,6 +900,7 @@ class Simulator(threading.Thread):
         self.port = self.sock.getsockname()[1]
         self.schalt, self.status = schalt, status
         self.werte = {schalt: (0, b""), status: (0, b""), mischer: (0, bytes((128,)))}
+        self.kanaele = self.KANAELE[:max(1, min(kanaele, len(self.KANAELE)))]
         # Fehlerbilder
         self.stumm = stumm                            # antwortet auf gar nichts
         self.stumm_nach_schreiben = stumm_nach_schreiben  # verstummt nach n Schreibvorgaengen
@@ -792,18 +909,17 @@ class Simulator(threading.Thread):
         self.con_negativ = con_negativ                # jede con negativ, nichts zugestellt
         self.schreib_verluste = schreib_verluste      # erste n Schreibtelegramme: con negativ, nicht zugestellt
         self.negativ_zugestellt = negativ_zugestellt  # Schreiben: con negativ, trotzdem zugestellt (Stufe 2)
-        self.quelle_ersetzen = quelle_ersetzen        # vorgegebene Quelle durch Tunneladresse ersetzen
+        self.quelle_ersetzen = quelle_ersetzen        # vorgegebene Quelle auf dem Bus durch Tunneladresse ersetzen
+        self.con_bei_fremder_quelle = con_bei_fremder_quelle  # abweichend von der Anlage doch eine con
         self.lesen_antwortet = lesen_antwortet
         self.status_spontan = status_spontan
-        # Protokoll fuer die Pruefungen
-        self.client = None
-        self.rx = 0
-        self.tx = 0
-        self.gesendet: list[int] = []
-        self.quittiert: set[int] = set()
+        # Zustand und Protokoll fuer die Pruefungen
+        self.verbindungen: dict[int, dict] = {}       # Kanal -> Endpunkt, Adresse, Zaehler
+        self.gesendet: list[tuple[int, int]] = []     # (Kanal, Sequenz)
+        self.quittiert: set[tuple[int, int]] = set()
         self.schreibvorgaenge: list[tuple[int, int]] = []
         self.quellen: list[int] = []
-        self.getrennt = False
+        self.getrennt = 0
         self._verloren = False
         self._fremd_gesendet = False
         self._stopp = threading.Event()
@@ -813,10 +929,16 @@ class Simulator(threading.Thread):
         self.join(2)
         self.sock.close()
 
-    def _an_client(self, cemi: bytes) -> None:
-        self.gesendet.append(self.tx)
-        self.sock.sendto(baue_tunneling_request(self.KANAL, self.tx, cemi), self.client)
-        self.tx = (self.tx + 1) & 0xFF
+    def _an(self, kanal: int, cemi: bytes) -> None:
+        v = self.verbindungen[kanal]
+        self.gesendet.append((kanal, v["tx"]))
+        self.sock.sendto(baue_tunneling_request(kanal, v["tx"], cemi), v["ep"])
+        v["tx"] = (v["tx"] + 1) & 0xFF
+
+    def _an_alle(self, cemi: bytes, ausser: int | None = None) -> None:
+        for kanal in list(self.verbindungen):
+            if kanal != ausser:
+                self._an(kanal, cemi)
 
     def _verstummt(self) -> bool:
         return self.stumm or (self.stumm_nach_schreiben > 0
@@ -834,33 +956,45 @@ class Simulator(threading.Thread):
                 continue
             dienst, rumpf = zerlege_knxip(dg)
             if dienst == CONNECT_REQUEST:
-                self.client = zerlege_hpai(rumpf[8:16])
-                antwort = (bytes((self.KANAL, 0)) + hpai(("127.0.0.1", self.port))
-                           + bytes((0x04, 0x04, self.ADRESSE >> 8, self.ADRESSE & 0xFF)))
+                frei = [k for k in self.kanaele if k not in self.verbindungen]
+                if not frei:
+                    self.sock.sendto(kopf(CONNECT_RESPONSE, 2) + bytes((0, 0x24)), absender)
+                    continue
+                kanal = frei[0]
+                adresse = self.ADRESSEN[self.KANAELE.index(kanal)]
+                self.verbindungen[kanal] = {"ep": zerlege_hpai(rumpf[8:16]), "adresse": adresse,
+                                            "rx": 0, "tx": 0}
+                antwort = (bytes((kanal, 0)) + hpai(("127.0.0.1", self.port))
+                           + bytes((0x04, 0x04, adresse >> 8, adresse & 0xFF)))
                 self.sock.sendto(kopf(CONNECT_RESPONSE, len(antwort)) + antwort, absender)
             elif dienst == CONNECTIONSTATE_REQUEST:
-                self.sock.sendto(kopf(CONNECTIONSTATE_RESPONSE, 2) + bytes((self.KANAL, 0)), absender)
+                status = 0 if rumpf[0] in self.verbindungen else 0x21
+                self.sock.sendto(kopf(CONNECTIONSTATE_RESPONSE, 2) + bytes((rumpf[0], status)), absender)
             elif dienst == DISCONNECT_REQUEST:
-                self.sock.sendto(baue_disconnect_response(self.KANAL), absender)
-                self.getrennt = True
+                self.verbindungen.pop(rumpf[0], None)
+                self.sock.sendto(baue_disconnect_response(rumpf[0]), absender)
+                self.getrennt += 1
             elif dienst == TUNNELING_ACK:
-                self.quittiert.add(rumpf[2])
+                self.quittiert.add((rumpf[1], rumpf[2]))
             elif dienst == TUNNELING_REQUEST:
                 self._tunnel(rumpf)
 
     def _tunnel(self, rumpf: bytes) -> None:
-        seq = rumpf[2]
+        kanal, seq = rumpf[1], rumpf[2]
+        v = self.verbindungen.get(kanal)
+        if v is None:
+            return
         if self.ack_verlieren and not self._verloren:
             self._verloren = True  # erste Anfrage geht "verloren" - der Client muss wiederholen
             return
-        if seq == self.rx:
-            self.rx = (seq + 1) & 0xFF
+        if seq == v["rx"]:
+            v["rx"] = (seq + 1) & 0xFF
             neu = True
-        elif seq == (self.rx - 1) & 0xFF:
+        elif seq == (v["rx"] - 1) & 0xFF:
             neu = False  # Wiederholung: quittieren, nicht noch einmal ausfuehren
         else:
             return
-        self.sock.sendto(baue_tunneling_ack(self.KANAL, seq), self.client)
+        self.sock.sendto(baue_tunneling_ack(kanal, seq), v["ep"])
         if not neu:
             return
         r = zerlege_cemi(rumpf[4:])
@@ -870,23 +1004,28 @@ class Simulator(threading.Thread):
             self.schreib_verluste -= 1
         nicht_zugestellt = self.con_negativ or verloren
         negativ = nicht_zugestellt or (self.negativ_zugestellt and r.apci == APCI_WRITE)
-        # Quelle auf dem Bus: 0.0.0 ersetzt jede Schnittstelle durch die
-        # Tunneladresse; eine vorgegebene uebernimmt der Simulator, ausser
-        # quelle_ersetzen ist gesetzt. ctrl1 9c/9d wie an der Anlage.
-        quelle = r.quelle if r.quelle and not self.quelle_ersetzen else self.ADRESSE
-        ctrl1 = 0x9C | (0x01 if negativ else 0x00)
-        self._an_client(baue_cemi(L_DATA_CON, quelle, r.ziel, r.apci, r.klein, r.daten, ctrl1))
+        # Quelle auf dem Bus: 0.0.0 wird zur Tunneladresse; eine vorgegebene
+        # uebernimmt der Simulator, ausser quelle_ersetzen ist gesetzt.
+        fremde_quelle = r.quelle not in (0, v["adresse"])
+        quelle = r.quelle if fremde_quelle and not self.quelle_ersetzen else v["adresse"]
+        # Bestaetigung: ctrl1 9c/9d wie an der Anlage - und bei vorgegebener
+        # Quelle gar keine (beobachtet 2026-09-12)
+        if not fremde_quelle or self.con_bei_fremder_quelle:
+            ctrl1 = 0x9C | (0x01 if negativ else 0x00)
+            self._an(kanal, baue_cemi(L_DATA_CON, quelle, r.ziel, r.apci, r.klein, r.daten, ctrl1))
         if nicht_zugestellt:
             return
+        # Das Telegramm steht auf dem Bus: Die anderen Tunnel sehen es.
+        self._an_alle(baue_cemi(L_DATA_IND, quelle, r.ziel, r.apci, r.klein, r.daten), ausser=kanal)
         if r.apci == APCI_READ and self.lesen_antwortet and r.ziel in self.werte:
             klein, daten = self.werte[r.ziel]
-            self._an_client(baue_cemi(L_DATA_IND, self.AKTOR, r.ziel, APCI_RESPONSE, klein, daten))
+            self._an_alle(baue_cemi(L_DATA_IND, self.AKTOR, r.ziel, APCI_RESPONSE, klein, daten))
         elif r.apci == APCI_WRITE:
             self.schreibvorgaenge.append((r.ziel, r.klein))
             self._schalte(r.ziel, r.klein)
             if self.fremd_schreiben and not self._fremd_gesendet:
                 self._fremd_gesendet = True
-                self._an_client(baue_cemi(L_DATA_IND, self.FREMD, r.ziel, APCI_WRITE, r.klein))
+                self._an_alle(baue_cemi(L_DATA_IND, self.FREMD, r.ziel, APCI_WRITE, r.klein))
                 self._schalte(r.ziel, r.klein)
 
     def _schalte(self, ga: int, klein: int) -> None:
@@ -894,7 +1033,7 @@ class Simulator(threading.Thread):
         if ga == self.schalt:
             self.werte[self.status] = (klein, b"")
             if self.status_spontan:
-                self._an_client(baue_cemi(L_DATA_IND, self.AKTOR, self.status, APCI_WRITE, klein))
+                self._an_alle(baue_cemi(L_DATA_IND, self.AKTOR, self.status, APCI_WRITE, klein))
 
 
 def selbsttest() -> int:
@@ -953,7 +1092,7 @@ def selbsttest() -> int:
            == bytes.fromhex("11 00 BC E0 00 00 34 14 02 00 80 80"))
     pruefe("GroupValueRead",
            baue_cemi(L_DATA_REQ, 0, 0x3415, APCI_READ) == bytes.fromhex("11 00 BC E0 00 00 34 15 01 00 00"))
-    pruefe("GroupValueRead mit Quelle 1.1.250",
+    pruefe("GroupValueRead mit Quelle 1.1.250 (Rohbytes wie an der Anlage gesendet)",
            baue_cemi(L_DATA_REQ, 0x11FA, 0x3415, APCI_READ) == bytes.fromhex("11 00 BC E0 11 FA 34 15 01 00 00"))
     pruefe("GA 6/4/20 <-> 0x3414", ga_aus_text("6/4/20") == 0x3414 and ga_text(0x3414) == "6/4/20")
     pruefe("PA 1.1.250 <-> 0x11FA", ia_aus_text("1.1.250") == 0x11FA and ia_text(0x11FA) == "1.1.250")
@@ -975,10 +1114,11 @@ def selbsttest() -> int:
     # 4. Ablaeufe gegen den Simulator - Zeiten verkuerzt, sonst dauern die
     #    Fehlerfall-Laeufe so lange wie an der Anlage.
     schalt, status, mischer = ga_aus_text("6/4/20"), ga_aus_text("6/4/21"), ga_aus_text("6/4/30")
-    schnell = Zeiten(antwort=1.0, trennen=0.5, ack=0.2, con=0.5, lesen=0.5, status=0.3)
+    schnell = Zeiten(antwort=1.0, trennen=0.5, ack=0.2, con=0.2, lesen=0.5, status=0.3, nachlauf=0.1)
 
     def lauf(sim_optionen: dict, befehl, **argumente):
         argumente.setdefault("quelle", 0)
+        argumente.setdefault("gegenprobe", False)
         if befehl is befehl_schreiben:
             argumente.setdefault("status", None)
         sim = Simulator(schalt, status, mischer, **sim_optionen)
@@ -996,26 +1136,59 @@ def selbsttest() -> int:
 
     hin_und_zurueck = [(schalt, 1), (schalt, 0)]
     s2 = {"schalt": schalt, "status": status, "halten": 0.2}
+    q250 = 0x11FA
 
     code, aus, sim = lauf({}, befehl_verbinden)
-    pruefe("verbinden: gruen, getrennt", code == 0 and sim.getrennt, aus)
+    pruefe("verbinden: gruen, getrennt", code == 0 and sim.getrennt == 1, aus)
 
     code, aus, sim = lauf({}, befehl_lesen, gas=[status, mischer])
     pruefe("lesen: 1 Bit und 1 Byte, alles quittiert, Quelle von der Schnittstelle",
            code == 0 and "6/4/21 = 0 " in aus and "6/4/30 = 128 " in aus and alles_quittiert(sim)
            and "1.1.148 (von der Schnittstelle eingesetzt)" in aus and sim.quellen == [0, 0], aus)
 
-    code, aus, sim = lauf({}, befehl_lesen, gas=[status], quelle=0x11FA)
-    pruefe("lesen --quelle 1.1.250: Schnittstelle uebernimmt",
-           code == 0 and "uebernimmt" in aus and sim.quellen == [0x11FA], aus)
+    # Quelladresse: an der Anlage kam bei vorgegebener Quelle keine con
+    code, aus, sim = lauf({}, befehl_lesen, gas=[status], quelle=q250)
+    pruefe("lesen --quelle 1.1.250: keine con, die Antwort entscheidet -> gruen",
+           code == 0 and "bei vorgegebener Quelle liefert die Schnittstelle keine" in aus
+           and sim.quellen == [q250], aus)
 
-    code, aus, sim = lauf({"quelle_ersetzen": True}, befehl_lesen, gas=[status], quelle=0x11FA)
-    pruefe("lesen --quelle 1.1.250: Schnittstelle ersetzt", code == 0 and "ERSETZT" in aus, aus)
+    code, aus, sim = lauf({}, befehl_lesen, gas=[status], quelle=q250, gegenprobe=True)
+    pruefe("lesen --quelle --gegenprobe: Schnittstelle uebernimmt -> 1.1.250 gesehen",
+           code == 0 and "Gegenprobe: verbunden: Kanal 8, Tunneladresse 1.1.149" in aus
+           and "Gegenprobe sah: 1.1.250 -> 6/4/21 read" in aus
+           and "stehen mit 1.1.250 auf dem Bus - wie vorgegeben" in aus
+           and sim.getrennt == 2 and alles_quittiert(sim), aus)
 
+    code, aus, sim = lauf({"quelle_ersetzen": True}, befehl_lesen, gas=[status], quelle=q250, gegenprobe=True)
+    pruefe("lesen --quelle --gegenprobe: Schnittstelle ersetzt -> 1.1.148 gesehen",
+           code == 0 and "stehen mit 1.1.148 auf dem Bus - erwartet war 1.1.250" in aus, aus)
+
+    code, aus, sim = lauf({}, befehl_lesen, gas=[status], gegenprobe=True)
+    pruefe("lesen --gegenprobe ohne Quelle: Tunneladresse gesehen",
+           code == 0 and "stehen mit 1.1.148 auf dem Bus - die Tunneladresse" in aus, aus)
+
+    code, aus, sim = lauf({"con_bei_fremder_quelle": True}, befehl_lesen, gas=[status], quelle=q250)
+    pruefe("lesen --quelle, falls doch eine con kaeme: 'uebernimmt'", code == 0 and "uebernimmt" in aus, aus)
+
+    code, aus, sim = lauf({"con_bei_fremder_quelle": True, "quelle_ersetzen": True},
+                          befehl_lesen, gas=[status], quelle=q250)
+    pruefe("lesen --quelle, falls doch eine con kaeme: 'ERSETZT'", code == 0 and "ERSETZT" in aus, aus)
+
+    code, aus, sim = lauf({"kanaele": 1}, befehl_lesen, gas=[status], gegenprobe=True)
+    pruefe("--gegenprobe ohne freien Tunnel -> Exit 1, nichts gesendet",
+           code == 1 and "alle Tunnel belegt" in aus and sim.quellen == [], aus)
+
+    # Schalten
     code, aus, sim = lauf({}, befehl_schalten, **s2)
     pruefe("schalten: hin und zurueck, Aktor wieder auf 0",
            code == 0 and sim.schreibvorgaenge == hin_und_zurueck
-           and sim.werte[schalt] == (0, b"") and alles_quittiert(sim) and sim.getrennt, aus)
+           and sim.werte[schalt] == (0, b"") and alles_quittiert(sim) and sim.getrennt == 1, aus)
+
+    code, aus, sim = lauf({}, befehl_schalten, quelle=q250, gegenprobe=True, **s2)
+    pruefe("schalten --quelle --gegenprobe: ohne con gruen, Schreibtelegramme mit 1.1.250 gesehen",
+           code == 0 and sim.schreibvorgaenge == hin_und_zurueck and "L_Data.con fehlt" in aus
+           and "Gegenprobe sah: 1.1.250 -> 6/4/20 write 1" in aus
+           and "stehen mit 1.1.250 auf dem Bus - wie vorgegeben" in aus and alles_quittiert(sim), aus)
 
     code, aus, sim = lauf({"negativ_zugestellt": True}, befehl_schalten, **s2)
     pruefe("schalten: negative con, trotzdem zugestellt (Fall Stufe 2) -> gruen, keine Wiederholung",
@@ -1051,12 +1224,17 @@ def selbsttest() -> int:
     pruefe("schalten: Fehler schon beim Lesen -> Exit 1, keine Rueckstellzeile (nichts geschrieben)",
            code == 1 and "ACHTUNG" not in aus and sim.schreibvorgaenge == [], aus)
 
+    # Lesen und Schreiben, Fehlerfaelle
     code, aus, sim = lauf({"lesen_antwortet": False}, befehl_lesen, gas=[status])
     pruefe("lesen: keine Antwort -> Exit 1 mit Hinweis auf das L-Flag", code == 1 and "L-Flag" in aus, aus)
 
     code, aus, sim = lauf({"con_negativ": True}, befehl_schreiben, ga=schalt, wert=1, dpt=1)
     pruefe("schreiben ohne --status: negative con -> Exit 1, Zustellung unbekannt",
            code == 1 and "Zustellung unbekannt" in aus, aus)
+
+    code, aus, sim = lauf({}, befehl_schreiben, ga=schalt, wert=1, dpt=1, quelle=q250)
+    pruefe("schreiben ohne --status: fehlende con (Quelle 1.1.250) -> Exit 1, Zustellung unbekannt",
+           code == 1 and "Zustellung unbekannt" in aus and sim.schreibvorgaenge == [(schalt, 1)], aus)
 
     code, aus, sim = lauf({"negativ_zugestellt": True}, befehl_schreiben, ga=schalt, wert=1, dpt=1, status=status)
     pruefe("schreiben --status: negative con, Ruecklesung passt -> gruen",
@@ -1128,8 +1306,10 @@ def main() -> int:
         if telegramme:
             s.add_argument("--quelle", type=arg_ia, default=0, metavar="B.L.G",
                            help="Quelladresse im Telegramm (Standard: Tunneladresse der Schnittstelle)")
+            s.add_argument("--gegenprobe", action="store_true",
+                           help="zweiter Tunnel hoert mit und meldet die Quelle auf dem Bus")
         else:
-            s.set_defaults(quelle=0)
+            s.set_defaults(quelle=0, gegenprobe=False)
         return s
 
     mit_ziel("verbinden", "Stufe 0: Tunnel auf- und abbauen, kein Bustelegramm",

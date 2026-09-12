@@ -373,7 +373,10 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   Abweichung genau eine Wiederholung; `schreiben --status`; neu `--quelle`.
 - **Nachweis Quelladresse 1.1.250 — zur Hälfte:** Das Telegramm geht raus,
   die L_Data.con bleibt aus (Abschnitt 8). Offen: welche Quelle auf dem Bus
-  stand — Gegenprobe über einen zweiten, mithörenden Tunnel.
+  stand — Gegenprobe über einen zweiten, mithörenden Tunnel. Das Werkzeug
+  kann das seit 1.2.0 (`--gegenprobe`); seither ist auch eine fehlende con
+  kein Abbruchgrund mehr. Aufruf, nur ein Lesetelegramm:
+  `./knx_tunnel.py lesen 192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe`
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
