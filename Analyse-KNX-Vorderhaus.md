@@ -32,9 +32,13 @@ lässt sich der Mischer in Sekunden bestätigen statt nach bis zu 60 s — sofer
 zusätzlich der Positionseingang zurückgelesen wird und die Bewegung vor den
 Befehlen auf 0 stand.
 
-**Offen:** der Entscheid über die schnellere Rückleseregel des Mischers
-(Abschnitt 8), die Umsetzung in der Firmware und der Re-Assert für die
-KNX-Befehle in `nodered-flows` (Abschnitt 9).
+**Entschieden (Owner, 2026-09-12 abends): Rückleseregel A** für den
+Mischer (Abschnitt 8). Referenz ist `knx_tunnel.py` 1.6.0,
+`mischer --bewegung`.
+
+**Offen:** die Umsetzung in der Firmware nach
+[`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) und der
+Re-Assert für die KNX-Befehle in `nodered-flows` (Abschnitt 9).
 
 ---
 
@@ -504,7 +508,7 @@ Position gültig, Pumpe aus, Regler auf ForcedState 1.
   Schließen lässt sie sich, indem der Schritt die Bewegung **vor** den
   Befehlen liest.
 
-**Vorschlag für die Rückleseregel des Mischers — Entscheid offen:**
+**Rückleseregel A — entschieden (Owner, 2026-09-12 abends):**
 
 1. In der Befehlsverbindung zuerst die Bewegung lesen (nur 1.1.39).
 2. Zwangsstellungen zurücknehmen, Position senden.
@@ -516,9 +520,23 @@ Position gültig, Pumpe aus, Regler auf ForcedState 1.
    abfragen, bis er 128 meldet. Die Frist muss dann den laufenden
    Endlagenlauf abdecken.
 
+Beim Einarbeiten festgelegt, jeweils zur sicheren Seite hin:
+
+- **Antwortet der Aktor auf die Vorab-Lesung nicht**, zählt das wie
+  Bewegung 1 — dann entscheidet die Endstellung.
+- **Antwortet er auf das Lesen des Eingangs nicht**, zählt das als
+  Abweichung.
+- **Die Wiederholung umfasst alle drei Mischertelegramme** (AUF 0, ZU 0,
+  Position): Derselbe Wert noch einmal ist unschädlich, und welches der drei
+  fehlte, ist nicht zu erkennen.
+- **Die Frist des Rückfalls beträgt 220 s**: bis zu 144 s laufender
+  Endlagenlauf, danach der halbe Hub (60 s), dazu Reserve.
+
 Im Regelfall (Mischer steht) dauert der Mischerteil damit wenige Sekunden
-statt bis zu 60 s plus Abfragetakt. Die Firmware braucht dafür die
-Gruppenadresse 6/4/14 zusätzlich in den Einstellungen.
+statt bis zu 60 s plus Abfragetakt. Die Firmware braucht dafür zusätzlich
+die Gruppenadresse 6/4/14. Referenz ist `knx_tunnel.py` 1.6.0,
+`mischer --bewegung`; der Selbsttest spielt alle Zweige gegen den
+Simulator durch.
 
 ### Zwei Wege, den Schritt einzubauen — entschieden: A (Owner, 2026-09-12)
 
@@ -642,10 +660,11 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 - ~~**Bestätigung über die Bewegungsmeldung 6/4/14 erproben**~~ — am
   2026-09-12 abends in fünf Läufen erledigt (Abschnitt 8): trägt, braucht
   aber das Zurücklesen des Eingangs und die Bewegung vor den Befehlen.
-- **Owner-Entscheid: Rückleseregel des Mischers** — schnelle Regel über
-  6/4/14 nach dem Vorschlag in Abschnitt 8, oder wie bisher über die
-  Endstellung.
-- **Umsetzung in der Firmware:** neuer Schritttyp am Ende der Heizen-Folge,
+- ~~**Owner-Entscheid: Rückleseregel des Mischers**~~ — entschieden am
+  2026-09-12 abends: Regel A (Abschnitt 8), Werkzeug 1.6.0.
+- **Umsetzung in der Firmware** nach
+  [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md): neuer
+  Schritttyp am Ende der Heizen-Folge,
   Bau der Telegramme in einem arduino-freien Header mit Hosttest gegen die
   Sollwerte aus `knx_tunnel.py`; Einstellungen für IP, Port, Quelle, die
   sechs Gruppenadressen (sieben mit 6/4/14) und die zwei Aktoradressen.
