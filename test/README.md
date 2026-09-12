@@ -1646,6 +1646,22 @@ Voreinstellungen sind die Gruppenadressen dieser Anlage.
 ./knx_tunnel.py schreiben 192.168.2.127 6/4/13 46 --dpt 5  # Positionseingang wie vorher
 ```
 
+**`mischer --bewegung` (seit 1.5.0)** prueft den Owner-Vorschlag, den Mischer
+ueber `MischerMotor_Position_Bewegung` (6/4/14) zu bestaetigen statt ueber die
+Endstellung: noch in der Befehlsverbindung kurz auf die spontane
+Bewegungsmeldung warten, dann Eingang (6/4/13), Bewegung und Status vom Aktor
+lesen. Die Abfrage bis zur Endstellung laeuft als Gegenkontrolle weiter und
+meldet ein falsches GRUEN. `--ohne-zwang` laesst die Zwangsstellungen stehen
+(Negativprobe: der Mischer darf nicht fahren), `--ohne-pumpe` laesst die
+Pumpe in Ruhe. Die Laufzeit der Bewegungsmeldung ist nur mit
+`--quelle 1.1.250` ihrem Ausloeser zuzuordnen - ohne liegen die Telegramme
+rund 22 ms auseinander, und das Werkzeug meldet die Zuordnung als unsicher.
+
+```bash
+./knx_tunnel.py mischer 192.168.2.127 --quelle 1.1.250 --bewegung --ohne-pumpe --mithoeren
+./knx_tunnel.py mischer 192.168.2.127 --quelle 1.1.250 --bewegung --ohne-pumpe --ohne-zwang --frist 20
+```
+
 **Der Selbsttest belegt die Logik, nicht die Schnittstelle.** Die Rahmen
 werden byteweise gegen die Rohbytes aus den Tests von xknx gehalten (eine
 unabhaengige Referenz), die Ablaeufe gegen einen Simulator, der nur abbildet,
