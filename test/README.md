@@ -1595,7 +1595,22 @@ deshalb auf 30 s begrenzt. `schalten` stellt bei einem fremden Schreibzugriff
 auf die Schalt-GA **nicht** zurueck (Exit 3) - die Kaskaden Logik schreibt die
 Pumpe ereignisgesteuert, ein blindes Zurueckstellen ueberschriebe ihren
 neuen Befehl. Bei jedem Abbruch nach dem Umschalten nennt das Werkzeug die
-Zeile zum manuellen Zurueckstellen (`schreiben ... <Ausgangswert>`).
+Zeile zum manuellen Zurueckstellen
+(`schreiben ... <Ausgangswert> --status <Status-GA>`).
+
+**Die Ruecklesung entscheidet, nicht die Busbestaetigung (seit 1.1.0).** In
+Stufe 2 kam fuer das Rueckstelltelegramm eine negative L_Data.con, und doch
+lag es auf dem Bus und der Aktor schaltete. `schalten` liest deshalb auch
+nach einer negativen Bestaetigung zurueck und wiederholt bei Abweichung genau
+einmal - dieselbe Regel soll der Firmwareschritt bekommen. `schreiben` ohne
+`--status` kann eine negative Bestaetigung nicht aufloesen und endet dann mit
+Exit 1 ("Zustellung unbekannt").
+
+`--quelle B.L.G` setzt eine eigene Quelladresse ins Telegramm, wie openknx es
+mit `eibadr` tut. Ob die Schnittstelle sie uebernimmt oder durch ihre
+Tunneladresse ersetzt, meldet das Werkzeug beim ersten Telegramm - die
+L_Data.con ist die Kopie des gesendeten Rahmens. Die Adresse darf an keinem
+anderen Geraet vergeben sein.
 
 **Der Selbsttest belegt die Logik, nicht die Schnittstelle.** Die Rahmen
 werden byteweise gegen die Rohbytes aus den Tests von xknx gehalten (eine

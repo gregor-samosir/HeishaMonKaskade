@@ -317,16 +317,37 @@ damit die Schnittstelle selbst wiederholt, ist beim Umsetzen zu entscheiden.
 ob der Schritt auf die Endlage wartet oder nur die Bewegungsrichtung prüft,
 ist nach dem Vorabtest festzulegen.
 
-In der Firmware: IP, Port und die sechs Gruppenadressen in den Einstellungen
-(wie `hydraulik_switch`). Der Aufbau und das Zerlegen der Rahmen kommen in
+In der Firmware: IP, Port, Quelladresse und die sechs Gruppenadressen in den
+Einstellungen (wie `hydraulik_switch`).
+
+**Quelladresse (Owner-Wunsch 2026-09-12: 1.1.250 statt der vergebenen
+Tunneladresse 1.1.148).** KNXnet/IP kennt zwei Wege, und openknx zeigt, welcher
+hier trägt:
+
+- **Quelladresse im Telegramm.** So macht es openknx (`eibadr = 1.1.245` in
+  der Adapterkonfiguration). Die Schnittstelle scheint die vorgegebene
+  Adresse zu übernehmen: In Stufe 2 lief ein Telegramm von **1.1.245** mit.
+  `knx_tunnel.py --quelle 1.1.250` setzt sie ebenso und meldet anhand der
+  L_Data.con, ob die Schnittstelle sie übernimmt oder ersetzt.
+- **Einen bestimmten Tunnel anfordern** (erweiterte CRI, Tunnelling v2). Das
+  setzt voraus, dass 1.1.250 als Tunneladresse der Schnittstelle projektiert
+  ist, und läuft üblicherweise über TCP — xknx bietet es nur dort an. In
+  openknx wäre das `tunnelInterfaceAddress`, und das ist leer. Wird hier nicht
+  gebraucht, solange der erste Weg trägt.
+
+Voraussetzung für beide: 1.1.250 ist an keinem anderen Gerät vergeben. Der Aufbau und das Zerlegen der Rahmen kommen in
 einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 `knx_tunnel.py`.
 
 ## 9. Folgeaufgaben
 
 - ~~**Vorabtest Stufen 0–2**~~ — erledigt am 2026-09-12, Abschnitt 7.
-- **`knx_tunnel.py schalten`**: nach einer negativen Bestätigung zurücklesen,
-  statt abzubrechen, damit der Lauf den tatsächlichen Zustand meldet.
+- ~~**`knx_tunnel.py schalten`**: nach einer negativen Bestätigung
+  zurücklesen~~ — erledigt in 1.1.0: Die Rücklesung entscheidet, bei
+  Abweichung genau eine Wiederholung; `schreiben --status`; neu `--quelle`.
+- **Nachweis Quelladresse 1.1.250:** `./knx_tunnel.py lesen 192.168.2.127
+  6/4/21 --quelle 1.1.250` — nur ein Lesetelegramm. Die Ausgabe sagt, ob die
+  Schnittstelle die Adresse übernimmt (Abschnitt 8).
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
