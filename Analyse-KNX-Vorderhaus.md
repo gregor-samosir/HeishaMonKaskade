@@ -18,7 +18,9 @@ Schritt in die Schrittfolge des Notbetriebs (Abschnitt 5).
 **Vorabtest abgeschlossen (2026-09-12, Abschnitt 7):** Der kurzlebige Tunnel
 trägt, der Pumpenstatus ist aktiv lesbar, und Schalten samt Rücklesung
 funktioniert. Wichtigster Befund: Eine **negative Busbestätigung heißt nicht,
-dass das Telegramm verloren ging** — die Rücklesung entscheidet.
+dass das Telegramm verloren ging** — die Rücklesung entscheidet. Die
+Quelladresse **1.1.250** lässt sich vorgeben und steht so auf dem Bus; sie
+kostet die Busbestätigung (Abschnitt 8).
 
 **Offen:** der Entwurf des Firmwareschritts (Abschnitt 8).
 
@@ -325,10 +327,11 @@ Tunneladresse 1.1.148).** KNXnet/IP kennt zwei Wege, und openknx zeigt, welcher
 hier trägt:
 
 - **Quelladresse im Telegramm.** So macht es openknx (`eibadr = 1.1.245` in
-  der Adapterkonfiguration). Die Schnittstelle scheint die vorgegebene
-  Adresse zu übernehmen: In Stufe 2 lief ein Telegramm von **1.1.245** mit.
-  `knx_tunnel.py --quelle 1.1.250` setzt sie ebenso und meldet anhand der
-  L_Data.con, ob die Schnittstelle sie übernimmt oder ersetzt.
+  der Adapterkonfiguration), und so setzt sie `knx_tunnel.py --quelle`.
+  **Belegt: Die Schnittstelle übernimmt sie auf den Bus** (Gegenprobe
+  unten). Dass in Stufe 2 ein Telegramm von 1.1.245 mitlief, war dafür noch
+  kein Beleg — die Tunneladressen der Schnittstelle liegen nicht am Stück
+  (1.1.148, 1.1.247), 1.1.245 kann ebenso gut der Tunnel von openknx sein.
 - **Einen bestimmten Tunnel anfordern** (erweiterte CRI, Tunnelling v2). Das
   setzt voraus, dass 1.1.250 als Tunneladresse der Schnittstelle projektiert
   ist, und läuft üblicherweise über TCP — xknx bietet es nur dort an. In
@@ -355,9 +358,20 @@ Schnittstelle stellt die Bestätigung offenbar nur zu, wenn die Quelle ihre
 Tunneladresse ist. openknx fällt das nicht auf: Es wartet laut Konfiguration
 gar nicht auf Bestätigungen (`waitForAck = False`).
 
-**Offen:** mit welcher Quelladresse das Telegramm auf dem Bus stand. Ohne con
-ist das vom eigenen Tunnel aus nicht zu sehen; klären lässt es sich über
-einen zweiten Tunnel, der mithört, oder über den ETS-Gruppenmonitor.
+**Gegenprobe vom 2026-09-12 — 1.1.250 steht auf dem Bus.** Ohne con ist die
+Quelle vom eigenen Tunnel aus nicht zu sehen; deshalb hörte ein zweiter
+Tunnel mit (`knx_tunnel.py` 1.2.0, `lesen 192.168.2.127 6/4/21 --quelle
+1.1.250 --gegenprobe`, wieder nur ein Lesetelegramm):
+
+| Tunnel | Kanal | Tunneladresse | sah |
+| --- | --- | --- | --- |
+| sendend | 178 | 1.1.148 | Antwort 1.1.60 → 6/4/21 = 1 nach 56 ms; keine L_Data.con |
+| Gegenprobe | 179 | 1.1.247 | **1.1.250 → 6/4/21 read**, dann 1.1.60 → 6/4/21 response 1 |
+
+Die Schnittstelle übernimmt die vorgegebene Quelle also unverändert und
+reicht das Telegramm an die anderen Tunnel weiter; nur die L_Data.con an den
+sendenden Tunnel entfällt. Das eigene Telegramm kommt beim sendenden Tunnel
+auch nicht als L_Data.ind zurück.
 
 **Folge für die Firmware:** Eine vorgegebene Quelle kostet die
 Busbestätigung. Nach der Rückleseregel ist das verkraftbar — dann darf aber
@@ -371,12 +385,8 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
 - ~~**`knx_tunnel.py schalten`**: nach einer negativen Bestätigung
   zurücklesen~~ — erledigt in 1.1.0: Die Rücklesung entscheidet, bei
   Abweichung genau eine Wiederholung; `schreiben --status`; neu `--quelle`.
-- **Nachweis Quelladresse 1.1.250 — zur Hälfte:** Das Telegramm geht raus,
-  die L_Data.con bleibt aus (Abschnitt 8). Offen: welche Quelle auf dem Bus
-  stand — Gegenprobe über einen zweiten, mithörenden Tunnel. Das Werkzeug
-  kann das seit 1.2.0 (`--gegenprobe`); seither ist auch eine fehlende con
-  kein Abbruchgrund mehr. Aufruf, nur ein Lesetelegramm:
-  `./knx_tunnel.py lesen 192.168.2.127 6/4/21 --quelle 1.1.250 --gegenprobe`
+- ~~**Nachweis Quelladresse 1.1.250**~~ — erledigt am 2026-09-12: steht so
+  auf dem Bus, ohne L_Data.con (Abschnitt 8, Gegenprobe mit 1.2.0).
 - **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
   Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
   Normalzustand selbst wiederherstellt.
