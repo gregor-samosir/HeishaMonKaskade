@@ -298,6 +298,12 @@ diesem Projekt als Risiko meldet, prüft zuerst, ob littlefs oder ein
 trunkierendes Dateisystem darunter liegt. Hier ist es littlefs, und die Antwort
 steht oben.
 
+**Nachtrag 2026-09-13 — 128 KB, nicht 192 KB:** Die beiden Stellen oben nennen
+für das Dateisystem 192 KB. Die `min_spiffs.csv` des verwendeten Core 3.3.11
+teilt den Bereich hinter den beiden Programmfächern aber in 128 KB LittleFS und
+64 KB Coredump; die 192 KB sind die Summe aus beidem. Am Entscheid ändert das
+nichts — auch 128 KB sind für eine ~250-Byte-Datei kein erreichbares Limit.
+
 **Veraltete Zahlen in Kommentaren** (Tabellenlänge 92 → 99, Gesamtdeckel
 180 s → 200 s): [decode.h:97](src/decode.h#L97),
 [decode.cpp:547](src/decode.cpp#L547), [notbetrieb.cpp:82](src/notbetrieb.cpp#L82),

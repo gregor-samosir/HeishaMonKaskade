@@ -552,9 +552,11 @@ other GPIOs."
 
 Auf diesen beiden Varianten liefert GPIO47 also **1,8 V statt 3,3 V** — je
 nach Relaistreiber zu wenig zum sauberen Durchschalten. Die hier verbauten
-Boards haben 4 MB Flash und kein PSRAM (`platformio.ini`,
-`board_upload.flash_size = 4MB` mit `min_spiffs.csv`), gehören also
-aller Wahrscheinlichkeit nach nicht dazu. Zu belegen ist es beiläufig: Die
+Boards haben laut Platinendesigner 4 MB Flash und 2 MB PSRAM, beides Quad-SPI
+(Korrektur 2026-09-13 — hier stand „kein PSRAM“, abgeleitet aus der
+`platformio.ini`, die das PSRAM gar nicht erwähnt). R8V und R16V tragen 8 bzw.
+16 MB Octal-PSRAM; die Boards gehören also nicht dazu. Die Gegenprobe gibt es
+beiläufig: Die
 Chipbezeichnung steht in der Bootausgabe auf der USB-Konsole und im
 `esptool`-Kopf beim USB-Flashen der beiden neu bestellten Boards. Kostet
 nichts, wenn man beim Erstflash ohnehin hinschaut — und erspart die Suche
