@@ -5,6 +5,10 @@
 > vom Owner entschieden. Die Firmware steht unverändert auf 3.20.0. Offen ist
 > die Umsetzung; dieser Plan führt vom ersten Befehl bis zum Rollout.
 > **Ergebnis: offen.**
+>
+> **2026-09-13:** E1–E4 und drei Folgepunkte entschieden (Abschnitt
+> „Entschieden am 2026-09-13“). Die Umsetzung läuft auf dem Branch
+> `knx-vorderhaus`.
 
 ## Worum es geht
 
@@ -77,19 +81,36 @@ Eine kurze Verbindung beim Absetzen, wie der Hydraulikschritt:
 3. 6/4/17 = 0, 6/4/16 = 0, 6/4/13 = 128 schreiben. Nicht auf eine con warten.
 4. 6/4/13 lesen. Keine Antwort oder ≠ 128: Schritt 3 einmal wiederholen,
    danach ROT.
-5. `schnell`: kurz auf Bewegung 1 vom Aktor warten, sonst 6/4/14 lesen; 1
+5. `schnell`: bis 2 s auf Bewegung 1 vom Aktor warten, sonst 6/4/14 lesen; 1
    ist GRÜN. Sonst 6/4/12 lesen; 128 ± 2 ist GRÜN (Mischer stand schon
    dort). Sonst Schritt 3 einmal wiederholen, danach ROT.
    Nicht `schnell`: der Mischer bleibt **ausstehend** → Rückfall (E2).
 6. 6/4/20 = 1, Rücklesung 6/4/21 vom Pumpenaktor (spontan, sonst lesen).
-   Abweichung: einmal wiederholen, danach ROT.
+   Abweichung: einmal wiederholen, danach ROT. **Immer**, auch wenn der
+   Mischer in Schritt 4 oder 5 ROT ergab (entschieden 2026-09-13).
 7. DISCONNECT — immer, auch im Fehlerfall.
 
 Während jeder Wartezeit jedes eingehende TUNNELING_REQUEST des eigenen
 Kanals binnen 1 s quittieren; fremde Kanäle verwerfen, ohne zu quittieren.
 Die Sequenzregel steht in `Tunnel._tunnel_empfangen()`.
 
-## Vor dem Code zu entscheiden — einzeln mit dem Owner
+## Entschieden am 2026-09-13
+
+Einzeln mit dem Owner, jeweils aus der Vorlage im nächsten Abschnitt.
+
+| Punkt | Entscheid |
+| --- | --- |
+| **E1** Einstellungen | **a.** Ein Feld `knx_schnittstelle`, **nur eine IP**, wahlweise mit `:Port` (Standard 3671). Quelle, die sieben Gruppenadressen und die zwei Aktoradressen stehen als Konstanten im Header und laufen durch den Hosttest. Kein Gerätename: Ob die Namensauflösung im Notbetriebsfall mit ausfällt, hängt davon ab, wo sie läuft; eine IP ist streng prüfbar. Leer oder ungültig: Warnung beim Start, ROT beim Druck. Preis: Eine Gruppenadresse, die sich in der ETS ändert, braucht einen neuen Build — das steht in `README.md` und `Ablauf-Notbetrieb.md`, damit der ETS-Fachmann es findet. Ein Tippfehler in einer GA auf der Einstellungsseite hätte Schreibtelegramme an eine fremde Gruppe geschickt. |
+| **E2** Rückfall | **a.** Timeout je Schritttyp. Der Vorderhausschritt bekommt 240 s — die 220 s der Rückfallfrist plus der Austausch beim Absetzen — und das ist seine **einzige** Frist: keine zweite Uhr neben dem Schritt-Timeout, sonst hinge das Ergebnis davon ab, welche zuerst abläuft. Gesamtdeckel bleibt abgeleitet, als Summe der Schritt-Timeouts: Heizen 440 s, Warmwasser unverändert 120 s. Im Rückfall fragt der Tick alle 10 s in einer eigenen kurzen Verbindung 6/4/12 ab, bis 1.1.39 128 ± 2 meldet. |
+| **E3** Text unter dem Satz | **c, Wortlaut des Owners:** „Der Mischer im Vorderhaus bleibt so eingestellt, wie die Steuerung es zuletzt vorgegeben hat. Ein zweiter Druck auf diesen Knopf kann eventuell die Einstellungen vornehmen. Wird es im Vorderhaus zu kalt oder zu warm, lies bitte die Anleitungen zum Mischer in den Unterlagen zum Notbetrieb.“ Darüber steht der Satz vom 2026-09-12. |
+| **E4** Test am Gerät | **a, erweitert.** Der Plan übersah: **Am Prüfling ist der Knopf gesperrt** — ohne Wärmepumpe kein TOP101 (`test/README.md`, „Verbindungsanzeige am Prüfstand“), und ohne Rücklesung bräche ein Lauf an Schritt 2 ab; Schritt 11 wird dort nie erreicht. Deshalb: `knx_tunnel.py simulator` auf der LAN-Adresse des Macs, und **ein Testzugang nur im Prüflings-Build** (Flag in `[stage_test_esp32]`), der allein den Vorderhausschritt ausführt — derselbe Code wie Schritt 11, samt Rückfall, ohne Sperre, ohne Wärmepumpe, ohne Hydraulik-Switch. Die produktiven Builds enthalten ihn nicht; das wird am Build nachgewiesen. |
+| E4, Angebot des Owners | Tests **am echten Mischer und an der echten Pumpe** sind erlaubt: Die Anlage steht im Heizbetrieb, Modus „Nur Warmwasser“, ohne Wärmeanforderung; die Pumpe dreht das Wasser nur im Kreis, der Mischer darf beliebig fahren. Jeder Lauf wird einzeln aufgerufen und vorher angekündigt. openknx darf zeitweise angehalten werden — vorgesehen ist es nicht: Mit laufendem openknx ist der Test strenger, weil die Firmware dessen schnellere Antworten verwerfen muss. |
+| Wartezeit auf die Bewegung | **2 s**, wie Regel A (Analyse §8) und `knx_tunnel.py` 1.6.0. Die „1 s“ in Schritt 2 dieses Plans war ein Übertragungsfehler. Im Regelfall endet das Warten mit der Meldung nach rund 0,1 s. |
+| Pumpe bei ROT des Mischers | **Immer einschalten**, wie das Referenzwerkzeug. Mit laufender Pumpe bekommt das Vorderhaus Wärme nach der letzten Mischerstellung der Steuerung (in der Feuerübung 132); ohne sie gar keine. Steht der Mischer auf AUF, kommt der Vorlauf der Notbetriebskurve an — für die Fußbodenheizung ausgelegt. Der Schritt meldet trotzdem den Fehler. |
+| Anzeige des Vorderhausfalls | **Amberfarbenes Feld** (`w3-amber`, `#ffc107`, schwarze Schrift — neu im eingebetteten CSS), Überschrift „Teilweise umgestellt“ (Arbeitsstand, in Schritt 5 änderbar). ROT hieße „Plan B am Bedienfeld“, und das trifft nicht zu; `w3-orange` hat weiße Schrift bei rund 2 : 1 Kontrast. **Intern bleibt es ROT** mit dem Grund `NOTBETRIEB_GRUND_VORDERHAUS`: Der Knopf kommt nach dem Lauf von selbst zurück (passt zum Text), Statusroute und Logzeile ändern ihren Aufbau nicht. |
+| **Neue Voraussetzung vor dem Rollout** | Die **Anleitung zum Mischer** in den Notbetriebsunterlagen (`nodered-flows`) — der Seitentext verweist darauf, heute führen die Unterlagen den Mischer nur als „bleibt stehen“ (FEUERUEBUNG.md, F6). Inhalt entscheidet der Owner. |
+
+## Die Vorlage dazu (Stand 2026-09-12)
 
 **E1 — Wo stehen Adressen und Gruppenadressen?** Die Analyse nennt
 Einstellungen „wie `hydraulik_switch`“; das wären zwölf neue Felder in
@@ -152,7 +173,8 @@ Branch.
 2. **Netzteil**, eigene Datei (Vorschlag `src/vorderhaus.cpp`), aufgerufen aus
    `notbetrieb_schritt_absetzen()`. `WiFiUDP`, Ablauf wie oben, jede Frist
    begrenzt (CONNECT 1 s, ACK 1 s mit einer Wiederholung, Lesen 1 s — endet
-   an der Antwort des Aktors, nicht am Fenster —, Bewegung spontan 1 s).
+   an der Antwort des Aktors, nicht am Fenster —, Bewegung spontan 2 s wie
+   Regel A).
    Beim ersten fehlenden ACK abbrechen, DISCONNECT, ROT. Logzeilen wie beim
    Hydraulikschritt: was geantwortet hat und was nicht.
    *Prüfkriterium:* Die größte Blockade von `loop()` ist ausgerechnet und
@@ -170,8 +192,11 @@ Branch.
    Hydraulik-Switch (`notbetrieb.cpp`, „keine Adresse fuer den
    Hydraulik-Switch“). `jsonDoc.overflowed()` bleibt die Absicherung.
 5. **Seite.** `NB_TXT_VORDERHAUS` nach `NB_TXT_HYDRAULIK` in
-   `webfunctions.cpp`, der ROT-Zweig wählt nach dem Grund; Dauertext und
-   Laufzeiten prüfen. `css_klassen_test.py` muss grün bleiben.
+   `webfunctions.cpp`, der ROT-Zweig wählt nach dem Grund; beim Grund
+   Vorderhaus das Amberfeld samt `w3-amber` im eingebetteten CSS. Im Rückfall
+   steht bis zu vier Minuten „läuft“ — dort ergänzen, dass die Wärmepumpen
+   schon laufen und nur der Mischer noch fährt. Dauertext und Laufzeiten
+   prüfen. `css_klassen_test.py` muss grün bleiben.
 6. **Hosttests anpassen,** die an der Schrittfolge hängen
    (`test/notbetrieb_test.cpp`): „Heizen hat zehn Schritte“, „Schritt 10
    schaltet die Anlage ein“, die Schleife „letzter Schritt jeder Rolle ist
@@ -185,15 +210,22 @@ Branch.
    der Analyse das Ergebnis.
 8. **Bauen und testen:** alle Envs, alle Hosttests (Befehle in `CLAUDE.md`,
    Liste in `main.yml`), `knx_tunnel.py selbsttest`.
-9. **Prüfling.** Nach E4. Der Lauf gegen die echte Schnittstelle nur mit
-   ausdrücklicher Freigabe, Kaskade aus, Busmonitor und `knx_tunnel.py
-   mischer … --mithoeren` oder `lesen --alle` als Gegenprobe. Achtung: Der
-   Notbetriebslauf schaltet dabei auch den echten Hydraulik-Switch (Ablauf
-   §1a, „Im Test stellt die lebende Steuerung binnen 20 s zurück“).
-   Zurückstellen wie am 2026-09-12, jeder Eingriff einzeln: AUF bzw. ZU wie
-   vorgefunden, Eingang auf den Vorwert, Pumpe wie vorgefunden.
-10. **Merge und Rollout** erst nach Schritt 8 vollständig. Abnahme mit
-    `test/tablesnap.py` gegen den Stand davor.
+9. **Prüfling** (E4, entschieden 2026-09-13). `knx_tunnel.py` bekommt den
+   Befehl `simulator`; der Prüflings-Build den Testzugang, der nur den
+   Vorderhausschritt ausführt. Zuerst alle Zweige von Regel A gegen den
+   Simulator. Danach gegen die echte Schnittstelle — **nur Mischer und
+   Pumpe**, keine Wärmepumpe, kein Hydraulik-Switch —, jeder Lauf einzeln
+   angekündigt: schneller Weg, „steht schon am Ziel“ (zweiter Druck),
+   Rückfall kurz nach einem Wechsel der Zwangsstellung, Pumpe. Busmonitor
+   und `knx_tunnel.py mischer … --mithoeren` oder `lesen --alle` als
+   Gegenprobe. Zurückstellen wie am 2026-09-12, jeder Eingriff einzeln: AUF
+   bzw. ZU wie vorgefunden, Eingang auf den Vorwert, Pumpe wie vorgefunden.
+   Ob beim Rollout zusätzlich ein ganzer Lauf an H1 stattfindet, entscheidet
+   der Owner.
+10. **Merge und Rollout** erst nach Schritt 8 vollständig **und wenn die
+    Anleitung zum Mischer in den Notbetriebsunterlagen steht** — der
+    Seitentext verweist darauf. Abnahme mit `test/tablesnap.py` gegen den
+    Stand davor.
 
 ## Fallen, die schon einmal zugeschnappt sind
 
@@ -227,7 +259,7 @@ Branch.
 
 ## Stand der Commits bei der Übergabe
 
-Alle auf `main`, **noch nicht gepusht** — ob und wann, entscheidet der Owner.
+Alle auf `main`; am 2026-09-13 stand `main` gleich `origin/main`.
 
 | Commit | Inhalt |
 | --- | --- |
