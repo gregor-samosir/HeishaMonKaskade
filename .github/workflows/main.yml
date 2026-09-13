@@ -151,6 +151,16 @@ jobs:
       #                  langen Ausfall. An der Anlage wäre das nicht
       #                  abzuwarten - die Gegenprobe zeigt dort "seit 1 Minute
       #                  nicht erreichbar" nach 49,7 Tagen ohne Broker.
+      # knx_test:        KNX-Tunnel des Notbetriebsschritts "Vorderhaus" aus
+      #                  3.21.0 - bindet src/knxtunnel.h direkt ein. Jeder
+      #                  Rahmen byteweise gegen die Rohbytes aus xknx und aus
+      #                  den Mitschnitten an der Anlage (2026-09-12), dazu die
+      #                  Zweige der Rückleseregel A samt Reihenfolge des Lesens.
+      #                  Der Grund, warum dieser Test in der CI steht: Der
+      #                  Schritt läuft nur im Ernstfall. Ein falsches Byte fiele
+      #                  erst dann auf - oder nie, wenn ein Filter die Antwort
+      #                  von openknx mitzählt: Der meldet im Test GRÜN aus dessen
+      #                  Zwischenspeicher, und im Ernstfall ist openknx nicht da.
       # byte110_test:    Bitzuordnung der vier Ist-Zustands-Topics (TOP99-102);
       #                  übersetzt src/decode.cpp mit, deshalb über das Skript
       #                  (Arduino-Ersatzheader aus test/stubs/)
@@ -181,6 +191,8 @@ jobs:
           /tmp/verbindung_test
           c++ -std=c++17 -O2 -Wall -o /tmp/rtcspiegel_test test/rtcspiegel_test.cpp
           /tmp/rtcspiegel_test
+          c++ -std=c++17 -O2 -Wall -o /tmp/knx_test test/knx_test.cpp
+          /tmp/knx_test
           ./test/decode_hosttest.sh
           ./test/decode_hosttest.sh test/byte9_test.cpp
           ./test/decode_hosttest.sh test/byte23_25_test.cpp
