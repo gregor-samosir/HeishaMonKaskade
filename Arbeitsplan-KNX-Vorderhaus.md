@@ -225,6 +225,37 @@ Branch.
    bzw. ZU wie vorgefunden, Eingang auf den Vorwert, Pumpe wie vorgefunden.
    Ob beim Rollout zusätzlich ein ganzer Lauf an H1 stattfindet, entscheidet
    der Owner.
+
+   **So läuft er ab (vorbereitet 2026-09-13):**
+   - Backup-Board leihen nach `test/README.md`, „Prüfstand aufsetzen“,
+     Schritte 1–2 (`pio run -e heishamon_esp32_usb -t upload`). Den
+     MQTT-Port **nicht** auf 1883 stellen: Der Test braucht keinen Broker,
+     das Board bleibt doppelt gesperrt, und die Rückgabe ist nur das
+     Zurückflashen der Stufen-Firmware.
+   - In `/settings` `knx_schnittstelle` auf die LAN-Adresse des Macs setzen
+     (Simulator), später auf `192.168.2.127`. Speichern startet neu.
+   - Simulator: `./test/knx_tunnel.py simulator <Mac-IP> [--start …]
+     [--fehler …]`. Lauf anstoßen: `curl -u notbetrieb:<Passwort> -X POST
+     http://<Prüfling>/vorderhaus/pruefen`, Stand mit `GET`, Einzelheiten
+     unter `/log` und per `test/telnet_mitschnitt.py`.
+   - Die Simulator-Läufe und ihr Soll:
+
+     | Aufruf | Soll |
+     | --- | --- |
+     | `--start zu` | GRÜN, Mischer fährt, Pumpe spontan gemeldet |
+     | `--start steht128` | GRÜN über den Status (zweiter Druck), rund 2,5 s |
+     | `--start faehrt` | Rückfall, GRÜN nach der Ankunft (rund 60 s) |
+     | `--fehler zwang_klemmt` | ROT nach einer Wiederholung, Pumpe trotzdem ein |
+     | `--fehler pos_verloren` | ROT über den Eingang, eine Wiederholung |
+     | `--fehler mischer_stumm` | Rückfall (Vorab-Lesung schweigt), dann ROT: Eingang stumm |
+     | `--fehler openknx` | GRÜN; im Telnet-Log „fremde Antworten“ > 0 |
+     | `--fehler pumpe_ohne_meldung` | GRÜN, Pumpe „gelesen“ statt „spontan“ |
+     | `--fehler pumpe_stumm` | ROT: Pumpe meldet nicht ein |
+     | `--fehler ack_verlieren` | GRÜN, eine Quittung wiederholt |
+     | `--fehler belegt` | ROT sofort, „alle Tunnel belegt“ im Log |
+     | `--fehler stumm` | ROT nach 1 s, „keine Antwort auf CONNECT“ |
+     | leeres Feld `knx_schnittstelle` | ROT sofort, Startwarnung im Serial |
+
 10. **Merge und Rollout** erst nach Schritt 8 vollständig **und wenn die
     Anleitung zum Mischer in den Notbetriebsunterlagen steht** — der
     Seitentext verweist darauf. Abnahme mit `test/tablesnap.py` gegen den

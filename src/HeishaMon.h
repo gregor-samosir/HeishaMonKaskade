@@ -155,6 +155,12 @@ bool vorderhaus_eingerichtet(void);
 KnxVorderhaus vorderhaus_absetzen(void);
 // Der Rueckfall: eine kurze Abfrage des Mischerstatus, true = am Ziel
 bool vorderhaus_abfragen(void);
+#ifdef KNX_PRUEFZUGANG
+// Nur im Pruefling-Build (E4): nur den Vorderhausschritt fahren, ohne Notbetrieb
+bool vorderhaus_pruefung_starten(void);
+void vorderhaus_pruefung_loop(void);
+void vorderhaus_pruefung_status(char *out, size_t len);
+#endif
 
 // Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
 extern const NotbetriebRolle notbetriebRolle;

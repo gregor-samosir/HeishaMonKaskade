@@ -817,3 +817,125 @@ bool vorderhaus_abfragen(void)
   write_mqtt_log(log_line);
   return true;
 }
+
+#ifdef KNX_PRUEFZUGANG
+/*****************************************************************************/
+/* Der Testzugang - NUR im Pruefling-Build (Owner-Entscheid E4, 2026-09-13)  */
+/*                                                                           */
+/* Am Pruefling laesst sich der Notbetrieb nicht ausloesen: Ohne Waermepumpe */
+/* gibt es kein TOP101, der Knopf bleibt gesperrt, und selbst ohne Sperre    */
+/* braeche der Lauf an Schritt 2 ab, weil keine Waermepumpe zurueckliest.    */
+/* Der Vorderhausschritt als elfter wird dort also nie erreicht.             */
+/*                                                                           */
+/* Dieser Zugang faehrt deshalb NUR den Vorderhausschritt - mit denselben    */
+/* Funktionen wie Schritt 11 (vorderhaus_absetzen(), im Rueckfall alle 10 s  */
+/* vorderhaus_abfragen(), hoechstens NOTBETRIEB_VORDERHAUS_TIMEOUT_MS). Die  */
+/* Einbindung in den Automaten deckt test/notbetrieb_test.cpp ab; hier geht  */
+/* es um den Netzteil am echten Geraet, ueber WLAN: gegen den Simulator      */
+/* (knx_tunnel.py simulator) und danach gegen Mischer und Pumpe der Anlage.  */
+/*                                                                           */
+/* Das Flag steht nur in [stage_test_esp32] (platformio.ini). Dass die       */
+/* produktiven Builds den Zugang nicht enthalten, zeigt nm an deren .elf.    */
+/*                                                                           */
+/* Getrieben aus loop() wie der Notbetrieb: Der POST stoesst nur an und      */
+/* antwortet sofort, der Austausch blockiert dann loop() - nicht den         */
+/* Webhandler, der sonst bis zu 20 s an einer Antwort haenge.                */
+/*****************************************************************************/
+enum VorderhausPruefung
+{
+  VHP_BEREIT = 0,
+  VHP_ANGESTOSSEN = 1, // der naechste loop()-Durchlauf setzt ab
+  VHP_RUECKFALL = 2,   // Mischer fuhr schon - Abfragen im Takt
+  VHP_GRUEN = 3,
+  VHP_ROT = 4
+};
+
+static uint8_t vhPruefung = VHP_BEREIT;
+static uint32_t vhPruefStart = 0;   // Beginn des Austauschs - fuer Timeout und Anzeige
+static uint32_t vhPruefAbfrage = 0; // letzte Abfrage im Rueckfall
+static uint32_t vhPruefDauer = 0;   // Dauer bis zum Ergebnis
+
+// Ein Ergebnis festhalten, mit Dauer und Logzeile
+static void vorderhaus_pruefung_abschluss(uint8_t zustand)
+{
+  vhPruefung = zustand;
+  vhPruefDauer = millis() - vhPruefStart;
+  char log_line[96];
+  (void)snprintf(log_line, sizeof(log_line), "Pruefzugang Vorderhaus: %s nach %lu,%lu s",
+                 zustand == VHP_GRUEN ? "GRUEN" : "ROT", (unsigned long)(vhPruefDauer / 1000u),
+                 (unsigned long)((vhPruefDauer % 1000u) / 100u));
+  write_mqtt_log(log_line);
+}
+
+bool vorderhaus_pruefung_starten(void)
+{
+  // Laeuft schon eine Pruefung oder ein echter Notbetriebslauf, nichts
+  // anstossen - beide teilen sich den Tunnel, und ein Ergebnis mitten in
+  // einem Notbetrieb waere nicht zuzuordnen.
+  if (vhPruefung == VHP_ANGESTOSSEN || vhPruefung == VHP_RUECKFALL ||
+      notbetriebLauf.zustand == NOTBETRIEB_LAEUFT)
+    return false;
+  vhPruefung = VHP_ANGESTOSSEN;
+  write_mqtt_log((char *)"Pruefzugang Vorderhaus: angestossen");
+  return true;
+}
+
+void vorderhaus_pruefung_loop(void)
+{
+  if (vhPruefung == VHP_ANGESTOSSEN)
+  {
+    vhPruefStart = millis();
+    const KnxVorderhaus ergebnis = vorderhaus_absetzen();
+    vhPruefAbfrage = millis();
+    if (ergebnis == KNX_VH_AUSSTEHEND)
+      vhPruefung = VHP_RUECKFALL;
+    else
+      vorderhaus_pruefung_abschluss(ergebnis == KNX_VH_GRUEN ? VHP_GRUEN : VHP_ROT);
+    return;
+  }
+
+  if (vhPruefung != VHP_RUECKFALL)
+    return;
+
+  // Dieselbe einzige Frist wie im Automaten (E2) - ueberlaufsicher gerechnet
+  if ((uint32_t)(millis() - vhPruefStart) >= NOTBETRIEB_VORDERHAUS_TIMEOUT_MS)
+  {
+    write_mqtt_log((char *)"Pruefzugang Vorderhaus: Mischer meldete 128 nicht binnen des Timeouts");
+    vorderhaus_pruefung_abschluss(VHP_ROT);
+    return;
+  }
+  if (knx_abfrage_faellig(vhPruefAbfrage, millis()))
+  {
+    vhPruefAbfrage = millis();
+    if (vorderhaus_abfragen())
+      vorderhaus_pruefung_abschluss(VHP_GRUEN);
+  }
+}
+
+// Stand als Klartext fuer GET /vorderhaus/pruefen - fuer curl, nicht fuer die Familie
+void vorderhaus_pruefung_status(char *out, size_t len)
+{
+  if (!out || len == 0)
+    return;
+  const uint32_t seit = millis() - vhPruefStart;
+  switch (vhPruefung)
+  {
+  case VHP_ANGESTOSSEN:
+    (void)snprintf(out, len, "ANGESTOSSEN\n");
+    break;
+  case VHP_RUECKFALL:
+    (void)snprintf(out, len, "RUECKFALL seit %lu s (Abfrage alle 10 s, hoechstens %lu s)\n",
+                   (unsigned long)(seit / 1000u), (unsigned long)(NOTBETRIEB_VORDERHAUS_TIMEOUT_MS / 1000u));
+    break;
+  case VHP_GRUEN:
+  case VHP_ROT:
+    (void)snprintf(out, len, "%s nach %lu,%lu s - Einzelheiten unter /log und im Telnet-Log\n",
+                   vhPruefung == VHP_GRUEN ? "GRUEN" : "ROT", (unsigned long)(vhPruefDauer / 1000u),
+                   (unsigned long)((vhPruefDauer % 1000u) / 100u));
+    break;
+  default:
+    (void)snprintf(out, len, "BEREIT - POST startet den Vorderhausschritt\n");
+    break;
+  }
+}
+#endif // KNX_PRUEFZUGANG

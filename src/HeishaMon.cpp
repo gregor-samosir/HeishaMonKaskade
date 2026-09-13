@@ -652,6 +652,30 @@ void setupHttp()
       return httpServer.requestAuthentication();
     }
     handle_log_ring(&httpServer); });
+#ifdef KNX_PRUEFZUGANG
+  // Nur im Pruefling-Build (E4, vorderhaus.cpp): POST faehrt nur den
+  // Vorderhausschritt, GET zeigt den Stand. Hinter dem Notbetriebszugang wie
+  // der Knopf selbst - der Zugang bewegt einen echten Mischer, wenn die
+  // eingetragene Schnittstelle die der Anlage ist.
+  httpServer.on("/vorderhaus/pruefen", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    char antwort[128];
+    if (httpServer.method() == HTTP_POST)
+    {
+      (void)snprintf(antwort, sizeof(antwort), "%s\n",
+                     vorderhaus_pruefung_starten() ? "angestossen"
+                                                   : "nicht angestossen - laeuft schon, oder ein Notbetriebslauf ist unterwegs");
+    }
+    else
+    {
+      vorderhaus_pruefung_status(antwort, sizeof(antwort));
+    }
+    httpServer.send(200, "text/plain", antwort); });
+#endif
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
@@ -1382,6 +1406,10 @@ void loop()
   // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
   // haengen, der ohnehin nur scheitern kann.
   notbetrieb_loop(actual_data);
+#ifdef KNX_PRUEFZUGANG
+  // Nur im Pruefling-Build: der Testzugang zum Vorderhausschritt (E4)
+  vorderhaus_pruefung_loop();
+#endif
 
   // Verbindungswacht nachfuehren. Sie kostet nichts, wenn sich nichts aendert,
   // und steht bewusst VOR dem Wiederverbindungsversuch: So meldet sie die
