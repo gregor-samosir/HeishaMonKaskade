@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimaler KNXnet/IP-Tunnel-Client - Vorabtest fuer den KNX-Schritt im Notbetrieb.
 
-Version 1.6.0 (2026-09-12)
+Version 1.7.0 (2026-09-13)
 
 Zweck: bevor der Notbetrieb das Vorderhaus per KNX versorgt (Mischer auf 50 %,
 Mischerpumpe ein), belegen, dass ein KURZLEBIGER Tunnel ohne Heartbeat an der
@@ -19,6 +19,7 @@ Entscheidungen und Testplan: Analyse-KNX-Vorderhaus.md.
   ./knx_tunnel.py lesen     192.168.2.127 6/4/12 --alle     # jede Antwort samt Quelle
   ./knx_tunnel.py mischer   192.168.2.127 --mithoeren       # Referenz des Firmwareschritts "Vorderhaus"
   ./knx_tunnel.py mischer   192.168.2.127 --bewegung --ohne-pumpe --mithoeren   # Rueckleseregel A (6/4/14)
+  ./knx_tunnel.py simulator 192.168.2.142 --fehler zwang_klemmt    # nachgebildete Schnittstelle fuer den Pruefling
 
 Optionen: --port (Standard 3671), --roh (jedes Datagramm als Hex),
 --quelle B.L.G (Quelladresse im Telegramm statt der Tunneladresse),
@@ -28,6 +29,10 @@ abwarten und jede Antwort mit Quelle zeigen), schreiben: --dpt 1|5 und --status 
 (Ruecklesung, nur DPT 1), schalten: --halten SEK (0-30, Standard 5),
 mischer: --bewegung [GA] (Rueckleseregel A mit der Bewegungsmeldung,
 Standard 6/4/14), --ohne-pumpe, --ohne-zwang (Negativprobe), --mithoeren.
+simulator: IP ist die eigene LAN-Adresse, auf der er lauscht; --port (Standard
+3671), --hub SEK (voller Hub, Standard 120 wie an der Anlage), --start
+zu|auf|steht128|faehrt (Ausgangslage des Mischers), --fehler NAME ... (siehe
+--help). Er laeuft bis Strg-C und protokolliert jedes Telegramm.
 
 Rueckleseregel (aus Stufe 2, 2026-09-12): Die L_Data.con entscheidet nichts.
 Eine negative con hiess an der Anlage nicht "verloren" - das Telegramm lag
@@ -48,6 +53,16 @@ Schreibzugriff waehrend 'schalten' (bewusst NICHT zurueckgestellt),
 Nur Standardbibliothek. Kein KNX IP Secure (an dieser Anlage nicht aktiv).
 
 Changelog:
+  1.7.0 (2026-09-13) Neu 'simulator' (Entscheid E4 im Arbeitsplan
+                     KNX-Vorderhaus): der Simulator des Selbsttests als eigene
+                     Schnittstelle auf der LAN-Adresse des Macs, damit der
+                     Pruefling den Firmwareschritt gegen ihn fahren kann - jeder
+                     Zweig von Regel A ohne Bus. Dafuer lauscht der Simulator auf
+                     waehlbarer Adresse (bisher fest 127.0.0.1) und nennt sie
+                     auch im Datenendpunkt der CONNECT_RESPONSE, die Hubzeit ist
+                     einstellbar (an der Anlage 120 s, im Selbsttest 1,2 s), er
+                     protokolliert auf Wunsch jedes Telegramm, und
+                     kanaele=0 bildet "alle Tunnel belegt" nach.
   1.6.0 (2026-09-12) Owner-Entscheid A: 'mischer --bewegung' setzt die
                      Rueckleseregel A um und ist damit die Referenz des
                      Firmwareschritts. Neu: Bewegung VOR den Befehlen lesen -
@@ -1221,6 +1236,66 @@ def befehl_mischer(a) -> int:
     return 4
 
 
+# Fehlerbilder des Befehls 'simulator' -> Optionen des Simulators. Dieselben,
+# die der Selbsttest benutzt; der Name sagt, was an der Anlage passiert waere.
+SIM_FEHLER = {
+    "stumm": {"stumm": True},                         # Schnittstelle antwortet auf nichts
+    "belegt": {"kanaele": 0},                         # alle Tunnel belegt (E_NO_MORE_CONNECTIONS)
+    "ack_verlieren": {"ack_verlieren": True},         # erste Anfrage geht verloren, Wiederholung noetig
+    "zwang_klemmt": {"zwang_klemmt": True},           # Zwangsstellung ZU laesst sich nicht zuruecknehmen
+    "pos_verloren": {"pos_verloren": True},           # nur der Positionsbefehl erreicht den Aktor nicht
+    "mischer_stumm": {"mischer_lesen_antwortet": False},  # Mischeraktor beantwortet kein Lesen
+    "openknx": {"openknx_antwortet": True},           # openknx antwortet vorab aus dem Zwischenspeicher
+    "pumpe_stumm": {"lesen_antwortet": False, "status_spontan": False},  # Pumpenaktor schweigt
+    "pumpe_ohne_meldung": {"status_spontan": False},  # wie an der Anlage, wenn die Pumpe schon laeuft
+}
+
+
+def befehl_simulator(a) -> int:
+    """Die nachgebildete Schnittstelle samt Mischer- und Pumpenaktor als
+    eigenes Geraet im LAN (Entscheid E4, Arbeitsplan KNX-Vorderhaus): Der
+    Pruefling bekommt diese Adresse als knx_schnittstelle und faehrt den
+    Vorderhausschritt dagegen - jeder Zweig von Regel A, ohne dass am echten
+    Bus etwas passiert.
+
+    Die Hubzeit ist die der Anlage (120 s), damit der Rueckfall mit den
+    Fristen der Firmware laeuft. Ein gruener Lauf gegen den Simulator belegt
+    die Firmware gegen DIESES Modell, nicht gegen die echte Schnittstelle -
+    dafuer gibt es danach die Laeufe an der Anlage."""
+    optionen: dict = {}
+    for name in a.fehler or []:
+        optionen.update(SIM_FEHLER[name])
+    jetzt = time.monotonic()
+    start = {
+        "zu": None,  # wie am 2026-09-12: Zwangsstellung ZU aktiv, Stellung 0, Eingang 46
+        "auf": {"auf": 1, "zu": 0, "status": 255, "eingang": 0},
+        "steht128": {"auf": 0, "zu": 0, "status": 128, "eingang": 128},  # zweiter Druck
+        # Endlagenlauf nach einem Wechsel der Zwangsstellung: faehrt von 255
+        # Richtung 0 - die Vorab-Lesung sieht Bewegung 1, es gilt der Rueckfall
+        "faehrt": {"auf": 0, "zu": 1, "status": 255, "ziel": 0, "ankunft": jetzt + 0.6 * a.hub},
+    }[a.start]
+    if start is not None:
+        optionen["mischer_start"] = start
+    sim = Simulator(ga_aus_text("6/4/20"), ga_aus_text("6/4/21"), ga_aus_text("6/4/30"),
+                    host=a.ip, port=a.port, hub_s=a.hub, protokoll=True, **optionen)
+    sim.start()
+    melde(f"Simulator lauscht auf {a.ip}:{sim.port} - Mischer '{a.start}', Hub {a.hub:g} s, "
+          f"Fehler: {', '.join(a.fehler) if a.fehler else 'keine'}. Ende mit Strg-C.")
+    melde(f"Am Pruefling eintragen: knx_schnittstelle = {a.ip}"
+          + ("" if sim.port == 3671 else f":{sim.port}"))
+    try:
+        while sim.is_alive():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    sim.stoppen()
+    m = sim.m
+    melde(f"beendet: {sim.getrennt} Verbindungen getrennt, {len(sim.schreibvorgaenge)} Schreibtelegramme "
+          f"insgesamt; Mischer: AUF {m['auf']}, ZU {m['zu']}, Eingang {m['eingang']}, "
+          f"Status {m['status']}, Pumpe {sim.werte[sim.schalt][0]}")
+    return 0
+
+
 def fuehre_aus(befehl, a) -> int:
     try:
         return befehl(a)
@@ -1262,15 +1337,24 @@ class Simulator(threading.Thread):
                  quelle_ersetzen=False, con_bei_fremder_quelle=False,
                  lesen_antwortet=True, status_spontan=True, openknx_antwortet=False,
                  zwang_klemmt=False, mischer_lesen_antwortet=True, pos_verloren=False,
-                 freigabe_faehrt=False, mischer_start: dict | None = None):
+                 freigabe_faehrt=False, mischer_start: dict | None = None,
+                 host: str = "127.0.0.1", port: int = 0, hub_s: float | None = None,
+                 protokoll: bool = False):
         super().__init__(daemon=True)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(("127.0.0.1", 0))
+        # host/port: im Selbsttest 127.0.0.1 und ein freier Port; als eigene
+        # Schnittstelle fuer den Pruefling die LAN-Adresse des Macs und 3671
+        self.sock.bind((host, port))
         self.sock.settimeout(0.05)
+        self.host = host
         self.port = self.sock.getsockname()[1]
+        self.hub_s = hub_s if hub_s is not None else self.HUB_S
+        self.protokoll = protokoll                    # jedes Telegramm ausgeben (Befehl 'simulator')
         self.schalt, self.status = schalt, status
         self.werte = {schalt: (0, b""), status: (0, b""), mischer: (0, bytes((128,)))}
-        self.kanaele = self.KANAELE[:max(1, min(kanaele, len(self.KANAELE)))]
+        # kanaele=0: kein Tunnel frei - jede CONNECT_REQUEST wird mit
+        # E_NO_MORE_CONNECTIONS abgelehnt (openknx und eine ETS belegen welche)
+        self.kanaele = self.KANAELE[:max(0, min(kanaele, len(self.KANAELE)))]
         # Fehlerbilder
         self.stumm = stumm                            # antwortet auf gar nichts
         self.stumm_nach_schreiben = stumm_nach_schreiben  # verstummt nach n Schreibvorgaengen
@@ -1346,7 +1430,10 @@ class Simulator(threading.Thread):
             self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.BEWEGUNG, APCI_WRITE, 1))
         # Fahrt proportional zum Weg, vereinfacht ab der zuletzt gemeldeten Stellung
         m["ziel"] = ziel
-        m["ankunft"] = time.monotonic() + abs(ziel - m["status"]) / 255 * self.HUB_S
+        m["ankunft"] = time.monotonic() + abs(ziel - m["status"]) / 255 * self.hub_s
+        if self.protokoll:
+            melde(f"Simulator: Mischer faehrt von {m['status']} auf {ziel}, "
+                  f"Ankunft in {m['ankunft'] - time.monotonic():.0f} s")
 
     def _mischer_tick(self) -> None:
         # Am Ziel angekommen: Status uebernehmen und EINMAL spontan melden,
@@ -1355,6 +1442,8 @@ class Simulator(threading.Thread):
         m = self.m
         if m["ziel"] is not None and time.monotonic() >= m["ankunft"]:
             m["status"], m["ziel"] = m["ziel"], None
+            if self.protokoll:
+                melde(f"Simulator: Mischer am Ziel, meldet {m['status']} - wer nicht verbunden ist, verpasst es")
             self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.POS_STATUS, APCI_WRITE,
                                     daten=bytes((m["status"],))))
             self._an_alle(baue_cemi(L_DATA_IND, self.MISCHER_AKTOR, self.BEWEGUNG, APCI_WRITE, 0))
@@ -1375,14 +1464,22 @@ class Simulator(threading.Thread):
                 frei = [k for k in self.kanaele if k not in self.verbindungen]
                 if not frei:
                     self.sock.sendto(kopf(CONNECT_RESPONSE, 2) + bytes((0, 0x24)), absender)
+                    if self.protokoll:
+                        melde(f"Simulator: CONNECT von {absender[0]}:{absender[1]} abgelehnt - alle Tunnel belegt")
                     continue
                 kanal = frei[0]
                 adresse = self.ADRESSEN[self.KANAELE.index(kanal)]
                 self.verbindungen[kanal] = {"ep": zerlege_hpai(rumpf[8:16]), "adresse": adresse,
                                             "rx": 0, "tx": 0}
-                antwort = (bytes((kanal, 0)) + hpai(("127.0.0.1", self.port))
+                # Datenendpunkt: die eigene Adresse - an der Anlage nennt die
+                # Schnittstelle ihren ausdruecklich (Stufe 0), die Firmware
+                # muss ihn aus der Antwort uebernehmen
+                antwort = (bytes((kanal, 0)) + hpai((self.host, self.port))
                            + bytes((0x04, 0x04, adresse >> 8, adresse & 0xFF)))
                 self.sock.sendto(kopf(CONNECT_RESPONSE, len(antwort)) + antwort, absender)
+                if self.protokoll:
+                    ep = self.verbindungen[kanal]["ep"]
+                    melde(f"Simulator: verbunden mit {ep[0]}:{ep[1]}, Kanal {kanal}")
             elif dienst == CONNECTIONSTATE_REQUEST:
                 status = 0 if rumpf[0] in self.verbindungen else 0x21
                 self.sock.sendto(kopf(CONNECTIONSTATE_RESPONSE, 2) + bytes((rumpf[0], status)), absender)
@@ -1390,6 +1487,8 @@ class Simulator(threading.Thread):
                 self.verbindungen.pop(rumpf[0], None)
                 self.sock.sendto(baue_disconnect_response(rumpf[0]), absender)
                 self.getrennt += 1
+                if self.protokoll:
+                    melde(f"Simulator: Kanal {rumpf[0]} getrennt")
             elif dienst == TUNNELING_ACK:
                 self.quittiert.add((rumpf[1], rumpf[2]))
             elif dienst == TUNNELING_REQUEST:
@@ -1415,6 +1514,9 @@ class Simulator(threading.Thread):
             return
         r = zerlege_cemi(rumpf[4:])
         self.quellen.append(r.quelle)
+        if self.protokoll:
+            melde(f"Simulator: Kanal {kanal} Seq {seq}: {ia_text(r.quelle)} -> {ga_text(r.ziel)} "
+                  f"{APCI_NAME.get(r.apci, hex(r.apci))} {wert_text(r) if r.apci != APCI_READ else ''}")
         verloren = r.apci == APCI_WRITE and self.schreib_verluste > 0
         if verloren:
             self.schreib_verluste -= 1
@@ -1721,7 +1823,8 @@ def selbsttest() -> int:
            code == 0 and sim.m["zu"] == 0 and sim.m["status"] == 128 and sim.werte[schalt] == (1, b"")
            and "zaehlt nicht" in aus and "erwartet rund 60 s" in aus and alles_quittiert(sim), aus)
 
-    code, aus, sim = lauf({}, befehl_mischer, **dict(mi, mithoeren=True))
+    # protokoll=True wie beim Befehl 'simulator' - die Ausgabe darf den Lauf nicht stoeren
+    code, aus, sim = lauf({"protokoll": True}, befehl_mischer, **dict(mi, mithoeren=True))
     pruefe("mischer --mithoeren: spontane Meldung am Ziel vom Mischeraktor gesehen",
            code == 0 and "Mithoerer: Bus: 1.1.39 -> 6/4/12 write 128" in aus, aus)
 
@@ -1912,6 +2015,16 @@ def main() -> int:
     s.add_argument("--pumpe", type=arg_ga, default=ga_aus_text("6/4/20"))
     s.add_argument("--pumpe-status", dest="pumpe_status", type=arg_ga, default=ga_aus_text("6/4/21"))
     s.set_defaults(fn=befehl_mischer)
+    s = sub.add_parser("simulator", help="nachgebildete Schnittstelle im LAN - fuer den Pruefling (E4)")
+    s.add_argument("ip", type=arg_ip, help="eigene LAN-Adresse, auf der der Simulator lauscht")
+    s.add_argument("--port", type=arg_port, default=3671)
+    s.add_argument("--hub", type=arg_bereich(1, 300), default=120.0,
+                   help="Sekunden fuer den vollen Hub (Anlage: 120)")
+    s.add_argument("--start", choices=("zu", "auf", "steht128", "faehrt"), default="zu",
+                   help="Ausgangslage des Mischers (Standard: Zwangsstellung ZU, Stellung 0)")
+    s.add_argument("--fehler", nargs="+", choices=sorted(SIM_FEHLER), metavar="NAME",
+                   help="Fehlerbilder: " + ", ".join(sorted(SIM_FEHLER)))
+    s.set_defaults(fn=befehl_simulator)
     sub.add_parser("selbsttest", help="ohne Netz: Rahmen gegen xknx, Ablaeufe gegen Simulator")
 
     a = p.parse_args()

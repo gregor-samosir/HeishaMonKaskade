@@ -49,7 +49,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `top_watch.py` | Verlauf statt Momentaufnahme: ausgewaehlte TOPs im Takt abfragen und jede Aenderung mit Zeitstempel melden | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
-| `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung, `mischer` als Referenz des Notbetriebsschritts "Vorderhaus". `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator | KNX-IP-Schnittstelle (`selbsttest`: nein) |
+| `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung, `mischer` als Referenz des Notbetriebsschritts "Vorderhaus". `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator; `simulator` (1.7.0) bietet denselben Simulator im LAN an, damit der Pruefling den Schritt ohne Bus fahren kann (Route `/vorderhaus/pruefen`, nur im Pruefling-Build) | KNX-IP-Schnittstelle (`selbsttest`, `simulator`: nein) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
