@@ -619,7 +619,7 @@ void setupHttp()
     {
       return httpServer.requestAuthentication();
     }
-    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch); });
+    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch, knx_schnittstelle); });
   // Notbetrieb: Seite und Ausloeser verlangen einen EIGENEN Zugang, nicht den
   // des Firmware-Uploads - Begruendung oben bei notbetrieb_password.
   // Die Statusroute verlangt gar keinen: Sie gibt nur "Schritt 3 von 7" heraus
@@ -1310,7 +1310,14 @@ void setup()
   // spaeteres init() wuerde sie wieder auf "nie verbunden" zuruecksetzen.
   verbindung_init(&hausteuerung, millis());
 
-  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch);
+  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch,
+            knx_schnittstelle);
+
+  // Erst jetzt stehen die Einstellungen aus der config.json fest - die
+  // Warnungen zu fehlenden Adressen gehoeren deshalb hierher und nicht in
+  // notbetrieb_init(). Dort warnte die Hydraulik-Pruefung bis 3.20.0 bei jedem
+  // Start, weil die Felder vor dem Laden noch leer sind.
+  notbetrieb_einstellungen_pruefen();
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
   if (MDNS.begin(wifi_hostname))

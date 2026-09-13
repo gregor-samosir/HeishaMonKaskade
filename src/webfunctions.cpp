@@ -119,7 +119,7 @@ static void loadConfigValue(char *dst, size_t dstsize, JsonDocument &jsonDoc, co
 static_assert(sizeof(HEISHA_AP_PASSWORD) >= 9, "HEISHA_AP_PASSWORD braucht mindestens 8 Zeichen (WPA2)");
 static_assert(sizeof(HEISHA_AP_PASSWORD) <= 64, "HEISHA_AP_PASSWORD darf hoechstens 63 Zeichen haben (WPA2)");
 
-void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
+void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch, char *knx_schnittstelle)
 {
   // Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
@@ -167,6 +167,9 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
           // leer - loadConfigValue laesst den Standardwert stehen. Genau dafuer
           // ist es gebaut, siehe Kommentar dort.
           loadConfigValue(hydraulik_switch, CONFIG_FIELD_LEN, jsonDoc, "hydraulik_switch");
+          // Ebenso die KNX-Schnittstelle (3.21.0): Fehlt der Schluessel, bleibt
+          // das Feld leer, und der Vorderhausschritt endet ROT.
+          loadConfigValue(knx_schnittstelle, CONFIG_FIELD_LEN, jsonDoc, "knx_schnittstelle");
         }
         else
         {
@@ -200,6 +203,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, CONFIG_FIELD_LEN - 1);
   WiFiManagerParameter custom_text3("<p>Hydraulik switch (Tasmota, IP or hostname)</p>");
   WiFiManagerParameter custom_hydraulik_switch("hydraulik_switch", "hydraulik switch", hydraulik_switch, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_text4("<p>KNX interface for Vorderhaus (IP, optional :port)</p>");
+  WiFiManagerParameter custom_knx_schnittstelle("knx_schnittstelle", "knx interface", knx_schnittstelle, CONFIG_FIELD_LEN - 1);
 
   // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -215,6 +220,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   wifiManager.addParameter(&custom_mqtt_password);
   wifiManager.addParameter(&custom_text3);
   wifiManager.addParameter(&custom_hydraulik_switch);
+  wifiManager.addParameter(&custom_text4);
+  wifiManager.addParameter(&custom_knx_schnittstelle);
 
   wifiManager.setConfigPortalTimeout(180);
   wifiManager.setConnectTimeout(10);
@@ -239,6 +246,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   (void)strlcpy(mqtt_username, custom_mqtt_username.getValue(), CONFIG_FIELD_LEN);
   (void)strlcpy(mqtt_password, custom_mqtt_password.getValue(), CONFIG_FIELD_LEN);
   (void)strlcpy(hydraulik_switch, custom_hydraulik_switch.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(knx_schnittstelle, custom_knx_schnittstelle.getValue(), CONFIG_FIELD_LEN);
 
   // Set hostname on wifi rather than ESP_xxxxx
   WiFi.setHostname(wifi_hostname);
@@ -258,6 +266,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
+    jsonDoc["knx_schnittstelle"] = knx_schnittstelle;
 
     // Ueberlaufpruefung, siehe die ausfuehrliche Begruendung in handleSettings:
     // Eine halb geschriebene config.json kostet nach dem Neustart womoeglich
@@ -551,7 +560,7 @@ void handleReboot(WebServerClass *httpServer)
   ESP.restart();
 }
 
-void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
+void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch, char *knx_schnittstelle)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -587,6 +596,7 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
+    jsonDoc["knx_schnittstelle"] = knx_schnittstelle;
 
     if (httpServer->hasArg("wifi_hostname"))
     {
@@ -636,6 +646,33 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
     if (httpServer->hasArg("hydraulik_switch"))
     {
       jsonDoc["hydraulik_switch"] = httpServer->arg("hydraulik_switch");
+    }
+    // Die KNX-Schnittstelle (3.21.0). Leer ist erlaubt - dann endet der
+    // Vorderhausschritt ROT, er entfaellt nicht still (Owner 2026-09-12).
+    // Alles andere muss eine IP sein, wahlweise mit :Port - dieselbe Pruefung
+    // wie beim Druck auf den Knopf (knx_schnittstelle_lesen(), knxtunnel.h).
+    // Eine ungueltige Eingabe wird ABGELEHNT und nichts gespeichert: Sie fiele
+    // sonst erst auf, wenn jemand im Ernstfall den Knopf drueckt. Die Eingabe
+    // wird dabei bewusst NICHT in die Seite zurueckgeschrieben.
+    if (httpServer->hasArg("knx_schnittstelle"))
+    {
+      const String knx = httpServer->arg("knx_schnittstelle");
+      uint8_t knx_ip[4];
+      uint16_t knx_port = 0;
+      if (knx.length() > 0 && !knx_schnittstelle_lesen(knx.c_str(), knx_ip, &knx_port))
+      {
+        httptext = "<div class='w3-container w3-center'>";
+        httptext = httptext + "<h3>--- KNX interface: not a valid IP address ---</h3>";
+        httptext = httptext + "<h3>e.g. 192.168.2.127 or 192.168.2.127:3671 - nothing saved</h3>";
+        httptext = httptext + "</div>";
+        httpServer->sendContent(httptext);
+        httpServer->sendContent_P(refreshMeta);
+        httpServer->sendContent_P(webFooter);
+        httpServer->sendContent("");
+        httpServer->client().stop();
+        return;
+      }
+      jsonDoc["knx_schnittstelle"] = knx;
     }
 
     // Nicht schreiben, wenn eine Allokation fehlgeschlagen ist (Begruendung
@@ -696,6 +733,11 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   // Notbetrieb nicht ausloesen - das ist Absicht, siehe notbetrieb.cpp.
   httptext = httptext + "Hydraulik switch (Tasmota, IP or hostname, empty = off):<br>";
   httptext = httptext + "<input type='text' name='hydraulik_switch' value='" + hydraulik_switch + "'>";
+  httptext = httptext + "<br><br>";
+  // Die KNX-Schnittstelle des Vorderhausschritts (3.21.0): nur eine IP,
+  // wahlweise mit :Port. Die Gruppenadressen stehen fest in knxtunnel.h.
+  httptext = httptext + "KNX interface for Vorderhaus (IP, optional :port, empty = step fails):<br>";
+  httptext = httptext + "<input type='text' name='knx_schnittstelle' value='" + knx_schnittstelle + "'>";
   httptext = httptext + "<br><br>";
   httptext = httptext + "<input class='w3-green w3-button' type='submit' value='Save and reboot'>";
   httptext = httptext + "</form>";

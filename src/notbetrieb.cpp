@@ -178,11 +178,46 @@ void notbetrieb_init(bool spiegel_gueltig)
     Serial.println("FEHLER Notbetrieb: TOP101 (Heat_Cool_SW_State) fehlt in stateTopics[]");
   }
 
-  // Und die Adresse des Hydraulik-Switch. Fehlt sie, laesst sich der Notbetrieb
-  // nicht ausloesen - das faellt sonst erst auf, wenn jemand den Knopf drueckt.
+  // Die Adressen aus den Einstellungen (Hydraulik-Switch, KNX-Schnittstelle)
+  // prueft notbetrieb_einstellungen_pruefen() - und zwar erst NACH
+  // setupWifi(), das die config.json laedt. Hier waeren beide noch leer.
+}
+
+/*****************************************************************************/
+/* Die Adressen aus den Einstellungen pruefen - nach dem Laden (3.21.0)      */
+/*                                                                           */
+/* Fehlt eine davon, laesst sich der Notbetrieb nicht vollstaendig ausloesen */
+/* - das faellt sonst erst auf, wenn jemand den Knopf drueckt.               */
+/*                                                                           */
+/* EIN FEHLER BIS 3.20.0: Die Hydraulik-Pruefung stand in notbetrieb_init(), */
+/* und das laeuft in setup() VOR setupWifi(), also vor dem Laden der         */
+/* config.json. Das Feld war dort immer leer, und die Warnung kam bei JEDEM  */
+/* Start - auch mit eingetragener Adresse. Eine Warnung, die immer kommt,    */
+/* liest niemand mehr; fehlt die Adresse wirklich, geht es darin unter.      */
+/* setup() ruft diese Funktion deshalb direkt hinter setupWifi() auf.        */
+/*                                                                           */
+/* Serial und nicht MQTT: Die Verbindung steht zu diesem Zeitpunkt noch      */
+/* nicht - dasselbe Muster wie die uebrigen Pruefungen beim Start.           */
+/*****************************************************************************/
+void notbetrieb_einstellungen_pruefen(void)
+{
+  // Der Hydraulik-Switch - Schritt 1 beider Folgen
   if (hydraulik_switch[0] == '\0')
   {
     Serial.println("WARNUNG Notbetrieb: keine Adresse fuer den Hydraulik-Switch (Settings)");
+  }
+
+  // Die KNX-Schnittstelle - den Vorderhausschritt gibt es nur in der Rolle
+  // Heizen. Leer oder ungueltig heisst: Der Schritt endet ROT, er entfaellt
+  // nicht still (Owner 2026-09-12). Der Feldinhalt steht mit in der Zeile.
+  if (notbetriebRolle != NOTBETRIEB_WASSER && !vorderhaus_eingerichtet())
+  {
+    char log_line[160];
+    (void)snprintf(log_line, sizeof(log_line),
+                   "WARNUNG Notbetrieb: keine gueltige Adresse fuer die KNX-Schnittstelle "
+                   "(Settings: \"%.40s\") - der Vorderhausschritt endet ROT",
+                   knx_schnittstelle);
+    Serial.println(log_line);
   }
 }
 

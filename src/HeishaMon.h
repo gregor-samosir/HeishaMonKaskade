@@ -110,6 +110,9 @@ extern Ticker Send_Pana_Mainquery_Timer;
 // der den Notbetrieb nichts angeht. Die Entscheidung "war da etwas" faellt
 // deshalb genau einmal in setup(), und beide Nutzer bekommen sie gereicht.
 void notbetrieb_init(bool spiegel_gueltig);
+// Warnungen zu fehlenden Adressen (Hydraulik-Switch, KNX-Schnittstelle) - erst
+// nach setupWifi() aufrufen, das die config.json laedt (seit 3.21.0)
+void notbetrieb_einstellungen_pruefen(void);
 bool notbetrieb_subscribe(PubSubClient &);
 // true, wenn das Topic in den Notbetriebszweig gehoerte - dann ist die
 // Nachricht abschliessend behandelt und laeuft NICHT weiter in den Set-Pfad
