@@ -810,8 +810,9 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 /* Verbindung). Intern ist der Lauf ROT mit eigenem Grund: So kommt der      */
 /* Knopf zurueck, zu dem der Zusatz einlaedt.                                */
 /*                                                                           */
-/* Die "Anleitungen zum Mischer" muessen in den Notbetriebsunterlagen stehen,*/
-/* bevor diese Firmware ausgerollt wird - Arbeitsplan-KNX-Vorderhaus.md.     */
+/* Die "Anleitungen zum Mischer" in den Notbetriebsunterlagen schreibt der   */
+/* Owner nach dem Rollout (Entscheid 2026-09-13) - bis dahin verweist der    */
+/* Satz ins Leere. Arbeitsplan-KNX-Vorderhaus.md.                            */
 /*                                                                           */
 /* Der dritte Satz gilt waehrend des Rueckfalls der Regel A: Der Mischer     */
 /* fuhr beim Druck schon, und die Endstellung kann bis zu vier Minuten       */

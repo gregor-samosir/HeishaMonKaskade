@@ -84,8 +84,8 @@
 //         NICHT IN DIESER VERSION: der Re-Assert fuer die KNX-Befehle in
 //         nodered-flows - ohne ihn holt die zurueckkehrende Steuerung Mischer
 //         und Pumpe nicht von selbst zurueck. Und die Anleitung zum Mischer
-//         in den Notbetriebsunterlagen, auf die die Seite verweist; sie ist
-//         Voraussetzung fuer den Rollout.
+//         in den Notbetriebsunterlagen, auf die die Seite verweist; sie
+//         schreibt der Owner nach dem Rollout (Entscheid 2026-09-13).
 //
 //         GROESSE gegen den Stand davor (heishamon_esp32_h1_ota, Tag
 //         rettungsanker-vor-knx-vorderhaus-2026-09-13, dieselbe Plattform):

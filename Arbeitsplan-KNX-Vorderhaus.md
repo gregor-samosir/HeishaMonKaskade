@@ -28,10 +28,11 @@ was sie braucht.
 **Das Board: h1b** (Backup-Board der Stufe 1), vom Owner per USB an den Mac
 gehängt. Solange es Prüfling ist, hat Stufe 1 keinen Notanker.
 
-1. **Port prüfen:** `~/.platformio/penv/bin/pio device list`. Das Board
-   erscheint als `/dev/cu.usbmodem…`; `platformio_user_env.ini` erwartet
-   `/dev/cu.usbmodem11101`. Weicht der Name ab, beim Flashen
-   `--upload-port` angeben — die Datei nicht ändern.
+1. **Port prüfen:** `~/.platformio/penv/bin/pio device list`. Der Owner sah
+   h1b am 2026-09-13 abends als **`/dev/cu.usbmodem1101`**;
+   `platformio_user_env.ini` erwartet `/dev/cu.usbmodem11101` (der Mac
+   nummeriert neu). Beim Flashen deshalb `--upload-port
+   /dev/cu.usbmodem1101` angeben — die Datei nicht ändern.
 2. **Flashen:** `pio run -e heishamon_esp32_usb -t upload` — Prefix
    `panasonic_heat_pump32`, mit Testzugang. Der MQTT-Port in der
    `config.json` bleibt **1884**: Der Test braucht keinen Broker, das Board
@@ -62,15 +63,16 @@ gehängt. Solange es Prüfling ist, hat Stufe 1 keinen Notanker.
    --mithoeren` oder der ETS-Busmonitor als Gegenprobe. Freigegeben, solange
    die Anlage im Modus „Nur Warmwasser“ ohne Wärmeanforderung steht.
    Zurückstellen wie am 2026-09-12, jeder Eingriff einzeln.
-8. **Rückgabe von h1b — Owner-Entscheid offen:** Produktiv ist 3.20.0
-   (`main`); der Branch baut 3.21.0. Entweder 3.20.0 aus einem Worktree am
-   Tag `rettungsanker-vor-knx-vorderhaus-2026-09-13` aufspielen, oder — wenn
-   der Rollout von 3.21.0 direkt folgt — `heishamon_esp32_h1_usb` vom Branch
-   samt `knx_schnittstelle = 192.168.2.127`. Danach `/settings` gegenprüfen:
-   Port 1884, Hostname `HeishaMon32_h1b`.
+8. **Rückgabe von h1b — entschieden: 3.21.0** (Owner 2026-09-13 abends).
+   Zuerst in `/settings` `knx_schnittstelle = 192.168.2.127` setzen (die
+   echte Schnittstelle; der Port bleibt 1884), dann `pio run -e
+   heishamon_esp32_h1_usb -t upload --upload-port /dev/cu.usbmodem1101`
+   vom Branch. Danach `/settings` gegenprüfen: Port 1884, Hostname
+   `HeishaMon32_h1b`, KNX-Schnittstelle `192.168.2.127`.
 9. **Danach:** Ergebnisse in `version.h` (Nachweis), `Ablauf-Notbetrieb.md`
-   Abschnitt 1c („am Gerät abgenommen“) und hier im Kopf. Dann Schritt 10 —
-   erst, wenn die Anleitung zum Mischer in den Notbetriebsunterlagen steht.
+   Abschnitt 1c („am Gerät abgenommen“) und hier im Kopf. Dann Schritt 10.
+   Die Anleitung zum Mischer ist **keine** Voraussetzung mehr — der Owner
+   schreibt sie nach dem Rollout.
 
 ## Worum es geht
 
@@ -170,7 +172,9 @@ Einzeln mit dem Owner, jeweils aus der Vorlage im nächsten Abschnitt.
 | Wartezeit auf die Bewegung | **2 s**, wie Regel A (Analyse §8) und `knx_tunnel.py` 1.6.0. Die „1 s“ in Schritt 2 dieses Plans war ein Übertragungsfehler. Im Regelfall endet das Warten mit der Meldung nach rund 0,1 s. |
 | Pumpe bei ROT des Mischers | **Immer einschalten**, wie das Referenzwerkzeug. Mit laufender Pumpe bekommt das Vorderhaus Wärme nach der letzten Mischerstellung der Steuerung (in der Feuerübung 132); ohne sie gar keine. Steht der Mischer auf AUF, kommt der Vorlauf der Notbetriebskurve an — für die Fußbodenheizung ausgelegt. Der Schritt meldet trotzdem den Fehler. |
 | Anzeige des Vorderhausfalls | **Amberfarbenes Feld** (`w3-amber`, `#ffc107`, schwarze Schrift — neu im eingebetteten CSS), Überschrift „Teilweise umgestellt“ (Arbeitsstand, in Schritt 5 änderbar). ROT hieße „Plan B am Bedienfeld“, und das trifft nicht zu; `w3-orange` hat weiße Schrift bei rund 2 : 1 Kontrast. **Intern bleibt es ROT** mit dem Grund `NOTBETRIEB_GRUND_VORDERHAUS`: Der Knopf kommt nach dem Lauf von selbst zurück (passt zum Text), Statusroute und Logzeile ändern ihren Aufbau nicht. |
-| **Neue Voraussetzung vor dem Rollout** | Die **Anleitung zum Mischer** in den Notbetriebsunterlagen (`nodered-flows`) — der Seitentext verweist darauf, heute führen die Unterlagen den Mischer nur als „bleibt stehen“ (FEUERUEBUNG.md, F6). Inhalt entscheidet der Owner. |
+| Anleitung zum Mischer | Die **Anleitung zum Mischer** in den Notbetriebsunterlagen (`nodered-flows`), auf die der Seitentext verweist — heute führen die Unterlagen den Mischer nur als „bleibt stehen“ (FEUERUEBUNG.md, F6). **Schreibt der Owner nach dem Rollout** (Entscheid 2026-09-13 abends); bis dahin verweist der Satz ins Leere. |
+| Re-Assert in `nodered-flows` | Claude schreibt dafür eine **Arbeitsanweisung für nodered-flows**, wenn dieses Vorhaben abgeschlossen ist (Owner 2026-09-13 abends). |
+| Rückgabe von h1b | h1b bekommt nach den Tests **3.21.0** (Owner 2026-09-13 abends). |
 
 ## Die Vorlage dazu (Stand 2026-09-12)
 
@@ -315,10 +319,10 @@ Branch.
      | `--fehler stumm` | ROT nach 1 s, „keine Antwort auf CONNECT“ |
      | leeres Feld `knx_schnittstelle` | ROT sofort, Startwarnung im Serial |
 
-10. **Merge und Rollout** erst nach Schritt 8 vollständig **und wenn die
-    Anleitung zum Mischer in den Notbetriebsunterlagen steht** — der
-    Seitentext verweist darauf. Abnahme mit `test/tablesnap.py` gegen den
-    Stand davor.
+10. **Merge und Rollout** erst nach Schritt 8 und 9 vollständig. Abnahme mit
+    `test/tablesnap.py` gegen den Stand davor. Die Anleitung zum Mischer
+    folgt danach durch den Owner; danach schreibt Claude die
+    Arbeitsanweisung für den KNX-Re-Assert in `nodered-flows`.
 
 ## Fallen, die schon einmal zugeschnappt sind
 
