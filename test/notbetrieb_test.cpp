@@ -1,5 +1,6 @@
 // Nachweis fuer die Regeln des Notbetriebs (src/notbetrieb.h), 3.12.0,
-// erweitert um den Hydraulikschritt in 3.15.0.
+// erweitert um den Hydraulikschritt in 3.15.0 und den Vorderhausschritt in
+// 3.21.0.
 //
 // Geprueft wird der Code, der auch auf dem Geraet laeuft: die Datei wird hier
 // direkt eingebunden, es gibt keine Nachbildung, die auseinanderlaufen kann.
@@ -24,6 +25,11 @@
 //     ein Lauf, der ihn nicht bestaetigt bekommt, mit dem Hydraulik-Grund?
 //     Nur so nennt die Seite den Schalter im Waschraum statt "Hat nicht
 //     geklappt" - und nur so bleibt die Fussbodenheizung aus dem Spiel.
+//  7. Steht der Vorderhausschritt als letzter der Heizen-Folge direkt hinter
+//     dem Einschalten, bekommt er sein eigenes Timeout von 240 s - und bleibt
+//     der Regelfall trotzdem bei 8 s? Ein Rueckfall, der nach 20 s abbraeche,
+//     widerspraeche Rueckleseregel A; einer, den der Gesamtdeckel
+//     abschnitte, endete je nach Zufall mit dem falschen Grund.
 //
 // Bauen und ausfuehren:
 //   c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
@@ -234,7 +240,7 @@ static void test_schrittfolge()
 {
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 10, "Heizen hat zehn Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 11, "Heizen hat elf Schritte (seit 3.21.0)");
   pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 6, "Wasser hat sechs Schritte");
 
   // Die Reihenfolge traegt fuenffach: erst die Hydraulik (sonst schiebt der
@@ -287,7 +293,13 @@ static void test_schrittfolge()
   pruefe_zahl(s6->fester_wert, 1, "Heatpump auf 1");
   pruefe_zahl(s6->top, 0, "rueckgelesen an TOP0");
 
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 10) == 0, "hinter dem letzten Schritt ist Schluss");
+  // Seit 3.21.0 das Vorderhaus als letzter Schritt, direkt hinter dem Einschalten
+  const NotbetriebSchritt *vh = notbetrieb_schritt(NOTBETRIEB_HEIZEN, 10);
+  pruefe_zahl(vh->typ, NB_SCHRITT_VORDERHAUS, "Heizen Schritt 11 stellt das Vorderhaus");
+  pruefe_text(vh->set_name, NOTBETRIEB_VORDERHAUS_NAME, "und heisst so in der Logzeile");
+  pruefe_zahl(vh->top, -1, "er liest an keinem TOP zurueck");
+
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, 11) == 0, "hinter dem letzten Schritt ist Schluss");
 
   // Wasser: derselbe Hydraulikschritt vorn - welchen Knopf jemand zuerst
   // drueckt, weiss niemand, und ein doppeltes AUS schadet nicht
@@ -319,15 +331,33 @@ static void test_schrittfolge()
 
   // In BEIDEN Rollen steht die Pumpe unmittelbar vor dem Einschalten - ein
   // Moduswechsel dahinter koennte sie sonst wieder auf Fix zurueckstellen.
+  // Hinter dem Einschalten kommt seit 3.21.0 nur noch das Vorderhaus, und das
+  // nur in der Heizen-Folge: Es geht nicht an die Waermepumpe, kann also
+  // nichts an ihr zurueckstellen, und nur Stufe 1 versorgt den Heizkreis.
   for (unsigned r = 0; r < 2; r++)
   {
     NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
     const unsigned n = notbetrieb_schritt_anzahl(rolle);
-    pruefe(strcmp(notbetrieb_schritt(rolle, n - 2)->set_name, "WaterPump") == 0 &&
-               strcmp(notbetrieb_schritt(rolle, n - 1)->set_name, "Heatpump") == 0,
-           (r == 0) ? "Heizen endet auf WaterPump, dann Heatpump"
+    const unsigned ein = (r == 0) ? n - 2 : n - 1; // Position von Heatpump
+    pruefe(strcmp(notbetrieb_schritt(rolle, ein - 1)->set_name, "WaterPump") == 0 &&
+               strcmp(notbetrieb_schritt(rolle, ein)->set_name, "Heatpump") == 0,
+           (r == 0) ? "Heizen: WaterPump, dann Heatpump, dann nur noch das Vorderhaus"
                     : "Wasser endet auf WaterPump, dann Heatpump");
   }
+  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN) - 1)->typ ==
+             NB_SCHRITT_VORDERHAUS,
+         "Heizen endet auf dem Vorderhaus, direkt hinter dem Einschalten");
+
+  // Genau EIN Vorderhausschritt in Heizen, KEINER in Wasser
+  unsigned vh_heizen = 0, vh_wasser = 0;
+  for (unsigned i = 0; i < notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN); i++)
+    if (notbetrieb_schritt(NOTBETRIEB_HEIZEN, i)->typ == NB_SCHRITT_VORDERHAUS)
+      vh_heizen++;
+  for (unsigned i = 0; i < notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER); i++)
+    if (notbetrieb_schritt(NOTBETRIEB_WASSER, i)->typ == NB_SCHRITT_VORDERHAUS)
+      vh_wasser++;
+  pruefe_zahl((int)vh_heizen, 1, "Heizen hat genau einen Vorderhausschritt");
+  pruefe_zahl((int)vh_wasser, 0, "Wasser hat keinen - nur Stufe 1 versorgt den Heizkreis");
 
   // Genau EIN Hydraulikschritt je Rolle, und er steht vorn. Ein zweiter waere
   // harmlos, aber er stuende fuer ein Missverstaendnis - der Switch wird
@@ -510,8 +540,9 @@ static void test_automat()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
               "Heizen mit 6-s-Antworten wird GRUEN");
-  // neun Schritte * 8 s Mindestwarte = 72 s Regelzeit (Ablauf-Notbetrieb.md)
-  pruefe(dauer <= 80000u, "realistischer Heizen-Lauf bleibt unter 80 s");
+  // elf Schritte * 8 s Mindestwarte = 88 s Regelzeit (Ablauf-Notbetrieb.md) -
+  // der Vorderhausschritt kostet im Regelfall genau die Mindestwarte
+  pruefe(dauer <= 88000u, "realistischer Heizen-Lauf bleibt bei 88 s");
   printf("       (gemessene Laufdauer: %u ms)\n", dauer);
 
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 6000, &dauer), NOTBETRIEB_GRUEN,
@@ -589,9 +620,12 @@ static void test_automat()
               "Tick mit Nullzeiger abgefangen");
   pruefe_zahl(notbetrieb_start(0, 5000), NOTBETRIEB_TU_NICHTS, "Start mit Nullzeiger abgefangen");
 
-  // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt
+  // Der Gesamtdeckel ist abgeleitet, nicht frei gewaehlt: die Summe der
+  // Schritt-Timeouts (seit 3.21.0, E2)
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN),
-              (int)(10u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Heizen = 10 x Schritt-Timeout");
+              (int)(10u * NOTBETRIEB_SCHRITT_TIMEOUT_MS + NOTBETRIEB_VORDERHAUS_TIMEOUT_MS),
+              "Gesamtdeckel Heizen = 10 x 20 s + 240 s Vorderhaus");
+  pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN), 440000, "das sind 440 s");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
               (int)(6u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 6 x Schritt-Timeout");
 }
@@ -620,8 +654,8 @@ static void test_mindestwarte()
   uint32_t dauer = 0;
   pruefe_zahl(lauf_durchspielen(NOTBETRIEB_HEIZEN, 1000, 0, &dauer), NOTBETRIEB_GRUEN,
               "Lauf mit Sofortbestaetigung wird GRUEN");
-  const uint32_t mindestens = 10u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-  pruefe(dauer >= mindestens, "aber nicht schneller als 10 x Mindestwarte");
+  const uint32_t mindestens = 11u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+  pruefe(dauer >= mindestens, "aber nicht schneller als 11 x Mindestwarte");
   printf("       (Laufdauer %u ms, Untergrenze %u ms)\n", dauer, mindestens);
 
   // Der Hydraulikschritt haelt die Mindestwarte mit ein, obwohl er in
@@ -683,6 +717,9 @@ static void test_schritt_wert()
   lauf.schritt = 0;
   pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
          "der Hydraulikschritt traegt keinen Wert");
+  lauf.schritt = 10;
+  pruefe(!notbetrieb_schritt_wert(&lauf, NOTBETRIEB_HEIZEN, &sp, &wert),
+         "der Vorderhausschritt ebenso nicht");
 
   // fester Wert braucht keinen Speicher
   lauf.schritt = 1;
@@ -938,6 +975,157 @@ static void test_hydraulikschritt()
 }
 
 /*****************************************************************************/
+/* 9b. Der Vorderhausschritt (3.21.0)                                        */
+/*                                                                           */
+/* Wie beim Hydraulikschritt ist der Austausch selbst hier nicht nachzu-     */
+/* bilden (dafuer gibt es test/knx_test.cpp), wohl aber, was der Automat aus */
+/* seinem Ergebnis macht: Position, Grund und vor allem das eigene Timeout   */
+/* nach E2. Der Rueckfall der Regel A darf bis zu 220 s brauchen, der        */
+/* Regelfall soll trotzdem bei 8 s bleiben.                                  */
+/*****************************************************************************/
+
+// Einen Heizen-Lauf bis zum Vorderhausschritt treiben: Jeder der ersten zehn
+// Schritte wird nach 'je_schritt' ms bestaetigt. Rueckgabe: der Zeitpunkt, zu
+// dem der Vorderhausschritt abgesetzt wurde - ab dort laeuft seine Uhr.
+static uint32_t bis_zum_vorderhaus(NotbetriebLauf *lauf, uint32_t start, uint32_t je_schritt)
+{
+  const unsigned vh = notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN) - 1;
+  notbetrieb_lauf_leeren(lauf);
+  lauf_anstossen(lauf, NOTBETRIEB_HEIZEN, start);
+  uint32_t t = start;
+  for (unsigned runde = 0; runde < 100 && lauf->schritt < vh && lauf->zustand == NOTBETRIEB_LAEUFT; runde++)
+  {
+    t += je_schritt;
+    (void)notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t, true, "0");
+  }
+  return t;
+}
+
+// Ohne Bestaetigung weiterticken, bis der Lauf endet. Rueckgabe: Endzeitpunkt.
+static uint32_t ticken_bis_ende(NotbetriebLauf *lauf, uint32_t t, NotbetriebAktion *a_out)
+{
+  NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+  for (unsigned i = 0; i < 1000 && a != NOTBETRIEB_ABBRUCH && a != NOTBETRIEB_FERTIG; i++)
+  {
+    t += 1000;
+    a = notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t, false, "0");
+  }
+  if (a_out)
+    *a_out = a;
+  return t;
+}
+
+// Ohne Bestaetigung ticken, von 'von' bis vor 'bis' (relativ zu t0) im Takt;
+// Rueckgabe: ob der Lauf die ganze Zeit LAEUFT blieb.
+static bool bleibt_laufend(NotbetriebLauf *lauf, uint32_t t0, uint32_t von, uint32_t bis, uint32_t takt)
+{
+  bool laeuft = true;
+  for (uint32_t d = von; d < bis; d += takt)
+  {
+    (void)notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t0 + d, false, "0");
+    if (lauf->zustand != NOTBETRIEB_LAEUFT)
+      laeuft = false;
+  }
+  return laeuft;
+}
+
+static void test_vorderhausschritt()
+{
+  printf("\n== Der Vorderhausschritt (3.21.0) ==\n");
+  const unsigned vh = notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN) - 1;
+
+  // Grund und Timeout haengen am Typ, nicht an der Nummer
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_HEIZEN, vh), NOTBETRIEB_GRUND_VORDERHAUS,
+              "Schritt 11 meldet den Vorderhaus-Grund");
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_HEIZEN, vh - 1), NOTBETRIEB_GRUND_TIMEOUT,
+              "Heatpump davor meldet den allgemeinen Grund");
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 5), NOTBETRIEB_GRUND_TIMEOUT,
+              "der letzte Wasser-Schritt ist kein Vorderhaus");
+  pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, vh), 240000,
+              "Timeout des Vorderhausschritts: 240 s (E2)");
+  pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, vh - 1), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
+              "die Set-Schritte bleiben bei 20 s");
+  pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, 0), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
+              "der Hydraulikschritt bleibt bei 20 s");
+  pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, 99), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
+              "hinter dem letzten Schritt gilt das allgemeine Timeout");
+
+  // REGELFALL: Das Ergebnis steht beim Absetzen fest - trotzdem geht es erst
+  // nach der Mindestwarte weiter, wie bei jedem Schritt
+  NotbetriebLauf ok;
+  const uint32_t t_ok = bis_zum_vorderhaus(&ok, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  pruefe_zahl(ok.schritt, (int)vh, "der Lauf steht auf dem Vorderhausschritt");
+  pruefe_zahl((int)(t_ok - 1000), 80000, "erreicht nach 80 s - wo bisher GRUEN kam");
+  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_HEIZEN, t_ok + 3000, true, "0"), NOTBETRIEB_TU_NICHTS,
+              "sofort bestaetigt, aber vor der Mindestwarte: noch nicht fertig");
+  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_HEIZEN, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "0"),
+              NOTBETRIEB_FERTIG, "nach der Mindestwarte GRUEN");
+  pruefe_zahl((int)(ok.ende - 1000), 88000, "der ganze Lauf dauert 88 s");
+
+  // RUECKFALL: Der Mischer fuhr schon, die Endstellung kommt nach 230 s. Mit
+  // 20 s Timeout waere das ROT gewesen - hier laeuft der Lauf weiter
+  NotbetriebLauf rf;
+  const uint32_t t_rf = bis_zum_vorderhaus(&rf, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  pruefe(bleibt_laufend(&rf, t_rf, 10000, 230000, 10000),
+         "Rueckfall: nach 20 s, 100 s und 220 s weiter LAEUFT, kein ROT");
+  pruefe_zahl(notbetrieb_tick(&rf, NOTBETRIEB_HEIZEN, t_rf + 230000, true, "0"), NOTBETRIEB_FERTIG,
+              "Endstellung nach 230 s bestaetigt -> GRUEN");
+
+  // KEINE ENDSTELLUNG: ROT genau nach 240 s, mit dem Vorderhaus-Grund
+  NotbetriebLauf tot;
+  const uint32_t t_tot = bis_zum_vorderhaus(&tot, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+  const uint32_t t_tot_ende = ticken_bis_ende(&tot, t_tot, &a);
+  pruefe_zahl(a, NOTBETRIEB_ABBRUCH, "ohne Endstellung wird es ROT");
+  pruefe_zahl((int)(t_tot_ende - t_tot), 240000, "genau nach 240 s, nicht nach 20 s");
+  pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_VORDERHAUS, "mit dem Vorderhaus-Grund - die WPs laufen");
+  pruefe_zahl(tot.schritt, (int)vh, "der Zaehler steht auf dem Vorderhaus");
+
+  // LANGSAMER LAUF: Jeder der ersten zehn Schritte braucht 19 s, das Vorderhaus
+  // dann 235 s - der Gesamtdeckel (440 s) darf das nicht abschneiden
+  NotbetriebLauf lang;
+  const uint32_t t_lang = bis_zum_vorderhaus(&lang, 1000, 19000);
+  pruefe_zahl(lang.schritt, (int)vh, "auch mit 19 s je Schritt erreicht");
+  pruefe(bleibt_laufend(&lang, t_lang, 1000, 235000, 1000),
+         "190 s Vorlauf plus 234 s Rueckfall: der Gesamtdeckel greift nicht");
+  pruefe_zahl(notbetrieb_tick(&lang, NOTBETRIEB_HEIZEN, t_lang + 235000, true, "0"), NOTBETRIEB_FERTIG,
+              "und die Endstellung nach 235 s macht ihn GRUEN");
+
+  // AM RAND: Jeder der ersten zehn Schritte braucht die vollen 20 s, das
+  // Vorderhaus meldet nie - Schritt-Timeout und Gesamtdeckel fallen auf
+  // denselben Zeitpunkt. Der Grund muss trotzdem das Vorderhaus sein.
+  NotbetriebLauf rand;
+  const uint32_t t_rand = bis_zum_vorderhaus(&rand, 1000, NOTBETRIEB_SCHRITT_TIMEOUT_MS);
+  pruefe_zahl(rand.schritt, (int)vh, "mit 20 s je Schritt erreicht - knapp erreicht ist erreicht");
+  const uint32_t t_rand_ende = ticken_bis_ende(&rand, t_rand, &a);
+  pruefe_zahl((int)(t_rand_ende - 1000), 440000,
+              "am Rand: ROT nach 440 s, Deckel und Schritt-Timeout zugleich");
+  pruefe_zahl(rand.grund, NOTBETRIEB_GRUND_VORDERHAUS, "und auch dort mit dem Vorderhaus-Grund");
+
+  // KUEHLEN mitten im Vorderhausschritt: Der Kuehl-Grund geht vor
+  NotbetriebLauf kuehl;
+  const uint32_t t_k = bis_zum_vorderhaus(&kuehl, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  pruefe_zahl(notbetrieb_tick(&kuehl, NOTBETRIEB_HEIZEN, t_k + 5000, false, "1"), NOTBETRIEB_ABBRUCH_KUEHLEN,
+              "Kuehlbetrieb bricht auch im Vorderhausschritt ab");
+  pruefe_zahl(kuehl.grund, NOTBETRIEB_GRUND_KUEHLEN, "mit dem Kuehl-Grund, nicht dem des Vorderhauses");
+
+  // UEBERLAUF: Der Rueckfall liegt ueber der millis()-Naht. Start 100 s vor
+  // der Naht, das Vorderhaus wird 80 s danach abgesetzt - 20 s vor der Naht.
+  const uint32_t vor_naht = 0xFFFFFFFFu - 100000u;
+  NotbetriebLauf ueber;
+  const uint32_t t_u = bis_zum_vorderhaus(&ueber, vor_naht, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  pruefe(bleibt_laufend(&ueber, t_u, 10000, 200000, 10000),
+         "Ueberlauf: der Rueckfall laeuft ueber die Naht weiter");
+  pruefe_zahl(notbetrieb_tick(&ueber, NOTBETRIEB_HEIZEN, t_u + 200000, true, "0"), NOTBETRIEB_FERTIG,
+              "und wird hinter der Naht GRUEN");
+  NotbetriebLauf ueber_tot;
+  const uint32_t t_ut = bis_zum_vorderhaus(&ueber_tot, vor_naht, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
+  const uint32_t t_ut_ende = ticken_bis_ende(&ueber_tot, t_ut, &a);
+  pruefe_zahl((int)(uint32_t)(t_ut_ende - t_ut), 240000, "Ueberlauf: ROT auch dort genau nach 240 s");
+  pruefe_zahl(ueber_tot.grund, NOTBETRIEB_GRUND_VORDERHAUS, "mit dem Vorderhaus-Grund");
+}
+
+/*****************************************************************************/
 /* 10. Der Anzeigeverfall                                                    */
 /*                                                                           */
 /* GRUEN und ROT blieben bis zum 2026-08-21 stehen, bis jemand erneut        */
@@ -1105,6 +1293,7 @@ int main()
   test_ruecklesen();
   test_freigabe();
   test_hydraulikschritt();
+  test_vorderhausschritt();
   test_anzeigeverfall();
   test_kurvenplausibilitaet();
 

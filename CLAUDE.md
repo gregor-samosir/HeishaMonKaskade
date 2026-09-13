@@ -90,8 +90,8 @@ gegen den Stand davor abgenommen.
   Nachweis und RAM/Flash-Delta, nicht nur das Was. Der Changelog ist hier die
   eigentliche Entwicklungsgeschichte.
 - **Prüfbare Regeln kommen in arduino-freie Header** (`notbetrieb.h`,
-  `verbindung.h`, `sendwindow.h`, `rtcspiegel.h`, `telegram.h`), die Firmware
-  und Hosttest gemeinsam einbinden. Alles mit Zeitbezug muss den
+  `verbindung.h`, `sendwindow.h`, `rtcspiegel.h`, `telegram.h`, `knxtunnel.h`),
+  die Firmware und Hosttest gemeinsam einbinden. Alles mit Zeitbezug muss den
   `millis()`-Überlauf nach 49,7 Tagen aushalten — an der Anlage wäre er nicht
   abzuwarten.
 - **Inline-Kommentare je Abschnitt**, und zwar zum Warum. Race Conditions und

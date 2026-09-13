@@ -73,6 +73,20 @@ char mqtt_password[CONFIG_FIELD_LEN];
 /*****************************************************************************/
 char hydraulik_switch[CONFIG_FIELD_LEN] = "";
 
+/*****************************************************************************/
+/* Die Adresse der KNX-IP-Schnittstelle (seit 3.21.0)                        */
+/*                                                                           */
+/* Die einzige KNX-Einstellung des Vorderhausschritts (Owner-Entscheid E1,   */
+/* 2026-09-13): eine IP, wahlweise mit ":Port". Gruppen- und Aktoradressen   */
+/* stehen fest in knxtunnel.h - sie aendern sich nur mit ETS-Arbeit, und ein */
+/* Tippfehler in einem Feld schickte Schreibtelegramme an eine fremde        */
+/* Gruppe.                                                                   */
+/*                                                                           */
+/* Leer oder ungueltig heisst "nicht eingerichtet": Der Schritt endet ROT,   */
+/* er entfaellt nicht still (Owner 2026-09-12).                              */
+/*****************************************************************************/
+char knx_schnittstelle[CONFIG_FIELD_LEN] = "";
+
 // log and debug
 bool outputMqttLog = true;   // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true; // enable/disable telnet DEBUG
@@ -605,7 +619,7 @@ void setupHttp()
     {
       return httpServer.requestAuthentication();
     }
-    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch); });
+    handleSettings(&httpServer, wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch, knx_schnittstelle); });
   // Notbetrieb: Seite und Ausloeser verlangen einen EIGENEN Zugang, nicht den
   // des Firmware-Uploads - Begruendung oben bei notbetrieb_password.
   // Die Statusroute verlangt gar keinen: Sie gibt nur "Schritt 3 von 7" heraus
@@ -638,6 +652,30 @@ void setupHttp()
       return httpServer.requestAuthentication();
     }
     handle_log_ring(&httpServer); });
+#ifdef KNX_PRUEFZUGANG
+  // Nur im Pruefling-Build (E4, vorderhaus.cpp): POST faehrt nur den
+  // Vorderhausschritt, GET zeigt den Stand. Hinter dem Notbetriebszugang wie
+  // der Knopf selbst - der Zugang bewegt einen echten Mischer, wenn die
+  // eingetragene Schnittstelle die der Anlage ist.
+  httpServer.on("/vorderhaus/pruefen", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    char antwort[128];
+    if (httpServer.method() == HTTP_POST)
+    {
+      (void)snprintf(antwort, sizeof(antwort), "%s\n",
+                     vorderhaus_pruefung_starten() ? "angestossen"
+                                                   : "nicht angestossen - laeuft schon, oder ein Notbetriebslauf ist unterwegs");
+    }
+    else
+    {
+      vorderhaus_pruefung_status(antwort, sizeof(antwort));
+    }
+    httpServer.send(200, "text/plain", antwort); });
+#endif
   httpServer.on("/togglelog", []()
                 {
     if (!httpServer.authenticate(update_username, ota_password))
@@ -1296,7 +1334,14 @@ void setup()
   // spaeteres init() wuerde sie wieder auf "nie verbunden" zuruecksetzen.
   verbindung_init(&hausteuerung, millis());
 
-  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch);
+  setupWifi(wifi_hostname, ota_password, mqtt_server, mqtt_port, mqtt_username, mqtt_password, hydraulik_switch,
+            knx_schnittstelle);
+
+  // Erst jetzt stehen die Einstellungen aus der config.json fest - die
+  // Warnungen zu fehlenden Adressen gehoeren deshalb hierher und nicht in
+  // notbetrieb_init(). Dort warnte die Hydraulik-Pruefung bis 3.20.0 bei jedem
+  // Start, weil die Felder vor dem Laden noch leer sind.
+  notbetrieb_einstellungen_pruefen();
 
   // mDNS is comfort only: log and continue instead of blocking the device forever
   if (MDNS.begin(wifi_hostname))
@@ -1361,6 +1406,10 @@ void loop()
   // wenn der Broker weg ist - er darf nicht hinter einem Verbindungsversuch
   // haengen, der ohnehin nur scheitern kann.
   notbetrieb_loop(actual_data);
+#ifdef KNX_PRUEFZUGANG
+  // Nur im Pruefling-Build: der Testzugang zum Vorderhausschritt (E4)
+  vorderhaus_pruefung_loop();
+#endif
 
   // Verbindungswacht nachfuehren. Sie kostet nichts, wenn sich nichts aendert,
   // und steht bewusst VOR dem Wiederverbindungsversuch: So meldet sie die

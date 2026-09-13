@@ -1,5 +1,104 @@
 #pragma once
 // Changelog:
+// 3.21.0 - DER NOTBETRIEB STELLT DAS VORDERHAUS MIT UM. Mischer und
+//         Mischerpumpe des Vorderhauses haengen am KNX-Bus und blieben bei
+//         einem Ausfall der Steuerung auf ihrem letzten Wert - im Sommer oft
+//         mit Zwangsstellung ZU, der Mischer auf 0. Ein neuer, letzter Schritt
+//         der Heizen-Folge schickt per KNXnet/IP-Tunneling Telegramme an die
+//         Schnittstelle: beide Zwangsstellungen zurueck, Mischer auf 128
+//         (50 %), Pumpe ein - und liest am Aktor zurueck. Recherche,
+//         Vorabtest an der Anlage und die Owner-Entscheide stehen in
+//         Analyse-KNX-Vorderhaus.md, der Weg in die Firmware samt der
+//         Entscheide E1-E4 in Arbeitsplan-KNX-Vorderhaus.md.
+//
+//         EIGENER MINIMALER TUNNEL-CLIENT, KEINE BIBLIOTHEK. Fuer den ESP32
+//         gibt es keinen gepflegten Tunnel-Client. Rahmen, Sequenzregel,
+//         Antwortfilter, das Urteil der Rueckleseregel A, die Einstellung und
+//         die Fristen stehen arduino-frei in src/knxtunnel.h; der Netzteil
+//         (WiFiUDP, Warten, Quittieren) in src/vorderhaus.cpp. Referenz ist
+//         test/knx_tunnel.py 1.6.0, an der Anlage erprobt.
+//
+//         WEG A: GANZ HINTEN, HINTER Heatpump = 1. Eine Stoerung am KNX darf
+//         den Notbetrieb der Waermepumpen nicht verhindern. Scheitert der
+//         Schritt, endet der Lauf mit dem neuen Grund
+//         NOTBETRIEB_GRUND_VORDERHAUS (4). Die Seite zeigt dann das normale
+//         GRUEN und darunter ein oranges Feld mit dem Wortlaut des Owners;
+//         intern ROT, damit der Knopf zurueckkommt, zu dem der Text einlaedt.
+//
+//         RUECKLESEREGEL A. Die Busbestaetigung (L_Data.con) entscheidet
+//         nichts - mit der Quelle 1.1.250 kommt keine. Es zaehlen nur
+//         Antworten der Aktoren 1.1.39 und 1.1.60; openknx beantwortet das
+//         Lesen aus seinem Zwischenspeicher schneller als der Aktor. Der
+//         Mischer gilt als umgestellt, wenn der Eingang 128 zuruecklesen UND
+//         Bewegung 1 kommt (oder der Status schon 128 meldet) - aber nur, wenn
+//         die Bewegung VOR den Befehlen auf 0 stand. Sonst entscheidet die
+//         Endstellung, bis 220 s. Die Pumpe wird immer eingeschaltet, auch
+//         wenn der Mischer ROT ergab.
+//
+//         ZEIT JE SCHRITTTYP (E2). Der Rueckfall sprengt die 20 s je Schritt.
+//         Der Vorderhausschritt bekommt 240 s als einzige Frist; der
+//         Gesamtdeckel ist jetzt die Summe der Schritt-Timeouts: Heizen 440 s
+//         (vorher 200 s), Wasser unveraendert 120 s. Im Regelfall kostet der
+//         Schritt die Mindestwarte von 8 s, ein Heizen-Lauf dauert 88 s.
+//
+//         NUR KURZE VERBINDUNGEN. Kein Tunnel bleibt ueber mehrere
+//         loop()-Durchlaeufe offen - die MQTT-Wiederverbindung blockiert bis
+//         2 s, ein offener Tunnel muss binnen 1 s quittieren. Groesste
+//         Blockade von loop(): 20,5 s (harter Deckel der Befehlsverbindung
+//         plus Trennen), nur wenn die Schnittstelle quittiert und kein Aktor
+//         antwortet; Regelfall rund 0,3 s. Begruendung im Kopf von
+//         vorderhaus.cpp.
+//
+//         EINE NEUE EINSTELLUNG: knx_schnittstelle, nur eine IP, wahlweise mit
+//         :Port (E1). Gruppen- und Aktoradressen stehen fest in knxtunnel.h -
+//         AENDERT SICH EINE GRUPPENADRESSE IN DER ETS, BRAUCHT ES EINE NEUE
+//         FIRMWARE. Leer oder ungueltig: Warnung beim Start, ROT beim Druck.
+//         Die Einstellungsseite lehnt eine ungueltige Eingabe ab.
+//
+//         ZWEI BEFUNDE AM CORE (pioarduino 55.3.311, NetworkUdp.cpp):
+//         parsePacket() liefert 0, solange vom vorigen Datagramm Bytes im
+//         Puffer liegen - nach jedem Datagramm deshalb clear() (flush() ist
+//         dort als veraltet markiert). Und begin() mit Port 0 gibt den
+//         vergebenen Port nicht heraus; das HPAI braucht ihn, also fester
+//         lokaler Port 3672.
+//
+//         NEBENBEFUND, BEHOBEN: Die Warnung "keine Adresse fuer den
+//         Hydraulik-Switch" kam seit 3.15.0 bei JEDEM Start - sie stand in
+//         notbetrieb_init(), und das laeuft vor setupWifi(), also vor dem
+//         Laden der config.json. Beide Adresspruefungen stehen jetzt in
+//         notbetrieb_einstellungen_pruefen(), direkt hinter setupWifi().
+//
+//         NACHWEIS: test/knx_test.cpp neu in der CI, 146 Pruefungen - jeder
+//         Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12,
+//         jeder Zweig von Regel A samt Reihenfolge des Lesens, die Einstellung
+//         und der millis()-Ueberlauf. notbetrieb_test um den Vorderhausschritt
+//         erweitert: Rueckfall nach 230 s GRUEN statt ROT nach 20 s, Timeout
+//         genau nach 240 s, der Rand Deckel = Schritt-Timeout, Ueberlauf im
+//         Rueckfall. Beide Tests reissen nachweislich bei eingebauten Fehlern
+//         (ctrl1, Quellenfilter, Sequenzregel, Rueckfall, festes Timeout,
+//         Deckel). Das Seiten-JavaScript mit node geprueft und gegen
+//         nachgebildete Statusantworten durchgespielt.
+//
+//         AM GERAET (2026-09-13, Pruefling h1b mit Testzugang): alle 13
+//         Simulatorlaeufe der Soll-Tabelle (Arbeitsplan, Schritt 9) wie
+//         erwartet. An der Anlage, openknx lief mit und wurde verworfen:
+//         schneller Weg ab 255 GRUEN nach 0,4 s (Status 128 nach 59,6 s),
+//         zweiter Druck GRUEN nach 3,4 s, Rueckfall im Nachlauf der Endlage
+//         GRUEN nach 71,3 s - der Aktor nimmt den Befehl auch im Nachlauf
+//         an. Protokoll in Ablauf-Notbetrieb.md, Abschnitt 1c.
+//
+//         NICHT IN DIESER VERSION: der Re-Assert fuer die KNX-Befehle in
+//         nodered-flows - ohne ihn holt die zurueckkehrende Steuerung Mischer
+//         und Pumpe nicht von selbst zurueck. Und die Anleitung zum Mischer
+//         in den Notbetriebsunterlagen, auf die die Seite verweist; sie
+//         schreibt der Owner nach dem Rollout (Entscheid 2026-09-13).
+//
+//         GROESSE gegen den Stand davor (heishamon_esp32_h1_ota, Tag
+//         rettungsanker-vor-knx-vorderhaus-2026-09-13, dieselbe Plattform):
+//         RAM 61608 -> 61952 Byte (+344, 18,8 % -> 18,9 %).
+//         Flash 1213025 -> 1222681 Byte (+9656, 61,7 % -> 62,2 %).
+//         text +7292, data +2752, bss +344.
+//
 // 3.20.0 - ROBUSTHEIT UND LANGZEITSTABILITAET. Umsetzung von M1-M4 der
 //         Codedurchsicht 2026-09-02 in EINEM Versionsschnitt statt in drei
 //         (Owner-Entscheid): ein Pruefstandslauf, ein Rollout, ein Release.
@@ -1850,4 +1949,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.20.0";
+static const char* heishamon_version = "3.21.0";

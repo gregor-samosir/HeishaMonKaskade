@@ -119,7 +119,7 @@ static void loadConfigValue(char *dst, size_t dstsize, JsonDocument &jsonDoc, co
 static_assert(sizeof(HEISHA_AP_PASSWORD) >= 9, "HEISHA_AP_PASSWORD braucht mindestens 8 Zeichen (WPA2)");
 static_assert(sizeof(HEISHA_AP_PASSWORD) <= 64, "HEISHA_AP_PASSWORD darf hoechstens 63 Zeichen haben (WPA2)");
 
-void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
+void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch, char *knx_schnittstelle)
 {
   // Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
@@ -167,6 +167,9 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
           // leer - loadConfigValue laesst den Standardwert stehen. Genau dafuer
           // ist es gebaut, siehe Kommentar dort.
           loadConfigValue(hydraulik_switch, CONFIG_FIELD_LEN, jsonDoc, "hydraulik_switch");
+          // Ebenso die KNX-Schnittstelle (3.21.0): Fehlt der Schluessel, bleibt
+          // das Feld leer, und der Vorderhausschritt endet ROT.
+          loadConfigValue(knx_schnittstelle, CONFIG_FIELD_LEN, jsonDoc, "knx_schnittstelle");
         }
         else
         {
@@ -200,6 +203,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, CONFIG_FIELD_LEN - 1);
   WiFiManagerParameter custom_text3("<p>Hydraulik switch (Tasmota, IP or hostname)</p>");
   WiFiManagerParameter custom_hydraulik_switch("hydraulik_switch", "hydraulik switch", hydraulik_switch, CONFIG_FIELD_LEN - 1);
+  WiFiManagerParameter custom_text4("<p>KNX interface for Vorderhaus (IP, optional :port)</p>");
+  WiFiManagerParameter custom_knx_schnittstelle("knx_schnittstelle", "knx interface", knx_schnittstelle, CONFIG_FIELD_LEN - 1);
 
   // set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -215,6 +220,8 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   wifiManager.addParameter(&custom_mqtt_password);
   wifiManager.addParameter(&custom_text3);
   wifiManager.addParameter(&custom_hydraulik_switch);
+  wifiManager.addParameter(&custom_text4);
+  wifiManager.addParameter(&custom_knx_schnittstelle);
 
   wifiManager.setConfigPortalTimeout(180);
   wifiManager.setConnectTimeout(10);
@@ -239,6 +246,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
   (void)strlcpy(mqtt_username, custom_mqtt_username.getValue(), CONFIG_FIELD_LEN);
   (void)strlcpy(mqtt_password, custom_mqtt_password.getValue(), CONFIG_FIELD_LEN);
   (void)strlcpy(hydraulik_switch, custom_hydraulik_switch.getValue(), CONFIG_FIELD_LEN);
+  (void)strlcpy(knx_schnittstelle, custom_knx_schnittstelle.getValue(), CONFIG_FIELD_LEN);
 
   // Set hostname on wifi rather than ESP_xxxxx
   WiFi.setHostname(wifi_hostname);
@@ -258,6 +266,7 @@ void setupWifi(char *wifi_hostname, char *ota_password, char *mqtt_server, char 
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
+    jsonDoc["knx_schnittstelle"] = knx_schnittstelle;
 
     // Ueberlaufpruefung, siehe die ausfuehrliche Begruendung in handleSettings:
     // Eine halb geschriebene config.json kostet nach dem Neustart womoeglich
@@ -551,7 +560,7 @@ void handleReboot(WebServerClass *httpServer)
   ESP.restart();
 }
 
-void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch)
+void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_password, char *mqtt_server, char *mqtt_port, char *mqtt_username, char *mqtt_password, char *hydraulik_switch, char *knx_schnittstelle)
 {
   httpServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
   httpServer->send(200, "text/html");
@@ -587,6 +596,7 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
     jsonDoc["mqtt_username"] = mqtt_username;
     jsonDoc["mqtt_password"] = mqtt_password;
     jsonDoc["hydraulik_switch"] = hydraulik_switch;
+    jsonDoc["knx_schnittstelle"] = knx_schnittstelle;
 
     if (httpServer->hasArg("wifi_hostname"))
     {
@@ -636,6 +646,33 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
     if (httpServer->hasArg("hydraulik_switch"))
     {
       jsonDoc["hydraulik_switch"] = httpServer->arg("hydraulik_switch");
+    }
+    // Die KNX-Schnittstelle (3.21.0). Leer ist erlaubt - dann endet der
+    // Vorderhausschritt ROT, er entfaellt nicht still (Owner 2026-09-12).
+    // Alles andere muss eine IP sein, wahlweise mit :Port - dieselbe Pruefung
+    // wie beim Druck auf den Knopf (knx_schnittstelle_lesen(), knxtunnel.h).
+    // Eine ungueltige Eingabe wird ABGELEHNT und nichts gespeichert: Sie fiele
+    // sonst erst auf, wenn jemand im Ernstfall den Knopf drueckt. Die Eingabe
+    // wird dabei bewusst NICHT in die Seite zurueckgeschrieben.
+    if (httpServer->hasArg("knx_schnittstelle"))
+    {
+      const String knx = httpServer->arg("knx_schnittstelle");
+      uint8_t knx_ip[4];
+      uint16_t knx_port = 0;
+      if (knx.length() > 0 && !knx_schnittstelle_lesen(knx.c_str(), knx_ip, &knx_port))
+      {
+        httptext = "<div class='w3-container w3-center'>";
+        httptext = httptext + "<h3>--- KNX interface: not a valid IP address ---</h3>";
+        httptext = httptext + "<h3>e.g. 192.168.2.127 or 192.168.2.127:3671 - nothing saved</h3>";
+        httptext = httptext + "</div>";
+        httpServer->sendContent(httptext);
+        httpServer->sendContent_P(refreshMeta);
+        httpServer->sendContent_P(webFooter);
+        httpServer->sendContent("");
+        httpServer->client().stop();
+        return;
+      }
+      jsonDoc["knx_schnittstelle"] = knx;
     }
 
     // Nicht schreiben, wenn eine Allokation fehlgeschlagen ist (Begruendung
@@ -696,6 +733,11 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
   // Notbetrieb nicht ausloesen - das ist Absicht, siehe notbetrieb.cpp.
   httptext = httptext + "Hydraulik switch (Tasmota, IP or hostname, empty = off):<br>";
   httptext = httptext + "<input type='text' name='hydraulik_switch' value='" + hydraulik_switch + "'>";
+  httptext = httptext + "<br><br>";
+  // Die KNX-Schnittstelle des Vorderhausschritts (3.21.0): nur eine IP,
+  // wahlweise mit :Port. Die Gruppenadressen stehen fest in knxtunnel.h.
+  httptext = httptext + "KNX interface for Vorderhaus (IP, optional :port, empty = step fails):<br>";
+  httptext = httptext + "<input type='text' name='knx_schnittstelle' value='" + knx_schnittstelle + "'>";
   httptext = httptext + "<br><br>";
   httptext = httptext + "<input class='w3-green w3-button' type='submit' value='Save and reboot'>";
   httptext = httptext + "</form>";
@@ -758,6 +800,30 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_HYDRAULIK_DANACH "Danach diesen Knopf noch einmal drücken. An der Wärmepumpe ist nichts verstellt worden."
 
 /*****************************************************************************/
+/* Die Meldungen des Vorderhausschritts (3.21.0)                             */
+/*                                                                           */
+/* Beide Saetze sind vom Owner vorgegeben: der erste am 2026-09-12, der      */
+/* Zusatz am 2026-09-13 (E3). Sie stehen in einem ORANGEN Hinweisfeld unter  */
+/* dem normalen GRUEN (Owner-Entscheid 2026-09-13): Die Waermepumpen sind im */
+/* Notbetrieb, das ist gruen - nur das Vorderhaus braucht Aufmerksamkeit,    */
+/* und Orange heisst auf dieser Seite schon "hier ist etwas zu tun" (Sperre, */
+/* Verbindung). Intern ist der Lauf ROT mit eigenem Grund: So kommt der      */
+/* Knopf zurueck, zu dem der Zusatz einlaedt.                                */
+/*                                                                           */
+/* Die "Anleitungen zum Mischer" in den Notbetriebsunterlagen schreibt der   */
+/* Owner nach dem Rollout (Entscheid 2026-09-13) - bis dahin verweist der    */
+/* Satz ins Leere. Arbeitsplan-KNX-Vorderhaus.md.                            */
+/*                                                                           */
+/* Der dritte Satz gilt waehrend des Rueckfalls der Regel A: Der Mischer     */
+/* fuhr beim Druck schon, und die Endstellung kann bis zu vier Minuten       */
+/* dauern. Ohne ihn stuende dort "bis zu anderthalb Minuten", und wer        */
+/* laenger wartet als angekuendigt, glaubt an einen Fehler.                  */
+/*****************************************************************************/
+#define NB_TXT_VORDERHAUS "Die Wärmepumpen laufen im Notbetrieb, nur das Vorderhaus ließ sich nicht umstellen."
+#define NB_TXT_VORDERHAUS_DANACH "Der Mischer im Vorderhaus bleibt so eingestellt, wie die Steuerung es zuletzt vorgegeben hat. Ein zweiter Druck auf diesen Knopf kann eventuell die Einstellungen vornehmen. Wird es im Vorderhaus zu kalt oder zu warm, lies bitte die Anleitungen zum Mischer in den Unterlagen zum Notbetrieb."
+#define NB_TXT_VORDERHAUS_FAEHRT "Die Wärmepumpen laufen bereits im Notbetrieb. Der Mischer im Vorderhaus fährt noch – das dauert bis zu vier Minuten."
+
+/*****************************************************************************/
 /* Die Kurvenwarnung - ein Hinweis, keine Sperre                             */
 /*                                                                           */
 /* Die Regel steht in notbetrieb.h: Eine Heizkurve faellt mit steigender     */
@@ -782,6 +848,10 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 // neu laedt, saehe die Sperre ein zweites Mal.
 static const char notbetriebJS[] PROGMEM =
     "<script>"
+    // Der GRUEN-Text steht einmal: Er gilt beim Erfolg UND ueber dem Hinweis
+    // zum Vorderhaus (3.21.0) - dort sind die Waermepumpen ebenso umgestellt.
+    // Der Wortlaut ist vom Familienrat vorgegeben (2026-08-29), siehe unten.
+    "var nbGruen='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';"
     "function nbFehlt(m){var l='';for(var i=0;i<nbNamen.length;i++){if(m&(1<<i))l+='<li>'+nbNamen[i]+'</li>';}return l;}"
     "function nbSperrtext(sp,m){"
     "if(sp==2)return '<h3>" NB_TXT_NUR_HEIZEN "</h3><p>" NB_TXT_HEIZEN_HINWEIS "</p>';"
@@ -797,16 +867,22 @@ static const char notbetriebJS[] PROGMEM =
     // Route (verbindungJS). Ein Einschub in der Mitte haette sie verschoben.
     "var kw=parseInt(p[7]);"
     "var ag=parseInt(p[8]);"
+    // Index 9 (3.21.0): 1 = der Vorderhausschritt wartet im Rueckfall auf die
+    // Endstellung des Mischers. Fehlt das Feld, ist parseInt NaN, also nicht 1.
+    "var vh=parseInt(p[9]);"
     // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
     // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
     "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     // "bis zu anderthalb Minuten" deckt beide Rollen ab: Der Heizen-Lauf
-    // braucht seit 3.18.0 80 s (zehn Schritte), der Warmwasser-Lauf 48 s. Die
+    // braucht seit 3.21.0 88 s (elf Schritte), der Warmwasser-Lauf 48 s. Die
     // Angabe steht bewusst ueber der laengeren der beiden - wer laenger wartet
-    // als angekuendigt, glaubt an einen Fehler, wo keiner ist.
-    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu anderthalb Minuten.</p>';}"
+    // als angekuendigt, glaubt an einen Fehler, wo keiner ist. Aus demselben
+    // Grund steht im Rueckfall des Vorderhausschritts (vh) der eigene Satz:
+    // Dort koennen es bis zu vier Minuten werden.
+    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. '"
+    "+(vh==1?'" NB_TXT_VORDERHAUS_FAEHRT "':'Bitte warten, das dauert bis zu anderthalb Minuten.')+'</p>';}"
     // Der Wortlaut bei GRUEN ist vom Familienrat vorgegeben (2026-08-29).
     // Der frueher hier stehende KNX-Hinweis ist bewusst raus: Wer im Notbetrieb
     // vor der Seite steht, soll nur zwei Dinge wissen - wo die Temperatur
@@ -817,7 +893,12 @@ static const char notbetriebJS[] PROGMEM =
     // und wird nur noch fuer Wartung geoeffnet). "GRUEN, aber 0 Hz mangels
     // Freigabe" ist damit der Wartungsfall und kein Regelfall mehr - er steht
     // in Ablauf-Notbetrieb.md und Analyse-Relais-statt-KNX.md Abschnitt 13.
-    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';}"
+    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML=nbGruen;}"
+    // Das Vorderhaus liess sich nicht umstellen (Grund 4): Die Waermepumpen
+    // laufen, also das normale GRUEN - darunter der Hinweis in Orange. Das
+    // aeussere Feld traegt dann keine eigene Farbe, die beiden inneren schon.
+    "else if(z==3&&ag==4){e.className='';e.innerHTML='<div class=\"w3-panel w3-green\">'+nbGruen+'</div>"
+    "<div class=\"w3-panel w3-orange\"><h3>Vorderhaus nicht umgestellt</h3><p>" NB_TXT_VORDERHAUS "</p><p>" NB_TXT_VORDERHAUS_DANACH "</p></div>';}"
     // Bei ROT entscheidet der Abbruchgrund, was zu tun ist: Bleibt die
     // Hydraulik auf 2-stufig, fuehrt der Weg ueber den Schalter im Waschraum
     // und NICHT ueber das Bedienfeld der Waermepumpe - dort ist nichts
@@ -1031,7 +1112,10 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
   // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere der
   // teurere Weg. Format nach der Erweiterung:
-  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund;Vorderhaus
+  // Das letzte Feld (3.21.0) ist 1, solange der Vorderhausschritt im Rueckfall
+  // auf die Endstellung des Mischers wartet - die Seite sagt dann, dass die
+  // Waermepumpen schon laufen und nur der Mischer noch faehrt.
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))
   {
@@ -1051,9 +1135,10 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
     // Route an den Indizes 5 und 6, ein Einschub in der Mitte haette beide
     // Seiten verschoben. Jedes weitere Feld gehoert aus demselben Grund ans
     // Ende.
-    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u",
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u;%u",
                    (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung(),
-                   (unsigned)notbetrieb_abbruchgrund());
+                   (unsigned)notbetrieb_abbruchgrund(),
+                   notbetrieb_vorderhaus_ausstehend() ? 1u : 0u);
   }
 
   httpServer->send(200, "text/plain", status);

@@ -7,8 +7,80 @@
 > **Ergebnis: offen.**
 >
 > **2026-09-13:** E1–E4 und drei Folgepunkte entschieden (Abschnitt
-> „Entschieden am 2026-09-13“). Die Umsetzung läuft auf dem Branch
-> `knx-vorderhaus`.
+> „Entschieden am 2026-09-13“), dazu die Farbe des Vorderhausfalls neu:
+> GRÜN mit orangem Hinweisfeld (siehe dort). Auf dem Branch `knx-vorderhaus`
+> sind die Schritte 1–7 erledigt (Firmware 3.21.0, alle Hosttests grün);
+> offen sind Schritt 8 (alle Envs), 9 (Prüfling, Anlage) und 10 (Merge,
+> Rollout).
+>
+> **2026-09-13 abends:** Schritt 8 erledigt, der Testzugang für Schritt 9
+> gebaut. **Nächste Session: Abschnitt „Übergabe für die Test-Session“
+> direkt hierunter.**
+>
+> **2026-09-13 spät: Schritt 9 erledigt.** Alle 13 Simulatorläufe und drei
+> Läufe an Mischer und Pumpe (Regelfall, zweiter Druck, Rückfall) wie
+> erwartet; die Anlage ist zurückgestellt, h1b trägt wieder den Stufen-Build
+> 3.21.0 mit `knx_schnittstelle = 192.168.2.127`. Protokoll in
+> `Ablauf-Notbetrieb.md`, Abschnitt 1c. **Offen: Schritt 10** — Merge und
+> Rollout. Ob dabei zusätzlich ein ganzer Lauf an H1 stattfindet,
+> entscheidet der Owner.
+
+## Übergabe für die Test-Session (Schritt 9)
+
+**Lage.** Branch `knx-vorderhaus` ist ausgecheckt, neun Commits über `main`,
+nichts gepusht, nichts geflasht. Firmware 3.21.0, Schritte 1–8 erledigt; die
+Nachweise stehen in den Commit-Messages und in `src/version.h`. Die Session
+dafür wurde getrennt, um einem Auto-Compact zuvorzukommen — hier steht alles,
+was sie braucht.
+
+**Das Board: h1b** (Backup-Board der Stufe 1), vom Owner per USB an den Mac
+gehängt. Solange es Prüfling ist, hat Stufe 1 keinen Notanker.
+
+1. **Port prüfen:** `~/.platformio/penv/bin/pio device list`. Der Owner sah
+   h1b am 2026-09-13 abends als **`/dev/cu.usbmodem1101`**;
+   `platformio_user_env.ini` erwartet `/dev/cu.usbmodem11101` (der Mac
+   nummeriert neu). Beim Flashen deshalb `--upload-port
+   /dev/cu.usbmodem1101` angeben — die Datei nicht ändern.
+2. **Flashen:** `pio run -e heishamon_esp32_usb -t upload` — Prefix
+   `panasonic_heat_pump32`, mit Testzugang. Der MQTT-Port in der
+   `config.json` bleibt **1884**: Der Test braucht keinen Broker, das Board
+   bleibt doppelt gesperrt (`test/README.md`, „Prüfstand aufsetzen“).
+3. **Adresse des Prüflings:** DHCP; mDNS `HeishaMon32_h1b.local`, sonst im
+   Router. Achtung: `heishamon_esp32_ota` zielt auf `heishamon32.local`,
+   nicht auf h1b — zum Nachflashen USB nehmen oder `--upload-port` setzen.
+4. **Einstellung:** In `/settings` des Prüflings `knx_schnittstelle =
+   192.168.2.142` (LAN-Adresse des Macs, en0, am 2026-09-13 — vorher mit
+   `ipconfig getifaddr en0` gegenprüfen). Speichern startet neu. Das Feld
+   des Hydraulik-Switch nicht anfassen; der Testzugang benutzt es nicht.
+5. **Simulator auf dem Mac:** `python3 -u test/knx_tunnel.py simulator
+   192.168.2.142 [--start …] [--fehler …]` im Hintergrund, Ausgabe in eine
+   Datei; er läuft bis Strg-C. Je Lauf neu starten, damit die Ausgangslage
+   stimmt.
+6. **Lauf anstoßen und ablesen:** `curl -u notbetrieb:<Passwort> -X POST
+   http://<Prüfling>/vorderhaus/pruefen`, Stand mit demselben Aufruf ohne
+   `-X POST`. Das Passwort ist `HEISHA_NOTBETRIEB_PASSWORD` aus
+   `platformio_user_env.ini` — nicht in Ausgaben oder Logs schreiben.
+   Zeilen unter `/log`, Einzelheiten („Vorderhaus Versuch …“, „fremde
+   Antworten“) per `test/telnet_mitschnitt.py <Prüfling> <Sekunden>`.
+7. **Reihenfolge:** erst die 13 Simulator-Läufe aus der Soll-Tabelle in
+   Schritt 9. Jede Abweichung vom Soll ist ein Befund — erst verstehen, dann
+   weiter. Danach `knx_schnittstelle = 192.168.2.127` und die Läufe am echten
+   Mischer: vorher den Ist-Zustand lesen (`knx_tunnel.py lesen 192.168.2.127
+   6/4/12 6/4/13 6/4/14 6/4/16 6/4/17 6/4/21 --alle`), **jeden Lauf einzeln
+   ankündigen und vom Owner freigeben lassen**, `knx_tunnel.py mischer …
+   --mithoeren` oder der ETS-Busmonitor als Gegenprobe. Freigegeben, solange
+   die Anlage im Modus „Nur Warmwasser“ ohne Wärmeanforderung steht.
+   Zurückstellen wie am 2026-09-12, jeder Eingriff einzeln.
+8. **Rückgabe von h1b — entschieden: 3.21.0** (Owner 2026-09-13 abends).
+   Zuerst in `/settings` `knx_schnittstelle = 192.168.2.127` setzen (die
+   echte Schnittstelle; der Port bleibt 1884), dann `pio run -e
+   heishamon_esp32_h1_usb -t upload --upload-port /dev/cu.usbmodem1101`
+   vom Branch. Danach `/settings` gegenprüfen: Port 1884, Hostname
+   `HeishaMon32_h1b`, KNX-Schnittstelle `192.168.2.127`.
+9. **Danach:** Ergebnisse in `version.h` (Nachweis), `Ablauf-Notbetrieb.md`
+   Abschnitt 1c („am Gerät abgenommen“) und hier im Kopf. Dann Schritt 10.
+   Die Anleitung zum Mischer ist **keine** Voraussetzung mehr — der Owner
+   schreibt sie nach dem Rollout.
 
 ## Worum es geht
 
@@ -108,7 +180,9 @@ Einzeln mit dem Owner, jeweils aus der Vorlage im nächsten Abschnitt.
 | Wartezeit auf die Bewegung | **2 s**, wie Regel A (Analyse §8) und `knx_tunnel.py` 1.6.0. Die „1 s“ in Schritt 2 dieses Plans war ein Übertragungsfehler. Im Regelfall endet das Warten mit der Meldung nach rund 0,1 s. |
 | Pumpe bei ROT des Mischers | **Immer einschalten**, wie das Referenzwerkzeug. Mit laufender Pumpe bekommt das Vorderhaus Wärme nach der letzten Mischerstellung der Steuerung (in der Feuerübung 132); ohne sie gar keine. Steht der Mischer auf AUF, kommt der Vorlauf der Notbetriebskurve an — für die Fußbodenheizung ausgelegt. Der Schritt meldet trotzdem den Fehler. |
 | Anzeige des Vorderhausfalls | **Amberfarbenes Feld** (`w3-amber`, `#ffc107`, schwarze Schrift — neu im eingebetteten CSS), Überschrift „Teilweise umgestellt“ (Arbeitsstand, in Schritt 5 änderbar). ROT hieße „Plan B am Bedienfeld“, und das trifft nicht zu; `w3-orange` hat weiße Schrift bei rund 2 : 1 Kontrast. **Intern bleibt es ROT** mit dem Grund `NOTBETRIEB_GRUND_VORDERHAUS`: Der Knopf kommt nach dem Lauf von selbst zurück (passt zum Text), Statusroute und Logzeile ändern ihren Aufbau nicht. |
-| **Neue Voraussetzung vor dem Rollout** | Die **Anleitung zum Mischer** in den Notbetriebsunterlagen (`nodered-flows`) — der Seitentext verweist darauf, heute führen die Unterlagen den Mischer nur als „bleibt stehen“ (FEUERUEBUNG.md, F6). Inhalt entscheidet der Owner. |
+| Anleitung zum Mischer | Die **Anleitung zum Mischer** in den Notbetriebsunterlagen (`nodered-flows`), auf die der Seitentext verweist — heute führen die Unterlagen den Mischer nur als „bleibt stehen“ (FEUERUEBUNG.md, F6). **Schreibt der Owner nach dem Rollout** (Entscheid 2026-09-13 abends); bis dahin verweist der Satz ins Leere. |
+| Re-Assert in `nodered-flows` | Claude schreibt dafür eine **Arbeitsanweisung für nodered-flows**, wenn dieses Vorhaben abgeschlossen ist (Owner 2026-09-13 abends). |
+| Rückgabe von h1b | h1b bekommt nach den Tests **3.21.0** (Owner 2026-09-13 abends). |
 
 ## Die Vorlage dazu (Stand 2026-09-12)
 
@@ -222,10 +296,41 @@ Branch.
    bzw. ZU wie vorgefunden, Eingang auf den Vorwert, Pumpe wie vorgefunden.
    Ob beim Rollout zusätzlich ein ganzer Lauf an H1 stattfindet, entscheidet
    der Owner.
-10. **Merge und Rollout** erst nach Schritt 8 vollständig **und wenn die
-    Anleitung zum Mischer in den Notbetriebsunterlagen steht** — der
-    Seitentext verweist darauf. Abnahme mit `test/tablesnap.py` gegen den
-    Stand davor.
+
+   **So läuft er ab (vorbereitet 2026-09-13):**
+   - Backup-Board leihen nach `test/README.md`, „Prüfstand aufsetzen“,
+     Schritte 1–2 (`pio run -e heishamon_esp32_usb -t upload`). Den
+     MQTT-Port **nicht** auf 1883 stellen: Der Test braucht keinen Broker,
+     das Board bleibt doppelt gesperrt, und die Rückgabe ist nur das
+     Zurückflashen der Stufen-Firmware.
+   - In `/settings` `knx_schnittstelle` auf die LAN-Adresse des Macs setzen
+     (Simulator), später auf `192.168.2.127`. Speichern startet neu.
+   - Simulator: `./test/knx_tunnel.py simulator <Mac-IP> [--start …]
+     [--fehler …]`. Lauf anstoßen: `curl -u notbetrieb:<Passwort> -X POST
+     http://<Prüfling>/vorderhaus/pruefen`, Stand mit `GET`, Einzelheiten
+     unter `/log` und per `test/telnet_mitschnitt.py`.
+   - Die Simulator-Läufe und ihr Soll:
+
+     | Aufruf | Soll |
+     | --- | --- |
+     | `--start zu` | GRÜN, Mischer fährt, Pumpe spontan gemeldet |
+     | `--start steht128` | GRÜN über den Status (zweiter Druck), rund 2,5 s |
+     | `--start faehrt` | Rückfall, GRÜN nach der Ankunft (rund 60 s) |
+     | `--fehler zwang_klemmt` | ROT nach einer Wiederholung, Pumpe trotzdem ein |
+     | `--fehler pos_verloren` | ROT über den Eingang, eine Wiederholung |
+     | `--fehler mischer_stumm` | Rückfall (Vorab-Lesung schweigt), dann ROT: Eingang stumm |
+     | `--fehler openknx` | GRÜN; im Telnet-Log „fremde Antworten“ > 0 |
+     | `--fehler pumpe_ohne_meldung` | GRÜN, Pumpe „gelesen“ statt „spontan“ |
+     | `--fehler pumpe_stumm` | ROT: Pumpe meldet nicht ein |
+     | `--fehler ack_verlieren` | GRÜN, eine Quittung wiederholt |
+     | `--fehler belegt` | ROT sofort, „alle Tunnel belegt“ im Log |
+     | `--fehler stumm` | ROT nach 1 s, „keine Antwort auf CONNECT“ |
+     | leeres Feld `knx_schnittstelle` | ROT sofort, Startwarnung im Serial |
+
+10. **Merge und Rollout** erst nach Schritt 8 und 9 vollständig. Abnahme mit
+    `test/tablesnap.py` gegen den Stand davor. Die Anleitung zum Mischer
+    folgt danach durch den Owner; danach schreibt Claude die
+    Arbeitsanweisung für den KNX-Re-Assert in `nodered-flows`.
 
 ## Fallen, die schon einmal zugeschnappt sind
 

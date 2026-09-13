@@ -207,6 +207,7 @@ Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 | Broker weg | nur eine Zeile im MQTT-Log, die niemanden erreicht | die Weboberfläche sagt es: „Hausteuerung seit 14 Minuten nicht erreichbar" |
 | Steuerung rechnet nicht mehr | fällt gar nicht auf, von außen sieht alles gesund aus | erkannt am ausbleibenden 5-min-Re-Assert, eigener Text auf der Seite |
 | Heizstab-Auftrag beim Notbetrieb | kennt keinen Notbetrieb | wird als eigener Schritt zurückgenommen, bevor die Anlage anläuft |
+| Mischer und Pumpe am KNX beim Notbetrieb | kennt keinen Notbetrieb | letzter Schritt per KNXnet/IP-Tunneling: Zwangsstellungen zurück, Mischer auf 50 %, Pumpe ein, am Aktor zurückgelesen |
 | Unbemerkte Neustarts | keine Spur — das Gerät ist binnen Sekunden wieder „Online" | Bootzähler und Reset-Ursache als Topics, ein Watchdog-Neustart fällt auf |
 | Speicherverbrauch | über Telnet als Prozentwert relativ zum Boot | vier Zahlen als Topics, in InfluxDB auftragbar |
 | Notbetriebswerte nach einem Neustart | kennt keinen Notbetrieb | überleben im RTC-Speicher; erst ein Stromausfall räumt sie weg |
@@ -214,6 +215,43 @@ Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 | Logzeitstempel | driften, kennen keine Sommerzeitumstellung | aus der von SNTP nachgeführten Systemuhr |
 
 Im Detail:
+
+### Der Notbetrieb stellt auch das Vorderhaus um (3.21.0)
+
+Der Notbetriebsknopf stellte bis 3.20.0 die Wärmepumpen um — und das Vorderhaus
+blieb außen vor. Es hängt über einen eigenen Mischer mit Pumpe am Heizkreis,
+und beide sitzen am KNX-Bus. Fällt die Steuerung aus, bleiben sie auf ihrem
+letzten Wert, im Sommer oft mit geschlossenem Mischer. Dann bekommt das
+Vorderhaus trotz laufendem Notbetrieb keine Wärme.
+
+Seit 3.21.0 hat die Heizen-Folge einen elften Schritt: Die Firmware öffnet eine
+kurze Verbindung zur KNX-IP-Schnittstelle, nimmt beide Zwangsstellungen zurück,
+stellt den Mischer auf 50 % und schaltet die Pumpe ein — und liest am Aktor
+zurück. Einen fertigen KNX-Tunnel-Client für den ESP32 gibt es nicht; der
+eigene steht arduino-frei in [`src/knxtunnel.h`](src/knxtunnel.h) und wird von
+[`test/knx_test.cpp`](test/knx_test.cpp) Byte für Byte gegen die Mitschnitte
+von der Anlage geprüft.
+
+Drei Entscheidungen dahinter:
+
+* **Ganz hinten, hinter dem Einschalten.** Eine Störung am KNX darf den
+  Notbetrieb der Wärmepumpen nicht verhindern. Scheitert der Schritt, zeigt die
+  Seite das normale GRÜN und darunter einen orangen Hinweis, dass nur das
+  Vorderhaus fehlt.
+* **Die Rücklesung entscheidet, nicht die Busbestätigung.** An der Anlage kam
+  eine negative Bestätigung für ein Telegramm, das trotzdem ankam — und mit der
+  eigenen Quelladresse 1.1.250 kommt gar keine. Es zählen nur Antworten der
+  Aktoren: openknx beantwortet das Lesen aus seinem Zwischenspeicher schneller
+  als der Aktor und hätte jeden Test grün gefärbt.
+* **Nur kurze Verbindungen.** Kein Tunnel bleibt offen, während `loop()` etwas
+  anderes tut — ein offener Tunnel muss binnen einer Sekunde quittieren.
+
+Die Adresse der Schnittstelle steht in den Einstellungen, die Gruppenadressen
+stehen im Code. **Ändert sich in der ETS eine der Gruppenadressen, braucht es
+eine neue Firmware.** Der Ablauf mit allen Zeiten und Fehlerfällen steht in
+[`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md), Abschnitt 1c; Recherche,
+Vorabtest an der Anlage und Entscheidungen in
+[`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md).
 
 ### Damit es Monate durchhält — und man merkt, wenn nicht (3.20.0)
 
@@ -1020,6 +1058,8 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/verbindung.h`](src/verbindung.h) | Karenz und Ausfalldauer der Verbindung zur Hausteuerung — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.h`](src/notbetrieb.h) | Regeln des Notbetriebs — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.cpp`](src/notbetrieb.cpp) | Anbindung ans Gerät: Abonnement, Schrittfolge, Zustand |
+| [`src/knxtunnel.h`](src/knxtunnel.h) | KNX-Tunnel und Rückleseregel A des Vorderhausschritts, Adressen der Anlage — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/vorderhaus.cpp`](src/vorderhaus.cpp) | Netzteil des Vorderhausschritts: kurze KNXnet/IP-Verbindungen über WiFiUDP |
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
 | [`MQTT-Topics.md`](MQTT-Topics.md) | Topic-Referenz (englisch), aus den Tabellen nachgezogen |
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
@@ -1028,6 +1068,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
 | [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
+| [`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md) | KNX-Schritt „Vorderhaus": Recherche, Vorabtest an der Anlage, Entwurf, Rückleseregel A; umgesetzt in 3.21.0 nach [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 

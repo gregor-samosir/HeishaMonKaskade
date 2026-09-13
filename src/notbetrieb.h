@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include "knxtunnel.h" // Fristen des Vorderhausschritts - sein Timeout ist daraus abgeleitet
 
 /*****************************************************************************/
 /* Notbetrieb: Werte halten, Schrittfolge fahren                             */
@@ -40,8 +41,9 @@ enum NotbetriebRolle
 /*                                                                           */
 /* Die Waermepumpe uebernimmt ein Kommando in 2-8 s (KNX-Messung 2026-08-16),*/
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
-/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.18.0 80 s    */
-/* (zehn Schritte, davon der erste die Hydraulik), ein Warmwasser-Lauf 48 s. */
+/* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.21.0 88 s    */
+/* (elf Schritte, vorn die Hydraulik, hinten das Vorderhaus), ein            */
+/* Warmwasser-Lauf 48 s.                                                     */
 /*                                                                           */
 /* DER LANGSAMSTE KANAL IST SEIT 3.18.0 SET39 ForceHeater. Beim EINSCHALTEN  */
 /* lag die Uebernahme in einem Lauf bei einer knappen halben Minute          */
@@ -52,14 +54,35 @@ enum NotbetriebRolle
 /* wider Erwarten nicht zurueck, ist ROT die richtige Antwort - an der       */
 /* Waermepumpe ist dann nichts verstellt, und der Mensch drueckt erneut.     */
 /*                                                                           */
-/* Der Gesamtdeckel ist ABGELEITET (Schrittzahl * Schritt-Timeout) und nicht */
-/* frei gewaehlt. Ein kleinerer Deckel wuerde einen Lauf abbrechen, den die  */
-/* Schritt-Timeouts noch gar nicht aufgegeben haben - dann haengt das        */
-/* Ergebnis davon ab, welche Regel zufaellig zuerst greift. So ist der       */
-/* Deckel das, was er sein soll: ein Notausgang, falls der Automat haengt,   */
-/* nicht der normale Weg zu ROT.                                             */
+/* Der Gesamtdeckel ist ABGELEITET und nicht frei gewaehlt: die Summe der    */
+/* Schritt-Timeouts (bis 3.20.0 Schrittzahl * 20 s - dasselbe, solange jeder */
+/* Schritt gleich lange durfte). Ein kleinerer Deckel wuerde einen Lauf      */
+/* abbrechen, den die Schritt-Timeouts noch gar nicht aufgegeben haben -     */
+/* dann haengt das Ergebnis davon ab, welche Regel zufaellig zuerst greift.  */
+/* So ist der Deckel das, was er sein soll: ein Notausgang, falls der        */
+/* Automat haengt, nicht der normale Weg zu ROT.                             */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_TIMEOUT_MS 20000u
+
+/*****************************************************************************/
+/* Das Timeout des Vorderhausschritts (seit 3.21.0, Owner-Entscheid E2)      */
+/*                                                                           */
+/* Im Regelfall steht sein Ergebnis nach rund einer Sekunde fest, und er     */
+/* kostet wie jeder Schritt die Mindestwarte von 8 s. Faehrt der Mischer     */
+/* beim Druck aber schon (Endlagenlauf nach einem Wechsel der                */
+/* Zwangsstellung) oder schweigt der Aktor auf die Vorab-Lesung, entscheidet */
+/* nach Rueckleseregel A die Endstellung - und die kann 220 s dauern         */
+/* (knxtunnel.h). Die 20 s der uebrigen Schritte reichen dafuer nicht.       */
+/*                                                                           */
+/* Deshalb ein Timeout JE SCHRITTTYP statt einer Sonderuhr: 220 s Rueckfall  */
+/* plus der Deckel des Austauschs beim Absetzen, der ebenfalls in die        */
+/* Schrittuhr faellt. Das ist die EINZIGE Frist des Schritts - zwei Uhren    */
+/* nebeneinander liessen das Ergebnis davon abhaengen, welche zuerst         */
+/* ablaeuft. Der Regelfall ist davon nicht betroffen.                        */
+/*****************************************************************************/
+#define NOTBETRIEB_VORDERHAUS_TIMEOUT_MS (KNX_RUECKFALL_FRIST_MS + KNX_BEFEHL_DECKEL_MS)
+static_assert(NOTBETRIEB_VORDERHAUS_TIMEOUT_MS == 240000u,
+              "E2 (2026-09-13): 240 s = 220 s Rueckfall + 20 s Deckel des Austauschs");
 
 /*****************************************************************************/
 /* Mindestwartezeit, bevor eine Rueckmeldung als Bestaetigung zaehlt          */
@@ -75,8 +98,9 @@ enum NotbetriebRolle
 /*                                                                            */
 /* Der Abfragezyklus liegt bei rund 6 s; 8 s decken einen vollen Zyklus plus  */
 /* Reserve ab. Das ist der Preis dafuer, dass GRUEN wirklich "zurueckgelesen" */
-/* heisst. Der Gesamtdeckel folgt der Schrittzahl und liegt seit 3.18.0 bei   */
-/* 200 s (Heizen, zehn Schritte) bzw. 120 s (Wasser, sechs).                  */
+/* heisst. Der Gesamtdeckel ist die Summe der Schritt-Timeouts und liegt seit */
+/* 3.21.0 bei 440 s (Heizen: zehn Schritte zu 20 s, das Vorderhaus mit 240 s) */
+/* bzw. 120 s (Wasser, sechs).                                                */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -89,7 +113,7 @@ enum NotbetriebRolle
 /* faellt die Anzeige deshalb auf BEREIT zurueck und der Knopf steht wieder   */
 /* da; im MQTT-Log bleibt der Lauf vollstaendig nachlesbar.                   */
 /*                                                                           */
-/* 15 Minuten sind laenger als jeder Lauf (Deckel 200 s) und kurz genug, dass */
+/* 15 Minuten sind laenger als jeder Lauf (Deckel 440 s) und kurz genug, dass */
 /* niemand ein fremdes Ergebnis fuer seines haelt.                            */
 /*****************************************************************************/
 #define NOTBETRIEB_ANZEIGE_VERFALL_MS 900000u
@@ -121,7 +145,9 @@ enum NotbetriebRolle
 /* einem TOP zurueckgelesen wird. Der Hydraulikschritt ist der erste, der    */
 /* etwas ANDERES tut: Er legt einen Tasmota-Switch im Hausnetz auf AUS und   */
 /* bekommt seine Bestaetigung aus dessen HTTP-Antwort, nicht aus             */
-/* actual_data[].                                                           */
+/* actual_data[]. Seit 3.21.0 folgt der Vorderhausschritt demselben Muster:  */
+/* KNX-Telegramme an die Schnittstelle, Bestaetigung aus der Ruecklesung am  */
+/* Aktor (vorderhaus.cpp, Regeln in knxtunnel.h).                            */
 /*                                                                          */
 /* Der Automat kennt trotzdem nur "Schritt vom Typ X, bestaetigt ja/nein" - */
 /* der Netzzugriff steht ausschliesslich in notbetrieb.cpp. Nur so bleibt    */
@@ -129,15 +155,17 @@ enum NotbetriebRolle
 /*****************************************************************************/
 enum NotbetriebSchrittTyp
 {
-    NB_SCHRITT_SET = 0,      // Set-Kommando an die WP, Ruecklesung ueber den TOP
-    NB_SCHRITT_HYDRAULIK = 1 // Tasmota-Switch auf AUS = Hydraulik 1-stufig
+    NB_SCHRITT_SET = 0,       // Set-Kommando an die WP, Ruecklesung ueber den TOP
+    NB_SCHRITT_HYDRAULIK = 1, // Tasmota-Switch auf AUS = Hydraulik 1-stufig
+    NB_SCHRITT_VORDERHAUS = 2 // KNX: Mischer Vorderhaus auf 50 %, Pumpe ein (3.21.0)
 };
 
 /*****************************************************************************/
 /* Ein Schritt der Folge                                                     */
 /*                                                                           */
-/* typ       - siehe oben. Bei NB_SCHRITT_HYDRAULIK sind top, wert_index und */
-/*             fester_wert BEDEUTUNGSLOS (top = -1, damit ein versehentliches */
+/* typ       - siehe oben. Bei NB_SCHRITT_HYDRAULIK und NB_SCHRITT_VORDERHAUS */
+/*             sind top, wert_index und fester_wert BEDEUTUNGSLOS (top = -1,  */
+/*             damit ein versehentliches                                      */
 /*             Nachschlagen in stateTopics[] auffaellt statt Zeile 0 zu      */
 /*             lesen).                                                       */
 /* set_name  - Topic-Name unter <prefix>/set/, wird an Topics::SET gehaengt  */
@@ -167,6 +195,7 @@ struct NotbetriebSchritt
 /* steht, ohne die Zeichenkette ein zweites Mal hinzuschreiben.              */
 /*****************************************************************************/
 #define NOTBETRIEB_HYDRAULIK_NAME "Hydraulik 1-stufig"
+#define NOTBETRIEB_VORDERHAUS_NAME "Vorderhaus" // aus demselben Grund, seit 3.21.0
 
 /*****************************************************************************/
 /* Die gehaltenen Werte je Rolle                                             */
@@ -277,6 +306,22 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* Anlage im 6-kW-Modus, steht SET39 auch an der anderen Stufe - dort muss   */
 /* der Knopf ebenfalls gedrueckt werden, sonst laeuft deren Umwaelzpumpe     */
 /* weiter (Ablauf-Notbetrieb.md, Abschnitt 1b).                             */
+/*                                                                          */
+/* DAS VORDERHAUS STEHT SEIT 3.21.0 GANZ HINTEN, hinter Heatpump = 1 (Weg A, */
+/* Owner 2026-09-12; Analyse-KNX-Vorderhaus.md, Abschnitt 8). Mischer und    */
+/* Pumpe des Vorderhauses haengen am KNX-Bus und bleiben ohne Steuerung auf  */
+/* ihrem letzten Wert - der Schritt nimmt die Zwangsstellungen zurueck,      */
+/* stellt den Mischer auf 50 % und schaltet die Pumpe ein.                   */
+/*                                                                          */
+/* WARUM HINTEN: Eine Stoerung am KNX - Schnittstelle, Bus, Einstellung -    */
+/* darf den Notbetrieb der Waermepumpen nicht verhindern; der Hauptteil des  */
+/* Hauses bekaeme sonst auch keine Waerme. Scheitert der Schritt, endet der  */
+/* Lauf mit eigenem Grund, und die Seite sagt: Die Waermepumpen laufen im    */
+/* Notbetrieb, nur das Vorderhaus liess sich nicht umstellen. Die Sekunden   */
+/* am Ende kosten nichts - der Kompressor faehrt ohnehin erst rund drei      */
+/* Minuten nach dem Einschalten hoch.                                        */
+/*                                                                          */
+/* NUR IN DER HEIZEN-FOLGE: Nur Stufe 1 versorgt den Heizkreis.              */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
@@ -288,7 +333,8 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_SET, "Z1HeatCurveOutsideLowTemp", 32, 2, 0},         // "AT kalt"
     {NB_SCHRITT_SET, "Z1HeatCurveOutsideHighTemp", 31, 3, 0},        // "AT warm"
     {NB_SCHRITT_SET, "WaterPump", 104, NOTBETRIEB_FESTER_WERT, 0},   // Pumpe auf auto
-    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}}; // zuletzt einschalten
+    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1},  // dann einschalten
+    {NB_SCHRITT_VORDERHAUS, NOTBETRIEB_VORDERHAUS_NAME, -1, NOTBETRIEB_FESTER_WERT, 0}}; // zuletzt das Vorderhaus
 
 /*****************************************************************************/
 /* Warmwasser braucht keine Kurve - der Knopf dort ist deutlich einfacher.   */
@@ -676,8 +722,9 @@ enum NotbetriebAbbruchgrund
 {
     NOTBETRIEB_GRUND_KEINER = 0,   // laeuft noch, oder GRUEN
     NOTBETRIEB_GRUND_TIMEOUT = 1,  // ein Schritt kam nicht zurueck
-    NOTBETRIEB_GRUND_KUEHLEN = 2,  // die Anlage meldet Kuehlbetrieb (TOP101)
-    NOTBETRIEB_GRUND_HYDRAULIK = 3 // der Switch liess sich nicht auf AUS legen
+    NOTBETRIEB_GRUND_KUEHLEN = 2,   // die Anlage meldet Kuehlbetrieb (TOP101)
+    NOTBETRIEB_GRUND_HYDRAULIK = 3, // der Switch liess sich nicht auf AUS legen
+    NOTBETRIEB_GRUND_VORDERHAUS = 4 // Mischer/Pumpe Vorderhaus nicht bestaetigt - die WPs laufen (3.21.0)
 };
 
 /*****************************************************************************/
@@ -693,6 +740,8 @@ inline NotbetriebAbbruchgrund notbetrieb_grund_fuer_schritt(NotbetriebRolle roll
     const NotbetriebSchritt *s = notbetrieb_schritt(rolle, schritt);
     if (s && s->typ == NB_SCHRITT_HYDRAULIK)
         return NOTBETRIEB_GRUND_HYDRAULIK;
+    if (s && s->typ == NB_SCHRITT_VORDERHAUS)
+        return NOTBETRIEB_GRUND_VORDERHAUS;
     return NOTBETRIEB_GRUND_TIMEOUT;
 }
 
@@ -780,11 +829,30 @@ inline bool notbetrieb_verfall_pruefen(NotbetriebLauf *lauf, uint32_t jetzt)
 }
 
 /*****************************************************************************/
-/* Gesamtdeckel - abgeleitet, siehe Zeitregeln oben                          */
+/* Das Timeout eines Schritts - je Schritttyp (seit 3.21.0, E2)              */
+/*                                                                           */
+/* Hinter dem letzten Schritt gilt das allgemeine Timeout; der Tick kommt    */
+/* dort nie hin, weil der Lauf vorher GRUEN wird.                            */
+/*****************************************************************************/
+inline uint32_t notbetrieb_schritt_timeout_ms(NotbetriebRolle rolle, unsigned schritt)
+{
+    const NotbetriebSchritt *s = notbetrieb_schritt(rolle, schritt);
+    if (s && s->typ == NB_SCHRITT_VORDERHAUS)
+        return NOTBETRIEB_VORDERHAUS_TIMEOUT_MS;
+    return NOTBETRIEB_SCHRITT_TIMEOUT_MS;
+}
+
+/*****************************************************************************/
+/* Gesamtdeckel - die Summe der Schritt-Timeouts, siehe Zeitregeln oben      */
+/*                                                                           */
+/* Elf Summanden von hoechstens 240 s - weit unter jedem Ueberlauf.          */
 /*****************************************************************************/
 inline uint32_t notbetrieb_gesamtdeckel_ms(NotbetriebRolle rolle)
 {
-    return (uint32_t)notbetrieb_schritt_anzahl(rolle) * NOTBETRIEB_SCHRITT_TIMEOUT_MS;
+    uint32_t summe = 0;
+    for (unsigned i = 0; i < notbetrieb_schritt_anzahl(rolle); i++)
+        summe += notbetrieb_schritt_timeout_ms(rolle, i);
+    return summe;
 }
 
 /*****************************************************************************/
@@ -796,6 +864,8 @@ inline uint32_t notbetrieb_gesamtdeckel_ms(NotbetriebRolle rolle)
 /*****************************************************************************/
 static_assert(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
               "Mindestwarte muss kleiner als das Schritt-Timeout sein");
+static_assert(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_VORDERHAUS_TIMEOUT_MS,
+              "Mindestwarte muss kleiner als das Timeout des Vorderhausschritts sein");
 
 /*****************************************************************************/
 /* Lauf starten                                                              */
@@ -909,8 +979,9 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
 
     // Der uebliche Weg zu ROT: ein Schritt kam nicht zurueck.
     // Abgebrochen wird SOFORT und nicht weitergemacht - steht die Betriebsart
-    // nicht, sind die Kurvenwerte danach sinnlos.
-    if ((uint32_t)(jetzt - lauf->schritt_start) >= NOTBETRIEB_SCHRITT_TIMEOUT_MS)
+    // nicht, sind die Kurvenwerte danach sinnlos. Die Frist haengt seit 3.21.0
+    // am Schritttyp (E2): 240 s fuer das Vorderhaus, sonst 20 s.
+    if ((uint32_t)(jetzt - lauf->schritt_start) >= notbetrieb_schritt_timeout_ms(rolle, lauf->schritt))
     {
         notbetrieb_abschluss(lauf, NOTBETRIEB_ROT, jetzt,
                              notbetrieb_grund_fuer_schritt(rolle, lauf->schritt));
@@ -926,7 +997,8 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
 /* Rueckgabe false, wenn der Schritt einen gehaltenen Wert braucht, der      */
 /* nicht vorliegt - dann darf nicht gesendet werden.                         */
 /*                                                                           */
-/* ACHTUNG: Ein Hydraulikschritt liefert IMMER false - er hat keinen Wert,   */
+/* ACHTUNG: Ein Hydraulik- oder Vorderhausschritt liefert IMMER false - er   */
+/* hat keinen Wert,                                                          */
 /* den man senden koennte. Wer ihn hier hineinreicht, hat den Typ nicht      */
 /* geprueft; das ist ein Fehler und soll wie einer aussehen, statt still     */
 /* eine 0 zu liefern. notbetrieb.cpp verzweigt vorher nach Typ.              */
@@ -939,7 +1011,7 @@ inline bool notbetrieb_schritt_wert(const NotbetriebLauf *lauf, NotbetriebRolle 
     const NotbetriebSchritt *s = notbetrieb_schritt(rolle, lauf->schritt);
     if (!s)
         return false;
-    if (s->typ == NB_SCHRITT_HYDRAULIK)
+    if (s->typ != NB_SCHRITT_SET)
         return false; // kein Set-Kommando, kein Wert - siehe Kommentar oben
 
     if (s->wert_index == NOTBETRIEB_FESTER_WERT)

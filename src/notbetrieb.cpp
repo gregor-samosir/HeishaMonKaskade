@@ -178,11 +178,46 @@ void notbetrieb_init(bool spiegel_gueltig)
     Serial.println("FEHLER Notbetrieb: TOP101 (Heat_Cool_SW_State) fehlt in stateTopics[]");
   }
 
-  // Und die Adresse des Hydraulik-Switch. Fehlt sie, laesst sich der Notbetrieb
-  // nicht ausloesen - das faellt sonst erst auf, wenn jemand den Knopf drueckt.
+  // Die Adressen aus den Einstellungen (Hydraulik-Switch, KNX-Schnittstelle)
+  // prueft notbetrieb_einstellungen_pruefen() - und zwar erst NACH
+  // setupWifi(), das die config.json laedt. Hier waeren beide noch leer.
+}
+
+/*****************************************************************************/
+/* Die Adressen aus den Einstellungen pruefen - nach dem Laden (3.21.0)      */
+/*                                                                           */
+/* Fehlt eine davon, laesst sich der Notbetrieb nicht vollstaendig ausloesen */
+/* - das faellt sonst erst auf, wenn jemand den Knopf drueckt.               */
+/*                                                                           */
+/* EIN FEHLER BIS 3.20.0: Die Hydraulik-Pruefung stand in notbetrieb_init(), */
+/* und das laeuft in setup() VOR setupWifi(), also vor dem Laden der         */
+/* config.json. Das Feld war dort immer leer, und die Warnung kam bei JEDEM  */
+/* Start - auch mit eingetragener Adresse. Eine Warnung, die immer kommt,    */
+/* liest niemand mehr; fehlt die Adresse wirklich, geht es darin unter.      */
+/* setup() ruft diese Funktion deshalb direkt hinter setupWifi() auf.        */
+/*                                                                           */
+/* Serial und nicht MQTT: Die Verbindung steht zu diesem Zeitpunkt noch      */
+/* nicht - dasselbe Muster wie die uebrigen Pruefungen beim Start.           */
+/*****************************************************************************/
+void notbetrieb_einstellungen_pruefen(void)
+{
+  // Der Hydraulik-Switch - Schritt 1 beider Folgen
   if (hydraulik_switch[0] == '\0')
   {
     Serial.println("WARNUNG Notbetrieb: keine Adresse fuer den Hydraulik-Switch (Settings)");
+  }
+
+  // Die KNX-Schnittstelle - den Vorderhausschritt gibt es nur in der Rolle
+  // Heizen. Leer oder ungueltig heisst: Der Schritt endet ROT, er entfaellt
+  // nicht still (Owner 2026-09-12). Der Feldinhalt steht mit in der Zeile.
+  if (notbetriebRolle != NOTBETRIEB_WASSER && !vorderhaus_eingerichtet())
+  {
+    char log_line[160];
+    (void)snprintf(log_line, sizeof(log_line),
+                   "WARNUNG Notbetrieb: keine gueltige Adresse fuer die KNX-Schnittstelle "
+                   "(Settings: \"%.40s\") - der Vorderhausschritt endet ROT",
+                   knx_schnittstelle);
+    Serial.println(log_line);
   }
 }
 
@@ -641,6 +676,20 @@ static bool hydraulik_auf_einstufig(void)
 static bool hydraulikBestaetigt = false;
 
 /*****************************************************************************/
+/* Das Ergebnis des Vorderhausschritts (seit 3.21.0)                         */
+/*                                                                           */
+/* Wie beim Hydraulikschritt: gesetzt beim Absetzen, geloescht beim Start    */
+/* jedes Laufs. Dazu der Rueckfall der Regel A: Fuhr der Mischer beim Druck  */
+/* schon, steht das Ergebnis erst mit der Endstellung fest. Der Tick fragt   */
+/* dann alle 10 s in einer eigenen kurzen Verbindung nach                    */
+/* (vorderhaus_abfragen()), bis der Aktor 128 +/- 2 meldet oder das Timeout  */
+/* des Schritts ablaeuft - kein Tunnel bleibt dazwischen offen.              */
+/*****************************************************************************/
+static bool vorderhausBestaetigt = false;
+static bool vorderhausAusstehend = false;
+static uint32_t vorderhausLetzteAbfrage = 0;
+
+/*****************************************************************************/
 /* Den aktuellen Schritt absetzen                                            */
 /*                                                                           */
 /* Die Kommandos gehen durch build_heatpump_command() - UNVERAENDERT. Der    */
@@ -669,6 +718,24 @@ static bool notbetrieb_schritt_absetzen(void)
 
     hydraulikBestaetigt = hydraulik_auf_einstufig();
     return hydraulikBestaetigt;
+  }
+
+  // Der Vorderhausschritt geht an die KNX-Schnittstelle (vorderhaus.cpp). Sein
+  // Ergebnis steht nach dem Austausch fest - ausser im Rueckfall, dann fragt
+  // der Tick nach. ROT heisst hier: sofort abbrechen, die Waermepumpen laufen.
+  if (s->typ == NB_SCHRITT_VORDERHAUS)
+  {
+    char vh_log[80];
+    (void)snprintf(vh_log, sizeof(vh_log), "Notbetrieb Schritt %u/%u: %.32s",
+                   (unsigned)(notbetriebLauf.schritt + 1),
+                   notbetrieb_schritt_anzahl(notbetriebRolle), s->set_name);
+    write_mqtt_log(vh_log);
+
+    const KnxVorderhaus ergebnis = vorderhaus_absetzen();
+    vorderhausBestaetigt = (ergebnis == KNX_VH_GRUEN);
+    vorderhausAusstehend = (ergebnis == KNX_VH_AUSSTEHEND);
+    vorderhausLetzteAbfrage = millis();
+    return ergebnis != KNX_VH_ROT;
   }
 
   int wert = 0;
@@ -734,6 +801,25 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     // actual_data[] - gesetzt beim Absetzen, siehe hydraulikBestaetigt.
     bestaetigt = hydraulikBestaetigt;
   }
+  else if (s->typ == NB_SCHRITT_VORDERHAUS)
+  {
+    // Im Regelfall steht die Bestaetigung seit dem Absetzen fest. Im Rueckfall
+    // wird alle 10 s nachgefragt - erst wenn der Schritt abgesetzt ist, sonst
+    // fragte die erste Runde nach einem Mischer, dem noch niemand etwas gesagt
+    // hat. Eine Abfrage blockiert loop() im Regelfall rund 0,1 s, hoechstens
+    // 4,5 s (vorderhaus.cpp).
+    if (vorderhausAusstehend && notbetriebLauf.schritt_gesendet &&
+        knx_abfrage_faellig(vorderhausLetzteAbfrage, millis()))
+    {
+      vorderhausLetzteAbfrage = millis();
+      if (vorderhaus_abfragen())
+      {
+        vorderhausBestaetigt = true;
+        vorderhausAusstehend = false;
+      }
+    }
+    bestaetigt = vorderhausBestaetigt;
+  }
   else
   {
     // Sollwert des laufenden Schritts. Fehlt er, ist der Lauf nicht zu retten -
@@ -771,8 +857,12 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
       const NotbetriebAbbruchgrund grund =
           notbetrieb_grund_fuer_schritt(notbetriebRolle, notbetriebLauf.schritt);
       notbetrieb_abschluss(&notbetriebLauf, NOTBETRIEB_ROT, millis(), grund);
+      // Ebenso der Vorderhausschritt: Sein Ergebnis steht mit dem Austausch
+      // fest. Die Waermepumpen sind zu diesem Zeitpunkt schon umgestellt.
       write_mqtt_log(grund == NOTBETRIEB_GRUND_HYDRAULIK
                          ? (char *)"Notbetrieb ROT: Hydraulik nicht auf 1-stufig, kein Kommando an die WP"
+                     : grund == NOTBETRIEB_GRUND_VORDERHAUS
+                         ? (char *)"Notbetrieb ROT: Vorderhaus nicht umgestellt - die WPs laufen im Notbetrieb"
                          : (char *)"Notbetrieb abgebrochen: Kommando abgelehnt");
     }
     break;
@@ -794,10 +884,17 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     break;
 
   case NOTBETRIEB_ABBRUCH:
-    (void)snprintf(log_line, sizeof(log_line),
-                       "Notbetrieb ROT: Schritt %u/%u (%.32s) kam nicht zurueck",
-                       (unsigned)(notbetriebLauf.schritt + 1),
-                       notbetrieb_schritt_anzahl(notbetriebRolle), s->set_name);
+    // Beim Vorderhaus heisst "kam nicht zurueck": Der Mischer hat im Rueckfall
+    // die 128 nicht binnen des Schritt-Timeouts gemeldet. Die WPs laufen.
+    if (notbetriebLauf.grund == NOTBETRIEB_GRUND_VORDERHAUS)
+      (void)snprintf(log_line, sizeof(log_line),
+                     "Notbetrieb ROT: Mischer Vorderhaus meldete 128 nicht binnen %u s - die WPs laufen",
+                     (unsigned)(NOTBETRIEB_VORDERHAUS_TIMEOUT_MS / 1000u));
+    else
+      (void)snprintf(log_line, sizeof(log_line),
+                     "Notbetrieb ROT: Schritt %u/%u (%.32s) kam nicht zurueck",
+                     (unsigned)(notbetriebLauf.schritt + 1),
+                     notbetrieb_schritt_anzahl(notbetriebRolle), s->set_name);
     write_mqtt_log(log_line);
     break;
 
@@ -842,6 +939,8 @@ bool notbetrieb_starten(void)
 
   // Ein "ja" vom vorigen Lauf darf den neuen nicht bestaetigen.
   hydraulikBestaetigt = false;
+  vorderhausBestaetigt = false;
+  vorderhausAusstehend = false;
 
   write_mqtt_log((char *)"NOTBETRIEB ausgeloest ueber die Weboberflaeche");
   return true;
@@ -856,6 +955,21 @@ bool notbetrieb_starten(void)
 NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void)
 {
   return (NotbetriebAbbruchgrund)notbetriebLauf.grund;
+}
+
+/*****************************************************************************/
+/* Wartet der Vorderhausschritt gerade auf die Endstellung? (3.21.0)         */
+/*                                                                           */
+/* Fuer die Seite: Im Rueckfall steht bis zu vier Minuten "laeuft", und sie  */
+/* sagt dann dazu, dass die Waermepumpen schon laufen. Alle drei Bedingungen */
+/* zusammen, damit ein liegengebliebenes Flag aus einem abgebrochenen Lauf   */
+/* nie auf der Seite erscheint.                                              */
+/*****************************************************************************/
+bool notbetrieb_vorderhaus_ausstehend(void)
+{
+  const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
+  return vorderhausAusstehend && notbetriebLauf.zustand == NOTBETRIEB_LAEUFT && s &&
+         s->typ == NB_SCHRITT_VORDERHAUS;
 }
 
 /*****************************************************************************/

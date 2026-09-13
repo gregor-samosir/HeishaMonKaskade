@@ -6,6 +6,7 @@
 #include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
 #include "rtcspiegel.h" // Gueltigkeitsregel des Spiegels im RTC-Speicher
 #include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
+#include "knxtunnel.h"  // KNX-Tunnel und Rueckleseregel A des Vorderhausschritts
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
 // platform layer: the official HeishaMon ESP32-S3 board. Until 3.15.0 the same
@@ -109,6 +110,9 @@ extern Ticker Send_Pana_Mainquery_Timer;
 // der den Notbetrieb nichts angeht. Die Entscheidung "war da etwas" faellt
 // deshalb genau einmal in setup(), und beide Nutzer bekommen sie gereicht.
 void notbetrieb_init(bool spiegel_gueltig);
+// Warnungen zu fehlenden Adressen (Hydraulik-Switch, KNX-Schnittstelle) - erst
+// nach setupWifi() aufrufen, das die config.json laedt (seit 3.21.0)
+void notbetrieb_einstellungen_pruefen(void);
 bool notbetrieb_subscribe(PubSubClient &);
 // true, wenn das Topic in den Notbetriebszweig gehoerte - dann ist die
 // Nachricht abschliessend behandelt und laeuft NICHT weiter in den Set-Pfad
@@ -130,11 +134,33 @@ NotbetriebKurvenWarnung notbetrieb_kurvenwarnung(void);
 // Hydraulik-Grund fuehrt der Weg zurueck ueber den Schalter im Waschraum,
 // nicht ueber die Firmware.
 NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void);
+// true, solange der Vorderhausschritt im Rueckfall auf die Endstellung des
+// Mischers wartet - die Seite sagt dann, dass die Waermepumpen schon laufen
+bool notbetrieb_vorderhaus_ausstehend(void);
 
 // Adresse des Tasmota-Switch fuer die Hydraulik (config.json, Feld
 // "hydraulik_switch"). Leer heisst "nicht eingerichtet" - dann bricht der
 // Notbetrieb im ersten Schritt ab.
 extern char hydraulik_switch[];
+
+// Der Vorderhausschritt (vorderhaus.cpp, seit 3.21.0). knx_schnittstelle ist
+// die einzige KNX-Einstellung (config.json, Feld "knx_schnittstelle"): eine
+// IP, wahlweise mit ":Port". Gruppen- und Aktoradressen stehen fest in
+// knxtunnel.h (Owner-Entscheid E1). Leer oder ungueltig heisst "nicht
+// eingerichtet" - dann endet der Schritt ROT, er entfaellt nicht still.
+extern char knx_schnittstelle[];
+bool vorderhaus_eingerichtet(void);
+// Die Befehlsverbindung beim Absetzen; blockiert loop() hoechstens 20,5 s,
+// im Regelfall rund 0,3 s (Begruendung in vorderhaus.cpp)
+KnxVorderhaus vorderhaus_absetzen(void);
+// Der Rueckfall: eine kurze Abfrage des Mischerstatus, true = am Ziel
+bool vorderhaus_abfragen(void);
+#ifdef KNX_PRUEFZUGANG
+// Nur im Pruefling-Build (E4): nur den Vorderhausschritt fahren, ohne Notbetrieb
+bool vorderhaus_pruefung_starten(void);
+void vorderhaus_pruefung_loop(void);
+void vorderhaus_pruefung_status(char *out, size_t len);
+#endif
 
 // Rolle dieser Stufe (Build-Flag) und der gehaltene Zustand
 extern const NotbetriebRolle notbetriebRolle;
