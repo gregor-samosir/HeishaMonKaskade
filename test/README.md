@@ -31,7 +31,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
 | `byte23_25_test.cpp` | Die sieben Installer-Topics TOP105-111 aus Byte 25 und Byte 23 gegen die gemessenen Rohbytes (`h2.log`, `h2_ext.log`) | nein |
-| `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101, Anzeigeverfall und die Plausibilitaet der Kurve (bindet `src/notbetrieb.h` direkt ein) | nein |
+| `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101, Anzeigeverfall, die Plausibilitaet der Kurve und der Vorderhausschritt mit eigenem Timeout (bindet `src/notbetrieb.h` direkt ein) | nein |
+| `knx_test.cpp` | KNX-Tunnel des Vorderhausschritts: jeder Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12, Sequenzregel, Antwortfilter (openknx zaehlt nie), jeder Zweig der Rueckleseregel A, die Einstellung `knx_schnittstelle`, `millis()`-Ueberlauf (bindet `src/knxtunnel.h` direkt ein) | nein |
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
@@ -182,6 +183,7 @@ c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindo
 c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test notbetrieb_test.cpp && /tmp/notbetrieb_test
 c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test verbindung_test.cpp && /tmp/verbindung_test
 c++ -std=c++17 -O2 -Wall -o /tmp/rtcspiegel_test rtcspiegel_test.cpp && /tmp/rtcspiegel_test
+c++ -std=c++17 -O2 -Wall -o /tmp/knx_test knx_test.cpp && /tmp/knx_test
 ./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
 ./decode_hosttest.sh test/byte9_test.cpp   # Heizstab-Kommandos SET37-SET39 (Pfad immer repo-relativ)
 

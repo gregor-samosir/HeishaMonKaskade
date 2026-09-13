@@ -7,8 +7,11 @@
 > **Ergebnis: offen.**
 >
 > **2026-09-13:** E1–E4 und drei Folgepunkte entschieden (Abschnitt
-> „Entschieden am 2026-09-13“). Die Umsetzung läuft auf dem Branch
-> `knx-vorderhaus`.
+> „Entschieden am 2026-09-13“), dazu die Farbe des Vorderhausfalls neu:
+> GRÜN mit orangem Hinweisfeld (siehe dort). Auf dem Branch `knx-vorderhaus`
+> sind die Schritte 1–7 erledigt (Firmware 3.21.0, alle Hosttests grün);
+> offen sind Schritt 8 (alle Envs), 9 (Prüfling, Anlage) und 10 (Merge,
+> Rollout).
 
 ## Worum es geht
 

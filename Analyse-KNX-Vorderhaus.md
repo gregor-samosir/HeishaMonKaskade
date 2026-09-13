@@ -36,9 +36,14 @@ Befehlen auf 0 stand.
 Mischer (Abschnitt 8). Referenz ist `knx_tunnel.py` 1.6.0,
 `mischer --bewegung`.
 
-**Offen:** die Umsetzung in der Firmware nach
-[`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) und der
-Re-Assert für die KNX-Befehle in `nodered-flows` (Abschnitt 9).
+**Umgesetzt in Firmware 3.21.0 (2026-09-13, Branch `knx-vorderhaus`)** nach
+[`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md); die
+Entscheidungen beim Umsetzen (E1–E4 und drei Folgepunkte) stehen dort. Am
+Gerät noch nicht abgenommen.
+
+**Offen:** die Abnahme am Prüfling und an Mischer und Pumpe, der Re-Assert für
+die KNX-Befehle in `nodered-flows` (Abschnitt 9) und die Anleitung zum Mischer
+in den Notbetriebsunterlagen.
 
 ---
 
@@ -579,7 +584,9 @@ beim Hydraulikschritt lässt sich der Schritt mit lebender Steuerung also nur
 auf Ausführung prüfen, nicht auf Dauerwirkung.
 
 In der Firmware: IP, Port, Quelladresse und die sechs Gruppenadressen in den
-Einstellungen (wie `hydraulik_switch`).
+Einstellungen (wie `hydraulik_switch`). *Überholt am 2026-09-13 (E1): Nur die
+Adresse der Schnittstelle ist eine Einstellung, alles andere steht fest in
+`src/knxtunnel.h`.*
 
 **Quelladresse (Owner-Wunsch 2026-09-12: 1.1.250 statt der vergebenen
 Tunneladresse 1.1.148).** KNXnet/IP kennt zwei Wege, und openknx zeigt, welcher
@@ -662,13 +669,11 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   aber das Zurücklesen des Eingangs und die Bewegung vor den Befehlen.
 - ~~**Owner-Entscheid: Rückleseregel des Mischers**~~ — entschieden am
   2026-09-12 abends: Regel A (Abschnitt 8), Werkzeug 1.6.0.
-- **Umsetzung in der Firmware** nach
-  [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md): neuer
-  Schritttyp am Ende der Heizen-Folge,
-  Bau der Telegramme in einem arduino-freien Header mit Hosttest gegen die
-  Sollwerte aus `knx_tunnel.py`; Einstellungen für IP, Port, Quelle, die
-  sechs Gruppenadressen (sieben mit 6/4/14) und die zwei Aktoradressen.
-  Vorher Rettungsanker und Branch.
+- ~~**Umsetzung in der Firmware**~~ — erledigt in 3.21.0 nach
+  [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md). Abweichend
+  vom Entwurf hier gibt es nur **eine** Einstellung, die Adresse der
+  Schnittstelle; Quelle, Gruppen- und Aktoradressen stehen fest in
+  `src/knxtunnel.h` (Owner-Entscheid E1, 2026-09-13). Am Gerät ausstehend.
 
 ## 10. Quellen
 

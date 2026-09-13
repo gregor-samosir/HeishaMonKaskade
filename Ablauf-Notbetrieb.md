@@ -4,8 +4,8 @@ Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
 passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
-**Stand:** 2026-08-30, Firmware 3.18.0 (Heizstabschritt; 3.17.0 lief seit dem
-2026-08-28 auf allen vier Boards).
+**Stand:** 2026-09-13, Firmware 3.21.0 (Vorderhausschritt, Abschnitt 1c — am
+Gerät noch nicht abgenommen); davor 3.18.0 (Heizstabschritt, 2026-08-30).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in
@@ -25,7 +25,7 @@ trägt das ganze Dokument:
 
 Ereignis | Dauer | Wer treibt den Ablauf
 :--- | ---: | :---
-Notbetrieb einschalten, Stufe 1 (Heizen) | **80 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 1 (Heizen) | **88 s** (im Rückfall des Vorderhausschritts bis 5 min 20 s) | die Firmware, Schritt für Schritt
 Notbetrieb einschalten, Stufe 2 (Warmwasser) | **48 s** | die Firmware, Schritt für Schritt
 Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
 
@@ -33,10 +33,11 @@ Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alle
 
 # 1. Notbetrieb einschalten — Stufe 1, Rolle Heizen
 
-Zehn Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
+Elf Schritte, t = 0 ist der Klick auf den Knopf. **Schritt 1 stellt seit 3.15.0
 die Hydraulik** ([Abschnitt 1a](#1a-der-hydraulikschritt)), **Schritt 2 nimmt seit
-3.18.0 den Heizstab zurück** ([Abschnitt 1b](#1b-der-heizstabschritt)), die
-übrigen acht gehen an die Wärmepumpe.
+3.18.0 den Heizstab zurück** ([Abschnitt 1b](#1b-der-heizstabschritt)), **Schritt
+11 stellt seit 3.21.0 das Vorderhaus** ([Abschnitt 1c](#1c-der-vorderhausschritt)),
+die übrigen acht gehen an die Wärmepumpe.
 
 ## Phase 1 — Auslösen (t = 0)
 
@@ -63,12 +64,13 @@ Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
 versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
 Aufbau der Seite und dem Klick können Minuten liegen.
 
-## Phase 2 — Die Schrittfolge (0 bis 80 s)
+## Phase 2 — Die Schrittfolge (0 bis 88 s)
 
 ### Der Rhythmus eines einzelnen Schritts
 
 Jeder der neun **Set-Schritte** durchläuft dieselben Stationen; der
-Hydraulikschritt hat seinen eigenen Rhythmus und steht in Abschnitt 1a. Die
+Hydraulikschritt und der Vorderhausschritt haben ihren eigenen Rhythmus und
+stehen in den Abschnitten 1a und 1c. Die
 Zeitangaben sind relativ zum Beginn des Schritts.
 
 Zeit im Schritt | Was passiert
@@ -85,7 +87,7 @@ der sieben Kommandos hintereinander absetzt, packt sie alle in *ein* Telegramm �
 dann konkurriert das Kurvenschreiben mit dem Werks-Reset des Moduswechsels, und
 welcher gewinnt, ist unbekannt.
 
-### Die zehn Schritte
+### Die elf Schritte
 
 Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 ---: | ---: | :--- | ---: | :---
@@ -98,8 +100,9 @@ Nr | t ab Klick | Kommando | TOP | Warum an dieser Stelle
 7 | +48 s | `Z1HeatCurveOutsideLowTemp` („AT kalt") | 32 |
 8 | +56 s | `Z1HeatCurveOutsideHighTemp` („AT warm") | 31 |
 9 | +64 s | `WaterPump` = 0 (auto) | 104 | Die Steuerung lässt die Pumpe im Umpumpbetrieb auf **Fix** laufen; im Notbetrieb gehört sie zurück auf bedarfsgeregelt. **Hinter** allen Moduswechseln, damit keiner sie zurückstellt
-10 | +72 s | `Heatpump` = 1 | 0 | **Zuletzt** — erst wenn Hydraulik, Heizstab, Betriebsart, Kurve und Pumpe stehen, darf die Anlage anlaufen
-— | **+80 s** | **GRÜN** | | alle zehn Schritte bestätigt
+10 | +72 s | `Heatpump` = 1 | 0 | Erst wenn Hydraulik, Heizstab, Betriebsart, Kurve und Pumpe stehen, darf die Anlage anlaufen
+**11** | **+80 s** | **Vorderhaus: Mischer auf 50 %, Pumpe ein (KNX)** | — | **Ganz hinten**: Eine Störung am KNX darf den Notbetrieb der Wärmepumpen nicht verhindern. Bestätigt durch die Rücklesung am Aktor, siehe [Abschnitt 1c](#1c-der-vorderhausschritt)
+— | **+88 s** | **GRÜN** | | alle elf Schritte bestätigt; im Rückfall des Vorderhausschritts bis +320 s
 
 Legt jemand den KNX-Schalter mitten im Lauf auf Kühlen, bricht der Lauf sofort
 ab — noch vor jeder anderen Prüfung. Ein bestätigter Schritt ist in einer
@@ -109,7 +112,7 @@ kühlenden Anlage nichts wert.
 
 t | Was passiert
 :--- | :---
-+80 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
++88 s | **GRÜN**, Zeitstempel gesetzt, MQTT-Log „Notbetrieb GRUEN: alle Schritte zurueckgelesen"
 alle 2 s | Der Browser holt `/notbetrieb/status` und schreibt die Anzeige fort — auch die Sperre, der Knopf gibt sich also von selbst frei
 GRÜN + 15 min | Die Anzeige fällt auf BEREIT zurück und der Knopf steht wieder da. Im MQTT-Log bleibt der Lauf vollständig nachlesbar
 danach | Die Firmware sendet **nichts** nach. Die Wärmepumpe fährt ihre Kurve allein weiter
@@ -516,6 +519,129 @@ Re-Assert holt zurück.
 
 ---
 
+# 1c. Der Vorderhausschritt
+
+Er steht seit 3.21.0 **nur in der Heizen-Folge**, als elfter und letzter
+Schritt — direkt hinter `Heatpump = 1`. Wie der Hydraulikschritt spricht er
+nicht mit der Wärmepumpe, sondern mit einem Gerät im Haus: der
+KNX-IP-Schnittstelle. Recherche, Vorabtest und Entscheidungen stehen in
+[`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md), der Weg in die
+Firmware in [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md).
+
+## Warum er sein muss
+
+Das Vorderhaus hängt über einen eigenen Mischer mit Mischerpumpe am Heizkreis,
+beide am KNX-Bus. Fällt die Steuerung aus, bleiben sie auf ihrem letzten Wert —
+im Sommer oft mit **Zwangsstellung ZU, der Mischer auf 0**. Dann bekommt das
+Vorderhaus trotz laufendem Notbetrieb keine Wärme. Bedienelemente für Mischer
+und Pumpe gibt es nicht.
+
+## Warum ganz hinten
+
+Eine Störung am KNX — Schnittstelle, Bus, Einstellung — darf den Notbetrieb der
+Wärmepumpen **nicht verhindern**; der Hauptteil des Hauses bekäme sonst auch
+keine Wärme. Deshalb steht der Schritt hinter dem Einschalten (Weg A, Owner
+2026-09-12). Die Sekunden am Ende kosten nichts: Der Kompressor fährt ohnehin
+erst rund drei Minuten nach dem Einschalten hoch.
+
+## Was er tut
+
+Eine kurze Verbindung zur Schnittstelle, Quelladresse 1.1.250:
+
+Nr | Telegramm | Zweck
+---: | :--- | :---
+1 | 6/4/14 lesen | Fährt der Mischer schon? Es zählt nur die Antwort des Aktors 1.1.39
+2 | 6/4/17 = 0, 6/4/16 = 0 | beide Zwangsstellungen zurück — sie gehen vor
+3 | 6/4/13 = 128 | Mischer auf 50 %
+4 | 6/4/13 lesen | Steht der Befehl im Aktor? Keine Antwort zählt als Abweichung
+5 | bis 2 s auf Bewegung 1 warten, sonst 6/4/14 lesen, sonst 6/4/12 lesen | Wirkt der Befehl? Bewegung 1, oder der Status steht schon auf 128 ± 2
+6 | 6/4/20 = 1, Rücklesung 6/4/21 vom Pumpenaktor 1.1.60 | Pumpe ein — **immer**, auch wenn der Mischer nicht bestätigt ist
+7 | trennen | immer, auch im Fehlerfall
+
+Passt 4 oder 5 nicht, gehen alle drei Mischertelegramme **einmal** erneut
+hinaus, ebenso bei der Pumpe. Danach ist das Ergebnis ROT.
+
+**Warum zwei Belege für den Mischer:** Der Aktor speichert die Position auch
+unter Zwangsstellung — der zurückgelesene Eingang allein belegt nicht, dass er
+fährt. Bewegung 1 belegt es, oder der Status 128, wenn er schon dort steht.
+**Warum die Bewegung vor den Befehlen:** Nach einem Wechsel der Zwangsstellung
+steht sie bis zu 144 s auf 1; eine 1 nach den Befehlen stammt dann nicht sicher
+von ihnen, und es entscheidet die Endstellung.
+
+## Die Zeiten
+
+Fall | Dauer
+:--- | :---
+Regelfall: Mischer stand, fährt jetzt los | Austausch rund 0,3 s, der Schritt 8 s (Mindestwartezeit) — GRÜN nach 88 s
+Mischer steht schon auf 128 (zweiter Druck) | Austausch rund 2,5 s, der Schritt 8 s
+**Rückfall**: Mischer fuhr beim Druck schon, oder der Aktor schwieg auf die erste Frage | alle 10 s eine eigene kurze Abfrage des Status, bis 128 ± 2 — **höchstens 240 s**
+Schnittstelle stumm | 1 s, dann ROT
+
+Die 240 s sind das **eigene Timeout dieses Schritts** (Owner-Entscheid E2): 220 s
+Rückfall — bis zu 144 s laufender Endlagenlauf, der halbe Hub, Reserve — plus
+der Deckel des Austauschs. Die übrigen Schritte behalten 20 s. Im Rückfall steht
+im gelben Feld der Seite: „Die Wärmepumpen laufen bereits im Notbetrieb. Der
+Mischer im Vorderhaus fährt noch – das dauert bis zu vier Minuten."
+
+## Warum nur kurze Verbindungen
+
+Ein offener Tunnel muss jedes Bustelegramm binnen 1 s quittieren, sonst trennt
+die Schnittstelle. Die MQTT-Wiederverbindung blockiert `loop()` im
+Notbetriebsfall aber bis zu 2 s, wiederholt. Deshalb ist jede Verbindung ein
+geschlossener Austausch innerhalb eines Aufrufs. Er blockiert `loop()` im
+Regelfall rund 0,3 s, **höchstens 20,5 s** — nur wenn die Schnittstelle
+quittiert, aber kein Aktor antwortet. Vertretbar aus demselben Grund wie beim
+Hydraulikschritt: Die Wärmepumpe ist zu diesem Zeitpunkt eingeschaltet und
+bestätigt, kein Kommando ist unterwegs, verloren geht höchstens eine Leserunde.
+
+## Die Fehlerfälle
+
+Lage | Was die Seite zeigt
+:--- | :---
+keine oder ungültige Adresse in den Einstellungen | GRÜN und darunter das orange Feld — sofort
+Schnittstelle antwortet nicht, alle Tunnel belegt, Quittung bleibt aus | ebenso, nach 1 bis 20 s
+Mischer bestätigt nicht (Zwangsstellung klemmt, Aktor stumm) | ebenso; die Pumpe ist trotzdem eingeschaltet
+Rückfall: die Endstellung kommt nicht binnen 240 s | ebenso, nach 240 s
+Anlage meldet mitten im Schritt Kühlen | ROT mit dem Kühl-Grund, wie in jedem Schritt
+
+Das orange Feld:
+
+> **Vorderhaus nicht umgestellt**
+> Die Wärmepumpen laufen im Notbetrieb, nur das Vorderhaus ließ sich nicht
+> umstellen.
+> Der Mischer im Vorderhaus bleibt so eingestellt, wie die Steuerung es zuletzt
+> vorgegeben hat. Ein zweiter Druck auf diesen Knopf kann eventuell die
+> Einstellungen vornehmen. Wird es im Vorderhaus zu kalt oder zu warm, lies
+> bitte die Anleitungen zum Mischer in den Unterlagen zum Notbetrieb.
+
+Darüber steht das normale GRÜN, denn die Wärmepumpen **sind** im Notbetrieb
+(Owner-Entscheid 2026-09-13). Intern ist der Lauf ROT mit eigenem Grund — so
+kommt der Knopf zurück, zu dem der zweite Satz einlädt. Im MQTT-Log und im
+Logring steht „Notbetrieb ROT: Vorderhaus …" mit dem Grund.
+
+## Die Einstellung
+
+Einziges Feld: **`knx_schnittstelle`**, eine IP, wahlweise mit `:Port`
+(Standard 3671) — kein Gerätename. Gruppen- und Aktoradressen stehen fest in
+[`src/knxtunnel.h`](src/knxtunnel.h) (Owner-Entscheid E1).
+
+> **Wird die Anlage in der ETS umprojektiert und ändert sich eine der
+> Gruppenadressen 6/4/12 bis 6/4/21 oder eine Aktoradresse, braucht es eine
+> neue Firmware.** Sonst endet der Schritt ROT, und im Log steht, was nicht
+> geantwortet hat.
+
+## Im Test mit lebender Steuerung
+
+Wie beim Hydraulikschritt lässt sich der Schritt mit lebender Steuerung nur auf
+**Ausführung** prüfen, nicht auf Dauerwirkung: Steht `HKM_ForcedState_Input` auf
+Auto, regelt `HKMregelung.js` die Position beim nächsten Regelschritt wieder
+weg; steht eine Zwangsstellung an, setzt die Steuerung sie erst beim nächsten
+Wechsel neu. Und openknx beantwortet das Lesen von 6/4/12 und 6/4/14 aus seinem
+Zwischenspeicher — die Firmware zählt diese Antworten nicht, im Telnet-Log
+stehen sie als „fremde Antworten".
+
+---
+
 # 2. Notbetrieb einschalten — Stufe 2, Rolle Warmwasser
 
 Derselbe Automat, dieselben Regelzeiten, nur eine kürzere Folge: Warmwasser
@@ -534,7 +660,8 @@ Nr | t ab Klick | Kommando | TOP | Anmerkung
 **Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
 Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
 die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
-liegt hier bei 120 s statt 200 s, weil er sich aus der Schrittzahl ableitet.
+liegt hier bei 120 s statt 440 s: Er ist die Summe der Schritt-Timeouts, und den
+Vorderhausschritt mit seinen 240 s gibt es nur in der Heizen-Folge.
 
 ---
 
@@ -587,6 +714,24 @@ t ab Reconnect | Akteur | Was passiert
 danach | [`test/kurven_sync.py`](test/kurven_sync.py) | Kurvenpunkte wiederhergestellt — **nicht** durch die Firmware
 GRÜN + 15 min | Firmware | Die Anzeige fällt auf BEREIT. Das ist der **einzige** Vorgang, mit dem HeishaMon den Notbetrieb selbst „beendet"
 
+## Das Vorderhaus kommt nicht von selbst zurück (Stand 3.21.0)
+
+Auch Mischer und Pumpe des Vorderhauses stellt die Firmware **nicht** zurück.
+Anders als bei den Wärmepumpen holt die zurückkehrende Steuerung sie heute aber
+auch **nicht zuverlässig** zurück — der Re-Assert für die KNX-Befehle in
+`nodered-flows` ist noch nicht gebaut ([Arbeitsplan](Arbeitsplan-KNX-Vorderhaus.md),
+„Nicht in diesem Plan"):
+
+* **Pumpe:** Die Kaskaden Logik schaltet `MischerPumpe_Schalten` nur bei
+  Ereignissen. Sie bleibt ein, bis das nächste Ereignis kommt.
+* **Zwangsstellung:** Die Steuerung setzt sie erst beim nächsten Wechsel neu.
+* **Position:** `HKMregelung.js` übernimmt beim nächsten Regelschritt mit
+  Änderung wieder — sofern keine Zwangsstellung ansteht.
+
+Bis der Re-Assert steht, kann das Vorderhaus nach einem Notbetrieb also eine
+Weile auf 50 % mit laufender Pumpe bleiben. Das ist unkritisch, aber kein
+Normalzustand.
+
 ---
 
 # 4. Die Messbelege
@@ -598,9 +743,10 @@ Abschnitt 10.
 **Sie stammen aus der Zeit vor dem Hydraulikschritt** (Firmware 3.12.0), also
 aus sieben- bzw. dreischrittigen Folgen. Ihre Aussage trägt trotzdem: Was sie
 belegen, ist der Rhythmus von 8 s je Schritt und die Herkunft der Kurvenwerte
-aus dem RAM — daran haben weder 3.15.0 noch 3.18.0 etwas geändert. Die
-Gesamtzeiten liegen seither um drei Schritte höher (80 s statt 56 s, 48 s statt
-24 s) — Hydraulik am Anfang, Heizstab dahinter, Umwälzpumpe vor dem Einschalten.
+aus dem RAM — daran haben weder 3.15.0 noch 3.18.0 noch 3.21.0 etwas geändert.
+Die Gesamtzeiten liegen seither höher (Heizen 88 s statt 56 s, Warmwasser 48 s
+statt 24 s) — Hydraulik am Anfang, Heizstab dahinter, Umwälzpumpe vor dem
+Einschalten, an Stufe 1 das Vorderhaus zuletzt.
 
 Lauf | Datum | Was er belegt | Ergebnis
 :--- | :--- | :--- | :---
