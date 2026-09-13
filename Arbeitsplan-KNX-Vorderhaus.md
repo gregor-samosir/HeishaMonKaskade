@@ -16,6 +16,14 @@
 > **2026-09-13 abends:** Schritt 8 erledigt, der Testzugang für Schritt 9
 > gebaut. **Nächste Session: Abschnitt „Übergabe für die Test-Session“
 > direkt hierunter.**
+>
+> **2026-09-13 spät: Schritt 9 erledigt.** Alle 13 Simulatorläufe und drei
+> Läufe an Mischer und Pumpe (Regelfall, zweiter Druck, Rückfall) wie
+> erwartet; die Anlage ist zurückgestellt, h1b trägt wieder den Stufen-Build
+> 3.21.0 mit `knx_schnittstelle = 192.168.2.127`. Protokoll in
+> `Ablauf-Notbetrieb.md`, Abschnitt 1c. **Offen: Schritt 10** — Merge und
+> Rollout. Ob dabei zusätzlich ein ganzer Lauf an H1 stattfindet,
+> entscheidet der Owner.
 
 ## Übergabe für die Test-Session (Schritt 9)
 

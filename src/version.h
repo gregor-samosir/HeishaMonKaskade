@@ -77,9 +77,15 @@
 //         Rueckfall. Beide Tests reissen nachweislich bei eingebauten Fehlern
 //         (ctrl1, Quellenfilter, Sequenzregel, Rueckfall, festes Timeout,
 //         Deckel). Das Seiten-JavaScript mit node geprueft und gegen
-//         nachgebildete Statusantworten durchgespielt. AM GERAET AUSSTEHEND:
-//         Pruefling gegen den Simulator, dann Mischer und Pumpe an der Anlage
-//         (Arbeitsplan, Schritt 9).
+//         nachgebildete Statusantworten durchgespielt.
+//
+//         AM GERAET (2026-09-13, Pruefling h1b mit Testzugang): alle 13
+//         Simulatorlaeufe der Soll-Tabelle (Arbeitsplan, Schritt 9) wie
+//         erwartet. An der Anlage, openknx lief mit und wurde verworfen:
+//         schneller Weg ab 255 GRUEN nach 0,4 s (Status 128 nach 59,6 s),
+//         zweiter Druck GRUEN nach 3,4 s, Rueckfall im Nachlauf der Endlage
+//         GRUEN nach 71,3 s - der Aktor nimmt den Befehl auch im Nachlauf
+//         an. Protokoll in Ablauf-Notbetrieb.md, Abschnitt 1c.
 //
 //         NICHT IN DIESER VERSION: der Re-Assert fuer die KNX-Befehle in
 //         nodered-flows - ohne ihn holt die zurueckkehrende Steuerung Mischer

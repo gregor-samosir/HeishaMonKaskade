@@ -5,7 +5,8 @@ passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
 **Stand:** 2026-09-13, Firmware 3.21.0 (Vorderhausschritt, Abschnitt 1c — am
-Gerät noch nicht abgenommen); davor 3.18.0 (Heizstabschritt, 2026-08-30).
+Prüfling und an Mischer und Pumpe abgenommen, noch nicht ausgerollt); davor
+3.18.0 (Heizstabschritt, 2026-08-30).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in
@@ -573,7 +574,7 @@ von ihnen, und es entscheidet die Endstellung.
 Fall | Dauer
 :--- | :---
 Regelfall: Mischer stand, fährt jetzt los | Austausch rund 0,3 s, der Schritt 8 s (Mindestwartezeit) — GRÜN nach 88 s
-Mischer steht schon auf 128 (zweiter Druck) | Austausch rund 2,5 s, der Schritt 8 s
+Mischer steht schon auf 128 (zweiter Druck) | Austausch rund 2,5 s (gemessen: 2,1 s; mit schon laufender Pumpe 3,4 s), der Schritt 8 s
 **Rückfall**: Mischer fuhr beim Druck schon, oder der Aktor schwieg auf die erste Frage | alle 10 s eine eigene kurze Abfrage des Status, bis 128 ± 2 — **höchstens 240 s**
 Schnittstelle stumm | 1 s, dann ROT
 
@@ -639,6 +640,40 @@ weg; steht eine Zwangsstellung an, setzt die Steuerung sie erst beim nächsten
 Wechsel neu. Und openknx beantwortet das Lesen von 6/4/12 und 6/4/14 aus seinem
 Zwischenspeicher — die Firmware zählt diese Antworten nicht, im Telnet-Log
 stehen sie als „fremde Antworten".
+
+## Am Gerät abgenommen — 2026-09-13
+
+Am Prüfling `h1b` mit dem Prüflings-Build: Dessen Testzugang
+`/vorderhaus/pruefen` führt allein diesen Schritt aus, mit demselben Code und
+demselben Rückfall — ohne Wärmepumpe, Sperre und Hydraulik-Switch. Die
+produktiven Builds enthalten ihn nicht; am zurückgeflashten Board antwortet die
+Route mit 404.
+
+**Gegen den Simulator** (`test/knx_tunnel.py simulator`): alle 13 Läufe der
+Soll-Tabelle im Arbeitsplan, Schritt 9, wie erwartet — vom Regelfall (79 ms
+Austausch) über den Rückfall (GRÜN bei der Ankunft nach 60,1 s) bis zu
+belegten Tunneln, stummer Schnittstelle und leerer Einstellung.
+
+**An Mischer und Pumpe**, jeder Lauf einzeln vom Owner freigegeben. Die
+Anlage stand im Modus „Nur Warmwasser“ ohne Wärmeanforderung, der Regler war
+gesperrt (`HKM_ForcedState_Input` = 1), openknx lief mit. Ausgangslage:
+Zwangsstellung AUF, Eingang 45, Status 255, Pumpe aus. Gegenprobe über die
+openknx-Datenpunkte und den ETS-Busmonitor.
+
+Lauf | Ergebnis
+:--- | :---
+Regelfall, Mischer ab 255 | **GRÜN nach 0,4 s.** Bewegung 1 kam 95 ms nach dem Positionsbefehl (openknx), Pumpe spontan nach 71 ms. Status 128 nach 59,6 s. Eine Antwort von openknx verworfen
+Zweiter Druck, Mischer auf 128 | **GRÜN über den Status nach 3,4 s.** Rund 1 s mehr als im Simulator: Die Pumpe lief schon, meldet auf denselben Wert nicht spontan und wird nachgelesen
+Rückfall | Zwangsstellung AUF gesetzt, gedrückt im Nachlauf in die Endlage (Status schon 255, Bewegung noch 1). Die Firmware las „vorher 1“ und ging in den Rückfall. **Der Aktor nimmt den Befehl auch im Nachlauf an:** Bewegung 0, nach 2 s wieder 1, Status 128 nach 59,6 s. **GRÜN nach 71,3 s**, bei der ersten Abfrage nach der Ankunft
+
+Der Rückfall-Lauf wurde bewusst erst nach Status 255 ausgelöst: Während einer
+Fahrt steht die alte Stellung im Status. Ein Druck in den ersten 60 s nach
+dem Wechsel von 128 auf AUF hätte „128“ gelesen und GRÜN gemeldet, ohne dass
+die Abfrage die Ankunft je gesehen hätte.
+
+Zurückgestellt in drei einzelnen Aufrufen, jeder mit Busbestätigung:
+AUF = 1, Eingang = 45, Pumpe = 0. Endstand per `lesen --alle` und openknx
+wie vorgefunden; der Nachlauf in die Endlage dauerte wieder 144 s.
 
 ---
 
