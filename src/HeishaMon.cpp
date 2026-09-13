@@ -73,6 +73,20 @@ char mqtt_password[CONFIG_FIELD_LEN];
 /*****************************************************************************/
 char hydraulik_switch[CONFIG_FIELD_LEN] = "";
 
+/*****************************************************************************/
+/* Die Adresse der KNX-IP-Schnittstelle (seit 3.21.0)                        */
+/*                                                                           */
+/* Die einzige KNX-Einstellung des Vorderhausschritts (Owner-Entscheid E1,   */
+/* 2026-09-13): eine IP, wahlweise mit ":Port". Gruppen- und Aktoradressen   */
+/* stehen fest in knxtunnel.h - sie aendern sich nur mit ETS-Arbeit, und ein */
+/* Tippfehler in einem Feld schickte Schreibtelegramme an eine fremde        */
+/* Gruppe.                                                                   */
+/*                                                                           */
+/* Leer oder ungueltig heisst "nicht eingerichtet": Der Schritt endet ROT,   */
+/* er entfaellt nicht still (Owner 2026-09-12).                              */
+/*****************************************************************************/
+char knx_schnittstelle[CONFIG_FIELD_LEN] = "";
+
 // log and debug
 bool outputMqttLog = true;   // toggle to write logmessages to mqtt (true) or telnetstream (false)
 bool outputTelnetLog = true; // enable/disable telnet DEBUG
