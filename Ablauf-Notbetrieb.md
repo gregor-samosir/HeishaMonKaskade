@@ -5,7 +5,8 @@ passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
 **Stand:** 2026-09-13, Firmware 3.21.0 (Vorderhausschritt, Abschnitt 1c — am
-Prüfling und an Mischer und Pumpe abgenommen, noch nicht ausgerollt); davor
+Prüfling und an Mischer und Pumpe abgenommen, am 2026-09-13 auf beiden Stufen
+ausgerollt); davor
 3.18.0 (Heizstabschritt, 2026-08-30).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —

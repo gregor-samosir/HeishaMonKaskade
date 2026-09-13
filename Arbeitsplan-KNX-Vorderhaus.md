@@ -21,9 +21,17 @@
 > Läufe an Mischer und Pumpe (Regelfall, zweiter Druck, Rückfall) wie
 > erwartet; die Anlage ist zurückgestellt, h1b trägt wieder den Stufen-Build
 > 3.21.0 mit `knx_schnittstelle = 192.168.2.127`. Protokoll in
-> `Ablauf-Notbetrieb.md`, Abschnitt 1c. **Offen: Schritt 10** — Merge und
-> Rollout. Ob dabei zusätzlich ein ganzer Lauf an H1 stattfindet,
-> entscheidet der Owner.
+> `Ablauf-Notbetrieb.md`, Abschnitt 1c.
+>
+> **Ergebnis (2026-09-13 abends): ausgerollt.** Schritt 10 erledigt — nach
+> `main` gemergt, Tag `v3.21.0`, per OTA auf H1 und H2. Abnahme mit
+> `tablesnap.py`: Tabellenaufbau auf beiden Stufen identisch, abweichend nur
+> je ein laufender Messwert; Notbetriebsknopf bereit (H1 11 Schritte, H2 6).
+> An H1 ist `knx_schnittstelle = 192.168.2.127` gesetzt; H2 braucht sie
+> nicht (Rolle Warmwasser). Ein ganzer Notbetriebslauf an H1 entfiel
+> (Owner-Entscheid). **Offen außerhalb dieses Repos:** die Anleitung zum
+> Mischer (Owner), danach die Arbeitsanweisung für den KNX-Re-Assert in
+> `nodered-flows` (Claude).
 
 ## Übergabe für die Test-Session (Schritt 9)
 
