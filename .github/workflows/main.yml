@@ -64,9 +64,15 @@ jobs:
       #
       # Der Schlüssel hängt an platformio.ini, weil dort steht, welche
       # Plattformen und Bibliotheken gebraucht werden. Zwei Folgen davon:
-      # - Die Plattformen sind dort NICHT auf eine Version gepinnt, ein
-      #   Toolchain-Update erreicht die CI also erst mit der nächsten Änderung
-      #   an platformio.ini.
+      # - Die Plattform ist seit 2026-09-13 auf ein festes pioarduino-Release
+      #   gepinnt. Ein Plattform-Update ist damit immer eine Änderung an
+      #   platformio.ini und bekommt einen neuen Cache-Schlüssel. Vorher stand
+      #   dort nur "espressif32", und die CI zog damit das offizielle
+      #   espressif32 7.0.1 (Core 2.0.17), während der Entwicklungsrechner
+      #   pioarduino 55.3.311 (Core 3.3.11) nahm - die CI prüfte also eine
+      #   andere Firmware als die geflashte. Die Bibliotheken installiert die
+      #   CI bei jedem Lauf neu aus den ^-Bereichen; am 2026-09-13 stimmten sie
+      #   mit dem Entwicklungsrechner überein.
       # - Bei GitHubs Grenze von 10 GB je Repository passen rund acht solcher
       #   Einträge; ältere verdrängt GitHub selbst.
       - name: PlatformIO-Cache
