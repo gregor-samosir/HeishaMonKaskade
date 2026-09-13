@@ -800,6 +800,29 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_HYDRAULIK_DANACH "Danach diesen Knopf noch einmal drücken. An der Wärmepumpe ist nichts verstellt worden."
 
 /*****************************************************************************/
+/* Die Meldungen des Vorderhausschritts (3.21.0)                             */
+/*                                                                           */
+/* Beide Saetze sind vom Owner vorgegeben: der erste am 2026-09-12, der      */
+/* Zusatz am 2026-09-13 (E3). Sie stehen in einem ORANGEN Hinweisfeld unter  */
+/* dem normalen GRUEN (Owner-Entscheid 2026-09-13): Die Waermepumpen sind im */
+/* Notbetrieb, das ist gruen - nur das Vorderhaus braucht Aufmerksamkeit,    */
+/* und Orange heisst auf dieser Seite schon "hier ist etwas zu tun" (Sperre, */
+/* Verbindung). Intern ist der Lauf ROT mit eigenem Grund: So kommt der      */
+/* Knopf zurueck, zu dem der Zusatz einlaedt.                                */
+/*                                                                           */
+/* Die "Anleitungen zum Mischer" muessen in den Notbetriebsunterlagen stehen,*/
+/* bevor diese Firmware ausgerollt wird - Arbeitsplan-KNX-Vorderhaus.md.     */
+/*                                                                           */
+/* Der dritte Satz gilt waehrend des Rueckfalls der Regel A: Der Mischer     */
+/* fuhr beim Druck schon, und die Endstellung kann bis zu vier Minuten       */
+/* dauern. Ohne ihn stuende dort "bis zu anderthalb Minuten", und wer        */
+/* laenger wartet als angekuendigt, glaubt an einen Fehler.                  */
+/*****************************************************************************/
+#define NB_TXT_VORDERHAUS "Die Wärmepumpen laufen im Notbetrieb, nur das Vorderhaus ließ sich nicht umstellen."
+#define NB_TXT_VORDERHAUS_DANACH "Der Mischer im Vorderhaus bleibt so eingestellt, wie die Steuerung es zuletzt vorgegeben hat. Ein zweiter Druck auf diesen Knopf kann eventuell die Einstellungen vornehmen. Wird es im Vorderhaus zu kalt oder zu warm, lies bitte die Anleitungen zum Mischer in den Unterlagen zum Notbetrieb."
+#define NB_TXT_VORDERHAUS_FAEHRT "Die Wärmepumpen laufen bereits im Notbetrieb. Der Mischer im Vorderhaus fährt noch – das dauert bis zu vier Minuten."
+
+/*****************************************************************************/
 /* Die Kurvenwarnung - ein Hinweis, keine Sperre                             */
 /*                                                                           */
 /* Die Regel steht in notbetrieb.h: Eine Heizkurve faellt mit steigender     */
@@ -824,6 +847,10 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 // neu laedt, saehe die Sperre ein zweites Mal.
 static const char notbetriebJS[] PROGMEM =
     "<script>"
+    // Der GRUEN-Text steht einmal: Er gilt beim Erfolg UND ueber dem Hinweis
+    // zum Vorderhaus (3.21.0) - dort sind die Waermepumpen ebenso umgestellt.
+    // Der Wortlaut ist vom Familienrat vorgegeben (2026-08-29), siehe unten.
+    "var nbGruen='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';"
     "function nbFehlt(m){var l='';for(var i=0;i<nbNamen.length;i++){if(m&(1<<i))l+='<li>'+nbNamen[i]+'</li>';}return l;}"
     "function nbSperrtext(sp,m){"
     "if(sp==2)return '<h3>" NB_TXT_NUR_HEIZEN "</h3><p>" NB_TXT_HEIZEN_HINWEIS "</p>';"
@@ -839,16 +866,22 @@ static const char notbetriebJS[] PROGMEM =
     // Route (verbindungJS). Ein Einschub in der Mitte haette sie verschoben.
     "var kw=parseInt(p[7]);"
     "var ag=parseInt(p[8]);"
+    // Index 9 (3.21.0): 1 = der Vorderhausschritt wartet im Rueckfall auf die
+    // Endstellung des Mischers. Fehlt das Feld, ist parseInt NaN, also nicht 1.
+    "var vh=parseInt(p[9]);"
     // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
     // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
     "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     // "bis zu anderthalb Minuten" deckt beide Rollen ab: Der Heizen-Lauf
-    // braucht seit 3.18.0 80 s (zehn Schritte), der Warmwasser-Lauf 48 s. Die
+    // braucht seit 3.21.0 88 s (elf Schritte), der Warmwasser-Lauf 48 s. Die
     // Angabe steht bewusst ueber der laengeren der beiden - wer laenger wartet
-    // als angekuendigt, glaubt an einen Fehler, wo keiner ist.
-    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. Bitte warten, das dauert bis zu anderthalb Minuten.</p>';}"
+    // als angekuendigt, glaubt an einen Fehler, wo keiner ist. Aus demselben
+    // Grund steht im Rueckfall des Vorderhausschritts (vh) der eigene Satz:
+    // Dort koennen es bis zu vier Minuten werden.
+    "if(z==1){e.className='w3-panel w3-yellow';e.innerHTML='<h3>Konfiguration Notbetrieb läuft</h3><p>Schritt '+s+' von '+n+'. '"
+    "+(vh==1?'" NB_TXT_VORDERHAUS_FAEHRT "':'Bitte warten, das dauert bis zu anderthalb Minuten.')+'</p>';}"
     // Der Wortlaut bei GRUEN ist vom Familienrat vorgegeben (2026-08-29).
     // Der frueher hier stehende KNX-Hinweis ist bewusst raus: Wer im Notbetrieb
     // vor der Seite steht, soll nur zwei Dinge wissen - wo die Temperatur
@@ -859,7 +892,12 @@ static const char notbetriebJS[] PROGMEM =
     // und wird nur noch fuer Wartung geoeffnet). "GRUEN, aber 0 Hz mangels
     // Freigabe" ist damit der Wartungsfall und kein Regelfall mehr - er steht
     // in Ablauf-Notbetrieb.md und Analyse-Relais-statt-KNX.md Abschnitt 13.
-    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';}"
+    "else if(z==2){e.className='w3-panel w3-green';e.innerHTML=nbGruen;}"
+    // Das Vorderhaus liess sich nicht umstellen (Grund 4): Die Waermepumpen
+    // laufen, also das normale GRUEN - darunter der Hinweis in Orange. Das
+    // aeussere Feld traegt dann keine eigene Farbe, die beiden inneren schon.
+    "else if(z==3&&ag==4){e.className='';e.innerHTML='<div class=\"w3-panel w3-green\">'+nbGruen+'</div>"
+    "<div class=\"w3-panel w3-orange\"><h3>Vorderhaus nicht umgestellt</h3><p>" NB_TXT_VORDERHAUS "</p><p>" NB_TXT_VORDERHAUS_DANACH "</p></div>';}"
     // Bei ROT entscheidet der Abbruchgrund, was zu tun ist: Bleibt die
     // Hydraulik auf 2-stufig, fuehrt der Weg ueber den Schalter im Waschraum
     // und NICHT ueber das Bedienfeld der Waermepumpe - dort ist nichts
@@ -1073,7 +1111,10 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
   // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere der
   // teurere Weg. Format nach der Erweiterung:
-  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund;Vorderhaus
+  // Das letzte Feld (3.21.0) ist 1, solange der Vorderhausschritt im Rueckfall
+  // auf die Endstellung des Mischers wartet - die Seite sagt dann, dass die
+  // Waermepumpen schon laufen und nur der Mischer noch faehrt.
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))
   {
@@ -1093,9 +1134,10 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
     // Route an den Indizes 5 und 6, ein Einschub in der Mitte haette beide
     // Seiten verschoben. Jedes weitere Feld gehoert aus demselben Grund ans
     // Ende.
-    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u",
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u;%u",
                    (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung(),
-                   (unsigned)notbetrieb_abbruchgrund());
+                   (unsigned)notbetrieb_abbruchgrund(),
+                   notbetrieb_vorderhaus_ausstehend() ? 1u : 0u);
   }
 
   httpServer->send(200, "text/plain", status);

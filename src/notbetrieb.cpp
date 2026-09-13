@@ -958,6 +958,21 @@ NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void)
 }
 
 /*****************************************************************************/
+/* Wartet der Vorderhausschritt gerade auf die Endstellung? (3.21.0)         */
+/*                                                                           */
+/* Fuer die Seite: Im Rueckfall steht bis zu vier Minuten "laeuft", und sie  */
+/* sagt dann dazu, dass die Waermepumpen schon laufen. Alle drei Bedingungen */
+/* zusammen, damit ein liegengebliebenes Flag aus einem abgebrochenen Lauf   */
+/* nie auf der Seite erscheint.                                              */
+/*****************************************************************************/
+bool notbetrieb_vorderhaus_ausstehend(void)
+{
+  const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
+  return vorderhausAusstehend && notbetriebLauf.zustand == NOTBETRIEB_LAEUFT && s &&
+         s->typ == NB_SCHRITT_VORDERHAUS;
+}
+
+/*****************************************************************************/
 /* Kurzstatus fuer die Statusroute: Zustand;Schritt;Schritte;fehlend;Sperre  */
 /*                                                                           */
 /* Bewusst maschinenlesbar und kurz - die Seite fragt ihn alle zwei Sekunden */

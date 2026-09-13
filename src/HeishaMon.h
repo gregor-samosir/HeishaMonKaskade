@@ -134,6 +134,9 @@ NotbetriebKurvenWarnung notbetrieb_kurvenwarnung(void);
 // Hydraulik-Grund fuehrt der Weg zurueck ueber den Schalter im Waschraum,
 // nicht ueber die Firmware.
 NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void);
+// true, solange der Vorderhausschritt im Rueckfall auf die Endstellung des
+// Mischers wartet - die Seite sagt dann, dass die Waermepumpen schon laufen
+bool notbetrieb_vorderhaus_ausstehend(void);
 
 // Adresse des Tasmota-Switch fuer die Hydraulik (config.json, Feld
 // "hydraulik_switch"). Leer heisst "nicht eingerichtet" - dann bricht der
