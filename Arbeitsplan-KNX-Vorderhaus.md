@@ -12,6 +12,65 @@
 > sind die Schritte 1–7 erledigt (Firmware 3.21.0, alle Hosttests grün);
 > offen sind Schritt 8 (alle Envs), 9 (Prüfling, Anlage) und 10 (Merge,
 > Rollout).
+>
+> **2026-09-13 abends:** Schritt 8 erledigt, der Testzugang für Schritt 9
+> gebaut. **Nächste Session: Abschnitt „Übergabe für die Test-Session“
+> direkt hierunter.**
+
+## Übergabe für die Test-Session (Schritt 9)
+
+**Lage.** Branch `knx-vorderhaus` ist ausgecheckt, neun Commits über `main`,
+nichts gepusht, nichts geflasht. Firmware 3.21.0, Schritte 1–8 erledigt; die
+Nachweise stehen in den Commit-Messages und in `src/version.h`. Die Session
+dafür wurde getrennt, um einem Auto-Compact zuvorzukommen — hier steht alles,
+was sie braucht.
+
+**Das Board: h1b** (Backup-Board der Stufe 1), vom Owner per USB an den Mac
+gehängt. Solange es Prüfling ist, hat Stufe 1 keinen Notanker.
+
+1. **Port prüfen:** `~/.platformio/penv/bin/pio device list`. Das Board
+   erscheint als `/dev/cu.usbmodem…`; `platformio_user_env.ini` erwartet
+   `/dev/cu.usbmodem11101`. Weicht der Name ab, beim Flashen
+   `--upload-port` angeben — die Datei nicht ändern.
+2. **Flashen:** `pio run -e heishamon_esp32_usb -t upload` — Prefix
+   `panasonic_heat_pump32`, mit Testzugang. Der MQTT-Port in der
+   `config.json` bleibt **1884**: Der Test braucht keinen Broker, das Board
+   bleibt doppelt gesperrt (`test/README.md`, „Prüfstand aufsetzen“).
+3. **Adresse des Prüflings:** DHCP; mDNS `HeishaMon32_h1b.local`, sonst im
+   Router. Achtung: `heishamon_esp32_ota` zielt auf `heishamon32.local`,
+   nicht auf h1b — zum Nachflashen USB nehmen oder `--upload-port` setzen.
+4. **Einstellung:** In `/settings` des Prüflings `knx_schnittstelle =
+   192.168.2.142` (LAN-Adresse des Macs, en0, am 2026-09-13 — vorher mit
+   `ipconfig getifaddr en0` gegenprüfen). Speichern startet neu. Das Feld
+   des Hydraulik-Switch nicht anfassen; der Testzugang benutzt es nicht.
+5. **Simulator auf dem Mac:** `python3 -u test/knx_tunnel.py simulator
+   192.168.2.142 [--start …] [--fehler …]` im Hintergrund, Ausgabe in eine
+   Datei; er läuft bis Strg-C. Je Lauf neu starten, damit die Ausgangslage
+   stimmt.
+6. **Lauf anstoßen und ablesen:** `curl -u notbetrieb:<Passwort> -X POST
+   http://<Prüfling>/vorderhaus/pruefen`, Stand mit demselben Aufruf ohne
+   `-X POST`. Das Passwort ist `HEISHA_NOTBETRIEB_PASSWORD` aus
+   `platformio_user_env.ini` — nicht in Ausgaben oder Logs schreiben.
+   Zeilen unter `/log`, Einzelheiten („Vorderhaus Versuch …“, „fremde
+   Antworten“) per `test/telnet_mitschnitt.py <Prüfling> <Sekunden>`.
+7. **Reihenfolge:** erst die 13 Simulator-Läufe aus der Soll-Tabelle in
+   Schritt 9. Jede Abweichung vom Soll ist ein Befund — erst verstehen, dann
+   weiter. Danach `knx_schnittstelle = 192.168.2.127` und die Läufe am echten
+   Mischer: vorher den Ist-Zustand lesen (`knx_tunnel.py lesen 192.168.2.127
+   6/4/12 6/4/13 6/4/14 6/4/16 6/4/17 6/4/21 --alle`), **jeden Lauf einzeln
+   ankündigen und vom Owner freigeben lassen**, `knx_tunnel.py mischer …
+   --mithoeren` oder der ETS-Busmonitor als Gegenprobe. Freigegeben, solange
+   die Anlage im Modus „Nur Warmwasser“ ohne Wärmeanforderung steht.
+   Zurückstellen wie am 2026-09-12, jeder Eingriff einzeln.
+8. **Rückgabe von h1b — Owner-Entscheid offen:** Produktiv ist 3.20.0
+   (`main`); der Branch baut 3.21.0. Entweder 3.20.0 aus einem Worktree am
+   Tag `rettungsanker-vor-knx-vorderhaus-2026-09-13` aufspielen, oder — wenn
+   der Rollout von 3.21.0 direkt folgt — `heishamon_esp32_h1_usb` vom Branch
+   samt `knx_schnittstelle = 192.168.2.127`. Danach `/settings` gegenprüfen:
+   Port 1884, Hostname `HeishaMon32_h1b`.
+9. **Danach:** Ergebnisse in `version.h` (Nachweis), `Ablauf-Notbetrieb.md`
+   Abschnitt 1c („am Gerät abgenommen“) und hier im Kopf. Dann Schritt 10 —
+   erst, wenn die Anleitung zum Mischer in den Notbetriebsunterlagen steht.
 
 ## Worum es geht
 
