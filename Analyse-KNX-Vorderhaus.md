@@ -39,11 +39,12 @@ Mischer (Abschnitt 8). Referenz ist `knx_tunnel.py` 1.6.0,
 **Umgesetzt in Firmware 3.21.0 (2026-09-13, Branch `knx-vorderhaus`)** nach
 [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md); die
 Entscheidungen beim Umsetzen (E1–E4 und drei Folgepunkte) stehen dort. Am
-Gerät noch nicht abgenommen.
+Gerät abgenommen am 2026-09-13 ([`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md),
+Abschnitt 1c).
 
-**Offen:** die Abnahme am Prüfling und an Mischer und Pumpe und die Anleitung
-zum Mischer in den Notbetriebsunterlagen. Der Re-Assert für die KNX-Befehle in
-`nodered-flows` steht seit 2026-09-14 (Abschnitt 9).
+**Offen:** die Anleitung zum Mischer in den Notbetriebsunterlagen. Die Abnahme
+am Prüfling und an Mischer und Pumpe ist am 2026-09-13 erfolgt, der Re-Assert
+für die KNX-Befehle in `nodered-flows` steht seit 2026-09-14 (Abschnitt 9).
 
 ---
 
@@ -679,7 +680,8 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md). Abweichend
   vom Entwurf hier gibt es nur **eine** Einstellung, die Adresse der
   Schnittstelle; Quelle, Gruppen- und Aktoradressen stehen fest in
-  `src/knxtunnel.h` (Owner-Entscheid E1, 2026-09-13). Am Gerät ausstehend.
+  `src/knxtunnel.h` (Owner-Entscheid E1, 2026-09-13). Am Gerät abgenommen am
+  2026-09-13 (`Ablauf-Notbetrieb.md`, Abschnitt 1c).
 
 ## 10. Quellen
 
