@@ -798,11 +798,12 @@ bei den Wärmepumpen:
 
 **An der Anlage belegt am 2026-09-14:** Nach der Folge dieses Schritts
 (`test/knx_tunnel.py mischer --quelle 1.1.250`) war beim ersten Takt die Pumpe
-wieder aus — der Pumpenaktor meldete 61 ms nach dem Befehl — und die
-Zwangsstellung AUF wieder gesetzt: Bewegung nach 79 ms, Endstellung nach
+wieder aus — der Pumpenaktor meldete 32 ms nach dem Befehl — und die
+Zwangsstellung AUF wieder gesetzt: Bewegung nach 62 ms, Endstellung nach
 59,7 s. Nach der Rückkehr der Steuerung steht das Vorderhaus also nach
 **höchstens fünf Minuten** wieder im Normalzustand. Protokoll:
-`nodered-flows/TODO-KNX-Vorderhaus.md`, Teil 2.
+`nodered-flows/TODO-KNX-Vorderhaus.md`, Teil 2; Zeiten aus dem
+Busmonitor-Mitschnitt (`nodered-flows/tests/knx-reassert/`).
 
 Voraussetzung, am selben Tag gemessen: openknx schickt auch einen
 unveränderten Wert auf den Bus, und eine wiederholte Zwangsstellung lässt den
