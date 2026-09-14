@@ -41,9 +41,9 @@ Mischer (Abschnitt 8). Referenz ist `knx_tunnel.py` 1.6.0,
 Entscheidungen beim Umsetzen (E1–E4 und drei Folgepunkte) stehen dort. Am
 Gerät noch nicht abgenommen.
 
-**Offen:** die Abnahme am Prüfling und an Mischer und Pumpe, der Re-Assert für
-die KNX-Befehle in `nodered-flows` (Abschnitt 9) und die Anleitung zum Mischer
-in den Notbetriebsunterlagen.
+**Offen:** die Abnahme am Prüfling und an Mischer und Pumpe und die Anleitung
+zum Mischer in den Notbetriebsunterlagen. Der Re-Assert für die KNX-Befehle in
+`nodered-flows` steht seit 2026-09-14 (Abschnitt 9).
 
 ---
 
@@ -658,9 +658,10 @@ einen arduino-freien Header mit Hosttest gegen die Sollwerte aus
   Abweichung genau eine Wiederholung; `schreiben --status`; neu `--quelle`.
 - ~~**Nachweis Quelladresse 1.1.250**~~ — erledigt am 2026-09-12: steht so
   auf dem Bus, ohne L_Data.con (Abschnitt 8, Gegenprobe mit 1.2.0).
-- **Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
-  Er ist Voraussetzung dafür, dass die Steuerung nach dem Notbetrieb den
-  Normalzustand selbst wiederherstellt.
+- ~~**Re-Assert für die KNX-Befehle in `nodered-flows`** (Pumpe,
+  Zwangsstellung)~~ — erledigt am 2026-09-14: 5-min-Takt für Pumpe und
+  Zwangsstellungen, an der Anlage nachgewiesen (`nodered-flows`,
+  `TODO-KNX-Vorderhaus.md` Teil 2).
 - ~~**Mischeradressen aus openknx übernehmen**~~ — erledigt am 2026-09-12
   (Abschnitt 8).
 - ~~**Positionsstatus lesbar?**~~ — ja, vom Aktor 1.1.39 und von openknx;

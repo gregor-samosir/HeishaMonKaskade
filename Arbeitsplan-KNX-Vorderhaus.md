@@ -371,12 +371,15 @@ Branch.
   offen halten.
 - **Die InfluxDB schreibt openknx-Werte jede Minute neu.** Ein Eintrag ist
   kein Telegramm; ob etwas auf dem Bus war, zeigen `ts`/`lc` am Datenpunkt.
+  Das gilt für Telegramme anderer Absender. Schreibt openknx selbst, setzt
+  schon sein lokales Echo `ts` — dann belegt nur der Busmonitor oder eine
+  Meldung des Aktors etwas (gemessen 2026-09-14).
 
 ## Nicht in diesem Plan
 
-- **Re-Assert der KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).
-  Ohne ihn holt die zurückkehrende Steuerung Mischer und Pumpe nicht von
-  selbst zurück — Voraussetzung dafür, dass der Normalzustand wiederkommt.
+- ~~**Re-Assert der KNX-Befehle in `nodered-flows`** (Pumpe, Zwangsstellung).~~
+  Erledigt am 2026-09-14: 5-min-Takt für Pumpe und Zwangsstellungen, an der
+  Anlage nachgewiesen (`nodered-flows/TODO-KNX-Vorderhaus.md`, Teil 2).
 - **Notfallanleitung** (`nodered-flows`, `FEUERUEBUNG.md`): Fällt nur
   Node-RED aus und ioBroker läuft, regelt `HKMregelung.js` die Position beim
   nächsten Regelschritt wieder weg (Analyse §6).

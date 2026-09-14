@@ -666,8 +666,9 @@ Einziges Feld: **`knx_schnittstelle`**, eine IP, wahlweise mit `:Port`
 Wie beim Hydraulikschritt lässt sich der Schritt mit lebender Steuerung nur auf
 **Ausführung** prüfen, nicht auf Dauerwirkung: Steht `HKM_ForcedState_Input` auf
 Auto, regelt `HKMregelung.js` die Position beim nächsten Regelschritt wieder
-weg; steht eine Zwangsstellung an, setzt die Steuerung sie erst beim nächsten
-Wechsel neu. Und openknx beantwortet das Lesen von 6/4/12 und 6/4/14 aus seinem
+weg; und seit 2026-09-14 holt der KNX-Re-Assert Zwangsstellung und Pumpe binnen
+fünf Minuten zurück (Abschnitt 3) — ein Test braucht also ein Fenster zwischen
+zwei Takten. Und openknx beantwortet das Lesen von 6/4/12 und 6/4/14 aus seinem
 Zwischenspeicher — die Firmware zählt diese Antworten nicht, im Telnet-Log
 stehen sie als „fremde Antworten".
 
@@ -780,23 +781,32 @@ t ab Reconnect | Akteur | Was passiert
 danach | [`test/kurven_sync.py`](test/kurven_sync.py) | Kurvenpunkte wiederhergestellt — **nicht** durch die Firmware
 GRÜN + 15 min | Firmware | Die Anzeige fällt auf BEREIT. Das ist der **einzige** Vorgang, mit dem HeishaMon den Notbetrieb selbst „beendet"
 
-## Das Vorderhaus kommt nicht von selbst zurück (Stand 3.21.0)
+## Das Vorderhaus holt der KNX-Re-Assert zurück (seit 2026-09-14)
 
 Auch Mischer und Pumpe des Vorderhauses stellt die Firmware **nicht** zurück.
-Anders als bei den Wärmepumpen holt die zurückkehrende Steuerung sie heute aber
-auch **nicht zuverlässig** zurück — der Re-Assert für die KNX-Befehle in
-`nodered-flows` ist noch nicht gebaut ([Arbeitsplan](Arbeitsplan-KNX-Vorderhaus.md),
-„Nicht in diesem Plan"):
+Das übernimmt seit 2026-09-14 ein 5-Minuten-Re-Assert in `nodered-flows`, wie
+bei den Wärmepumpen:
 
-* **Pumpe:** Die Kaskaden Logik schaltet `MischerPumpe_Schalten` nur bei
-  Ereignissen. Sie bleibt ein, bis das nächste Ereignis kommt.
-* **Zwangsstellung:** Die Steuerung setzt sie erst beim nächsten Wechsel neu.
-* **Position:** `HKMregelung.js` übernimmt beim nächsten Regelschritt mit
-  Änderung wieder — sofern keine Zwangsstellung ansteht.
+* **Pumpe:** Die Node „MischerPumpe Re-Assert“ hinter der Modus Parameter Logik
+  sendet `MischerPumpe_Schalten` im Takt des Hauptmodus-Verteilers neu. Im
+  Wartungsmodus des Verteilers pausiert sie.
+* **Zwangsstellung:** `HKMregelung.js` (ab V2.2.0) schreibt AUF/ZU alle 5 min
+  neu, passend zu `HKM_ForcedState_Input`.
+* **Position:** kein Takt. Im Automatikbetrieb regelt `HKMregelung.js` von der
+  echten Position aus weiter; unter Zwangsstellung wird der Eingang nur
+  hinterlegt und fährt den Mischer nicht.
 
-Bis der Re-Assert steht, kann das Vorderhaus nach einem Notbetrieb also eine
-Weile auf 50 % mit laufender Pumpe bleiben. Das ist unkritisch, aber kein
-Normalzustand.
+**An der Anlage belegt am 2026-09-14:** Nach der Folge dieses Schritts
+(`test/knx_tunnel.py mischer --quelle 1.1.250`) war beim ersten Takt die Pumpe
+wieder aus — der Pumpenaktor meldete 61 ms nach dem Befehl — und die
+Zwangsstellung AUF wieder gesetzt: Bewegung nach 79 ms, Endstellung nach
+59,7 s. Nach der Rückkehr der Steuerung steht das Vorderhaus also nach
+**höchstens fünf Minuten** wieder im Normalzustand. Protokoll:
+`nodered-flows/TODO-KNX-Vorderhaus.md`, Teil 2.
+
+Voraussetzung, am selben Tag gemessen: openknx schickt auch einen
+unveränderten Wert auf den Bus, und eine wiederholte Zwangsstellung lässt den
+Motor nicht anlaufen.
 
 ---
 
