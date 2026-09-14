@@ -171,9 +171,10 @@ void notbetrieb_init(bool spiegel_gueltig)
 
   // Dasselbe fuer die Freigabebedingung: Faende TOP101 seine Zeile nicht, waere
   // der Knopf der Rolle Heizen dauerhaft gesperrt, ohne dass irgendwo stuende,
-  // warum. Fuer Warmwasser spielt TOP101 keine Rolle (M3).
+  // warum. Seit 3.22.0 braucht auch die Rolle Warmwasser TOP101: Ohne die
+  // Zeile entfiele dort der Vorderhausschritt bei jedem Lauf.
   heizKuehlIndex = state_topic_index(NOTBETRIEB_TOP_HEIZ_KUEHL);
-  if (notbetriebRolle != NOTBETRIEB_WASSER && heizKuehlIndex < 0)
+  if (heizKuehlIndex < 0)
   {
     Serial.println("FEHLER Notbetrieb: TOP101 (Heat_Cool_SW_State) fehlt in stateTopics[]");
   }
@@ -207,10 +208,11 @@ void notbetrieb_einstellungen_pruefen(void)
     Serial.println("WARNUNG Notbetrieb: keine Adresse fuer den Hydraulik-Switch (Settings)");
   }
 
-  // Die KNX-Schnittstelle - den Vorderhausschritt gibt es nur in der Rolle
-  // Heizen. Leer oder ungueltig heisst: Der Schritt endet ROT, er entfaellt
-  // nicht still (Owner 2026-09-12). Der Feldinhalt steht mit in der Zeile.
-  if (notbetriebRolle != NOTBETRIEB_WASSER && !vorderhaus_eingerichtet())
+  // Die KNX-Schnittstelle - seit 3.22.0 in BEIDEN Rollen Pflicht, weil der
+  // Vorderhausschritt in beiden Folgen steht (Owner 2026-09-14). Leer oder
+  // ungueltig heisst: Der Schritt endet ROT, er entfaellt nicht still (Owner
+  // 2026-09-12). Der Feldinhalt steht mit in der Zeile.
+  if (!vorderhaus_eingerichtet())
   {
     char log_line[160];
     (void)snprintf(log_line, sizeof(log_line),
@@ -688,6 +690,10 @@ static bool hydraulikBestaetigt = false;
 static bool vorderhausBestaetigt = false;
 static bool vorderhausAusstehend = false;
 static uint32_t vorderhausLetzteAbfrage = 0;
+// Seit 3.22.0: Der Schritt ist mangels Heizbetrieb bewusst entfallen
+// (notbetrieb_vorderhaus_faellig()). Nur fuer Logzeile und Seite - der
+// Automat sieht einen bestaetigten Schritt.
+static bool vorderhausEntfallen = false;
 
 /*****************************************************************************/
 /* Den aktuellen Schritt absetzen                                            */
@@ -699,8 +705,11 @@ static uint32_t vorderhausLetzteAbfrage = 0;
 /* unterschieben - ist verworfen: Sie umgeht alle vier Pruefungen und        */
 /* ueberschreibt zusaetzlich jedes andere Feld, das in einem gerade offenen  */
 /* Sammelfenster steht.                                                      */
+/*                                                                           */
+/* richtung ist der Rohtext von TOP101 - seit 3.22.0 entscheidet er, ob der  */
+/* Vorderhausschritt ueberhaupt faellig ist.                                 */
 /*****************************************************************************/
-static bool notbetrieb_schritt_absetzen(void)
+static bool notbetrieb_schritt_absetzen(const char *richtung)
 {
   const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
   if (!s)
@@ -730,6 +739,23 @@ static bool notbetrieb_schritt_absetzen(void)
                    (unsigned)(notbetriebLauf.schritt + 1),
                    notbetrieb_schritt_anzahl(notbetriebRolle), s->set_name);
     write_mqtt_log(vh_log);
+
+    // Seit 3.22.0 in beiden Rollen, aber nur bei Heizbetrieb (Owner
+    // 2026-09-14): An Stufe 2 laeuft die Folge auch im Kuehlbetrieb, dort
+    // bleibt das Vorderhaus bewusst unberuehrt. Kein Telegramm, kein ROT -
+    // der Schritt gilt als erledigt, die Seite zeigt den Hinweis.
+    if (!notbetrieb_vorderhaus_faellig(richtung))
+    {
+      char entf_log[128];
+      (void)snprintf(entf_log, sizeof(entf_log),
+                     "Notbetrieb: Vorderhaus entfaellt - die Anlage meldet nicht Heizen (TOP101 \"%.8s\")",
+                     richtung ? richtung : "");
+      write_mqtt_log(entf_log);
+      vorderhausEntfallen = true;
+      vorderhausBestaetigt = true;
+      vorderhausAusstehend = false;
+      return true;
+    }
 
     const KnxVorderhaus ergebnis = vorderhaus_absetzen();
     vorderhausBestaetigt = (ergebnis == KNX_VH_GRUEN);
@@ -848,7 +874,7 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt, richtung))
   {
   case NOTBETRIEB_SENDEN:
-    if (!notbetrieb_schritt_absetzen())
+    if (!notbetrieb_schritt_absetzen(richtung))
     {
       // Der Hydraulikschritt bricht HIER ab und nicht erst nach 20 s: Sein
       // Ergebnis steht mit der Antwort des Switch fest, es gibt nichts
@@ -868,7 +894,11 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     break;
 
   case NOTBETRIEB_FERTIG:
-    write_mqtt_log((char *)"Notbetrieb GRUEN: alle Schritte zurueckgelesen");
+    // Ist das Vorderhaus entfallen, steht das mit in der Zeile - "alle
+    // Schritte zurueckgelesen" allein hiesse sonst, der Mischer sei umgestellt.
+    write_mqtt_log(vorderhausEntfallen
+                       ? (char *)"Notbetrieb GRUEN: alle Schritte zurueckgelesen, Vorderhaus entfiel (kein Heizbetrieb)"
+                       : (char *)"Notbetrieb GRUEN: alle Schritte zurueckgelesen");
     break;
 
   // Der KNX-Schalter ist waehrend des Laufs auf Kuehlen gegangen (oder stand
@@ -941,6 +971,7 @@ bool notbetrieb_starten(void)
   hydraulikBestaetigt = false;
   vorderhausBestaetigt = false;
   vorderhausAusstehend = false;
+  vorderhausEntfallen = false;
 
   write_mqtt_log((char *)"NOTBETRIEB ausgeloest ueber die Weboberflaeche");
   return true;
@@ -970,6 +1001,18 @@ bool notbetrieb_vorderhaus_ausstehend(void)
   const NotbetriebSchritt *s = notbetrieb_schritt(notbetriebRolle, notbetriebLauf.schritt);
   return vorderhausAusstehend && notbetriebLauf.zustand == NOTBETRIEB_LAEUFT && s &&
          s->typ == NB_SCHRITT_VORDERHAUS;
+}
+
+/*****************************************************************************/
+/* Ist der Vorderhausschritt im letzten Lauf entfallen? (3.22.0)             */
+/*                                                                           */
+/* Fuer die Seite: Unter GRUEN steht dann ein Hinweis, dass das Vorderhaus   */
+/* bewusst nicht angefasst wurde. Nur bei GRUEN - nach dem Anzeigeverfall    */
+/* (BEREIT) gehoert das Flag zu keinem angezeigten Ergebnis mehr.            */
+/*****************************************************************************/
+bool notbetrieb_vorderhaus_entfallen(void)
+{
+  return vorderhausEntfallen && notbetriebLauf.zustand == NOTBETRIEB_GRUEN;
 }
 
 /*****************************************************************************/

@@ -216,7 +216,7 @@ Zu holen ist hier aber noch mehr — für alle, die eine eigene Umsetzung bauen:
 
 Im Detail:
 
-### Der Notbetrieb stellt auch das Vorderhaus um (3.21.0)
+### Der Notbetrieb stellt auch das Vorderhaus um (3.21.0, beide Stufen seit 3.22.0)
 
 Der Notbetriebsknopf stellte bis 3.20.0 die Wärmepumpen um — und das Vorderhaus
 blieb außen vor. Es hängt über einen eigenen Mischer mit Pumpe am Heizkreis,
@@ -231,6 +231,13 @@ zurück. Einen fertigen KNX-Tunnel-Client für den ESP32 gibt es nicht; der
 eigene steht arduino-frei in [`src/knxtunnel.h`](src/knxtunnel.h) und wird von
 [`test/knx_test.cpp`](test/knx_test.cpp) Byte für Byte gegen die Mitschnitte
 von der Anlage geprüft.
+
+Seit 3.22.0 steht derselbe Schritt auch am Ende der Warmwasser-Folge: Welcher
+der beiden Knöpfe im Ernstfall zuerst gedrückt wird, weiß niemand, und ein
+zweiter Lauf ist unschädlich — der Mischer steht dann schon auf 128. Fällig ist
+er nur, wenn die Anlage sauber Heizen meldet (TOP101 = 0). Die Warmwasser-Folge
+läuft auch im Kühlbetrieb, und dort lässt der Knopf das Vorderhaus bewusst in
+Ruhe. **Die KNX-Schnittstelle ist damit an beiden Stufen eine Pflichteinstellung.**
 
 Drei Entscheidungen dahinter:
 

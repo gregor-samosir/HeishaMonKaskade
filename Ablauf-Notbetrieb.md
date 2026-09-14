@@ -4,9 +4,10 @@ Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
 passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
-**Stand:** 2026-09-13, Firmware 3.21.0 (Vorderhausschritt, Abschnitt 1c — am
-Prüfling und an Mischer und Pumpe abgenommen, am 2026-09-13 auf beiden Stufen
-ausgerollt); davor
+**Stand:** 2026-09-14, Firmware 3.22.0 (Vorderhausschritt an beiden Stufen,
+nur bei Heizbetrieb, Abschnitt 1c — noch nicht ausgerollt); davor 3.21.0
+(Vorderhausschritt nur an Stufe 1, am Prüfling und an Mischer und Pumpe
+abgenommen, am 2026-09-13 ausgerollt) und
 3.18.0 (Heizstabschritt, 2026-08-30).
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
@@ -28,7 +29,7 @@ trägt das ganze Dokument:
 Ereignis | Dauer | Wer treibt den Ablauf
 :--- | ---: | :---
 Notbetrieb einschalten, Stufe 1 (Heizen) | **88 s** (im Rückfall des Vorderhausschritts bis 5 min 20 s) | die Firmware, Schritt für Schritt
-Notbetrieb einschalten, Stufe 2 (Warmwasser) | **48 s** | die Firmware, Schritt für Schritt
+Notbetrieb einschalten, Stufe 2 (Warmwasser) | **56 s** (im Rückfall des Vorderhausschritts bis 4 min 48 s) | die Firmware, Schritt für Schritt
 Rückkehr der Steuerung | **bis 5 min** bis zur Übernahme, rund 10 min bis alles steht | Node-RED — **die Firmware tut nichts**
 
 ---
@@ -523,8 +524,10 @@ Re-Assert holt zurück.
 
 # 1c. Der Vorderhausschritt
 
-Er steht seit 3.21.0 **nur in der Heizen-Folge**, als elfter und letzter
-Schritt — direkt hinter `Heatpump = 1`. Wie der Hydraulikschritt spricht er
+Er steht seit 3.21.0 in der Heizen-Folge als elfter und letzter Schritt und
+seit 3.22.0 auch in der Warmwasser-Folge als siebter — jeweils direkt hinter
+`Heatpump = 1`. Fällig ist er nur, wenn TOP101 sauber Heizen meldet (siehe
+„An beiden Stufen“ unten). Wie der Hydraulikschritt spricht er
 nicht mit der Wärmepumpe, sondern mit einem Gerät im Haus: der
 KNX-IP-Schnittstelle. Recherche, Vorabtest und Entscheidungen stehen in
 [`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md), der Weg in die
@@ -570,6 +573,31 @@ fährt. Bewegung 1 belegt es, oder der Status 128, wenn er schon dort steht.
 steht sie bis zu 144 s auf 1; eine 1 nach den Befehlen stammt dann nicht sicher
 von ihnen, und es entscheidet die Endstellung.
 
+## An beiden Stufen (seit 3.22.0)
+
+Bis 3.21.0 stand der Schritt nur in der Heizen-Folge, begründet mit „nur
+Stufe 1 versorgt den Heizkreis“. Das war eine Annahme des Entwurfs, kein
+Entscheid. Seit 3.22.0 steht er auch am Ende der Warmwasser-Folge (Owner
+2026-09-14): Welche Stufe im Ernstfall zuerst gedrückt wird, weiß niemand.
+
+* **Ein Doppellauf ist unschädlich.** Steht der Mischer schon auf 128,
+  bestätigt der zweite Lauf über den Status nach rund 2,5 s. Fährt er noch
+  (der erste Druck liegt weniger als rund 60 s zurück), liest der zweite Lauf
+  „vorher 1“, geht in den Rückfall und wird GRÜN, wenn der Mischer ankommt.
+  Zwei Tunnel gleichzeitig verträgt die Schnittstelle: Sie hat fünf, openknx
+  belegt einen.
+* **Fällig nur bei Heizbetrieb.** Die Warmwasser-Folge läuft absichtlich auch
+  im Kühlbetrieb (M3). Dort nähme der Schritt die Zwangsstellung des Sommers
+  zurück und schickte 50 % Kühlwasser ins Vorderhaus. Deshalb gilt für ihn
+  dieselbe Regel wie für die Freigabe der Rolle Heizen: nur eine sauber
+  gelesene 0 an TOP101 (`notbetrieb_vorderhaus_faellig()`). Sonst
+  **entfällt** er — kein Telegramm, kein ROT. Die Seite zeigt unter GRÜN
+  blassgelb „Vorderhaus unverändert“, das Log „Vorderhaus entfaellt“. An
+  Stufe 1 tritt das praktisch nicht auf: Dort startet ein Lauf nur bei
+  Heizbetrieb, und Kühlen bricht ihn ab.
+* **Die KNX-Schnittstelle ist an beiden Stufen Pflicht**, auch an den
+  Backup-Boards (`Ablauf-Backup-Boards.md`).
+
 ## Die Zeiten
 
 Fall | Dauer
@@ -604,7 +632,8 @@ keine oder ungültige Adresse in den Einstellungen | GRÜN und darunter das oran
 Schnittstelle antwortet nicht, alle Tunnel belegt, Quittung bleibt aus | ebenso, nach 1 bis 20 s
 Mischer bestätigt nicht (Zwangsstellung klemmt, Aktor stumm) | ebenso; die Pumpe ist trotzdem eingeschaltet
 Rückfall: die Endstellung kommt nicht binnen 240 s | ebenso, nach 240 s
-Anlage meldet mitten im Schritt Kühlen | ROT mit dem Kühl-Grund, wie in jedem Schritt
+Anlage meldet mitten im Schritt Kühlen (Stufe 1) | ROT mit dem Kühl-Grund, wie in jedem Schritt
+Anlage meldet beim Absetzen nicht Heizen (Stufe 2) | GRÜN, darunter blassgelb „Vorderhaus unverändert“ — der Schritt ist entfallen, kein Fehler
 
 Das orange Feld:
 
@@ -691,13 +720,14 @@ Nr | t ab Klick | Kommando | TOP | Anmerkung
 4 | +24 s | `DHWTemp` | 9 | der einzige gehaltene Wert dieser Rolle
 5 | +32 s | `WaterPump` = 0 (auto) | 104 | wie an Stufe 1 — die Pumpe zurück auf bedarfsgeregelt
 6 | +40 s | `Heatpump` = 1 | 0 |
-— | **+48 s** | **GRÜN** | | vor dem Heizstabschritt an H2 gemessen: GRÜN nach 43 s bei 40 s Regelzeit (2026-08-27)
+**7** | **+48 s** | **Vorderhaus** | — | seit 3.22.0 auch hier, nur bei Heizbetrieb — sonst entfällt er, siehe Abschnitt 1c
+— | **+56 s** | **GRÜN** | | vor dem Heizstabschritt an H2 gemessen: GRÜN nach 43 s bei 40 s Regelzeit (2026-08-27); mit dem Vorderhaus noch nicht gemessen
 
 **Der Unterschied, der zählt:** TOP101 ist für diese Rolle **keine**
 Freigabebedingung. Der Knopf an Stufe 2 funktioniert also auch im Sommer, wenn
-die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Der Gesamtdeckel
-liegt hier bei 120 s statt 440 s: Er ist die Summe der Schritt-Timeouts, und den
-Vorderhausschritt mit seinen 240 s gibt es nur in der Heizen-Folge.
+die Anlage auf Kühlen steht — und genau dafür ist er gedacht. Das Vorderhaus
+entfällt dann (Abschnitt 1c, „An beiden Stufen“). Der Gesamtdeckel liegt hier
+bei 360 s: sechs Schritte zu 20 s plus die 240 s des Vorderhausschritts.
 
 ---
 
@@ -779,10 +809,11 @@ Abschnitt 10.
 **Sie stammen aus der Zeit vor dem Hydraulikschritt** (Firmware 3.12.0), also
 aus sieben- bzw. dreischrittigen Folgen. Ihre Aussage trägt trotzdem: Was sie
 belegen, ist der Rhythmus von 8 s je Schritt und die Herkunft der Kurvenwerte
-aus dem RAM — daran haben weder 3.15.0 noch 3.18.0 noch 3.21.0 etwas geändert.
-Die Gesamtzeiten liegen seither höher (Heizen 88 s statt 56 s, Warmwasser 48 s
-statt 24 s) — Hydraulik am Anfang, Heizstab dahinter, Umwälzpumpe vor dem
-Einschalten, an Stufe 1 das Vorderhaus zuletzt.
+aus dem RAM — daran haben weder 3.15.0 noch 3.18.0 noch 3.21.0 noch 3.22.0
+etwas geändert. Die Gesamtzeiten liegen seither höher (Heizen 88 s statt 56 s,
+Warmwasser 56 s statt 24 s) — Hydraulik am Anfang, Heizstab dahinter,
+Umwälzpumpe vor dem Einschalten, das Vorderhaus zuletzt (an Stufe 1 seit
+3.21.0, an Stufe 2 seit 3.22.0).
 
 Lauf | Datum | Was er belegt | Ergebnis
 :--- | :--- | :--- | :---

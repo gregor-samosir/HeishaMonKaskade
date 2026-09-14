@@ -27,11 +27,22 @@
 > `main` gemergt, Tag `v3.21.0`, per OTA auf H1 und H2. Abnahme mit
 > `tablesnap.py`: Tabellenaufbau auf beiden Stufen identisch, abweichend nur
 > je ein laufender Messwert; Notbetriebsknopf bereit (H1 11 Schritte, H2 6).
-> An H1 ist `knx_schnittstelle = 192.168.2.127` gesetzt; H2 braucht sie
-> nicht (Rolle Warmwasser). Ein ganzer Notbetriebslauf an H1 entfiel
-> (Owner-Entscheid). **Offen außerhalb dieses Repos:** die Anleitung zum
-> Mischer (Owner), danach die Arbeitsanweisung für den KNX-Re-Assert in
+> An H1 ist `knx_schnittstelle = 192.168.2.127` gesetzt; an H2 nicht, weil
+> 3.21.0 den Schritt dort nicht kannte. Ein ganzer Notbetriebslauf an H1
+> entfiel (Owner-Entscheid). **Offen außerhalb dieses Repos:** die Anleitung
+> zum Mischer (Owner), danach die Arbeitsanweisung für den KNX-Re-Assert in
 > `nodered-flows` (Claude).
+>
+> **2026-09-14: Nachtrag 3.22.0 (Branch `knx-vorderhaus-h2`).** Der Owner
+> hat bei der Durchsicht bemerkt, dass der Schritt nur an H1 läuft. „Nur
+> Rolle Heizen“ stand als Owner-Entscheid in der Tabelle unten, war aber eine
+> Annahme des Entwurfs (Analyse §8) und nie vorgelegt worden. Neu entschieden:
+> **Der Schritt läuft an beiden Stufen**, weil niemand weiß, welcher Knopf im
+> Ernstfall zuerst gedrückt wird — ein zweiter Lauf ist unschädlich. **Fällig
+> ist er nur bei Heizbetrieb** (TOP101 = 0): An H2 läuft die Warmwasser-Folge
+> auch im Kühlbetrieb, dort entfällt er mit Hinweis unter GRÜN statt die
+> Zwangsstellung des Sommers aufzuheben. **`knx_schnittstelle` ist damit an
+> allen vier Boards Pflicht** und wird bei jedem Rollout gesetzt.
 
 ## Übergabe für die Test-Session (Schritt 9)
 
@@ -122,7 +133,7 @@ Pumpe ein — und liest am Aktor zurück.
 | Entscheid | Quelle |
 | --- | --- |
 | Eigener minimaler Tunnel-Client, keine Bibliothek, kein Routing | Analyse §2–4 |
-| Weg A: **ein** Schritt am Ende der Heizen-Folge, nach `Heatpump = 1`; nur Rolle Heizen | Analyse §8, Owner 2026-09-12 |
+| Weg A: **ein** Schritt am Ende der Folge, nach `Heatpump = 1`. *Bis 3.21.0 stand hier „nur Rolle Heizen“ — das war eine Annahme des Entwurfs und fälschlich als Owner-Entscheid geführt. Seit 3.22.0 in beiden Rollen, fällig nur bei Heizbetrieb (Owner 2026-09-14).* | Analyse §8, Owner 2026-09-12 und 2026-09-14 |
 | ROT-Wortlaut: „Die Wärmepumpen laufen im Notbetrieb, nur das Vorderhaus ließ sich nicht umstellen“ | Owner 2026-09-12 |
 | Fehlende KNX-Einstellung = ROT, kein stilles Entfallen | Owner 2026-09-12 |
 | Quelladresse 1.1.250 im Telegramm | Owner 2026-09-12, Analyse §8 |

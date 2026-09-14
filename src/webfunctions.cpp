@@ -824,6 +824,17 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_VORDERHAUS_FAEHRT "Die Wärmepumpen laufen bereits im Notbetrieb. Der Mischer im Vorderhaus fährt noch – das dauert bis zu vier Minuten."
 
 /*****************************************************************************/
+/* Der Hinweis, wenn das Vorderhaus entfallen ist (3.22.0)                   */
+/*                                                                           */
+/* Seit 3.22.0 steht der Schritt in beiden Folgen, faellig aber nur bei      */
+/* Heizbetrieb (notbetrieb_vorderhaus_faellig()). Druckt jemand im Sommer    */
+/* den Knopf an Stufe 2, bleibt das Vorderhaus bewusst unberuehrt - dann     */
+/* steht dieser Satz unter dem GRUEN. Blassgelb wie die Kurvenwarnung: eine  */
+/* Auskunft, kein Handlungsbedarf. Orange bleibt dem Fehlschlag vorbehalten. */
+/*****************************************************************************/
+#define NB_TXT_VORDERHAUS_ENTFALLEN "Die Anlage steht nicht auf Heizen, deshalb hat der Knopf das Vorderhaus nicht umgestellt. Mischer und Pumpe im Vorderhaus bleiben so eingestellt, wie die Steuerung es zuletzt vorgegeben hat."
+
+/*****************************************************************************/
 /* Die Kurvenwarnung - ein Hinweis, keine Sperre                             */
 /*                                                                           */
 /* Die Regel steht in notbetrieb.h: Eine Heizkurve faellt mit steigender     */
@@ -870,13 +881,17 @@ static const char notbetriebJS[] PROGMEM =
     // Index 9 (3.21.0): 1 = der Vorderhausschritt wartet im Rueckfall auf die
     // Endstellung des Mischers. Fehlt das Feld, ist parseInt NaN, also nicht 1.
     "var vh=parseInt(p[9]);"
+    // Index 10 (3.22.0): 1 = GRUEN, das Vorderhaus ist mangels Heizbetrieb
+    // bewusst entfallen. Fehlt das Feld, ist parseInt NaN, also nicht 1.
+    "var ve=parseInt(p[10]);"
     // Felder 5 und 6: Lage der Verbindung zur Hausteuerung und die Dauer als
     // fertiger Text. true = auch "verbunden" anzeigen, siehe verbindungJS.
     "vbSetzen(parseInt(p[5]),p[6],true);"
     "var e=document.getElementById('nbstat');var f=document.getElementById('nbform');"
     "var g=document.getElementById('nbsperre');var k=document.getElementById('nbwarn');"
     // "bis zu anderthalb Minuten" deckt beide Rollen ab: Der Heizen-Lauf
-    // braucht seit 3.21.0 88 s (elf Schritte), der Warmwasser-Lauf 48 s. Die
+    // braucht seit 3.21.0 88 s (elf Schritte), der Warmwasser-Lauf seit 3.22.0
+    // 56 s (sieben). Die
     // Angabe steht bewusst ueber der laengeren der beiden - wer laenger wartet
     // als angekuendigt, glaubt an einen Fehler, wo keiner ist. Aus demselben
     // Grund steht im Rueckfall des Vorderhausschritts (vh) der eigene Satz:
@@ -893,6 +908,11 @@ static const char notbetriebJS[] PROGMEM =
     // und wird nur noch fuer Wartung geoeffnet). "GRUEN, aber 0 Hz mangels
     // Freigabe" ist damit der Wartungsfall und kein Regelfall mehr - er steht
     // in Ablauf-Notbetrieb.md und Analyse-Relais-statt-KNX.md Abschnitt 13.
+    // Ist das Vorderhaus entfallen (ve, 3.22.0), steht unter dem GRUEN der
+    // Hinweis in Blassgelb - wie beim Vorderhaus-Fehlschlag traegt das
+    // aeussere Feld dann keine eigene Farbe.
+    "else if(z==2&&ve==1){e.className='';e.innerHTML='<div class=\"w3-panel w3-green\">'+nbGruen+'</div>"
+    "<div class=\"w3-panel w3-pale-yellow\"><h3>Vorderhaus unverändert</h3><p>" NB_TXT_VORDERHAUS_ENTFALLEN "</p></div>';}"
     "else if(z==2){e.className='w3-panel w3-green';e.innerHTML=nbGruen;}"
     // Das Vorderhaus liess sich nicht umstellen (Grund 4): Die Waermepumpen
     // laufen, also das normale GRUEN - darunter der Hinweis in Orange. Das
@@ -1112,10 +1132,12 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
   // steht: Es ist die einzige Statusroute des Geraets, sie ist bewusst ohne
   // Anmeldung erreichbar, und eine zweite Route fuer zwei Felder waere der
   // teurere Weg. Format nach der Erweiterung:
-  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund;Vorderhaus
-  // Das letzte Feld (3.21.0) ist 1, solange der Vorderhausschritt im Rueckfall
-  // auf die Endstellung des Mischers wartet - die Seite sagt dann, dass die
-  // Waermepumpen schon laufen und nur der Mischer noch faehrt.
+  //   Zustand;Schritt;Schritte;fehlendMaske;Sperre;Lage;Dauertext;Kurvenwarnung;Abbruchgrund;Vorderhaus;VorderhausEntfallen
+  // Das Feld Vorderhaus (3.21.0) ist 1, solange der Vorderhausschritt im
+  // Rueckfall auf die Endstellung des Mischers wartet - die Seite sagt dann,
+  // dass die Waermepumpen schon laufen und nur der Mischer noch faehrt. Das
+  // letzte Feld (3.22.0) ist 1, wenn der Lauf GRUEN ist und das Vorderhaus
+  // mangels Heizbetrieb bewusst entfallen ist.
   const size_t used = strlen(status);
   if (used + 1 < sizeof(status))
   {
@@ -1135,10 +1157,11 @@ void handleNotbetriebStatus(WebServerClass *httpServer)
     // Route an den Indizes 5 und 6, ein Einschub in der Mitte haette beide
     // Seiten verschoben. Jedes weitere Feld gehoert aus demselben Grund ans
     // Ende.
-    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u;%u",
+    (void)snprintf(status + used, sizeof(status) - used, ";%u;%s;%u;%u;%u;%u",
                    (unsigned)lage, dauer, (unsigned)notbetrieb_kurvenwarnung(),
                    (unsigned)notbetrieb_abbruchgrund(),
-                   notbetrieb_vorderhaus_ausstehend() ? 1u : 0u);
+                   notbetrieb_vorderhaus_ausstehend() ? 1u : 0u,
+                   notbetrieb_vorderhaus_entfallen() ? 1u : 0u);
   }
 
   httpServer->send(200, "text/plain", status);

@@ -1,5 +1,51 @@
 #pragma once
 // Changelog:
+// 3.22.0 - DER VORDERHAUSSCHRITT LAEUFT AN BEIDEN STUFEN. Bis 3.21.0 stand
+//         er nur in der Heizen-Folge (Stufe 1). Die Begruendung "nur Stufe 1
+//         versorgt den Heizkreis" war eine Annahme des Entwurfs
+//         (Analyse-KNX-Vorderhaus.md, Abschnitt 8) und ist faelschlich als
+//         Owner-Entscheid in den Arbeitsplan gewandert; der Owner hat es bei
+//         der Durchsicht am 2026-09-14 gefunden. Welcher Knopf im Ernstfall
+//         zuerst gedrueckt wird, weiss niemand - also steht der Schritt jetzt
+//         auch am Ende der Warmwasser-Folge, direkt hinter Heatpump = 1. Ein
+//         zweiter Lauf ist unschaedlich: Steht der Mischer schon auf 128,
+//         bestaetigt der Status nach rund 2,5 s; faehrt er noch, wartet der
+//         Rueckfall die Ankunft ab.
+//
+//         FAELLIG NUR BEI HEIZBETRIEB (Owner-Entscheid 2026-09-14). An Stufe 2
+//         fehlt die Sperre, die den Schritt an Stufe 1 schuetzt: Die
+//         Warmwasser-Folge laeuft absichtlich auch im Kuehlbetrieb (M3). Dort
+//         naehme der Schritt die Zwangsstellung des Sommers zurueck und
+//         schickte 50 % Kuehlwasser ins Vorderhaus. Neue Regel
+//         notbetrieb_vorderhaus_faellig() in notbetrieb.h: nur eine sauber
+//         gelesene 0 an TOP101, dieselbe strenge Lesart wie die Freigabe der
+//         Rolle Heizen. Sonst ENTFAELLT der Schritt - kein Telegramm, kein
+//         ROT. Logzeile "Vorderhaus entfaellt", GRUEN-Zeile mit Zusatz, und
+//         unter GRUEN ein blassgelber Hinweis "Vorderhaus unveraendert"
+//         (neues elftes Feld der Statusroute, hinten angehaengt).
+//
+//         KNX-SCHNITTSTELLE AN BEIDEN STUFEN PFLICHT. Die Startwarnung gilt
+//         fuer beide Rollen, ebenso die Pruefung, ob TOP101 in stateTopics[]
+//         steht. Beim Rollout wird knx_schnittstelle auch an H2 und h2b
+//         gesetzt (Ablauf-Backup-Boards.md).
+//
+//         Warmwasser-Lauf 56 s statt 48 s (sieben Schritte), Gesamtdeckel
+//         360 s statt 120 s (Summe der Schritt-Timeouts, E2). Heizen
+//         unveraendert.
+//
+//         NACHWEIS: notbetrieb_test um Block 9c erweitert - Faelligkeit fuer
+//         alle Lesarten von TOP101, Regelfall 56 s, Rueckfall an Stufe 2 bei
+//         gemeldetem Kuehlen (laeuft weiter, die Warmwasser-Folge bricht nie
+//         ab), ROT genau nach 240 s mit dem Vorderhaus-Grund; Schrittfolge
+//         und Deckel beider Rollen angepasst. Alle Hosttests der CI gruen,
+//         alle sechs Envs gebaut, kein Testzugang in den produktiven
+//         Abbildern. Der Vorderhausschritt selbst ist seit 3.21.0 an der
+//         Anlage abgenommen und unveraendert; neu sind nur seine Stelle in
+//         der Warmwasser-Folge und die Faelligkeitspruefung.
+//
+//         GROESSE gegen 3.21.0 (heishamon_esp32_h1_ota): RAM 61952 -> 61952
+//         Byte (+0), Flash 1222681 -> 1223413 Byte (+732).
+//
 // 3.21.0 - DER NOTBETRIEB STELLT DAS VORDERHAUS MIT UM. Mischer und
 //         Mischerpumpe des Vorderhauses haengen am KNX-Bus und blieben bei
 //         einem Ausfall der Steuerung auf ihrem letzten Wert - im Sommer oft
@@ -1949,4 +1995,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.21.0";
+static const char* heishamon_version = "3.22.0";

@@ -137,6 +137,9 @@ NotbetriebAbbruchgrund notbetrieb_abbruchgrund(void);
 // true, solange der Vorderhausschritt im Rueckfall auf die Endstellung des
 // Mischers wartet - die Seite sagt dann, dass die Waermepumpen schon laufen
 bool notbetrieb_vorderhaus_ausstehend(void);
+// true, wenn der letzte Lauf GRUEN ist und der Vorderhausschritt mangels
+// Heizbetrieb bewusst entfallen ist (3.22.0) - die Seite zeigt dann den Hinweis
+bool notbetrieb_vorderhaus_entfallen(void);
 
 // Adresse des Tasmota-Switch fuer die Hydraulik (config.json, Feld
 // "hydraulik_switch"). Leer heisst "nicht eingerichtet" - dann bricht der

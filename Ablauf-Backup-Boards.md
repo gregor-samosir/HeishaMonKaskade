@@ -89,13 +89,13 @@ Hostname nachweislich stehen.
 
    ```bash
    # 3a - Sperre und Identität (Werte für Stufe 2: HeishaMon32_h2b)
-   curl -u admin:<ota-pw> "http://<IP>/settings?mqtt_port=1884&wifi_hostname=HeishaMon32_h1b&hydraulik_switch=<Tasmota-IP>"
+   curl -u admin:<ota-pw> "http://<IP>/settings?mqtt_port=1884&wifi_hostname=HeishaMon32_h1b&hydraulik_switch=<Tasmota-IP>&knx_schnittstelle=<KNX-IP>"
    # 3b - erst jetzt der Broker
    curl -u admin:<ota-pw> "http://<IP>/settings?mqtt_server=<Broker-IP>"
    ```
 
    `/settings` schreibt die `config.json` bei jedem Aufruf vollständig neu und
-   übernimmt dabei nur die sieben bekannten Felder — die Reste der
+   übernimmt dabei nur die acht bekannten Felder — die Reste der
    Original-Firmware (`ntp_servers`, `use_1wire`, `s0_*` …) verschwinden von
    selbst. Nicht übergebene Felder behalten ihren Wert. `new_ota_password`
    deshalb **nicht** mitschicken, sonst verlangt der Handler das aktuelle
@@ -109,7 +109,8 @@ Hostname nachweislich stehen.
    OTA fasst das LittleFS garantiert nicht an, und der Weg ist derselbe, den
    das Nachziehen später braucht — er ist damit gleich mitgeprüft.
 6. **Gegenprobe über HTTP**, bevor das Board weggelegt wird:
-   `/settings` muss Port **1884** und den Hostnamen `…_h1b`/`…_h2b` zeigen, die
+   `/settings` muss Port **1884**, den Hostnamen `…_h1b`/`…_h2b` und — seit
+   3.22.0 an **beiden** Boards Pflicht — die KNX-Schnittstelle zeigen, die
    Startseite die richtige Stufe (`Heisha Stufe 1`/`2`) und die Version.
 7. **DHCP-Reservierung** im Router auf die MAC setzen.
 8. **Etikett mit IP und Einbauposition auf das Board.** Blatt 3 (unten) wählt das
@@ -148,7 +149,8 @@ Ein Board ohne Broker meldet auf `/notbetrieb/status` erwartungsgemäß fehlende
 Werte und Sperre 1 — das ist der stillgelegte Zustand, kein Befund.
 
 Beide gemeinsame Werte: Broker `192.168.2.147`, Hydraulik-Switch
-`192.168.2.180`, MQTT-Benutzer und -Passwort leer — abgelesen an den laufenden
+`192.168.2.180`, KNX-Schnittstelle `192.168.2.127` (seit 3.22.0 an beiden
+Stufen Pflicht, weil der Vorderhausschritt in beiden Folgen steht), MQTT-Benutzer und -Passwort leer — abgelesen an den laufenden
 Boards `.120` und `.122`, die während der ganzen Inbetriebnahme unberührt
 weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
 
@@ -159,10 +161,13 @@ weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
 3. Wird ein Gerät zum Testen gebraucht, dient **ein Backup-Board** als
    Prüfling — mit der Stufen-Firmware, stillgelegt über Port 1884.
 4. Baseline mit `test/tablesnap.py` ziehen, OTA auf Stufe 1, abnehmen, dann
-   Stufe 2 (Verfahren siehe [`test/README.md`](test/README.md)).
+   Stufe 2 (Verfahren siehe [`test/README.md`](test/README.md)). Bringt die
+   Version ein neues Pflichtfeld mit, wird es direkt nach dem OTA in
+   `/settings` gesetzt — seit 3.22.0 gilt das für `knx_schnittstelle` an
+   **beiden** Stufen.
 5. **Backups direkt nach der Abnahme nachziehen** — beide Boards anstecken, per
-   OTA auf dieselbe Version bringen, Port und Hostname prüfen, wieder
-   stromlos einlagern. Dieser Schritt ist zugleich der wiederkehrende
+   OTA auf dieselbe Version bringen, Port, Hostname und KNX-Schnittstelle
+   prüfen, wieder stromlos einlagern. Dieser Schritt ist zugleich der wiederkehrende
    Lebendtest der Ersatzplatinen.
 
 Nachziehen ohne eigenes Env, über die reservierte IP des Backups:

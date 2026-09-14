@@ -30,6 +30,10 @@
 //     der Regelfall trotzdem bei 8 s? Ein Rueckfall, der nach 20 s abbraeche,
 //     widerspraeche Rueckleseregel A; einer, den der Gesamtdeckel
 //     abschnitte, endete je nach Zufall mit dem falschen Grund.
+//  8. Steht der Vorderhausschritt seit 3.22.0 auch am Ende der
+//     Warmwasser-Folge, und ist er nur bei sauber gemeldetem Heizbetrieb
+//     faellig? An Stufe 2 laeuft die Folge auch im Kuehlbetrieb - dort darf
+//     er die Zwangsstellung des Sommers nicht zuruecknehmen.
 //
 // Bauen und ausfuehren:
 //   c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test test/notbetrieb_test.cpp
@@ -241,7 +245,7 @@ static void test_schrittfolge()
   printf("\n== Schrittfolge und Reihenfolge ==\n");
 
   pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN), 11, "Heizen hat elf Schritte (seit 3.21.0)");
-  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 6, "Wasser hat sechs Schritte");
+  pruefe_zahl((int)notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER), 7, "Wasser hat sieben Schritte (seit 3.22.0)");
 
   // Die Reihenfolge traegt fuenffach: erst die Hydraulik (sonst schiebt der
   // Warmwasserbetrieb bis zu 57 C in die Fussbodenheizung), dann die Ruecknahme
@@ -329,26 +333,33 @@ static void test_schrittfolge()
   const NotbetriebSchritt *w2 = notbetrieb_schritt(NOTBETRIEB_WASSER, 5);
   pruefe_text(w2->set_name, "Heatpump", "Wasser Schritt 6 schaltet die Anlage ein");
 
+  // Seit 3.22.0 auch hier das Vorderhaus als letzter Schritt (Owner 2026-09-14)
+  const NotbetriebSchritt *wv = notbetrieb_schritt(NOTBETRIEB_WASSER, 6);
+  pruefe_zahl(wv->typ, NB_SCHRITT_VORDERHAUS, "Wasser Schritt 7 stellt ebenfalls das Vorderhaus");
+  pruefe_text(wv->set_name, NOTBETRIEB_VORDERHAUS_NAME, "und heisst auch hier so in der Logzeile");
+  pruefe_zahl(wv->top, -1, "auch er liest an keinem TOP zurueck");
+  pruefe(notbetrieb_schritt(NOTBETRIEB_WASSER, 7) == 0, "hinter dem Vorderhaus ist Schluss");
+
   // In BEIDEN Rollen steht die Pumpe unmittelbar vor dem Einschalten - ein
   // Moduswechsel dahinter koennte sie sonst wieder auf Fix zurueckstellen.
-  // Hinter dem Einschalten kommt seit 3.21.0 nur noch das Vorderhaus, und das
-  // nur in der Heizen-Folge: Es geht nicht an die Waermepumpe, kann also
-  // nichts an ihr zurueckstellen, und nur Stufe 1 versorgt den Heizkreis.
+  // Hinter dem Einschalten kommt seit 3.22.0 in beiden Rollen nur noch das
+  // Vorderhaus: Es geht nicht an die Waermepumpe, kann also nichts an ihr
+  // zurueckstellen. Welcher Knopf zuerst gedrueckt wird, weiss niemand.
   for (unsigned r = 0; r < 2; r++)
   {
     NotbetriebRolle rolle = (r == 0) ? NOTBETRIEB_HEIZEN : NOTBETRIEB_WASSER;
     const unsigned n = notbetrieb_schritt_anzahl(rolle);
-    const unsigned ein = (r == 0) ? n - 2 : n - 1; // Position von Heatpump
+    const unsigned ein = n - 2; // Position von Heatpump
     pruefe(strcmp(notbetrieb_schritt(rolle, ein - 1)->set_name, "WaterPump") == 0 &&
                strcmp(notbetrieb_schritt(rolle, ein)->set_name, "Heatpump") == 0,
            (r == 0) ? "Heizen: WaterPump, dann Heatpump, dann nur noch das Vorderhaus"
-                    : "Wasser endet auf WaterPump, dann Heatpump");
+                    : "Wasser: WaterPump, dann Heatpump, dann nur noch das Vorderhaus");
+    pruefe(notbetrieb_schritt(rolle, n - 1)->typ == NB_SCHRITT_VORDERHAUS,
+           (r == 0) ? "Heizen endet auf dem Vorderhaus, direkt hinter dem Einschalten"
+                    : "Wasser endet ebenso auf dem Vorderhaus");
   }
-  pruefe(notbetrieb_schritt(NOTBETRIEB_HEIZEN, notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN) - 1)->typ ==
-             NB_SCHRITT_VORDERHAUS,
-         "Heizen endet auf dem Vorderhaus, direkt hinter dem Einschalten");
 
-  // Genau EIN Vorderhausschritt in Heizen, KEINER in Wasser
+  // Genau EIN Vorderhausschritt je Rolle - seit 3.22.0 auch in Wasser
   unsigned vh_heizen = 0, vh_wasser = 0;
   for (unsigned i = 0; i < notbetrieb_schritt_anzahl(NOTBETRIEB_HEIZEN); i++)
     if (notbetrieb_schritt(NOTBETRIEB_HEIZEN, i)->typ == NB_SCHRITT_VORDERHAUS)
@@ -357,7 +368,7 @@ static void test_schrittfolge()
     if (notbetrieb_schritt(NOTBETRIEB_WASSER, i)->typ == NB_SCHRITT_VORDERHAUS)
       vh_wasser++;
   pruefe_zahl((int)vh_heizen, 1, "Heizen hat genau einen Vorderhausschritt");
-  pruefe_zahl((int)vh_wasser, 0, "Wasser hat keinen - nur Stufe 1 versorgt den Heizkreis");
+  pruefe_zahl((int)vh_wasser, 1, "Wasser ebenso - welche Stufe zuerst gedrueckt wird, weiss niemand");
 
   // Genau EIN Hydraulikschritt je Rolle, und er steht vorn. Ein zweiter waere
   // harmlos, aber er stuende fuer ein Missverstaendnis - der Switch wird
@@ -627,7 +638,9 @@ static void test_automat()
               "Gesamtdeckel Heizen = 10 x 20 s + 240 s Vorderhaus");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_HEIZEN), 440000, "das sind 440 s");
   pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER),
-              (int)(6u * NOTBETRIEB_SCHRITT_TIMEOUT_MS), "Gesamtdeckel Wasser = 6 x Schritt-Timeout");
+              (int)(6u * NOTBETRIEB_SCHRITT_TIMEOUT_MS + NOTBETRIEB_VORDERHAUS_TIMEOUT_MS),
+              "Gesamtdeckel Wasser = 6 x 20 s + 240 s Vorderhaus (seit 3.22.0)");
+  pruefe_zahl((int)notbetrieb_gesamtdeckel_ms(NOTBETRIEB_WASSER), 360000, "das sind 360 s");
 }
 
 /*****************************************************************************/
@@ -662,10 +675,10 @@ static void test_mindestwarte()
   // Millisekunden fertig ist: Der Automat kennt genau einen Rhythmus, und die
   // 8 s fallen ohnehin in die 90 s der beiden Stellantriebe.
   //
-  // Gegenprobe Wasser: sechs Schritte
+  // Gegenprobe Wasser: sieben Schritte (seit 3.22.0 mit dem Vorderhaus)
   (void)lauf_durchspielen(NOTBETRIEB_WASSER, 1000, 0, &dauer);
-  pruefe(dauer >= 6u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
-         "Wasser ebenso, mit sechs Schritten");
+  pruefe(dauer >= 7u * NOTBETRIEB_SCHRITT_MINDESTWARTE_MS,
+         "Wasser ebenso, mit sieben Schritten");
 
   // Die Regel muss in sich stimmig bleiben, sonst endet jeder Lauf in ROT
   pruefe(NOTBETRIEB_SCHRITT_MINDESTWARTE_MS < NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -1040,7 +1053,11 @@ static void test_vorderhausschritt()
   pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_HEIZEN, vh - 1), NOTBETRIEB_GRUND_TIMEOUT,
               "Heatpump davor meldet den allgemeinen Grund");
   pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 5), NOTBETRIEB_GRUND_TIMEOUT,
-              "der letzte Wasser-Schritt ist kein Vorderhaus");
+              "Heatpump in Wasser meldet den allgemeinen Grund");
+  pruefe_zahl(notbetrieb_grund_fuer_schritt(NOTBETRIEB_WASSER, 6), NOTBETRIEB_GRUND_VORDERHAUS,
+              "der letzte Wasser-Schritt meldet seit 3.22.0 den Vorderhaus-Grund");
+  pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_WASSER, 6), 240000,
+              "und hat auch dort 240 s (E2)");
   pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, vh), 240000,
               "Timeout des Vorderhausschritts: 240 s (E2)");
   pruefe_zahl((int)notbetrieb_schritt_timeout_ms(NOTBETRIEB_HEIZEN, vh - 1), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -1123,6 +1140,90 @@ static void test_vorderhausschritt()
   const uint32_t t_ut_ende = ticken_bis_ende(&ueber_tot, t_ut, &a);
   pruefe_zahl((int)(uint32_t)(t_ut_ende - t_ut), 240000, "Ueberlauf: ROT auch dort genau nach 240 s");
   pruefe_zahl(ueber_tot.grund, NOTBETRIEB_GRUND_VORDERHAUS, "mit dem Vorderhaus-Grund");
+}
+
+/*****************************************************************************/
+/* 9c. Das Vorderhaus an beiden Stufen (3.22.0)                              */
+/*                                                                           */
+/* Owner 2026-09-14: Welche Stufe im Ernstfall zuerst gedrueckt wird, weiss  */
+/* niemand; ein zweiter Lauf ist unschaedlich. Faellig ist der Schritt aber  */
+/* nur bei sauber gemeldetem Heizbetrieb - an Stufe 2 laeuft die Folge auch  */
+/* im Kuehlbetrieb, und dort bliebe das Vorderhaus bewusst unberuehrt.       */
+/* Das Entfallen selbst entscheidet die Firmware beim Absetzen; der Automat  */
+/* sieht dann einen bestaetigten Schritt (Regelfall unten).                  */
+/*****************************************************************************/
+
+// Einen Warmwasser-Lauf bis zum Vorderhausschritt treiben, jeder der ersten
+// sechs Schritte nach der Mindestwarte bestaetigt. Rueckgabe wie
+// bis_zum_vorderhaus(): der Zeitpunkt, zu dem der Schritt abgesetzt wurde.
+static uint32_t wasser_bis_zum_vorderhaus(NotbetriebLauf *lauf, uint32_t start)
+{
+  const unsigned vw = notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER) - 1;
+  notbetrieb_lauf_leeren(lauf);
+  lauf_anstossen(lauf, NOTBETRIEB_WASSER, start);
+  uint32_t t = start;
+  for (unsigned runde = 0; runde < 100 && lauf->schritt < vw && lauf->zustand == NOTBETRIEB_LAEUFT; runde++)
+  {
+    t += NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
+    (void)notbetrieb_tick(lauf, NOTBETRIEB_WASSER, t, true, "0");
+  }
+  return t;
+}
+
+static void test_vorderhaus_beide_rollen()
+{
+  printf("\n== Das Vorderhaus an beiden Stufen (3.22.0) ==\n");
+  const unsigned vw = notbetrieb_schritt_anzahl(NOTBETRIEB_WASSER) - 1;
+
+  // Die Faelligkeit: dieselbe strenge Regel wie die Freigabe der Rolle Heizen
+  pruefe(notbetrieb_vorderhaus_faellig("0"), "TOP101 = 0 (Heizen): faellig");
+  pruefe(notbetrieb_vorderhaus_faellig(" 0 "), "mit Leerzeichen ebenso");
+  pruefe(!notbetrieb_vorderhaus_faellig("1"), "Kuehlen: entfaellt");
+  pruefe(!notbetrieb_vorderhaus_faellig("2"), "unknown: entfaellt");
+  pruefe(!notbetrieb_vorderhaus_faellig("-1"), "Feld leer: entfaellt");
+  pruefe(!notbetrieb_vorderhaus_faellig(""), "nie empfangen: entfaellt");
+  pruefe(!notbetrieb_vorderhaus_faellig(0), "Nullzeiger: entfaellt");
+
+  // REGELFALL an Stufe 2 - und genauso sieht der Automat ein Entfallen: einen
+  // Schritt, der beim Absetzen bestaetigt ist
+  NotbetriebLauf ok;
+  const uint32_t t_ok = wasser_bis_zum_vorderhaus(&ok, 1000);
+  pruefe_zahl(ok.schritt, (int)vw, "Wasser erreicht das Vorderhaus");
+  pruefe_zahl((int)(t_ok - 1000), 48000, "nach 48 s - wo bis 3.21.0 GRUEN kam");
+  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "1"),
+              NOTBETRIEB_FERTIG, "nach der Mindestwarte GRUEN, auch bei gemeldetem Kuehlen");
+  pruefe_zahl((int)(ok.ende - 1000), 56000, "der ganze Warmwasser-Lauf dauert 56 s");
+
+  // RUECKFALL an Stufe 2, und mittendrin meldet die Anlage Kuehlen: Die
+  // Warmwasser-Folge bricht nie ab (M3) - der Befehl an den Mischer ist
+  // gegeben, die Endstellung entscheidet wie sonst auch.
+  NotbetriebLauf rf;
+  const uint32_t t_rf = wasser_bis_zum_vorderhaus(&rf, 1000);
+  bool laeuft = true;
+  for (uint32_t d = 10000; d < 230000; d += 10000)
+  {
+    (void)notbetrieb_tick(&rf, NOTBETRIEB_WASSER, t_rf + d, false, "1");
+    if (rf.zustand != NOTBETRIEB_LAEUFT)
+      laeuft = false;
+  }
+  pruefe(laeuft, "Rueckfall an Stufe 2 laeuft auch bei gemeldetem Kuehlen weiter");
+  pruefe_zahl(notbetrieb_tick(&rf, NOTBETRIEB_WASSER, t_rf + 230000, true, "1"), NOTBETRIEB_FERTIG,
+              "und wird mit der Endstellung nach 230 s GRUEN");
+
+  // KEINE ENDSTELLUNG an Stufe 2: ROT genau nach 240 s mit dem
+  // Vorderhaus-Grund - der Gesamtdeckel (360 s) greift vorher nicht
+  NotbetriebLauf tot;
+  const uint32_t t_tot = wasser_bis_zum_vorderhaus(&tot, 1000);
+  NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+  uint32_t t = t_tot;
+  for (unsigned i = 0; i < 1000 && a != NOTBETRIEB_ABBRUCH && a != NOTBETRIEB_FERTIG; i++)
+  {
+    t += 1000;
+    a = notbetrieb_tick(&tot, NOTBETRIEB_WASSER, t, false, "0");
+  }
+  pruefe_zahl(a, NOTBETRIEB_ABBRUCH, "ohne Endstellung wird es auch an Stufe 2 ROT");
+  pruefe_zahl((int)(t - t_tot), 240000, "genau nach 240 s");
+  pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_VORDERHAUS, "mit dem Vorderhaus-Grund - die WP laeuft");
 }
 
 /*****************************************************************************/
@@ -1294,6 +1395,7 @@ int main()
   test_freigabe();
   test_hydraulikschritt();
   test_vorderhausschritt();
+  test_vorderhaus_beide_rollen();
   test_anzeigeverfall();
   test_kurvenplausibilitaet();
 
