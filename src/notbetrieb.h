@@ -43,7 +43,7 @@ enum NotbetriebRolle
 /* der Abfragezyklus liegt bei rund 6 s. 20 s je Schritt sind damit gut drei */
 /* Zyklen Reserve; ein vollstaendiger Heizen-Lauf dauert seit 3.21.0 88 s    */
 /* (elf Schritte, vorn die Hydraulik, hinten das Vorderhaus), ein            */
-/* Warmwasser-Lauf 48 s.                                                     */
+/* Warmwasser-Lauf seit 3.22.0 56 s (sieben, hinten ebenfalls das Vorderhaus).*/
 /*                                                                           */
 /* DER LANGSAMSTE KANAL IST SEIT 3.18.0 SET39 ForceHeater. Beim EINSCHALTEN  */
 /* lag die Uebernahme in einem Lauf bei einer knappen halben Minute          */
@@ -100,7 +100,7 @@ static_assert(NOTBETRIEB_VORDERHAUS_TIMEOUT_MS == 240000u,
 /* Reserve ab. Das ist der Preis dafuer, dass GRUEN wirklich "zurueckgelesen" */
 /* heisst. Der Gesamtdeckel ist die Summe der Schritt-Timeouts und liegt seit */
 /* 3.21.0 bei 440 s (Heizen: zehn Schritte zu 20 s, das Vorderhaus mit 240 s) */
-/* bzw. 120 s (Wasser, sechs).                                                */
+/* und seit 3.22.0 bei 360 s (Wasser: sechs zu 20 s, das Vorderhaus 240 s).   */
 /*****************************************************************************/
 #define NOTBETRIEB_SCHRITT_MINDESTWARTE_MS 8000u
 
@@ -321,7 +321,9 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* am Ende kosten nichts - der Kompressor faehrt ohnehin erst rund drei      */
 /* Minuten nach dem Einschalten hoch.                                        */
 /*                                                                          */
-/* NUR IN DER HEIZEN-FOLGE: Nur Stufe 1 versorgt den Heizkreis.              */
+/* IN BEIDEN FOLGEN (seit 3.22.0, Owner 2026-09-14): Welcher Knopf im        */
+/* Ernstfall zuerst gedrueckt wird, weiss niemand. Faellig ist der Schritt   */
+/* aber nur bei Heizbetrieb - siehe notbetrieb_vorderhaus_faellig().         */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
@@ -345,6 +347,13 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
 /* Der Heizstabschritt steht auch hier an Position 2: Der 6-kW-Modus setzt   */
 /* SET39 an BEIDEN Stufen, und welchen Knopf jemand zuerst drueckt, weiss    */
 /* niemand - dieselbe Ueberlegung wie beim Hydraulikschritt.                 */
+/*                                                                          */
+/* Das Vorderhaus steht seit 3.22.0 auch hier ganz hinten, aus demselben     */
+/* Grund (Owner 2026-09-14). Ein zweiter Lauf nach dem an Stufe 1 ist        */
+/* unschaedlich: Steht der Mischer schon auf 128, ist er nach rund 2,5 s     */
+/* bestaetigt; faehrt er noch, wartet der Rueckfall die Ankunft ab. Weil     */
+/* diese Folge auch im Kuehlbetrieb laeuft, entfaellt er dort               */
+/* (notbetrieb_vorderhaus_faellig()).                                        */
 /*****************************************************************************/
 static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
@@ -352,7 +361,8 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
     {NB_SCHRITT_SET, "DHWTemp", 9, 0, 0},
     {NB_SCHRITT_SET, "WaterPump", 104, NOTBETRIEB_FESTER_WERT, 0}, // Pumpe auf auto
-    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1}};
+    {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1},    // dann einschalten
+    {NB_SCHRITT_VORDERHAUS, NOTBETRIEB_VORDERHAUS_NAME, -1, NOTBETRIEB_FESTER_WERT, 0}}; // zuletzt das Vorderhaus
 
 static const unsigned NOTBETRIEB_SCHRITTE_HEIZEN_N =
     sizeof(NOTBETRIEB_SCHRITTE_HEIZEN) / sizeof(NOTBETRIEB_SCHRITTE_HEIZEN[0]);
@@ -677,6 +687,37 @@ inline NotbetriebSperre notbetrieb_sperrgrund(NotbetriebRolle rolle,
     if (rolle != NOTBETRIEB_WASSER && !notbetrieb_heizbetrieb_belegt(heiz_kuehl_text))
         return NOTBETRIEB_SPERRE_HEIZBETRIEB;
     return NOTBETRIEB_FREI;
+}
+
+/*****************************************************************************/
+/* Ist der Vorderhausschritt faellig? (seit 3.22.0)                          */
+/*                                                                           */
+/* Der Schritt steht seit 3.22.0 in BEIDEN Folgen (Owner 2026-09-14): Welche */
+/* Stufe im Ernstfall zuerst gedrueckt wird, weiss niemand, und ein zweiter  */
+/* Lauf ist unschaedlich. Bis 3.21.0 stand er nur in der Heizen-Folge - das  */
+/* war eine Annahme des Entwurfs ("nur Stufe 1 versorgt den Heizkreis"),     */
+/* kein Entscheid des Owners.                                                */
+/*                                                                           */
+/* An Stufe 2 fehlt aber die Sperre, die ihn an Stufe 1 schuetzt: Die        */
+/* Warmwasser-Folge laeuft absichtlich auch im Kuehlbetrieb (M3). Dort nahme */
+/* der Schritt die Zwangsstellung des Sommers zurueck und schickte 50 %      */
+/* Kuehlwasser ins Vorderhaus. Deshalb gilt fuer das Vorderhaus dieselbe     */
+/* strenge Regel wie fuer die Freigabe der Rolle Heizen: nur eine sauber     */
+/* gelesene 0 an TOP101 (Owner-Entscheid 2026-09-14). Alles andere -         */
+/* Kuehlen, unknown, leer, nie empfangen - laesst den Schritt ENTFALLEN.     */
+/*                                                                           */
+/* Entfallen heisst nicht ROT: Die Waermepumpe ist umgestellt, und das       */
+/* Vorderhaus wurde bewusst nicht angefasst. Die Firmware schreibt eine      */
+/* Logzeile, die Seite zeigt unter GRUEN einen Hinweis. An Stufe 1 tritt der */
+/* Fall praktisch nicht auf - dort startet ein Lauf nur bei Heizbetrieb, und */
+/* Kuehlen bricht ihn ab.                                                    */
+/*                                                                           */
+/* Die Regel haengt bewusst NICHT an der Rolle: eine Regel fuer beide Stufen */
+/* ist eine Stelle, an der sich nichts auseinanderentwickeln kann.           */
+/*****************************************************************************/
+inline bool notbetrieb_vorderhaus_faellig(const char *heiz_kuehl_text)
+{
+    return notbetrieb_heizbetrieb_belegt(heiz_kuehl_text);
 }
 
 /*****************************************************************************/

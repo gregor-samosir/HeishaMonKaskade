@@ -318,7 +318,12 @@ jede Minute einen Eintrag hat.
 ## 8. Entwurf des Firmwareschritts „Vorderhaus"
 
 Vorgesehen für die Folge der Stufe 1 (Rolle Heizen), weil nur sie den
-Heizkreis versorgt.
+Heizkreis versorgt. *Überholt am 2026-09-14 (Owner): Das war eine Annahme
+dieses Entwurfs, kein Entscheid — sie ist trotzdem als entschieden in den
+Arbeitsplan gewandert. Seit 3.22.0 steht der Schritt in beiden Folgen, weil
+niemand weiß, welche Stufe im Ernstfall zuerst gedrückt wird. Fällig ist er
+nur bei Heizbetrieb (TOP101 = 0): Die Warmwasser-Folge läuft auch im
+Kühlbetrieb, und dort bleibt das Vorderhaus unberührt.*
 
 ### Die Gruppenadressen
 
