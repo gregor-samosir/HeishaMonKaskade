@@ -35,6 +35,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `knx_test.cpp` | KNX-Tunnel des Vorderhausschritts: jeder Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12, Sequenzregel, Antwortfilter (openknx zaehlt nie), jeder Zweig der Rueckleseregel A, die Einstellung `knx_schnittstelle`, `millis()`-Ueberlauf (bindet `src/knxtunnel.h` direkt ein) | nein |
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
+| `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` nicht in der Liste steht | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
@@ -171,21 +172,17 @@ Die C++-Programme pruefen ihre Ergebnisse selbst und geben bei gebrochener
 Zusicherung `1` zurueck - die CI bricht dann ab. Vorher (bis 3.5.0) gaben sie
 ihre Zahlen nur aus.
 
-`byte110_test.cpp` und `byte9_test.cpp` laufen ueber das Skript, weil dabei
+Alle Hosttests laufen ueber `hosttests.sh` - dasselbe Skript, das die CI
+aufruft. Hier stand bis 2026-09-17 eine abgeschriebene Befehlsliste; ihr
+fehlten zu dem Zeitpunkt schon `byte23_25_test.cpp` und `css_klassen_test.py`.
+Einen einzelnen Test gezielt nachbauen: die Zeile aus `hosttests.sh` nehmen.
+Die Tests gegen den Dekodierpfad laufen dabei ueber `decode_hosttest.sh`, weil
 `decode.cpp` neben die Ersatzheader kopiert werden muss (Begruendung im
-Skriptkopf). Ohne Argument baut das Skript `byte110_test.cpp`.
+Skriptkopf).
 
 ```bash
-c++ -std=c++17 -O2 -o /tmp/merge_test merge_test.cpp && /tmp/merge_test
-c++ -std=c++17 -O2 -Wall -o /tmp/byte28_test byte28_test.cpp && /tmp/byte28_test
-c++ -std=c++17 -O2 -o /tmp/telegramm_test telegramm_test.cpp && /tmp/telegramm_test
-c++ -std=c++17 -O2 -o /tmp/sendwindow_test sendwindow_test.cpp && /tmp/sendwindow_test
-c++ -std=c++17 -O2 -Wall -o /tmp/notbetrieb_test notbetrieb_test.cpp && /tmp/notbetrieb_test
-c++ -std=c++17 -O2 -Wall -o /tmp/verbindung_test verbindung_test.cpp && /tmp/verbindung_test
-c++ -std=c++17 -O2 -Wall -o /tmp/rtcspiegel_test rtcspiegel_test.cpp && /tmp/rtcspiegel_test
-c++ -std=c++17 -O2 -Wall -o /tmp/knx_test knx_test.cpp && /tmp/knx_test
-./decode_hosttest.sh          # byte110_test.cpp, aus dem Repo-Wurzelverzeichnis auch ./test/...
-./decode_hosttest.sh test/byte9_test.cpp   # Heizstab-Kommandos SET37-SET39 (Pfad immer repo-relativ)
+./hosttests.sh                                   # alle, auch aus dem Repo-Wurzelverzeichnis
+./decode_hosttest.sh test/byte9_test.cpp         # einzeln (Pfad immer repo-relativ)
 
 ./hexlog_test.py     --esp <ip-des-pruefstands> --broker 192.168.2.147
 ./verteiler_test.py  --esp <ip-des-pruefstands>

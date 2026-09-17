@@ -165,7 +165,8 @@ weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
    mit einer einzigen Regel muss niemand prüfen, welcher Fall vorliegt.
    `v3.19.0`, `v3.21.0` und `v3.22.0` sind noch einfache Tags; sie bleiben so,
    weil an ihnen Releases hängen.
-2. Hosttestliste der CI vollständig lokal fahren, danach alle Envs bauen.
+2. `./test/hosttests.sh` (alle Hosttests, dieselbe Liste wie die CI), danach
+   alle Envs bauen.
 3. Wird ein Gerät zum Testen gebraucht, dient **ein Backup-Board** als
    Prüfling — mit der Stufen-Firmware, stillgelegt über Port 1884.
 4. **Merge und Tag, vor dem OTA** (Owner-Entscheid 2026-09-17).
