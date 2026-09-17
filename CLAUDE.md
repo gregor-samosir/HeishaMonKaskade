@@ -44,6 +44,7 @@ aufgeschlagen hat.
 | Was passiert im Notbetrieb, Schritt für Schritt? | `Ablauf-Notbetrieb.md` |
 | Wie werden die Ersatzplatinen gepflegt? | `Ablauf-Backup-Boards.md` |
 | Welches Werkzeug gibt es für welchen Nachweis? | `test/README.md` |
+| Wie läuft eine Änderung bis zum Release? | `Ablauf-Backup-Boards.md`, „Bei jeder Firmware-Änderung"; geführt über die Skills `/pruefen-vor-merge` und `/rollout` (`.claude/skills/`) |
 
 ## Befehle
 
