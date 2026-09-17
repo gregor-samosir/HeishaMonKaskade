@@ -13,9 +13,10 @@ ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)).
 
 **Beide Backup-Boards stehen seit dem 2026-08-27** mit Port 1884 und eigenem
-Hostnamen (Protokoll unten). **Firmware: 3.19.0** — nachgezogen am 2026-08-31
-über die reservierten IPs, Port und Hostname dabei unverändert geprüft
-(`h1b` → 1884, `h2b` → 1884, beide mit ihrem eigenen Hostnamen).
+Hostnamen (Protokoll unten). **Firmware:** immer dieselbe Version wie die
+produktiven Boards — sie werden nach jeder Abnahme nachgezogen (Schritt 5 unter
+„Bei jeder Firmware-Änderung"). Eine Versionsnummer steht hier bewusst nicht
+mehr: Sie stand auf 3.19.0, als längst 3.22.0 lief.
 
 Die Rückfallebene ist damit **zweiteilig**, und beide Teile werden gebraucht:
 die Boards gegen den Hardware-Ausfall, das Abbild der Vorversion gegen einen
@@ -142,9 +143,10 @@ Board | USB-Port | MAC | IP | Ergebnis
 `HeishaMon32_h1b` | `usbmodem11301` | `e8:f6:0a:80:1d:48` | 192.168.2.194 | 3.16.0, Heisha Stufe 1, Port 1884
 `HeishaMon32_h2b` | `usbmodem11401` | `1c:db:d4:bc:61:c8` | 192.168.2.166 | 3.16.0, Heisha Stufe 2, Port 1884
 
-Seither nachgezogen: **3.17.0** (2026-08-28) und **3.18.0** (2026-08-30), beide
-Male per OTA über die reservierte IP, ohne die Boards zu öffnen. Die Prüfung
-nach dem Nachziehen ist immer dieselbe: Version, Hostname, `mqtt_port = 1884`.
+Seither bei jeder Version nachgezogen, zum ersten Mal mit **3.17.0**
+(2026-08-28), immer per OTA über die reservierte IP, ohne die Boards zu öffnen.
+Die Prüfung nach dem Nachziehen ist immer dieselbe: Version, Hostname,
+`mqtt_port = 1884`, seit 3.22.0 dazu die KNX-Schnittstelle.
 Ein Board ohne Broker meldet auf `/notbetrieb/status` erwartungsgemäß fehlende
 Werte und Sperre 1 — das ist der stillgelegte Zustand, kein Befund.
 
@@ -169,6 +171,22 @@ weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
    OTA auf dieselbe Version bringen, Port, Hostname und KNX-Schnittstelle
    prüfen, wieder stromlos einlagern. Dieser Schritt ist zugleich der wiederkehrende
    Lebendtest der Ersatzplatinen.
+6. **Merge und Tag.** `git merge --no-ff` nach `main`, Tag `vX.Y.Z` auf den
+   Merge-Commit. Dann `main` und den Versions-Tag **einzeln** pushen
+   (`git push origin main`, `git push origin vX.Y.Z`) — **nie
+   `git push --follow-tags`**: Die Rettungsanker-Tags bleiben bewusst lokal,
+   und drei von ihnen zeigen auf Commits mit alter Adresse, deren Push GitHub
+   ablehnt. Bei 3.21.0 und 3.22.0 lag der Merge unmittelbar vor dem OTA, bei
+   3.20.0 erst danach — eine feste Reihenfolge ist noch nicht vereinbart.
+7. **CI prüfen.** Je Push auf `main` laufen zwei Workflows, `CI` und `CodeQL`;
+   maßgeblich ist der Lauf `CI` zum Merge-Commit.
+8. **Releases.** Öffentlich `vX.Y.Z` mit den Befunden, **ohne** Binaries
+   (Passwörter im Abbild). Privat in `HeishaMon-Rollback`: beide Abbilder
+   **und** `platformio_user_env_vX.Y.Z.ini` als Assets, den Vorgänger auf
+   „Rückfallstand vor X.Y.Z" umbenennen, das Release davor löschen (der Tag
+   bleibt). Ein `cp` in den lokalen Ordner `~/HeishaMon-Rollback/` ist
+   **keine** Sicherung — nachprüfen mit `gh release view vX.Y.Z --json assets`.
+   Einzelheiten stehen im README der privaten Ablage.
 
 Nachziehen ohne eigenes Env, über die reservierte IP des Backups:
 
