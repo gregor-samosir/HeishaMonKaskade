@@ -14,7 +14,7 @@ ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 
 **Beide Backup-Boards stehen seit dem 2026-08-27** mit Port 1884 und eigenem
 Hostnamen (Protokoll unten). **Firmware:** immer dieselbe Version wie die
-produktiven Boards — sie werden nach jeder Abnahme nachgezogen (Schritt 5 unter
+produktiven Boards — sie werden nach jeder Abnahme nachgezogen (Schritt 6 unter
 „Bei jeder Firmware-Änderung"). Eine Versionsnummer steht hier bewusst nicht
 mehr: Sie stand auf 3.19.0, als längst 3.22.0 lief.
 
@@ -158,28 +158,37 @@ weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
 
 ## Bei jeder Firmware-Änderung
 
-1. Rettungsanker-Tag setzen, auf einem Branch arbeiten.
+1. **Rettungsanker** als **annotierten** Tag setzen (`git tag -a
+   rettungsanker-JJJJ-MM-TT -m "…"`), auf einem Branch arbeiten. Annotiert
+   gilt für jeden Tag, auch für die Versions-Tags: Ein einfacher Tag auf einen
+   Commit mit alter Adresse wird von GitHub abgelehnt, ein annotierter nicht —
+   mit einer einzigen Regel muss niemand prüfen, welcher Fall vorliegt.
+   `v3.19.0`, `v3.21.0` und `v3.22.0` sind noch einfache Tags; sie bleiben so,
+   weil an ihnen Releases hängen.
 2. Hosttestliste der CI vollständig lokal fahren, danach alle Envs bauen.
 3. Wird ein Gerät zum Testen gebraucht, dient **ein Backup-Board** als
    Prüfling — mit der Stufen-Firmware, stillgelegt über Port 1884.
-4. Baseline mit `test/tablesnap.py` ziehen, OTA auf Stufe 1, abnehmen, dann
+4. **Merge und Tag, vor dem OTA** (Owner-Entscheid 2026-09-17).
+   `git merge --no-ff` nach `main`, annotierter Tag `vX.Y.Z` auf den
+   Merge-Commit, dann **von `main` aus** bauen. So stammt die Firmware auf den
+   Geräten genau aus dem getaggten Stand. **Noch nicht pushen** — scheitert die
+   Abnahme, ist nichts öffentlich, und der Rettungsanker aus Schritt 1 ist der
+   Rückweg.
+5. Baseline mit `test/tablesnap.py` ziehen, OTA auf Stufe 1, abnehmen, dann
    Stufe 2 (Verfahren siehe [`test/README.md`](test/README.md)). Bringt die
    Version ein neues Pflichtfeld mit, wird es direkt nach dem OTA in
    `/settings` gesetzt — seit 3.22.0 gilt das für `knx_schnittstelle` an
    **beiden** Stufen.
-5. **Backups direkt nach der Abnahme nachziehen** — beide Boards anstecken, per
+6. **Backups direkt nach der Abnahme nachziehen** — beide Boards anstecken, per
    OTA auf dieselbe Version bringen, Port, Hostname und KNX-Schnittstelle
    prüfen, wieder stromlos einlagern. Dieser Schritt ist zugleich der wiederkehrende
    Lebendtest der Ersatzplatinen.
-6. **Merge und Tag.** `git merge --no-ff` nach `main`, Tag `vX.Y.Z` auf den
-   Merge-Commit. Dann `main` und den Versions-Tag **einzeln** pushen
+7. **Push und CI.** `main` und den Versions-Tag **einzeln** pushen
    (`git push origin main`, `git push origin vX.Y.Z`) — **nie
-   `git push --follow-tags`**: Die Rettungsanker-Tags bleiben bewusst lokal,
-   und drei von ihnen zeigen auf Commits mit alter Adresse, deren Push GitHub
-   ablehnt. Bei 3.21.0 und 3.22.0 lag der Merge unmittelbar vor dem OTA, bei
-   3.20.0 erst danach — eine feste Reihenfolge ist noch nicht vereinbart.
-7. **CI prüfen.** Je Push auf `main` laufen zwei Workflows, `CI` und `CodeQL`;
-   maßgeblich ist der Lauf `CI` zum Merge-Commit.
+   `git push --follow-tags`**: Er schöbe alle annotierten Tags mit hoch, also
+   auch die Rettungsanker, die bewusst lokal bleiben. Je Push auf `main` laufen
+   zwei Workflows, `CI` und `CodeQL`; maßgeblich ist der Lauf `CI` zum
+   Merge-Commit.
 8. **Releases.** Öffentlich `vX.Y.Z` mit den Befunden, **ohne** Binaries
    (Passwörter im Abbild). Privat in `HeishaMon-Rollback`: beide Abbilder
    **und** `platformio_user_env_vX.Y.Z.ini` als Assets, den Vorgänger auf

@@ -74,8 +74,10 @@ gegen den Stand davor abgenommen.
    sowie OTA- und AP-Passwort.
 3. **Keine gebauten Binaries ins Repo**, auch nicht an ein Release: AP- und
    Notbetriebspasswort stehen im Abbild im Klartext.
-4. **Vor Codeänderungen den Stand einfrieren:** Tag `rettungsanker-JJJJ-MM-TT`
-   auf den aktuellen Commit, dann auf einem Branch arbeiten. Doku-Ergänzungen
+4. **Vor Codeänderungen den Stand einfrieren:** annotierter Tag
+   `rettungsanker-JJJJ-MM-TT` auf den aktuellen Commit, dann auf einem Branch
+   arbeiten. Der ganze Ablauf bis zum Release steht in `Ablauf-Backup-Boards.md`
+   unter „Bei jeder Firmware-Änderung". Doku-Ergänzungen
    laufen direkt auf `main`.
 5. **Die Firmware hängt an einer laufenden Heizung.** Kein Zugriff auf die
    produktiven Geräte ohne ausdrücklichen Auftrag; Testläufe gehören auf den
