@@ -56,13 +56,14 @@ In einer nicht-interaktiven Shell liegt `pio` nicht im PATH — dann
 pio run -e heishamon_esp32_h1_ota          # Standard-Env (Stufe 1, OTA)
 pio run $(pio project config --json-output \
   | python3 -c "import json,sys; print(' '.join('-e '+s[0][4:] for s in json.load(sys.stdin) if s[0].startswith('env:')))")
+./test/hosttests.sh                        # alle Hosttests, wie in der CI
 ```
 
 Die zweite Zeile baut **alle** Envs, ohne eine zweite Liste zu pflegen. Die
 maßgebliche Liste der Hosttests samt Begründung, warum jeder einzelne existiert,
-steht im Schritt „Hosttests" in
-[`.github/workflows/main.yml`](.github/workflows/main.yml) — von dort
-übernehmen, nicht neu erfinden. Nach dem Flashen wird mit `test/tablesnap.py`
+steht in [`test/hosttests.sh`](test/hosttests.sh); die CI ruft dasselbe Skript
+auf. Ein neuer Test kommt dort hinein — fehlt eine `test/*_test.cpp` in der
+Liste, meldet das Skript ROT. Nach dem Flashen wird mit `test/tablesnap.py`
 gegen den Stand davor abgenommen.
 
 ## Harte Regeln
