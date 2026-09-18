@@ -38,7 +38,7 @@ aufgeschlagen hat.
 | Was ist das, und warum so? | `README.md` |
 | Welche Topics gibt es? | `MQTT-Topics.md` (englisch, Upstream-kompatibel) |
 | Liest ein Set-Kommando zurück, und über welches Topic? | `SET-TOP-Zuordnung.md` |
-| Was bedeutet Byte *n*? | `ProtocolByteDecrypt.md`, ergänzend `doku-intern/` |
+| Was bedeutet Byte *n*, und nutzt die Firmware es? | `Byte-Zuordnung.md`; Rohquelle `ProtocolByteDecrypt.md`, ergänzend `doku-intern/` |
 | Was wurde wann warum geändert? | `src/version.h` |
 | Wie lief ein abgeschlossenes Vorhaben aus? | `Vorhaben-*.md`, `Auftrag-*.md` — Ergebnis steht jeweils im Kopf |
 | Was passiert im Notbetrieb, Schritt für Schritt? | `Ablauf-Notbetrieb.md` |

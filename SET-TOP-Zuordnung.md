@@ -543,7 +543,8 @@ Grenzen aus.
 Der Vollständigkeit halber: Im Kommandobereich (Bytes 4–109) sind in
 `ProtocolByteDecrypt.md` weitere Felder beschrieben, die diese Firmware weder
 liest noch schreibt. Sie sind hier gelistet, damit die Suche nicht zweimal
-gemacht wird — nicht als Vorschlag.
+gemacht wird — nicht als Vorschlag. Die vollständige Übersicht über alle
+202 Bytes samt Bitgruppen steht in [`Byte-Zuordnung.md`](Byte-Zuordnung.md).
 
 Bytes | Inhalt laut Referenz | warum nicht drin
 :--- | :--- | :---
