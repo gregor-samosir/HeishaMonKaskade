@@ -298,7 +298,7 @@ differs from the original project's. Notes are German.*
 |  |  | 161 | ganz | TOP54 | `Bypass_Outlet_Temp` | Bypass-Austritt (°C, Rohwert − 128) |
 |  |  | 162 | ganz | TOP55 | `Ipm_Temp` | Leistungsmodul IPM (°C, Rohwert − 128) |
 |  |  | 163 | ganz | TOP64 | `High_Pressure` | Hochdruck (kgf/cm², (Rohwert − 1) / 5) |
-|  |  | 164 | ganz | TOP66 | `Low_Pressure` | Niederdruck (kgf/cm², Rohwert − 1). Skalierung ungeklärt: Referenz (Rohwert − 1) / 5, Original seit Dezember 2023 (Rohwert − 1) × 50; nicht nachgemessen |
+|  |  | 164 | ganz | TOP66 | `Low_Pressure` | Niederdruck (kgf/cm², Rohwert − 1). An beiden Stufen konstant `0x01`, also 0 — dieses Modell meldet keinen Niederdruck. Wird beim nächsten Firmware-Release entfernt, die Nummer bleibt frei |
 |  |  | 165 | ganz | TOP67 | `Compressor_Current` | Stromaufnahme Außeneinheit (A, (Rohwert − 1) / 5) |
 |  |  | 166 | ganz | TOP8 | `Compressor_Freq` | Verdichterfrequenz (Hz, Rohwert − 1) |
 |  |  | 167 | ganz |  |  | Referenz: stets `0x00` |
@@ -340,11 +340,16 @@ differs from the original project's. Notes are German.*
 
 ## Was beim Aufstellen aufgefallen ist
 
-* **TOP66 `Low_Pressure` ist womöglich falsch skaliert.** Diese Firmware
-  rechnet Rohwert − 1, so wie das Original-Projekt zum Zeitpunkt der
-  Abspaltung. Die Referenz nennt (Rohwert − 1) / 5 in kgf/cm², das Original
-  rechnet seit Dezember 2023 (Rohwert − 1) × 50. Drei Quellen, drei Faktoren —
-  keiner davon ist an dieser Anlage nachgemessen.
+* **TOP66 `Low_Pressure` trägt an dieser Anlage nichts.** Byte 164 steht an
+  beiden Stufen dauerhaft auf `0x01`: Der ioBroker-Verlauf hat seit Beginn der
+  Aufzeichnung am 2026-07-12 je rund 98 000 Werte, alle 0, auch bei laufendem
+  Verdichter. Damit ist auch die Frage nach dem Faktor erledigt — diese
+  Firmware rechnet Rohwert − 1, die Referenz (Rohwert − 1) / 5, das Original
+  seit Dezember 2023 (Rohwert − 1) × 50, und jeder davon ergibt hier 0.
+  **Owner-Entscheid 2026-09-18:** TOP66 wird bei der nächsten
+  Firmware-Änderung entfernt, die ohnehin den vollen Ablauf bis zum Rollout
+  durchläuft — kein eigener Release dafür. Vorbild ist Zone 2 in 3.4.0: Zeile
+  raus, die übrigen Topics behalten ihre Nummern.
 * **Zwei Widersprüche zwischen Referenz und Original-Code**, beide an Feldern,
   die diese Anlage nicht hat: das zweite Raumthermostat (Byte 128 oder
   Byte 200) und die Zuordnung der Mischventil-PID zu den Zonen (Byte 177 und
