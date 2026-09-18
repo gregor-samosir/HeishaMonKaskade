@@ -406,6 +406,27 @@ Stand-Zeile falsch, erfundenes SET ab Byte 110) und drei am Code (TOP66
 gestrichen, TOP66 auf `(Rohwert - 1) x 50` umgestellt, `getPumpFlow` liest
 ein anderes Byte). Die unveraenderte Kopie war GRUEN.
 
+## Tabellen und Verweise des Repos (repo_konsistenz_test.py, 2026-09-18)
+
+Hosttest, laeuft in `hosttests.sh` und im pre-commit-Hook. Prueft, was das
+Repo ueber sich selbst sagt: README "Aufbau" gegen die versionierten
+Markdown-Dateien und `src/`, die Werkzeugtabelle oben gegen `test/`,
+`MQTT-Topics.md` gegen den Code (TOP Nummer und Name, SET Nummer, Name, Byte
+und Wertebereich), die Pfade in `CLAUDE.md` und jeden relativen Link in jeder
+Markdown-Datei. Von git ignorierte Pfade (`doku-intern/`,
+`platformio_user_env.ini`) gelten als vorhanden.
+
+**Gegenprobe beim Einfuehren, in einem frischen lokalen Klon:** Aufbau-Zeile
+geloescht, neues Werkzeug ohne Eintrag, Wertebereich und Topic-Name in
+`MQTT-Topics.md` falsch, Pfad in `CLAUDE.md` falsch, toter Link, neuer
+`*_test.py` ohne Eintrag in `hosttests.sh` - alle ROT. Ein Commit mit Fehler
+brach im Hook ab, einer ohne ging durch.
+
+**Warum im Klon und nicht im Arbeitsverzeichnis:** Nur dort fehlen die
+ignorierten Dateien wie in der CI. Genau so fiel auf, dass `doku-intern/`
+ohne Schraegstrich nicht als ignoriert erkannt wird - lokal existierte der
+Ordner, die CI waere nach dem Push rot geworden.
+
 ## Byte-Zuordnung belegen (byte_monitor.py, 3.9.0)
 
 Ein Byte beobachten, den zugehoerigen Wert aendern, die Flanke ansehen. Damit
