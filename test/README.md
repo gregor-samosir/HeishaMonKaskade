@@ -35,7 +35,9 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `knx_test.cpp` | KNX-Tunnel des Vorderhausschritts: jeder Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12, Sequenzregel, Antwortfilter (openknx zaehlt nie), jeder Zweig der Rueckleseregel A, die Einstellung `knx_schnittstelle`, `millis()`-Ueberlauf (bindet `src/knxtunnel.h` direkt ein) | nein |
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
-| `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` nicht in der Liste steht | nein |
+| `css_klassen_test.py` | Hosttest: jede benutzte w3-Klasse ist im eingebetteten CSS definiert, jede Farbklasse steht hinter `.w3-button` | nein |
+| `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md` und alle relativen Links gegen Dateien und Code | nein |
+| `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |

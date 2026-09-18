@@ -1058,6 +1058,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/HeishaMon.cpp`](src/HeishaMon.cpp) | Hauptschleife, Timing-Kette, serielle Anbindung, MQTT, OTA |
 | [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht (ESP32-S3), Timing-Konstanten |
 | [`src/telegram.h`](src/telegram.h) | Typ-, Längen- und Prüfsummenregel des Antworttelegramms (auch vom Hosttest genutzt) |
+| [`src/sendwindow.h`](src/sendwindow.h) | Zeitregeln des Kommando-Sammelfensters samt Deckel — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
@@ -1065,6 +1066,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/verbindung.h`](src/verbindung.h) | Karenz und Ausfalldauer der Verbindung zur Hausteuerung — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.h`](src/notbetrieb.h) | Regeln des Notbetriebs — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/notbetrieb.cpp`](src/notbetrieb.cpp) | Anbindung ans Gerät: Abonnement, Schrittfolge, Zustand |
+| [`src/rtcspiegel.h`](src/rtcspiegel.h) | Gültigkeitsregel des RTC-Spiegels, der die Notbetriebswerte über einen Neustart rettet — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/knxtunnel.h`](src/knxtunnel.h) | KNX-Tunnel und Rückleseregel A des Vorderhausschritts, Adressen der Anlage — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/vorderhaus.cpp`](src/vorderhaus.cpp) | Netzteil des Vorderhausschritts: kurze KNXnet/IP-Verbindungen über WiFiUDP |
 | [`src/version.h`](src/version.h) | Versionsnummer und ausführlicher Changelog |
@@ -1072,12 +1074,23 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) | Welches State-Topic liest ein Set-Kommando zurück — und wo keines existiert |
 | [`Byte-Zuordnung.md`](Byte-Zuordnung.md) | Byte 1–202 der Antwort mit allen Bitgruppen: welches Set-Kommando schreibt, welches State-Topic liest, was unbelegt ist |
 | [`Vorhaben-Byte28-Betriebsart.md`](Vorhaben-Byte28-Betriebsart.md) | Kurve ↔ Direkt als Set-Kommando — vollständig erledigt in 3.11.0, beide Kommandos am Gerät belegt |
+| [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md) | Heizstab über MQTT (SET37–SET39) — Entwurf, Messungen und Entscheidungen; erledigt in 3.17.0 |
+| [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) | ESP8266-Pfad aus Code, Build, CI und Doku entfernt — Planung und Entscheidungen; erledigt in 3.16.0 |
 | [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
 | [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
 | [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
 | [`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md) | KNX-Schritt „Vorderhaus": Recherche, Vorabtest an der Anlage, Entwurf, Rückleseregel A; umgesetzt in 3.21.0 nach [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) |
+| [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) | Umsetzung des Vorderhausschritts vom ersten Befehl bis zum Rollout; ausgerollt als 3.21.0 |
+| [`Analyse-Relais-statt-KNX.md`](Analyse-Relais-statt-KNX.md) | Die zwei Relais der Platine statt des KNX-Aktors — geprüft und verworfen (2026-08-23) |
+| [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md) | Node-RED-Seite des Notbetriebs (Werte-Sender, Verteiler-Ausgang) — erledigt am 2026-08-20 im Projekt `nodered-flows` |
+| [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md) | Umsetzung der Durchsicht vom 2026-09-02 (M1–M4) samt Nachweisen; 3.20.0 |
+| [`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md) | Auftrag aus `nodered-flows`: der Notbetrieb nimmt SET39 zurück — beantwortet, gebaut in 3.18.0 |
+| [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md) | Re-Assert-Sperre bei Wartung — beantwortet am 2026-08-20: die Sperre war nie eingeschaltet |
+| [`Massnahmenplan-Codedurchsicht-2026-08-18.md`](Massnahmenplan-Codedurchsicht-2026-08-18.md) | Erste Codedurchsicht: Befunde mit Entscheid je Punkt, auch für die verworfenen; umgesetzt bis 3.9.0 |
+| [`Massnahmenplan-Codedurchsicht-2026-09-02.md`](Massnahmenplan-Codedurchsicht-2026-09-02.md) | Zweite Durchsicht (Robustheit, Langzeitstabilität): Befunde mit Entscheid je Punkt; umgesetzt in 3.20.0 |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
+| [`.githooks/`](.githooks/pre-commit) | pre-commit-Hook: `test/hosttests.sh --schnell` vor jedem Commit, auch vor reinen Doku-Commits; einmal je Klon aktivieren mit `git config core.hooksPath .githooks` |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
 
 Zeitverhalten (Konstanten in `HeishaMon.h`): alle 5 s eine Abfrage an die

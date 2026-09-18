@@ -58,13 +58,15 @@ pio run -e heishamon_esp32_h1_ota          # Standard-Env (Stufe 1, OTA)
 pio run $(pio project config --json-output \
   | python3 -c "import json,sys; print(' '.join('-e '+s[0][4:] for s in json.load(sys.stdin) if s[0].startswith('env:')))")
 ./test/hosttests.sh                        # alle Hosttests, wie in der CI
+./test/hosttests.sh --schnell              # nur die Python-Prüfungen, < 1 s
+git config core.hooksPath .githooks        # einmal je Klon: --schnell vor jedem Commit
 ```
 
 Die zweite Zeile baut **alle** Envs, ohne eine zweite Liste zu pflegen. Die
 maßgebliche Liste der Hosttests samt Begründung, warum jeder einzelne existiert,
 steht in [`test/hosttests.sh`](test/hosttests.sh); die CI ruft dasselbe Skript
-auf. Ein neuer Test kommt dort hinein — fehlt eine `test/*_test.cpp` in der
-Liste, meldet das Skript ROT. Nach dem Flashen wird mit `test/tablesnap.py`
+auf. Ein neuer Test kommt dort hinein — fehlt eine `test/*_test.cpp` oder
+`test/*_test.py` in der Liste, meldet das Skript ROT. Nach dem Flashen wird mit `test/tablesnap.py`
 gegen den Stand davor abgenommen.
 
 ## Harte Regeln
