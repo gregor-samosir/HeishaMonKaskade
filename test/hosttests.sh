@@ -8,6 +8,12 @@
 # noch diese eine Liste. Vor dem Merge (CLAUDE.md, Regel 6):
 #
 #   ./test/hosttests.sh            # aus dem Repo-Wurzelverzeichnis oder test/
+#   ./test/hosttests.sh --schnell  # nur die Python-Pruefungen (< 1 s)
+#
+# --schnell ruft der pre-commit-Hook (.githooks/pre-commit) vor jedem Commit
+# auf - auch vor reinen Doku-Commits, die direkt auf main gehen. Dieselbe
+# Liste, damit Hook und Hosttests nicht auseinanderlaufen: Der Hook kennt
+# keine eigene Testliste, er laesst hier nur die C++-Tests aus.
 #
 # Laeuft ALLE Tests durch, auch wenn einer scheitert, und nennt am Ende jeden
 # gescheiterten. Rueckgabewert != 0, sobald einer scheitert oder ein Test
@@ -18,6 +24,10 @@
 # ueberschreiben sich gegenseitig die Programme.
 set -u
 
+# Schneller Modus: C++-Tests werden nur fuer die Vollstaendigkeit vermerkt
+SCHNELL=0
+[ "${1:-}" = "--schnell" ] && SCHNELL=1
+
 # --- Umgebung -------------------------------------------------------------
 # Ins Repo-Wurzelverzeichnis wechseln, damit alle Pfade unten repo-relativ
 # gelten, egal von wo das Skript gerufen wird
@@ -26,13 +36,17 @@ cd "$REPO" || exit 2
 BAU=${TMPDIR:-/tmp}/heisha_hosttests
 
 # Fehlende Werkzeuge frueh und verstaendlich melden statt als Folgefehler
-command -v c++ >/dev/null || { echo "FEHLER: c++ nicht gefunden (Xcode Command Line Tools)" >&2; exit 2; }
+[ "$SCHNELL" = 1 ] || command -v c++ >/dev/null || { echo "FEHLER: c++ nicht gefunden (Xcode Command Line Tools)" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "FEHLER: python3 nicht gefunden" >&2; exit 2; }
 
 # Bauverzeichnis frisch anlegen - ein altes Programm darf nie an Stelle eines
 # nicht uebersetzbaren neuen laufen
-rm -rf "$BAU"
-mkdir -p "$BAU" || exit 2
+# Im schnellen Modus NICHT: Der pre-commit-Hook darf einem parallel laufenden
+# vollen Lauf nicht die frisch uebersetzten Programme wegloeschen.
+if [ "$SCHNELL" = 0 ]; then
+    rm -rf "$BAU"
+    mkdir -p "$BAU" || exit 2
+fi
 
 GESCHEITERT=""   # Namen der gescheiterten Tests, fuer die Zusammenfassung
 GELAUFEN=""      # alle gerufenen .cpp, fuer die Vollstaendigkeitspruefung
@@ -49,8 +63,9 @@ kopf() {
 
 # Eigenstaendiger Test: bindet nur arduino-freie Header aus src/ ein
 cpp_test() {
-    kopf "$1"
     GELAUFEN="$GELAUFEN test/$1.cpp"
+    [ "$SCHNELL" = 1 ] && return 0
+    kopf "$1"
     if c++ -std=c++17 -O2 -Wall -o "$BAU/$1" "test/$1.cpp" && "$BAU/$1"; then
         :
     else
@@ -61,8 +76,9 @@ cpp_test() {
 # Test gegen den echten Dekodierpfad - braucht den Baurahmen mit den
 # Ersatzheadern (Begruendung im Kopf von decode_hosttest.sh)
 decode_test() {
-    kopf "$1"
     GELAUFEN="$GELAUFEN test/$1.cpp"
+    [ "$SCHNELL" = 1 ] && return 0
+    kopf "$1"
     if ./test/decode_hosttest.sh "test/$1.cpp"; then
         :
     else
@@ -72,6 +88,7 @@ decode_test() {
 
 py_test() {
     kopf "$1"
+    GELAUFEN="$GELAUFEN test/$1.py"
     if python3 "test/$1.py"; then
         :
     else
@@ -164,13 +181,22 @@ py_test css_klassen_test
 # erst auf, wenn jemand nach dem Byte sucht und das Falsche findet.
 py_test doku_zuordnung_test
 
+# Die Tabellen und Verweise des Repos ueber sich selbst: README "Aufbau",
+# die Werkzeugtabelle in test/README.md, MQTT-Topics.md gegen den Code, die
+# Pfade in CLAUDE.md und alle relativen Links. Die Durchsicht vom 2026-09-18
+# fand dort 14 Luecken, die keine Pruefung abgefangen hatte.
+py_test repo_konsistenz_test
+
 # --- Vollstaendigkeit -----------------------------------------------------
-# Jede test/*_test.cpp ist ein Hosttest (die Hardware-Tests sind .py). Steht
-# eine nicht in der Liste oben, laeuft sie weder lokal noch in der CI - und
-# niemand merkt es, weil alles gruen ist. Deshalb zaehlt das als Scheitern.
+# Jede test/*_test.cpp und test/*_test.py ist ein Hosttest - ausser den
+# Hardware-Tests unten, die ein Geraet brauchen und deshalb nie hier laufen.
+# Steht ein Hosttest nicht in der Liste oben, laeuft er weder lokal noch in
+# der CI - und niemand merkt es, weil alles gruen ist. Deshalb zaehlt das als
+# Scheitern. Die .py kamen am 2026-09-18 dazu.
+HARDWARE="test/hexlog_test.py test/kurven_test.py test/verteiler_test.py"
 FEHLT=""
-for datei in test/*_test.cpp; do
-    case " $GELAUFEN " in
+for datei in test/*_test.cpp test/*_test.py; do
+    case " $GELAUFEN $HARDWARE " in
         *" $datei "*) ;;
         *) FEHLT="$FEHLT $datei" ;;
     esac
@@ -189,5 +215,9 @@ if [ -n "$FEHLT" ] || [ -n "$GESCHEITERT" ]; then
     echo "HOSTTESTS ROT ($ANZAHL gelaufen)"
     exit 1
 fi
-echo "HOSTTESTS GRUEN: alle $ANZAHL bestanden"
+if [ "$SCHNELL" = 1 ]; then
+    echo "HOSTTESTS GRUEN (--schnell, nur Python): alle $ANZAHL bestanden"
+else
+    echo "HOSTTESTS GRUEN: alle $ANZAHL bestanden"
+fi
 exit 0

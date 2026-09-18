@@ -35,7 +35,9 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `knx_test.cpp` | KNX-Tunnel des Vorderhausschritts: jeder Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12, Sequenzregel, Antwortfilter (openknx zaehlt nie), jeder Zweig der Rueckleseregel A, die Einstellung `knx_schnittstelle`, `millis()`-Ueberlauf (bindet `src/knxtunnel.h` direkt ein) | nein |
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
-| `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` nicht in der Liste steht | nein |
+| `css_klassen_test.py` | Hosttest: jede benutzte w3-Klasse ist im eingebetteten CSS definiert, jede Farbklasse steht hinter `.w3-button` | nein |
+| `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md` und alle relativen Links gegen Dateien und Code | nein |
+| `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
@@ -403,6 +405,27 @@ geloescht, Status-Name falsch, Kodierung falsch, Bitgruppen verschoben,
 Stand-Zeile falsch, erfundenes SET ab Byte 110) und drei am Code (TOP66
 gestrichen, TOP66 auf `(Rohwert - 1) x 50` umgestellt, `getPumpFlow` liest
 ein anderes Byte). Die unveraenderte Kopie war GRUEN.
+
+## Tabellen und Verweise des Repos (repo_konsistenz_test.py, 2026-09-18)
+
+Hosttest, laeuft in `hosttests.sh` und im pre-commit-Hook. Prueft, was das
+Repo ueber sich selbst sagt: README "Aufbau" gegen die versionierten
+Markdown-Dateien und `src/`, die Werkzeugtabelle oben gegen `test/`,
+`MQTT-Topics.md` gegen den Code (TOP Nummer und Name, SET Nummer, Name, Byte
+und Wertebereich), die Pfade in `CLAUDE.md` und jeden relativen Link in jeder
+Markdown-Datei. Von git ignorierte Pfade (`doku-intern/`,
+`platformio_user_env.ini`) gelten als vorhanden.
+
+**Gegenprobe beim Einfuehren, in einem frischen lokalen Klon:** Aufbau-Zeile
+geloescht, neues Werkzeug ohne Eintrag, Wertebereich und Topic-Name in
+`MQTT-Topics.md` falsch, Pfad in `CLAUDE.md` falsch, toter Link, neuer
+`*_test.py` ohne Eintrag in `hosttests.sh` - alle ROT. Ein Commit mit Fehler
+brach im Hook ab, einer ohne ging durch.
+
+**Warum im Klon und nicht im Arbeitsverzeichnis:** Nur dort fehlen die
+ignorierten Dateien wie in der CI. Genau so fiel auf, dass `doku-intern/`
+ohne Schraegstrich nicht als ignoriert erkannt wird - lokal existierte der
+Ordner, die CI waere nach dem Push rot geworden.
 
 ## Byte-Zuordnung belegen (byte_monitor.py, 3.9.0)
 

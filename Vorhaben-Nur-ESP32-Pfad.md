@@ -206,7 +206,7 @@ Laufzeit heute: **4:15 min** (Lauf vom 2026-08-25).
 
 ### 3.5 Werkzeuge
 
-* [`piotools/obj-dump.py:7`](piotools/obj-dump.py#L7) ruft
+* `piotools/obj-dump.py:7` (mit 3.16.0 entfernt, siehe „Entscheidungen, die während der Umsetzung fielen“) ruft
   `xtensa-lx106-elf-objdump` — die **ESP8266**-Toolchain. Das Skript ist für
   ESP32 schon heute kaputt; es fällt nur nicht auf, weil einzig
   `name-firmware.py` in `extra_scripts` steht. Entweder auf
