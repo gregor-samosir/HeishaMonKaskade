@@ -1086,6 +1086,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Analyse-Relais-statt-KNX.md`](Analyse-Relais-statt-KNX.md) | Die zwei Relais der Platine statt des KNX-Aktors — geprüft und verworfen (2026-08-23) |
 | [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md) | Node-RED-Seite des Notbetriebs (Werte-Sender, Verteiler-Ausgang) — erledigt am 2026-08-20 im Projekt `nodered-flows` |
 | [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md) | Umsetzung der Durchsicht vom 2026-09-02 (M1–M4) samt Nachweisen; 3.20.0 |
+| [`Arbeitsplan-AltExternalSensor.md`](Arbeitsplan-AltExternalSensor.md) | Alternativer Außenfühler als SET40/TOP112, TOP66 entfällt — Entscheide und Ablauf bis zum Release; geplant für 3.23.0 |
 | [`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md) | Auftrag aus `nodered-flows`: der Notbetrieb nimmt SET39 zurück — beantwortet, gebaut in 3.18.0 |
 | [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md) | Re-Assert-Sperre bei Wartung — beantwortet am 2026-08-20: die Sperre war nie eingeschaltet |
 | [`Massnahmenplan-Codedurchsicht-2026-08-18.md`](Massnahmenplan-Codedurchsicht-2026-08-18.md) | Erste Codedurchsicht: Befunde mit Entscheid je Punkt, auch für die verworfenen; umgesetzt bis 3.9.0 |
