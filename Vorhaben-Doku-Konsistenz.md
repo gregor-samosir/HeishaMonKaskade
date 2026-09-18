@@ -1,11 +1,17 @@
 # Vorhaben: Doku, Memory und Code beisammenhalten
 
-> **Übergabe für eine neue Session — Stand 2026-09-18.**
-> Teil 1 und 2 sind erledigt: Prüfungen für die Tabellen des Repos und ein
-> pre-commit-Hook. Offen sind **Teil 3** (Memory verschlanken) und **Teil 4**
-> (Abschluss-Skill). Beides ist mit dem Owner abgesprochen, die Einzelheiten
-> entscheidet er je Punkt in der neuen Session.
-> **Ergebnis: offen.**
+> **Ergebnis: erledigt (2026-09-18).** Alle vier Teile sind abgeschlossen.
+> Teil 3: Memory zweistufig umgebaut (`MEMORY.md` mit 12 Grundregeln plus
+> vier Themen-Indizes plus `ARCHIV.md`), `projektstand-heishamon` von 10.556
+> auf 249 Wörter gekürzt, acht Memories gekürzt, zwei archiviert, zwei
+> gelöscht, `memory-lint` grün. Teil 4: Skill `/abschluss`
+> (`.claude/skills/abschluss/`), dazu `/rollout` Schritt 8 korrigiert
+> (Projektstand-Memory künftig überschreiben statt ergänzen — sonst wächst
+> genau die Datei wieder, die Teil 3 gerade gekürzt hat). Die Bestandsaufnahme
+> zu Teil 3 hat der Owner als Tabelle pauschal freigegeben, nicht Zeile für
+> Zeile durchgesprochen. Offen bleibt nur der Nebenbefund unten (feste
+> `**Ergebnis:**`-Zeile) — ein Vorschlag, den der Owner noch nicht
+> entschieden hat.
 
 ## Worum es geht
 

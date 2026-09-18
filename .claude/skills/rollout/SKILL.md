@@ -195,8 +195,11 @@ Die letzte Zeile muss drei Assets zeigen, danach `rm -rf "$R"`.
 
 - Erledigungsvermerk im Kopf des zugehörigen `Vorhaben-*.md`/`Arbeitsplan-*.md`,
   falls es eines gibt; auf `main` committen und pushen.
-- Projektstand in der Memory fortschreiben: Version auf allen vier Boards, Merge,
-  Tag, Rettungsanker, CI-Lauf, Releases, Abnahmebefund.
+- `projektstand-heishamon.md` in der Memory **überschreiben, nicht
+  ergänzen**: nur der aktuelle Zustand (Version auf allen vier Boards,
+  Pflicht-Konfiguration, offene Folgethemen). Merge, Tag, Rettungsanker,
+  CI-Lauf und Abnahmebefund stehen bereits im Changelog von `src/version.h`
+  und brauchen keine zweite Ablage.
 - Abschluss an den Owner: je Board eine Zeile (Version, Abnahme, Besonderheit),
   dazu CI und beide Releases.
 
