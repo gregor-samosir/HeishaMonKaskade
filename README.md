@@ -1077,6 +1077,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md) | Heizstab über MQTT (SET37–SET39) — Entwurf, Messungen und Entscheidungen; erledigt in 3.17.0 |
 | [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) | ESP8266-Pfad aus Code, Build, CI und Doku entfernt — Planung und Entscheidungen; erledigt in 3.16.0 |
 | [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
+| [`Vorhaben-Doku-Konsistenz.md`](Vorhaben-Doku-Konsistenz.md) | Doku, Memory und Code beisammenhalten — Prüfungen und pre-commit-Hook erledigt (2026-09-18), offen: Memory verschlanken und Abschluss-Skill |
 | [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
 | [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
