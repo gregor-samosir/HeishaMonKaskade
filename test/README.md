@@ -49,6 +49,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `tablesnap.py` | Momentaufnahme der Topic-Tabelle ueber `/tablerefresh`, zeilenweise diffbar - fuer die Abnahme nach dem Flashen | Produktivgeraet (nur lesend) |
 | `top_watch.py` | Verlauf statt Momentaufnahme: ausgewaehlte TOPs im Takt abfragen und jede Aenderung mit Zeitstempel melden | Produktivgeraet (nur lesend) |
 | `set_top_zuordnung.py` | Erzeugt die Tabellen in `SET-TOP-Zuordnung.md`: welches State-Topic liest ein Set-Kommando zurueck | nein |
+| `doku_zuordnung_test.py` | Hosttest: `Byte-Zuordnung.md` gegen `setCommands[]` und `stateTopics[]` (Byte, Bits, Namen, Einheit, Kodierung, Stand-Zeile), ruft `set_top_zuordnung.py --pruefen` mit auf | nein |
 | `byte_monitor.py` | Einzelne Bytes des Antworttelegramms beobachten, um eine Byte-Zuordnung zu belegen statt sie abzuleiten | Produktivgeraet (nur lesend) |
 | `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung, `mischer` als Referenz des Notbetriebsschritts "Vorderhaus". `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator; `simulator` (1.7.0) bietet denselben Simulator im LAN an, damit der Pruefling den Schritt ohne Bus fahren kann (Route `/vorderhaus/pruefen`, nur im Pruefling-Build) | KNX-IP-Schnittstelle (`selbsttest`, `simulator`: nein) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
@@ -363,12 +364,42 @@ meldet TOP4 nie den geschriebenen Wert zurueck, sondern 2 **oder** 7 - die WP
 legt die Richtung selbst fest.
 
 Nach jeder Aenderung an `setCommands[]` oder `stateTopics[]` laufen lassen und
-die Ausgabe gegen die Doku halten.
+die Ausgabe gegen die Doku halten. `--pruefen` laeuft seit 2026-09-18 in den
+Hosttests mit (ueber `doku_zuordnung_test.py`, naechster Abschnitt). Es
+vergleicht allerdings nur die Paare SET -> TOP - die Topic-Listen in
+Abschnitt 3 der Doku prueft es nicht.
 
 **Beim Nachschlagen in `ProtocolByteDecrypt.md`:** Die Zahl in der ersten
 Spalte ist eine Topic-Nummer des *Original*-Projekts, keine Byte-Position.
 Wo eine Zuordnung zweifelhaft ist, entscheidet die Messung - `byte_monitor.py`,
 siehe naechster Abschnitt.
+
+## Doku gegen den Code (doku_zuordnung_test.py, 2026-09-18)
+
+Hosttest, laeuft in `hosttests.sh` und damit lokal vor dem Merge und in der
+CI. Prueft `Byte-Zuordnung.md` in allem, was sich aus dem Code ableiten laesst:
+Byte 1-202 lueckenlos, Bitgruppen je Byte vollstaendig, jedes SET und TOP auf
+seinem Byte und genau seinen Bits, die Namen in *Kommando* und *Status*,
+Einheit und Kodierung in der Bemerkung und die Zahlen in der Stand-Zeile.
+Dazu ruft er `set_top_zuordnung.py --pruefen` fuer `SET-TOP-Zuordnung.md`.
+Die Bedeutungstexte ("Referenz:", "Original:", Befunde) prueft er nicht.
+
+```
+./doku_zuordnung_test.py                 # das Repo pruefen
+./doku_zuordnung_test.py <kopie.md>      # eine andere Fassung pruefen
+```
+
+Mehrbyte-Dekodierer (`getPumpFlow` usw.) stehen mit ihren Bytes in der
+Tabelle `MEHRBYTE` im Test und werden gegen die `serial_data[]`-Zugriffe in
+`decode.cpp` gehalten; ein neuer Dekodierer ohne Eintrag dort ist ROT, statt
+stillschweigend als ganzes Byte zu gelten.
+
+**Gegenprobe beim Einfuehren (2026-09-18):** Neun absichtlich falsche
+Fassungen, alle ROT mit passender Meldung - sechs an der Doku (Zeile
+geloescht, Status-Name falsch, Kodierung falsch, Bitgruppen verschoben,
+Stand-Zeile falsch, erfundenes SET ab Byte 110) und drei am Code (TOP66
+gestrichen, TOP66 auf `(Rohwert - 1) x 50` umgestellt, `getPumpFlow` liest
+ein anderes Byte). Die unveraenderte Kopie war GRUEN.
 
 ## Byte-Zuordnung belegen (byte_monitor.py, 3.9.0)
 

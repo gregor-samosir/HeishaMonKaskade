@@ -30,6 +30,11 @@ Ausgabe wird gegen diese Datei gehalten:
 ./test/set_top_zuordnung.py --pruefen
 ```
 
+Seit dem 2026-09-18 läuft diese Prüfung in den Hosttests mit
+([`test/doku_zuordnung_test.py`](test/doku_zuordnung_test.py)), also vor jedem
+Merge und in der CI. Sie vergleicht die Paare SET → TOP, nicht die
+Topic-Listen in Abschnitt 3.
+
 ## Wie die Zuordnung entstanden ist
 
 Zugeordnet wurde über **Byte-Position und Bitmaske**, nicht über Namen — Namen
