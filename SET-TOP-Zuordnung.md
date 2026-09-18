@@ -1,7 +1,7 @@
 # SET-TOP-Zuordnung
 
 Welches State-Topic liest ein Set-Kommando zurück? Diese Datei beantwortet das
-für alle 37 Set-Kommandos und alle 92 State-Topics der Firmware 3.17.0 und
+für alle 37 Set-Kommandos und alle 99 State-Topics der Firmware 3.22.0 und
 hält fest, wo es kein Gegenstück gibt.
 
 Wozu: Eine Steuerung, die schreibt, muss prüfen können, ob der Wert angekommen
@@ -12,13 +12,13 @@ einzige Nachweis ist das Rücklesen des zugehörigen State-Topics. Wo diese
 Spalte leer bleibt, schreibt die Steuerung blind.
 
 *In English: which state topic reads a set command back? This file maps all 37
-set commands and all 92 state topics of firmware 3.17.0 against each other and
+set commands and all 99 state topics of firmware 3.22.0 against each other and
 records where no counterpart exists. The heat pump acknowledges nothing and
 silently clamps out-of-range values, so reading the matching state topic back
 is the only proof a write arrived — where that column is empty, a controller
 writes blind. Tables are language-neutral; the notes are German.*
 
-**Stand:** 2026-08-28, Firmware 3.17.0. Quelle sind ausschließlich die beiden
+**Stand:** 2026-09-18, Firmware 3.22.0. Quelle sind ausschließlich die beiden
 Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
 und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
 sind nicht von Hand gepflegt, sondern von
@@ -32,8 +32,8 @@ Ausgabe wird gegen diese Datei gehalten:
 
 Seit dem 2026-09-18 läuft diese Prüfung in den Hosttests mit
 ([`test/doku_zuordnung_test.py`](test/doku_zuordnung_test.py)), also vor jedem
-Merge und in der CI. Sie vergleicht die Paare SET → TOP, nicht die
-Topic-Listen in Abschnitt 3.
+Merge und in der CI. Sie vergleicht die Paare SET → TOP, die Topic-Listen in
+Abschnitt 3 und die Zahlen in den Überschriften und im Einleitungssatz.
 
 ## Wie die Zuordnung entstanden ist
 
@@ -397,11 +397,11 @@ angefangen hat, nicht dass das Kommando angekommen ist. Bleibt die Routine aus,
 lässt sich daraus nicht ableiten, ob das Kommando verworfen wurde oder die
 Wärmepumpe es abgelehnt hat.
 
-## 3. State-Topics ohne Set-Kommando (57)
+## 3. State-Topics ohne Set-Kommando (64)
 
-### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (8)
+### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (15)
 
-Diese 8 Topics liegen unter Byte 110, ihre Adresse existiert im
+Diese 15 Topics liegen unter Byte 110, ihre Adresse existiert im
 Kommandotelegramm also. **Das heißt nicht, dass die Wärmepumpe dort auch
 schreiben lässt** — belegt ist nur die Leseseite. Die Spalte *Kodierung* ist
 aus dem vorhandenen Dekodierer zurückgerechnet und damit nicht geraten; offen
@@ -417,6 +417,13 @@ TOP70 | `Sterilization_Temp` | 100 | ganz | `Wert + 128` | gering
 TOP71 | `Sterilization_Max_Time` | 101 | ganz | `Wert + 1` | gering
 TOP3 | `Quiet_Mode_Schedule` | 7 | 1+2 | Maske `0xC0`, `(n+1)×64` | gering ⁵
 TOP13 | `Main_Schedule_State` | 5 | 1+2 | Maske `0xC0`, `(n+1)×64` | gering ⁵
+TOP105 | `Pad_Heater_Type` | 25 | 3+4 | Maske `0x30`, `(n+1)×16` | keiner ⁸
+TOP106 | `Internal_Heater_Power` | 25 | 5+6 | Maske `0x0C`, `(n+1)×4` | keiner ⁸
+TOP107 | `DHW_Heater_Type` | 25 | 7+8 | Maske `0x03`, `(n+1)×1` | keiner ⁸
+TOP108 | `External_Compressor_Config` | 23 | 1+2 | Maske `0xC0`, `(n+1)×64` | keiner ⁸
+TOP109 | `External_Error_Signal_Config` | 23 | 3+4 | Maske `0x30`, `(n+1)×16` | keiner ⁸
+TOP110 | `Heat_Cool_SW_Config` | 23 | 5+6 | Maske `0x0C`, `(n+1)×4` | keiner ⁸
+TOP111 | `External_Control_Config` | 23 | 7+8 | Maske `0x03`, `(n+1)×1` | keiner ⁸
 
 Die drei Heizstab-Topics TOP58, TOP59 und TOP68 standen bis 3.16.0 ebenfalls
 hier. Seit 3.17.0 haben sie ihr Set-Kommando (SET37 – SET39, Fußnote ⁷) — die
@@ -427,6 +434,16 @@ geschrieben war.
 ⁵ Die beiden Schedule-Topics melden, ob ein Zeitprogramm aktiv ist. Das
 Zeitprogramm selbst steht nicht in diesen Bits — es einzuschalten, ohne es
 setzen zu können, bringt für eine externe Steuerung nichts.
+
+⁸ Die sieben Installer-Topics stehen seit 3.19.0 im Code, und zwar zum Lesen:
+Sie machen eine falsche Systemeinstellung sichtbar, ohne dass jemand ins Menü
+muss. Anlass war der 2026-08-31 — ein Speicher-Heizstab auf „extern“ legte
+Stufe 2 mit H91 still ([`MQTT-Topics.md`](MQTT-Topics.md), Abschnitt zu
+TOP105–TOP111). Ein Set-Kommando wäre das Gegenteil davon: Ein falscher Wert
+aus der Ferne legt die Stufe genauso still, nur ohne dass jemand vor dem Gerät
+steht. Die Kodierung ist der Vollständigkeit halber eingetragen. Hier fehlten
+die sieben bis 2026-09-18, weil der Abgleich nur die Paare SET → TOP prüfte —
+ein Topic ohne Kommando bildet kein Paar. Seitdem prüft er auch diese Listen.
 
 ### 3b. Ist-Zustände ab Byte 110 — kein Set-Kommando möglich (9)
 
@@ -535,7 +552,8 @@ zusammen im selben Sammelfenster. Alle vier Rohwerte aus
 
 Offen bleibt:
 
-**1. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht. Jeder
+**1. Der Rest aus Abschnitt 3a**, wenn ein konkreter Bedarf auftaucht —
+ausgenommen die Installer-Topics TOP105–TOP111, siehe ⁸. Jeder
 dieser Werte ist eine Zeile in `setCommands[]`; die Arbeit steckt nicht im
 Code, sondern im Ausmessen des zulässigen Bereichs. Wie das geht und warum es
 nötig ist, steht in [`MQTT-Topics.md`](MQTT-Topics.md) — von den 21 Werten, die
@@ -555,7 +573,7 @@ Bytes | Inhalt laut Referenz | warum nicht drin
 :--- | :--- | :---
 40, 41, 79–82, 90–93 | Zone 2, Anforderung und beide Kurven | Zone 2 in 3.4.0 entfernt, diese Anlagen haben keine
 58–70 | Pool, Puffer, Solar, Bivalent, externe Heizstäbe | an dieser Anlage nicht vorhanden
-20–26, 29, 30 | Anlagenkonfiguration: Zonenzahl, Sensorart, externe Steuerung, Pumpenregelung | Installateur-Ebene, gehört nicht in eine Kaskadensteuerung
+20–22, 24, 26, 29, 30 | Anlagenkonfiguration: Zonenzahl, Sensorart, Speicher, Bivalenz, Pumpenregelung | Installateur-Ebene, gehört nicht in eine Kaskadensteuerung
 27 | Freigabe SG Ready und Demand Control | Kapazitäten sind über SET22–SET25 gesetzt, die Freigabe steht am Terminal
 46 | Estrichtrocknung, Zieltemperatur der Stufe | einmaliger Bauvorgang
 104–106 | Verzögerung und Delta für den internen Heizstab (J/K/L-Serie) | Serie passt nicht
@@ -568,6 +586,10 @@ jede Reaktion in den 203 Bytes der Antwort (byteweiser Vergleich mit
 [`test/frame_diff.py`](test/frame_diff.py)). Byte 23 ist die
 Menü-*Einstellung*, ob der Eingang benutzt wird — nicht sein Zustand. Diese
 Suche gilt als abgeschlossen, siehe [`MQTT-Topics.md`](MQTT-Topics.md).
+
+Byte 23 und Byte 25 stehen seit 3.19.0 nicht mehr in dieser Liste: Die Firmware
+liest sie als TOP105–TOP111 (Abschnitt 3a, Fußnote ⁸), die Einstellung des
+Kompressor-Eingangs also als TOP108 `External_Compressor_Config`.
 
 ## Vorbehalte
 
