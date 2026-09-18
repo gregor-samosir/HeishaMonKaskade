@@ -1,6 +1,7 @@
 # Auftrag: Der Notbetrieb muss `SET39 ForceHeater` zurücknehmen
 
-> **Beantwortet am 2026-08-30 — angenommen, gebaut und ausgeliefert in 3.18.0.**
+> **Ergebnis: erledigt (2026-08-30) — angenommen, gebaut und ausgeliefert in
+> 3.18.0.**
 > Der Befund stimmt in allen Punkten: `SET39` kam in keiner der beiden
 > Schrittfolgen vor, und niemand hätte den Zustand zurückgenommen. Beide Folgen
 > haben jetzt an **Position 2** den Schritt `ForceHeater = 0` — genau dort, wo

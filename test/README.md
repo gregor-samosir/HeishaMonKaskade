@@ -36,7 +36,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
 | `css_klassen_test.py` | Hosttest: jede benutzte w3-Klasse ist im eingebetteten CSS definiert, jede Farbklasse steht hinter `.w3-button` | nein |
-| `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md` und alle relativen Links gegen Dateien und Code | nein |
+| `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md`, alle relativen Links gegen Dateien und Code, und die `**Ergebnis:**`-Zeile in jeder Vorhaben-/Auftrag-/Arbeitsplan-Datei | nein |
 | `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
@@ -412,15 +412,26 @@ Hosttest, laeuft in `hosttests.sh` und im pre-commit-Hook. Prueft, was das
 Repo ueber sich selbst sagt: README "Aufbau" gegen die versionierten
 Markdown-Dateien und `src/`, die Werkzeugtabelle oben gegen `test/`,
 `MQTT-Topics.md` gegen den Code (TOP Nummer und Name, SET Nummer, Name, Byte
-und Wertebereich), die Pfade in `CLAUDE.md` und jeden relativen Link in jeder
-Markdown-Datei. Von git ignorierte Pfade (`doku-intern/`,
-`platformio_user_env.ini`) gelten als vorhanden.
+und Wertebereich), die Pfade in `CLAUDE.md`, jeden relativen Link in jeder
+Markdown-Datei, und ob jede `Vorhaben-*.md`/`Auftrag-*.md`/`Arbeitsplan-*.md`
+in den ersten 15 Zeilen eine `**Ergebnis: ...**`-Zeile traegt (Konvention seit
+2026-09-18, `Vorhaben-Doku-Konsistenz.md`). Von git ignorierte Pfade
+(`doku-intern/`, `platformio_user_env.ini`) gelten als vorhanden.
+
+**Was die Ergebnis-Pruefung NICHT abdeckt:** ob die Zeile stimmt, nur dass sie
+da ist — zwei Faelle hatten trotz vorhandenem Kopf ein veraltetes oder
+widerspruechliches Ergebnis stehen (`Arbeitsplan-KNX-Vorderhaus.md`,
+`Vorhaben-Nur-ESP32-Pfad.md`). Ob der Inhalt noch stimmt, prueft der Skill
+`/abschluss`, Schritt 3 — mechanisch ist das nicht fassbar.
 
 **Gegenprobe beim Einfuehren, in einem frischen lokalen Klon:** Aufbau-Zeile
 geloescht, neues Werkzeug ohne Eintrag, Wertebereich und Topic-Name in
 `MQTT-Topics.md` falsch, Pfad in `CLAUDE.md` falsch, toter Link, neuer
 `*_test.py` ohne Eintrag in `hosttests.sh` - alle ROT. Ein Commit mit Fehler
-brach im Hook ab, einer ohne ging durch.
+brach im Hook ab, einer ohne ging durch. Die Ergebnis-Pruefung ist mit echtem
+Vorher/Nachher belegt: vor dem Ergaenzen der Zeilen meldete der Test neun der
+elf Dateien ROT (die zwei mit vorhandener Zeile bestanden bereits), nach dem
+Ergaenzen alle elf GRUEN.
 
 **Warum im Klon und nicht im Arbeitsverzeichnis:** Nur dort fehlen die
 ignorierten Dateien wie in der CI. Genau so fiel auf, dass `doku-intern/`

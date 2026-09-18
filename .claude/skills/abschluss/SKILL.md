@@ -73,11 +73,14 @@ auf einem Arbeits-Branch.
 } | sort -u
 ```
 
-Für jede betroffene Datei: Steht oben das **aktuelle** Ergebnis, oder
-widerspricht es dem, was weiter unten in derselben Datei steht (Lehrstück:
-`Arbeitsplan-KNX-Vorderhaus.md` und `Vorhaben-Nur-ESP32-Pfad.md`, beide am
-2026-09-18 mit veraltetem Kopf gefunden)? Abweichung melden und, wenn es
-reine Doku ist, mit dieser Session gleich richtigstellen.
+Jede solche Datei trägt seit 2026-09-18 eine `**Ergebnis: ...**`-Zeile in den
+ersten 15 Zeilen — `repo_konsistenz_test.py` prüft nur, dass sie **da ist**,
+nicht ob sie **stimmt**. Für jede betroffene Datei deshalb lesen: Ist die
+Zeile noch aktuell, oder widerspricht sie dem, was weiter unten in derselben
+Datei steht (Lehrstück: `Arbeitsplan-KNX-Vorderhaus.md` und
+`Vorhaben-Nur-ESP32-Pfad.md`, beide am 2026-09-18 mit veraltetem Kopf
+gefunden)? Abweichung melden und, wenn es reine Doku ist, mit dieser Session
+gleich richtigstellen.
 
 ## 4. Abschlussmeldung
 

@@ -1,5 +1,9 @@
 # Vorhaben: Heizstab freigeben (Byte 9) und ForceHeater (Byte 5)
 
+> **Ergebnis: erledigt, bis auf das Winterexperiment (frühestens Winter
+> 2026/27).** SET37–39 seit 3.17.0 im Einsatz, die Notbetrieb-Rücknahme seit
+> 3.18.0.
+
 Ziel ist, den internen Heizstab über MQTT ansprechbar zu machen — bis 3.16.0
 ging das nur am Bedienterminal.
 

@@ -1,10 +1,15 @@
 # Arbeitsplan: KNX-Schritt „Vorderhaus“ in der Firmware
 
+> **Ergebnis: erledigt (2026-09-14) — ausgerollt als 3.22.0 auf allen vier
+> Boards.** Der Schritt läuft an beiden Stufen, fällig nur bei Heizbetrieb;
+> `knx_schnittstelle` ist an allen vieren Pflicht. Offen bleibt nur
+> außerhalb dieses Repos: die Mischer-Anleitung (Owner), danach die
+> Arbeitsanweisung für den KNX-Re-Assert in `nodered-flows` (Claude).
+>
 > **Übergabe für eine neue Session — Stand 2026-09-12 abends.**
 > Recherche, Vorabtest, Entwurf und Rückleseregel sind abgeschlossen und
 > vom Owner entschieden. Die Firmware steht unverändert auf 3.20.0. Offen ist
 > die Umsetzung; dieser Plan führt vom ersten Befehl bis zum Rollout.
-> **Ergebnis: offen.**
 >
 > **2026-09-13:** E1–E4 und drei Folgepunkte entschieden (Abschnitt
 > „Entschieden am 2026-09-13“), dazu die Farbe des Vorderhausfalls neu:

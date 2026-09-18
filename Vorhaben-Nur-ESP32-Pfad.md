@@ -1,5 +1,11 @@
 # Vorhaben: Nur noch der ESP32-Pfad
 
+> **Ergebnis: erledigt (2026-08-27) — Firmware 3.16.0.** Der ESP8266-Pfad ist
+> vollständig aus Code, Build-Konfiguration, CI und Dokumentation entfernt;
+> die Firmware auf den produktiven Boards hat sich dabei um kein Byte
+> geändert (text/data/bss und alle 9346 ELF-Symbole verglichen). Beide
+> Backup-Boards eingerichtet und stillgelegt.
+
 Übergabe für eine eigene Session. Ziel ist, den ESP8266-Pfad (D1 mini) aus
 Code, Build-Konfiguration, CI und Dokumentation zu entfernen. Die Firmware auf
 den beiden produktiven Boards ändert sich dabei **um kein Byte** — es geht um

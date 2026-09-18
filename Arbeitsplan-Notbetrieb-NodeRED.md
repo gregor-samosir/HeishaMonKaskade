@@ -1,6 +1,6 @@
 # Arbeitsplan: Node-RED-Seite des Notbetriebs
 
-> **Erledigt am 2026-08-20.** Umgesetzt im Projekt `nodered-flows`:
+> **Ergebnis: erledigt (2026-08-20).** Umgesetzt im Projekt `nodered-flows`:
 > *Notbetriebswerte-Sender V1.0* (Teil 1) und *Hauptmodus-Verteiler V6.5*,
 > Ausgang 15 (Teil 2); `NOTBETRIEB.md` dort ist nachgezogen (Teil 3), die vier
 > Abnahmepunkte sind durch. Von hier aus gegengeprüft: Alle fünf Werte liegen im

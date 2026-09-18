@@ -1,5 +1,10 @@
 # Arbeitsplan 3.20.0: Robustheit und Langzeitstabilität
 
+> **Ergebnis: erledigt (2026-09-02) — als 3.20.0 ausgerollt.** M1–M4
+> umgesetzt, am Prüfstand abgenommen (P1–P4 bestanden) und auf allen vier
+> Boards ausgerollt. Vollständiger Befund in
+> `Massnahmenplan-Codedurchsicht-2026-09-02.md`.
+
 Umsetzung von M1–M4 aus `Massnahmenplan-Codedurchsicht-2026-09-02.md`.
 Ausgangsstand: 3.19.0, Commit `4a2da3a` auf `main`, alle vier Boards laufen
 3.19.0.

@@ -261,6 +261,20 @@ def main():
                 befunde.append(f"{datei}: Link auf {ziel} fuehrt ins Leere")
     erg.pruefung("Links", befunde, f"alle {links} relativen Links in den Markdown-Dateien fuehren zu einer Datei")
 
+    # --- 6. Ergebnis-Zeile in Vorhaben-/Auftrag-/Arbeitsplan-Dateien ---------
+    befunde = []
+    kopf_zeile = re.compile(r"^>?\s*\*\*Ergebnis:", re.M)
+    vorhaben_dateien = sorted(
+        d for d in dateien
+        if "/" not in d and re.match(r"^(Vorhaben|Auftrag|Arbeitsplan)-.*\.md$", d))
+    for datei in vorhaben_dateien:
+        kopf = "\n".join((REPO / datei).read_text().splitlines()[:15])
+        if not kopf_zeile.search(kopf):
+            befunde.append(f"{datei}: keine `**Ergebnis: ...**`-Zeile in den ersten 15 Zeilen")
+    erg.pruefung("Vorhaben-Koepfe", befunde,
+                 f"alle {len(vorhaben_dateien)} Vorhaben-/Auftrag-/Arbeitsplan-Dateien "
+                 f"nennen das Ergebnis im Kopf")
+
     print()
     if erg.fehler:
         print(f"FEHLGESCHLAGEN ({erg.fehler} Fehler)")

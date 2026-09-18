@@ -1,6 +1,6 @@
 # Vorhaben: Betriebsart Kurve ↔ Direkt als Set-Kommando (Byte 28)
 
-> ## ✅ VOLLSTÄNDIG ERLEDIGT am 2026-08-19 mit Firmware 3.11.0
+> **Ergebnis: erledigt (2026-08-19) — ✅ vollständig, Firmware 3.11.0.**
 >
 > **Die Wärmepumpe nimmt Byte 28 an.** Das war die einzige echte Unbekannte
 > (Abschnitt 3), und sie ist beantwortet. SET35 `HeatingMode` und SET36

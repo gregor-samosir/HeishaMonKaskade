@@ -148,20 +148,22 @@ lesen, prüfen und melden; pushen nur auf Auftrag. Eintrag in `CLAUDE.md` unter
 Einmal am Ende der Session laufen lassen, die Teil 3 abschließt; dabei gefundene
 Abweichungen berichtigen.
 
-## Nebenbefund: das Ergebnis im Kopf der Vorhaben
+## Nebenbefund: das Ergebnis im Kopf der Vorhaben — umgesetzt (2026-09-18)
 
 `CLAUDE.md` sagt über die Vorhaben- und Auftragsdateien: „Ergebnis steht jeweils
-im Kopf“. Zwei weichen ab:
+im Kopf”. Zwei wichen ab: [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md)
+führte oben noch „Ergebnis: offen”, während das tatsächliche Ergebnis
+(„ausgerollt”) drei Absätze tiefer stand; [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)
+nannte im Kopf nur den Planungsstand vom 2026-08-25, obwohl 3.16.0 umgesetzt
+und ausgerollt war.
 
-* [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) führt oben noch
-  „Ergebnis: offen“; das tatsächliche Ergebnis („ausgerollt“) steht drei Absätze
-  tiefer.
-* [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) nennt im Kopf nur den
-  Planungsstand vom 2026-08-25, obwohl 3.16.0 umgesetzt und ausgerollt ist.
-
-**Vorschlag für den Owner:** eine feste Zeile `**Ergebnis:** …` direkt unter der
-Überschrift jeder solchen Datei. Dann kann `repo_konsistenz_test.py` prüfen, dass
-sie vorhanden ist — ob sie stimmt, prüft der Abschluss-Skill (Teil 4, Schritt 3).
+**Auf Owner-Auftrag umgesetzt:** Jede `Vorhaben-*.md`/`Auftrag-*.md`/
+`Arbeitsplan-*.md` trägt jetzt eine Zeile `**Ergebnis: …**` in den ersten 15
+Zeilen (elf Dateien, die zwei genannten korrigiert). `repo_konsistenz_test.py`
+prüft mechanisch, dass sie **da ist** — mit echter Gegenprobe: vor dem
+Ergänzen 9 von 11 Dateien ROT, danach alle GRÜN. Ob sie **stimmt**, prüft der
+Skill `/abschluss`, Schritt 3 (Teil 4) — das bleibt Sache des Lesens, nicht
+mechanisch prüfbar.
 
 ## Regeln für die Session
 

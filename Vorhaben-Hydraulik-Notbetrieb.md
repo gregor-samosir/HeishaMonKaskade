@@ -1,5 +1,8 @@
 # Vorhaben: Die Hydraulik beim Notbetrieb auf 1-stufig schalten
 
+> **Ergebnis: erledigt (2026-08-27) — umgesetzt als 3.15.0, an der Anlage
+> abgenommen (P1–P4, P6, P7).**
+
 Der Notbetrieb setzt hydraulisch **1-stufigen** Betrieb voraus. Bisher stellt
 das niemand sicher — im Normalbetrieb schaltet die Kaskadensteuerung einen
 Tasmota-Switch, und genau die ist im Notbetriebsfall weg. Dieses Vorhaben legt

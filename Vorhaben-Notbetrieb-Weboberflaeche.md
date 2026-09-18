@@ -1,5 +1,11 @@
 # Vorhaben: Notbetrieb über die Weboberfläche schaltbar machen
 
+> **Ergebnis: erledigt (2026-08-21) — Firmware v3.12.0.** Der Notbetrieb ist
+> über die Weboberfläche schaltbar (eigener Zugang, Sperre über TOP101),
+> Etappen 5–7 gefahren und grün. Die Datei trägt danach weitere
+> Abnahmeprotokolle bis 3.14.2 — für den aktuellen Firmware-Stand
+> `src/version.h` bzw. die Memory `projektstand-heishamon` prüfen.
+
 Der Notbetrieb soll ohne ioBroker, ohne Node-RED und ohne MQTT-Broker
 auslösbar sein — mit einem Browser, von einem Menschen aus der Familie.
 

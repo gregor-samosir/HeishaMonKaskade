@@ -1,6 +1,7 @@
 # Auftrag: Die Wartung muss den Re-Assert wirklich stilllegen — und von außen sichtbar sein
 
-> **Beantwortet am 2026-08-20 — und zwar anders, als dieser Auftrag annimmt.**
+> **Ergebnis: erledigt (2026-08-20) — beantwortet, und zwar anders, als
+> dieser Auftrag annimmt.**
 > Die Sperre war nicht defekt. **Sie war nie eingeschaltet.**
 >
 > Zwei Spuren, die eine Wartungsflanke zwingend hinterlässt, fehlten beide:
