@@ -123,9 +123,9 @@ Nur prüfen und melden:
 - Neues Werkzeug unter `test/` → Tabelle „Werkzeuge" in `test/README.md`.
 - Neuer arduino-freier Header → Liste in `CLAUDE.md`, „Konventionen beim Ändern".
 - Neues oder geändertes Topic → `MQTT-Topics.md` (englisch), `Byte-Zuordnung.md`
-  und bei Set-Kommandos `SET-TOP-Zuordnung.md`. Die Spalten beider Zuordnungen
-  prüft `doku_zuordnung_test` in Schritt 4 mit; die Topic-Listen in Abschnitt 3
-  von `SET-TOP-Zuordnung.md` nicht — die von Hand ansehen.
+  und `SET-TOP-Zuordnung.md`. Was sich aus dem Code ableiten lässt (Bytes, Bits,
+  Namen, Topic-Listen, Zahlen), prüft `doku_zuordnung_test` in Schritt 4 mit;
+  die Bedeutungstexte und Fußnoten nicht — die von Hand ansehen.
 - Nichts aus `doku-intern/` zitiert, auch nicht sinngemäß, auch nicht in
   Commit-Messages.
 

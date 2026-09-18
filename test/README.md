@@ -366,8 +366,11 @@ legt die Richtung selbst fest.
 Nach jeder Aenderung an `setCommands[]` oder `stateTopics[]` laufen lassen und
 die Ausgabe gegen die Doku halten. `--pruefen` laeuft seit 2026-09-18 in den
 Hosttests mit (ueber `doku_zuordnung_test.py`, naechster Abschnitt). Es
-vergleicht allerdings nur die Paare SET -> TOP - die Topic-Listen in
-Abschnitt 3 der Doku prueft es nicht.
+vergleicht die Paare SET -> TOP, die Topic-Listen in Abschnitt 3a-3c und die
+Zahlen in den Ueberschriften und im Einleitungssatz. Die Listen kamen am
+2026-09-18 dazu: Die sieben Installer-Topics aus 3.19.0 fehlten dort drei
+Wochen, und der reine Paarvergleich blieb gruen - ein Topic ohne Kommando
+bildet kein Paar.
 
 **Beim Nachschlagen in `ProtocolByteDecrypt.md`:** Die Zahl in der ersten
 Spalte ist eine Topic-Nummer des *Original*-Projekts, keine Byte-Position.

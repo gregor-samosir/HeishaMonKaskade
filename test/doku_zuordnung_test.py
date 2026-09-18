@@ -31,7 +31,8 @@ Bemerkung - alles, was sich aus dem Code ableiten laesst:
   5. Bei ganzen Bytes nennt die Bemerkung Einheit und Kodierung des
      Dekodierers, z. B. "(°C, Rohwert − 128)".
   6. Die Stand-Zeile nennt die richtige Anzahl Kommandos und Topics.
-  7. SET-TOP-Zuordnung.md besteht set_top_zuordnung.py --pruefen.
+  7. SET-TOP-Zuordnung.md besteht set_top_zuordnung.py --pruefen: die Paare
+     SET -> TOP, die Topic-Listen in Abschnitt 3 und die Zahlen im Text.
 
 Nicht pruefbar sind die Bedeutungstexte ("Referenz:", "Original:", Befunde) -
 die bleiben Handarbeit.
@@ -347,7 +348,10 @@ def main():
     lauf = subprocess.run([sys.executable, str(HIER / "set_top_zuordnung.py"), "--pruefen"],
                           capture_output=True, text=True, check=False)
     if lauf.returncode != 0:
-        befunde = [z for z in (lauf.stdout + lauf.stderr).splitlines() if z.strip()]
+        # je Abweichung eine Zeile; die Kopfzeile von --pruefen ist kein Befund.
+        # Bricht das Skript mit einer Meldung ab (Aufbau geaendert), zaehlt die.
+        ausgabe = [z.strip() for z in (lauf.stdout + lauf.stderr).splitlines() if z.strip()]
+        befunde = [z for z in ausgabe if not z.endswith("weicht vom Code ab:")] or ausgabe
     erg.pruefung("SET-TOP-Zuordnung.md", befunde,
                  "SET-TOP-Zuordnung.md deckt sich mit dem Code (set_top_zuordnung.py --pruefen)")
 
