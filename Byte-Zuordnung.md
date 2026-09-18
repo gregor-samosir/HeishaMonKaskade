@@ -370,7 +370,12 @@ Bitgruppen jedes Bytes überlappen sich nicht und ergeben zusammen alle acht
 Bits. Die Mehrbyte-Topics sind gegen die `serial_data[]`-Zugriffe in
 `decode.cpp` gehalten.
 
-Aufteilung und Bemerkungen sind von Hand. **Anders als bei
-`SET-TOP-Zuordnung.md` gibt es für diese Datei noch keine automatische
-Prüfung** — wer ein Set-Kommando oder ein State-Topic hinzufügt, trägt es hier
-von Hand nach.
+Aufteilung und Bemerkungen sind von Hand. **Seit dem 2026-09-18 prüft
+[`test/doku_zuordnung_test.py`](test/doku_zuordnung_test.py) die Tabelle bei
+jedem Lauf der Hosttests** — lokal vor dem Merge und in der CI. Geprüft wird
+alles, was sich aus dem Code ableiten lässt: Byte 1–202 lückenlos, die
+Bitgruppen jedes Bytes, jedes SET und TOP auf seinem Byte und seinen Bits, die
+Namen in *Kommando* und *Status*, Einheit und Kodierung in der Klammer und die
+Zahlen in der Stand-Zeile. Wer ein Set-Kommando oder ein State-Topic hinzufügt,
+streicht oder umkodiert, bekommt dort ROT, bis diese Datei nachgezogen ist. Die
+Bedeutungstexte prüft der Test nicht.

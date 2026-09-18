@@ -157,6 +157,13 @@ decode_test byte23_25_test
 # auf beiden Stufen lief, weil lokal nur ein Teil der Tests gelaufen war.
 py_test css_klassen_test
 
+# Byte-Zuordnung.md und SET-TOP-Zuordnung.md gegen setCommands[] und
+# stateTopics[]: jedes SET und TOP auf seinem Byte und seinen Bits, Namen,
+# Einheit und Kodierung. Eine veraltete Tabelle sieht aus wie eine richtige -
+# ohne diesen Test fiele ein neues, gestrichenes oder umkodiertes Topic dort
+# erst auf, wenn jemand nach dem Byte sucht und das Falsche findet.
+py_test doku_zuordnung_test
+
 # --- Vollstaendigkeit -----------------------------------------------------
 # Jede test/*_test.cpp ist ein Hosttest (die Hardware-Tests sind .py). Steht
 # eine nicht in der Liste oben, laeuft sie weder lokal noch in der CI - und

@@ -122,8 +122,10 @@ Nur prüfen und melden:
 - Neue Datei → Tabelle in `README.md`, Abschnitt „Aufbau".
 - Neues Werkzeug unter `test/` → Tabelle „Werkzeuge" in `test/README.md`.
 - Neuer arduino-freier Header → Liste in `CLAUDE.md`, „Konventionen beim Ändern".
-- Neues oder geändertes Topic → `MQTT-Topics.md` (englisch), bei Set-Kommandos
-  `SET-TOP-Zuordnung.md` (`./test/set_top_zuordnung.py --pruefen`).
+- Neues oder geändertes Topic → `MQTT-Topics.md` (englisch), `Byte-Zuordnung.md`
+  und bei Set-Kommandos `SET-TOP-Zuordnung.md`. Die Spalten beider Zuordnungen
+  prüft `doku_zuordnung_test` in Schritt 4 mit; die Topic-Listen in Abschnitt 3
+  von `SET-TOP-Zuordnung.md` nicht — die von Hand ansehen.
 - Nichts aus `doku-intern/` zitiert, auch nicht sinngemäß, auch nicht in
   Commit-Messages.
 
