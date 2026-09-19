@@ -1084,6 +1084,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Vorhaben-Doku-Konsistenz.md`](Vorhaben-Doku-Konsistenz.md) | Doku, Memory und Code beisammenhalten — Prüfungen und pre-commit-Hook erledigt (2026-09-18), offen: Memory verschlanken und Abschluss-Skill |
 | [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
+| [`Anlauf-H1-2026-09-19.md`](Anlauf-H1-2026-09-19.md) | Ein vollständiger Kaltstart der Stufe 1, mit `top_watch.py` mitgeschnitten: Frequenz, therm. Leistung, Vor- und Rücklauf auf dem Zeitstrahl |
 | [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
 | [`Analyse-KNX-Vorderhaus.md`](Analyse-KNX-Vorderhaus.md) | KNX-Schritt „Vorderhaus": Recherche, Vorabtest an der Anlage, Entwurf, Rückleseregel A; umgesetzt in 3.21.0 nach [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) |
 | [`Arbeitsplan-KNX-Vorderhaus.md`](Arbeitsplan-KNX-Vorderhaus.md) | Umsetzung des Vorderhausschritts vom ersten Befehl bis zum Rollout; ausgerollt als 3.21.0 |
