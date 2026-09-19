@@ -1,16 +1,21 @@
 # Arbeitsplan: Alternativer Außenfühler als SET40/TOP112 (3.23.0)
 
-> **Ergebnis: offen — an beiden Stufen abgenommen, Release steht noch aus.**
-> `main` trägt 3.23.0 (Merge, Tag `v3.23.0`, noch nicht gepusht). OTA und
-> SET40-Funktionstest sind an H1 und H2 grün (TOP112 folgt in 7–11 s, TOP14
-> springt zeitgleich mit, kein Fehler, keine Sollwertbewegung) — Einzelheiten
-> in `test/README.md`. Offen: Backups nachziehen, Push, CI, Releases,
-> Memory (Phase E ab Schritt 22, Phase F).
+> **Ergebnis: erledigt.** 3.23.0 läuft auf allen vier Boards (H1, H2, h1b,
+> h2b), an H1/H2 während eines echten Kaskadenanlaufs funktionsgeprüft
+> (TOP112 folgt in 7–11 s, TOP14 springt zeitgleich mit, kein Fehler, keine
+> Sollwertbewegung — `test/README.md`). CI grün, `main` und `v3.23.0`
+> gepusht, öffentliches Release und privates Rollback-Release stehen. TOP66
+> auf dem Broker geräumt; die vier ioBroker-Objekte (Retained-State und
+> Aliase mit Historie) muss der Owner noch von Hand im Admin löschen (E8).
 >
-> **Übergabe für die Rollout-Session.** Dieser Plan führt vom ersten Befehl
-> bis zum Release in beiden Repos. Er ist vollständig entschieden; offen ist nur
-> die Arbeit. Wer ihn aufnimmt, liest zuerst „Entschieden — nicht neu
-> aufmachen“ und „Lies zuerst“, dann die Schritte ab Schritt 22 der Reihe nach.
+> **Offen als Folgeauftrag, außerhalb dieses Repos:** SET40/TOP112 in den
+> `WP_Befehls_Waechter` in `nodered-flows` aufnehmen (Schritt 28) — noch
+> nicht angelegt, eigene Session in jenem Repo.
+>
+> **Übergabe:** Dieser Plan führt vom ersten Befehl bis zum Release in beiden
+> Repos und ist damit vollständig abgearbeitet. Wer künftig an SET40/TOP112
+> etwas ändert, findet hier die Owner-Entscheide E1–E8 und den Nachweis;
+> „Entschieden — nicht neu aufmachen“ zuerst lesen.
 
 ## Worum es geht
 
