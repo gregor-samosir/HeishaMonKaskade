@@ -61,8 +61,9 @@
 //         Stufen) folgt separat und steht in test/README.md, nicht hier: Nach
 //         E5 liegt dieser Tag schon vor dem Funktionstest.
 //
-//         GROESSE gegen 3.22.0 (heishamon_esp32_h1_ota): RAM 61952 -> 61952
-//         Byte (+0), Flash 1223413 -> 1223461 Byte (+48).
+//         GROESSE gegen 3.22.0 (heishamon_esp32_h1_ota, frisch im Worktree
+//         gegen den Rettungsanker gebaut): RAM 61952 -> 61952 Byte (+0),
+//         Flash 1223369 -> 1223461 Byte (+92).
 //
 // 3.22.0 - DER VORDERHAUSSCHRITT LAEUFT AN BEIDEN STUFEN. Bis 3.21.0 stand
 //         er nur in der Heizen-Folge (Stufe 1). Die Begruendung "nur Stufe 1
