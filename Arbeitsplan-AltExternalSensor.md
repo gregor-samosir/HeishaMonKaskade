@@ -8,9 +8,10 @@
 > auf dem Broker geräumt; die vier ioBroker-Objekte (Retained-State und
 > Aliase mit Historie) muss der Owner noch von Hand im Admin löschen (E8).
 >
-> **Offen als Folgeauftrag, außerhalb dieses Repos:** SET40/TOP112 in den
-> `WP_Befehls_Waechter` in `nodered-flows` aufnehmen (Schritt 28) — noch
-> nicht angelegt, eigene Session in jenem Repo.
+> **Folgeauftrag (Schritt 28) erledigt am 2026-09-19:** SET40/TOP112 ist
+> neunter Kanal des `WP_Befehls_Waechter` in `nodered-flows` (V1.4.0). Ablauf
+> und Nachweis stehen im Kopf von
+> [`Auftrag-Befehlswaechter-AltExternalSensor.md`](Auftrag-Befehlswaechter-AltExternalSensor.md).
 >
 > **Übergabe:** Dieser Plan führt vom ersten Befehl bis zum Release in beiden
 > Repos und ist damit vollständig abgearbeitet. Wer künftig an SET40/TOP112
