@@ -1737,7 +1737,7 @@ unabhaengige Referenz), die Ablaeufe gegen einen Simulator, der nur abbildet,
 was das Werkzeug benutzt. Was die echte Schnittstelle tut, zeigen erst die
 Stufen 0-2.
 
-## Aussenfuehler umschalten (Byte 20, SET40/TOP112)
+## Aussenfuehler umschalten (Byte 20, SET40/TOP112, 2026-09-19)
 
 Nachweis fuer SET40 `AltExternalSensor` aus 3.23.0, nach dem Muster von Byte 9
 und Byte 28 oben. Byte 20 traegt AltExternalSensor auf Bits 3+4 neben
@@ -1750,24 +1750,35 @@ H1 UND H2, waehrend 30 s Mitschnitt je Stufe unveraendert - Bits 3+4 = `10`
 On-Testvektor in [`byte20_test.cpp`](byte20_test.cpp)
 (`Arbeitsplan-AltExternalSensor.md`, Schritt 1).
 
-Geplanter Funktionstest je Stufe, H1 vor H2 (E5), jeder Eingriff einzeln
-aufgerufen und vorher angesagt:
+**Funktionstest am selben Abend, waehrend eines echten Kaskadenanlaufs.**
+Anders als geplant nicht in einem ruhigen Fenster, sondern nach E6 "wie es
+sich ergibt": Der Owner fuhr die Kaskade 1-stufig hoch (H1 Heizen, H2
+DHW-Bereitschaft) und schnitt parallel einen vollstaendigen Anlauf mit
+(`produktiv_mitschnitt.py` und `top_watch.py --alle`, beide Stufen, ab
+02:21 Uhr). Der SET40-Test lief aus diesem bereits laufenden Mitschnitt
+heraus - `top_watch --alle` deckt TOP0/8/14/44/112 ohnehin ab, eine eigene
+Vorlaufzeit war nicht noetig. **Byte 23/25 wurden diesmal nicht unabhaengig
+gegengelesen**, weil der Telnet-Kanal schon durch den Anlauf-Mitschnitt belegt
+war (`byte_monitor.py` braucht denselben Kanal); die Nachbarbit-Erhaltung
+stuetzt sich stattdessen auf `byte20_test.cpp` (alle 64 Kombinationen) und die
+Vorab-Lesung oben.
 
-```bash
-python3 -u test/byte_monitor.py 192.168.2.120 20 23 25 142 --dauer 180 > h1_byte20_1.log 2>&1 &
-python3 -u test/top_watch.py 192.168.2.120 0 8 14 44 112 --dauer 180 --takt 5 > h1_top_1.log 2>&1 &
-# 20 s Vorlauf, dann allein:
-./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/AltExternalSensor=0
-# bis zu 120 s beobachten, danach Mitschnitte neu starten und zurueck:
-./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/AltExternalSensor=1
-```
+Kommando | Stufe | gesendet | TOP112 | Uebernahme | TOP14 | Verdichter | Fehler
+:--- | :--- | :--- | :--- | ---: | :--- | :--- | :---
+`AltExternalSensor=0` | H1 | 02:32:37 | On -> Off | 11 s | 12 -> 11 °C | 33 Hz, unbeeinflusst | keiner
+`AltExternalSensor=1` | H1 | 02:34:06 | Off -> On | 8 s | 11 -> 12 °C | 32 Hz, unbeeinflusst | keiner
+`AltExternalSensor=0` | H2 | 02:38:46 | On -> Off | 7 s | 11 -> 12 °C | 0 Hz (Bereitschaft) | keiner
+`AltExternalSensor=1` | H2 | 02:39:48 | Off -> On | 11 s | 12 -> 11 °C | 0 Hz (Bereitschaft) | keiner
 
-Byte 23 und 25 laufen als Kontrolle mit - sie duerfen sich **nicht** bewegen,
-nur Bits 3+4 von Byte 20. TOP14 `Outside_Temp` ist der Wirkungsbeleg (1-2 K
-Sprung beim Umschalten), aber kein Pruefkriterium: Lesen beide Fuehler gerade
-fast dasselbe, bleibt der Sprung aus, ohne dass etwas falsch ist - gruen oder
-rot entscheiden Byte 20 und TOP112.
+**TOP14 sprang bei allen vier Kommandos im selben 5-s-Abfragetakt wie TOP112**
+- der sauberste erreichbare Beleg, dass tatsaechlich der Fuehler wechselt und
+nicht nur ein Bit im Speicher kippt. Kein Sollwert bewegte sich im Moment
+eines der vier Kommandos; die einzigen Sollwertspruenge im Mitschnitt (TOP18,
+TOP27, TOP29 an H1) liegen zehn Minuten vor dem ersten SET40-Kommando und
+stammen vom Hochfahren der Kaskadensteuerung selbst - im rohen
+Vorher/Nachher-Diff gegen den Stand direkt nach dem OTA sehen sie wie eine
+Abweichung aus, sind aber zeitlich eindeutig davon getrennt.
 
-**Ergebnis folgt nach der Abnahme** (Arbeitsplan-AltExternalSensor.md,
-Schritt 20/21 und 23; nach E5 liegt der Tag `v3.23.0` schon vor dem
-Funktionstest, das Ergebnis wird hier nachgetragen).
+Endzustand beider Stufen: `tablesnap.py` zeigt keine verstellten Sollwerte,
+der ioBroker-Datenpunkt `set.AltExternalSensor` steht an beiden Stufen auf
+`val: 1` zurueck - der vorgefundene Zustand ist wiederhergestellt.

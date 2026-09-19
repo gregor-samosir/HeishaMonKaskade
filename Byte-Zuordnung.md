@@ -107,7 +107,7 @@ differs from the original project's. Notes are German.*
 |  |  | 19 | ganz |  |  | Referenz: stets `0x00` |
 |  |  | 20 | 1 |  |  | Referenz: Umlaufmedium Wasser/Glykol. Original: `Liquid_Type` |
 |  |  | 20 | 2 |  |  | unbelegt |
-| SET40 | `AltExternalSensor` | 20 | 3+4 | TOP112 | `Alt_External_Sensor` | Alternativer (externer) Außenfühler 0 = Off (Gehäusefühler), 1 = On (extern); Installer-Einstellung, Umschalten nur über den ioBroker-Datenpunkt (Wiedereinspielung). Vorab gemessen 2026-09-19, beide Stufen: `0x2A` roh, On ⁹ |
+| SET40 | `AltExternalSensor` | 20 | 3+4 | TOP112 | `Alt_External_Sensor` | Alternativer (externer) Außenfühler 0 = Off (Gehäusefühler), 1 = On (extern); Installer-Einstellung, Umschalten nur über den ioBroker-Datenpunkt (Wiedereinspielung). Gemessen 2026-09-19 an beiden Stufen: Rohwert `0x2A` (On), Umschalten On→Off→On per SET40 in 7–11 s über TOP112 bestätigt ⁹ |
 |  |  | 20 | 5+6 |  |  | Referenz: Frostschutz aus/ein. Original: `Anti_Freeze_Mode` |
 |  |  | 20 | 7+8 |  |  | Referenz: Optionsplatine aus/ein. Original: `Optional_PCB` |
 |  |  | 21 | ganz |  |  | Referenz: Zonenzahl und -ziel als Kennwert — `0x15` eine Zone, Raum; `0x19` eine Zone, Pool; `0x16` zwei Zonen, Z2 Raum; `0x26` zwei Zonen, Z2 Pool |

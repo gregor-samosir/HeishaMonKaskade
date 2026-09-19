@@ -1,15 +1,16 @@
 # Arbeitsplan: Alternativer Außenfühler als SET40/TOP112 (3.23.0)
 
-> **Ergebnis: offen — Code und Doku fertig, `/pruefen-vor-merge` grün, Branch
-> `alt-aussenfuehler` lokal (Commits `2321c20`, `a91ca9d`); Schritte 0–14
-> erledigt.** Offen bleibt Phase E (Anlagenzugriff, vom Owner über `/rollout
-> 3.23.0` aufgerufen) und Phase F. Die Firmware steht auf 3.22.0 (alle vier
-> Boards) — noch kein OTA gelaufen.
+> **Ergebnis: offen — an beiden Stufen abgenommen, Release steht noch aus.**
+> `main` trägt 3.23.0 (Merge, Tag `v3.23.0`, noch nicht gepusht). OTA und
+> SET40-Funktionstest sind an H1 und H2 grün (TOP112 folgt in 7–11 s, TOP14
+> springt zeitgleich mit, kein Fehler, keine Sollwertbewegung) — Einzelheiten
+> in `test/README.md`. Offen: Backups nachziehen, Push, CI, Releases,
+> Memory (Phase E ab Schritt 22, Phase F).
 >
 > **Übergabe für die Rollout-Session.** Dieser Plan führt vom ersten Befehl
 > bis zum Release in beiden Repos. Er ist vollständig entschieden; offen ist nur
 > die Arbeit. Wer ihn aufnimmt, liest zuerst „Entschieden — nicht neu
-> aufmachen“ und „Lies zuerst“, dann die Schritte ab Phase E der Reihe nach.
+> aufmachen“ und „Lies zuerst“, dann die Schritte ab Schritt 22 der Reihe nach.
 
 ## Worum es geht
 

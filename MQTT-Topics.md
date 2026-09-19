@@ -791,6 +791,17 @@ SET40 | AltExternalSensor | 20 | Select which outdoor sensor the unit uses (inst
 > defrosting depends on it. Both units currently have their own external
 > sensor and stood on `On` when this was built (owner decision, 2026-09-19).
 >
+> **Measured, both units, 2026-09-19:**
+>
+> Menu entry | unit | changed | byte | raw value | evidence
+> :--- | :--- | ---: | ---: | :--- | :---
+> Alternative outdoor sensor | H1 + H2 | (baseline, On) | 20 | `0x2A` (both units) | test/README.md, read-only pre-check
+>
+> The live toggle itself (On -> Off -> On, both units) is confirmed through
+> `TOP112` and the matching `TOP14` jump rather than a second raw-byte
+> capture - the take-over landed in 7-11 s each time, with no error and no
+> other setpoint moving. Times and the full table: `test/README.md`.
+>
 > **Switch via the ioBroker datapoint only, not the control panel.** The
 > ioBroker adapter replays every set topic's stored value when it
 > (re)connects (`SUBSCRIBE_GRACE`, 3.6.1). Whoever switches at the panel has
@@ -813,7 +824,10 @@ SET40 | AltExternalSensor | 20 | Select which outdoor sensor the unit uses (inst
 > ioBroker-Datenpunkt**, nicht mehr am Bedienteil: Der ioBroker spielt beim
 > Verbinden den gespeicherten Wert wieder ein, wer am Bedienteil umschaltet
 > muss den Datenpunkt von Hand nachziehen. Der Notbetrieb fasst diese
-> Einstellung nicht an.*
+> Einstellung nicht an. **Gemessen an beiden Stufen (2026-09-19):** Rohwert
+> `0x2A` (On) vorab gelesen; die aktive Umschaltung On→Off→On lief in 7–11 s
+> und zeigte sich zeitgleich am TOP14-Sprung, ohne Fehler und ohne dass ein
+> Sollwert mitwanderte (`test/README.md`).*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 
