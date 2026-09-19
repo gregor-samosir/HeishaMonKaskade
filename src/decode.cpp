@@ -81,9 +81,11 @@ static const char *HeaterLocation[] = {"Internal", "External", "unknown", nullpt
 /*                                                                           */
 /* Genau das ist hier passiert - die Nummerierung hat Luecken bei TOP34,     */
 /* 35, 37, 43, 57 und 82-89. Das waren die Zone-2-Topics, entfallen in       */
-/* 3.4.0, weil diese Anlage keine Zone 2 hat. Die Luecken sind Absicht:      */
-/* TOP36 heisst in MQTT-Topics.md und in jedem alten Mitschnitt weiter       */
-/* TOP36. Bitte nicht durchnummerieren.                                      */
+/* 3.4.0, weil diese Anlage keine Zone 2 hat. Seit 3.23.0 fehlt auch TOP66:  */
+/* Byte 164 stand an beiden Stufen dauerhaft auf 0x01 (Low_Pressure meldete  */
+/* immer 0, ~98000 Werte seit 2026-07-12, Byte-Zuordnung.md). Die Luecken    */
+/* sind Absicht: TOP36 heisst in MQTT-Topics.md und in jedem alten           */
+/* Mitschnitt weiter TOP36. Bitte nicht durchnummerieren.                    */
 /*****************************************************************************/
 const StateTopic stateTopics[NUMBEROFTOPICS] = {
     {  0,   4, "Heatpump_State",                   getBit7and8,          nullptr,                   OffOn},
@@ -149,7 +151,6 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     { 63, 174, "Fan2_Motor_Speed",                 getIntMinus1Times10,  nullptr,                   RotationsPerMin},
     { 64, 163, "High_Pressure",                    getIntMinus1Div5,     nullptr,                   Pressure},
     { 65, 171, "Pump_Speed",                       getIntMinus1Times50,  nullptr,                   RotationsPerMin},
-    { 66, 164, "Low_Pressure",                     getIntMinus1,         nullptr,                   Pressure},
     { 67, 165, "Compressor_Current",               getIntMinus1Div5,     nullptr,                   Ampere},
     { 68,   5, "Force_Heater_State",               getBit5and6,          nullptr,                   InactiveActive},
     { 69, 117, "Sterilization_State",              getBit5and6,          nullptr,                   InactiveActive},
@@ -246,6 +247,13 @@ const StateTopic stateTopics[NUMBEROFTOPICS] = {
     {109,  23, "External_Error_Signal_Config",     getBit3and4,          nullptr,                   DisabledEnabled},
     {110,  23, "Heat_Cool_SW_Config",              getBit5and6,          nullptr,                   DisabledEnabled},
     {111,  23, "External_Control_Config",          getBit7and8,          nullptr,                   DisabledEnabled},
+
+    // Ruecklesung von SET40 AltExternalSensor (3.23.0). Kein reines
+    // Installer-Lese-Topic nach der Drei-Punkte-Regel (MQTT-Topics.md) -
+    // TOP112 ist die Rueckmeldung eines eigenen Set-Kommandos; ohne sie
+    // wuerde der ioBroker blind auf Byte 20 schreiben (SET-TOP-Zuordnung.md).
+    // Anlagennachweis (TOP14-Sprung, beide Stufen): test/README.md.
+    {112,  20, "Alt_External_Sensor",              getBit3and4,          nullptr,                   OffOn},
 };
 
 // Haelt NUMBEROFTOPICS (Array-Groesse von actual_data) und die Tabelle zusammen

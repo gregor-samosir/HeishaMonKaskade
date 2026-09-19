@@ -31,6 +31,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
 | `byte23_25_test.cpp` | Die sieben Installer-Topics TOP105-111 aus Byte 25 und Byte 23 gegen die gemessenen Rohbytes (`h2.log`, `h2_ext.log`) | nein |
+| `byte20_test.cpp` | Kodierung von SET40/TOP112 (alternativer Aussenfuehler) gegen den echten Dekodierpfad, gemessener Rohwert plus alle Kombinationen der Nachbarfelder in Byte 20 | nein |
 | `notbetrieb_test.cpp` | Regeln des Notbetriebs: Vollstaendigkeit der Werte, Bereichsgrenzen, Karenzzeit-Ausnahme, Zustandsautomat, Freigabe ueber TOP101, Anzeigeverfall, die Plausibilitaet der Kurve und der Vorderhausschritt mit eigenem Timeout (bindet `src/notbetrieb.h` direkt ein) | nein |
 | `knx_test.cpp` | KNX-Tunnel des Vorderhausschritts: jeder Rahmen byteweise gegen xknx und die Mitschnitte vom 2026-09-12, Sequenzregel, Antwortfilter (openknx zaehlt nie), jeder Zweig der Rueckleseregel A, die Einstellung `knx_schnittstelle`, `millis()`-Ueberlauf (bindet `src/knxtunnel.h` direkt ein) | nein |
 | `verbindung_test.cpp` | Zeitregeln der Verbindungswacht: Karenz, "seit dem Neustart nie verbunden" und der `millis()`-Ueberlauf (bindet `src/verbindung.h` direkt ein) | nein |
@@ -38,7 +39,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `css_klassen_test.py` | Hosttest: jede benutzte w3-Klasse ist im eingebetteten CSS definiert, jede Farbklasse steht hinter `.w3-button` | nein |
 | `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md`, alle relativen Links gegen Dateien und Code, und die `**Ergebnis:**`-Zeile in jeder Vorhaben-/Auftrag-/Arbeitsplan-Datei | nein |
 | `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
-| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp` und `byte23_25_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
+| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp`, `byte23_25_test.cpp` und `byte20_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
@@ -58,7 +59,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
-| `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp`, `byte9_test.cpp` und `decode_vergleich.py` | - |
+| `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp`, `byte9_test.cpp`, `byte20_test.cpp` und `decode_vergleich.py` | - |
 
 ## Pruefstand aufsetzen - ein Backup-Board leihen
 
@@ -1735,3 +1736,38 @@ werden byteweise gegen die Rohbytes aus den Tests von xknx gehalten (eine
 unabhaengige Referenz), die Ablaeufe gegen einen Simulator, der nur abbildet,
 was das Werkzeug benutzt. Was die echte Schnittstelle tut, zeigen erst die
 Stufen 0-2.
+
+## Aussenfuehler umschalten (Byte 20, SET40/TOP112)
+
+Nachweis fuer SET40 `AltExternalSensor` aus 3.23.0, nach dem Muster von Byte 9
+und Byte 28 oben. Byte 20 traegt AltExternalSensor auf Bits 3+4 neben
+Frostschutz (5+6) und Optionsplatine (7+8); Bit 1 ist das Wasser/Glykol-Bit
+und bleibt bei jedem SET40-Kommando 0 (E7, diese Anlage laeuft mit Wasser).
+
+**Vorab-Lesung, rein lesend (2026-09-19, beide Stufen):** Byte 20 = `0x2A` an
+H1 UND H2, waehrend 30 s Mitschnitt je Stufe unveraendert - Bits 3+4 = `10`
+(On, bestaetigt E1), Bit 1 = 0 (Wasser, bestaetigt E7). Das ist der
+On-Testvektor in [`byte20_test.cpp`](byte20_test.cpp)
+(`Arbeitsplan-AltExternalSensor.md`, Schritt 1).
+
+Geplanter Funktionstest je Stufe, H1 vor H2 (E5), jeder Eingriff einzeln
+aufgerufen und vorher angesagt:
+
+```bash
+python3 -u test/byte_monitor.py 192.168.2.120 20 23 25 142 --dauer 180 > h1_byte20_1.log 2>&1 &
+python3 -u test/top_watch.py 192.168.2.120 0 8 14 44 112 --dauer 180 --takt 5 > h1_top_1.log 2>&1 &
+# 20 s Vorlauf, dann allein:
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/AltExternalSensor=0
+# bis zu 120 s beobachten, danach Mitschnitte neu starten und zurueck:
+./test/mqtt_pub.py --host 192.168.2.147 panasonic_heat_pump/set/AltExternalSensor=1
+```
+
+Byte 23 und 25 laufen als Kontrolle mit - sie duerfen sich **nicht** bewegen,
+nur Bits 3+4 von Byte 20. TOP14 `Outside_Temp` ist der Wirkungsbeleg (1-2 K
+Sprung beim Umschalten), aber kein Pruefkriterium: Lesen beide Fuehler gerade
+fast dasselbe, bleibt der Sprung aus, ohne dass etwas falsch ist - gruen oder
+rot entscheiden Byte 20 und TOP112.
+
+**Ergebnis folgt nach der Abnahme** (Arbeitsplan-AltExternalSensor.md,
+Schritt 20/21 und 23; nach E5 liegt der Tag `v3.23.0` schon vor dem
+Funktionstest, das Ergebnis wird hier nachgetragen).

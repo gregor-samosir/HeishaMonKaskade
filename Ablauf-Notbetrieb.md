@@ -507,6 +507,12 @@ ins Hinterhaus. Der Hydraulikschritt ist die einzige Ausnahme, und er ist es aus
 einem Grund: Ohne ihn schiebt der Warmwasserbetrieb bis zu 57 °C in die
 Fußbodenheizung.
 
+**Die Fühlerwahl (SET40 `AltExternalSensor`) bleibt, wie sie ist.** Der
+Notbetrieb fasst Byte 20 nicht an (Owner-Entscheid 2026-09-19,
+`Arbeitsplan-AltExternalSensor.md`, E3): Beide Fühler liefern brauchbare
+Werte, ein zusätzlicher Schritt hätte beide Schrittfolgen nur verlängert,
+ohne einen Ausfall abzuwenden.
+
 ## Wer `SET39` wieder setzt
 
 **Die Kaskadensteuerung, wie bei allen anderen Werten auch.** Der Kanal liegt im

@@ -1,5 +1,69 @@
 #pragma once
 // Changelog:
+// 3.23.0 - ALTERNATIVER AUSSENFUEHLER PER MQTT (SET40/TOP112), TOP66
+//         ENTFAELLT. Neues Set-Kommando SET40 AltExternalSensor schaltet die
+//         Fuehlerwahl im Installateurmenue um (Byte 20, Bits 3+4): Off nutzt
+//         den eingebauten Gehaeusefuehler, On den externen Fuehler auf dem
+//         Flachdach. TOP112 Alt_External_Sensor liest zurueck.
+//
+//         WARUM. Bisher liess sich nur am Bedienteil umschalten, obwohl die
+//         Fuehlerwahl zweimal im Jahr wechseln soll: On (extern) im
+//         Sommer/Kuehlbetrieb, weil der Gehaeusefuehler dort Sonne abbekommt,
+//         Off (Gehaeuse) im Winter, weil die Abtausteuerung auf ihn angewiesen
+//         ist. Ohne Ruecklesung wuesste eine Steuerung nie, welcher Fuehler
+//         gerade gilt - deshalb TOP112 als Pflichtteil, nicht als Kuer (SET-
+//         TOP-Zuordnung.md).
+//
+//         BEIDE STUFEN GLEICH (Owner-Entscheid E1, 2026-09-19). Beide
+//         Waermepumpen haben einen eigenen externen Fuehler und standen beim
+//         Auftrag auf On - keine Abweichung H1/H2.
+//
+//         NUR NOCH UEBER DEN IOBROKER (Owner-Entscheid E2). Der ioBroker
+//         spielt beim Verbinden den gespeicherten Wert jedes Set-Topics wieder
+//         ein (SUBSCRIBE_GRACE, 3.6.1) - wer am Bedienteil umschaltet, muss
+//         den Datenpunkt von Hand nachziehen, sonst dreht die naechste
+//         Wiedereinspielung den Zustand still zurueck. Folgeauftrag in
+//         nodered-flows: SET40/TOP112 in den WP_Befehls_Waechter, NICHT in den
+//         WP_Installer_Waechter - der prueft gegen einen festen Sollstand,
+//         TOP112 wechselt aber gewollt.
+//
+//         DER NOTBETRIEB FASST DAS NICHT AN (Owner-Entscheid E3) - beide
+//         Fuehler liefern brauchbare Werte, ein zusaetzlicher Schritt haette
+//         beide Ablaeufe nur verlaengert, ohne einen Ausfall abzuwenden.
+//
+//         TOP66 LOW_PRESSURE ENTFAELLT IM SELBEN ZUG (Owner-Entscheid
+//         2026-09-18). Byte 164 stand an beiden Stufen seit Beginn der Messung
+//         (2026-07-12) dauerhaft auf 0x01 - rund 98000 Werte, alle 0, auch bei
+//         laufendem Verdichter (Byte-Zuordnung.md). Zeile gestrichen, NICHT
+//         umnummeriert (Vorbild Zone 2, 3.4.0); NUMBEROFTOPICS bleibt 99, weil
+//         TOP112 im selben Zug dazukommt.
+//
+//         NACHWEIS OHNE GERAET: test/byte20_test.cpp, neu in der CI. Legt die
+//         Merge-Zeile aus commands.cpp und die ECHTEN Dekodierer aus
+//         decode.cpp nebeneinander, mit dem an der Anlage gemessenen Rohwert
+//         (siehe unten) als On-Testvektor sowie allen 64 Kombinationen von
+//         Frostschutz, Optionsplatine und dem Wasser/Glykol-Bitpaar - TOP112
+//         bleibt in jeder Kombination unberuehrt. Gegenprobe von Hand
+//         (Parameter 8 statt 16 in der Merge-Zeile): Fall 2 bricht
+//         vollstaendig, 4 Zusicherungen rot. test/decode_vergleich.py gegen
+//         den Rettungsanker: 98 uebrige Topics ueber alle Telegramme
+//         identisch. Alle Hosttests der CI gruen, alle Envs gebaut.
+//
+//         NEBENBEFUND, BEHOBEN: test/decode_vergleich.py stubte
+//         write_wert_log() nicht mit. Seit dessen Einfuehrung in 3.20.0 war
+//         das Werkzeug gegen jede neuere Basisversion nicht mehr lauffaehig -
+//         nur nie aufgefallen, weil zuletzt gegen v3.8.x verglichen wurde.
+//
+//         GEMESSEN VORAB (2026-09-19, beide Stufen, vor dem Umbau): Byte 20 =
+//         0x2A an H1 UND H2, waehrend 30 s Mitschnitt je Stufe unveraendert -
+//         Bits 3+4 = 10 (On, bestaetigt E1), Bit 1 = 0 (Wasser, bestaetigt
+//         E7). Der Anlagennachweis der Umschaltung selbst (TOP14-Sprung, beide
+//         Stufen) folgt separat und steht in test/README.md, nicht hier: Nach
+//         E5 liegt dieser Tag schon vor dem Funktionstest.
+//
+//         GROESSE gegen 3.22.0 (heishamon_esp32_h1_ota): RAM 61952 -> 61952
+//         Byte (+0), Flash 1223413 -> 1223461 Byte (+48).
+//
 // 3.22.0 - DER VORDERHAUSSCHRITT LAEUFT AN BEIDEN STUFEN. Bis 3.21.0 stand
 //         er nur in der Heizen-Folge (Stufe 1). Die Begruendung "nur Stufe 1
 //         versorgt den Heizkreis" war eine Annahme des Entwurfs
@@ -1995,4 +2059,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.22.0";
+static const char* heishamon_version = "3.23.0";
