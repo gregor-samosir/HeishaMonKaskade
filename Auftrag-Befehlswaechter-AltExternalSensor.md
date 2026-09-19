@@ -26,8 +26,8 @@
 >    Datenpunkt ohne Publish gesetzt wird, und bliebe bei einer Wiedereinspielung
 >    durch den Adapter ein Risiko für den Fühler einer laufenden WP. Schritt 3
 >    trennt den Broker, der zugleich der ioBroker-mqtt-Adapter ist, und verfälscht
->    den Vorfallzähler beider Bridge-Wächter. Die Live-Fassung bleibt auf
->    ausdrücklichen Wunsch des Owners nachholbar.
+>    den Vorfallzähler beider Bridge-Wächter. **Owner-Entscheid 2026-09-19:** Die
+>    beiden Punkte werden nicht zusätzlich an der Anlage gefahren.
 > 3. **Passiver Nachweis der Verdrahtung, noch offen:** Wären die Datenpunkt-IDs
 >    falsch, stünde ab 16:02 eine Zeile `AltExternalSensor … nicht bewertbar` im
 >    Log (60-min-Grenze). Der nächste Checkup zeigt es; fehlt sie, ist der Kanal
