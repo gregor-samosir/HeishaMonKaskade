@@ -1,7 +1,7 @@
 # SET-TOP-Zuordnung
 
 Welches State-Topic liest ein Set-Kommando zurück? Diese Datei beantwortet das
-für alle 37 Set-Kommandos und alle 99 State-Topics der Firmware 3.22.0 und
+für alle 38 Set-Kommandos und alle 99 State-Topics der Firmware 3.23.0 und
 hält fest, wo es kein Gegenstück gibt.
 
 Wozu: Eine Steuerung, die schreibt, muss prüfen können, ob der Wert angekommen
@@ -11,14 +11,14 @@ Bereichs kommentarlos auf den nächsten Rand (nachgewiesen an den beiden
 einzige Nachweis ist das Rücklesen des zugehörigen State-Topics. Wo diese
 Spalte leer bleibt, schreibt die Steuerung blind.
 
-*In English: which state topic reads a set command back? This file maps all 37
-set commands and all 99 state topics of firmware 3.22.0 against each other and
+*In English: which state topic reads a set command back? This file maps all 38
+set commands and all 99 state topics of firmware 3.23.0 against each other and
 records where no counterpart exists. The heat pump acknowledges nothing and
 silently clamps out-of-range values, so reading the matching state topic back
 is the only proof a write arrived — where that column is empty, a controller
 writes blind. Tables are language-neutral; the notes are German.*
 
-**Stand:** 2026-09-18, Firmware 3.22.0. Quelle sind ausschließlich die beiden
+**Stand:** 2026-09-19, Firmware 3.23.0. Quelle sind ausschließlich die beiden
 Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
 und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
 sind nicht von Hand gepflegt, sondern von
@@ -48,7 +48,7 @@ Byte 7).
 Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 * **Kommando- und Antworttelegramm benutzen dieselben Byte-Positionen.** Alle
-  35 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
+  36 gefundenen Paare liegen auf identischer Position — Byte 38 schreibt die
   Heizanforderung und Byte 38 liest sie zurück, ohne eine einzige Ausnahme. Die
   Zuordnung ist damit nicht geraten, sondern abgelesen.
 * **Das Kommandotelegramm ist 110 Bytes lang** (`QUERYSIZE`, Indizes 0–109),
@@ -58,9 +58,9 @@ Zwei Eigenschaften des Protokolls tragen die ganze Auswertung:
 
 Daraus ergibt sich die Zweiteilung des Telegramms: Bytes 4–106 tragen
 Einstellungen und spiegeln das Kommandotelegramm, ab Byte 110 kommen
-Ist-Zustände und Messwerte. Jedes der 35 Paare liegt unter Byte 110.
+Ist-Zustände und Messwerte. Jedes der 36 Paare liegt unter Byte 110.
 
-## 1. Set-Kommandos mit Rückmeldung (35 von 37)
+## 1. Set-Kommandos mit Rückmeldung (36 von 38)
 
 Die Spalte *Bits* zählt wie das Projekt: **Bit 1 ist das höchstwertige Bit**,
 `ganz` heißt, das Kommando belegt das volle Byte. *Art* sagt, ob das Topic
@@ -103,6 +103,7 @@ SET36 | `CoolingMode` | 28 | 5+6 | TOP81 | `Cooling_Mode` | voll ⁶
 SET37 | `RoomHeaterState` | 9 | 7+8 | TOP59 | `Room_Heater_State` | voll ⁷
 SET38 | `DHWHeaterState` | 9 | 5+6 | TOP58 | `DHW_Heater_State` | voll ⁷
 SET39 | `ForceHeater` | 5 | 5+6 | TOP68 | `Force_Heater_State` | voll ⁷
+SET40 | `AltExternalSensor` | 20 | 3+4 | TOP112 | `Alt_External_Sensor` | voll ⁹
 
 Bei den Kurven kreuzen sich `High` und `Low` zwischen SET- und TOP-Nummer
 (SET29 `OutsideLow` → TOP32, SET30 `OutsideHigh` → TOP31). Das ist kein Fehler
@@ -372,6 +373,38 @@ der Notbetriebsknopf eine Anlage ein, an der der Heizstab-Auftrag noch steht —
 samt der Umwälzpumpe, die daran hängt. Siehe
 [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) Abschnitt 1b.
 
+### ⁹ Alternativer Außenfühler (neu in 3.23.0)
+
+SET40 `AltExternalSensor` liegt auf Byte 20, Bits 3+4, Maske `0x30`, neben
+Feldern ohne eigenes Set-Kommando (Frostschutz, Bits 5+6; Optionsplatine,
+Bits 7+8). Bit 1 ist ein Einzelbit (Wasser/Glykol) und wird von jedem
+SET40-Kommando mit 0 geschickt — an dieser Anlage folgenlos, sie läuft mit
+Wasser (Owner-Entscheid E7, 2026-09-19).
+
+**Vorab an der Anlage gemessen (2026-09-19, beide Stufen):** Byte 20 = `0x2A`
+an H1 UND H2, während 30 s Mitschnitt je Stufe unverändert — Bits 3+4 = `10`
+(On), Bit 1 = 0 (Wasser). Bestätigt damit die beiden Owner-Annahmen E1 (beide
+Stufen haben einen externen Fühler und standen auf On) und E7, bevor eine
+Zeile Code geschrieben wurde.
+
+Zusätzlich ohne Gerät belegt: [`test/byte20_test.cpp`](test/byte20_test.cpp)
+legt die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus
+`decode.cpp` nebeneinander, mit dem gemessenen Rohwert als Testvektor und
+allen 64 Kombinationen der Nachbarfelder (Frostschutz, Optionsplatine,
+Wasser/Glykol-Bitpaar) — TOP112 bleibt in jeder davon unberührt.
+
+**Umgeschaltet wird nur über den ioBroker-Datenpunkt** (Owner-Entscheid E2),
+nicht mehr am Bedienteil: Der ioBroker spielt beim Verbinden den
+gespeicherten Wert jedes Set-Topics wieder ein (`SUBSCRIBE_GRACE`, 3.6.1);
+wer am Bedienteil umschaltet, muss den Datenpunkt von Hand nachziehen, sonst
+dreht die nächste Wiedereinspielung den Zustand still zurück. Der Notbetrieb
+fasst diese Einstellung nicht an (Owner-Entscheid E3).
+
+Der Funktionsnachweis der Umschaltung selbst (TOP14-Sprung, beide Stufen)
+folgt separat in [`test/README.md`](test/README.md), sobald die Abnahme
+gelaufen ist. Einzelheiten und alle Owner-Entscheide:
+[`Arbeitsplan-AltExternalSensor.md`](Arbeitsplan-AltExternalSensor.md).
+
 ## 2. Set-Kommandos ohne Rückmeldung (2)
 
 SET | Kommando | Byte | Bits | Lage
@@ -397,7 +430,7 @@ angefangen hat, nicht dass das Kommando angekommen ist. Bleibt die Routine aus,
 lässt sich daraus nicht ableiten, ob das Kommando verworfen wurde oder die
 Wärmepumpe es abgelehnt hat.
 
-## 3. State-Topics ohne Set-Kommando (64)
+## 3. State-Topics ohne Set-Kommando (63)
 
 ### 3a. Einstellwerte im Kommandobereich — die eigentlichen Lücken (15)
 
@@ -471,7 +504,7 @@ SET3 `QuietMode` | TOP18 (Stufe 0–3) | TOP99 (nur an/aus)
 SET4 `PowerfulMode` | TOP17 (Laufzeit) | TOP100
 SET9 `OperationMode` | TOP4 (Modus, siehe ³) | TOP101 (nur heizen/kühlen)
 
-### 3c. Messwerte und Zähler — kein Set-Kommando sinnvoll (40)
+### 3c. Messwerte und Zähler — kein Set-Kommando sinnvoll (39)
 
 Temperaturen, Drücke, Drehzahlen, Energiewerte, Betriebsstunden und
 Fehlercode. Alle liegen ab Byte 139 oder werden aus mehreren Bytes gebildet;
@@ -480,7 +513,7 @@ für keinen davon wäre ein Set-Kommando sinnvoll.
 TOP1, TOP5, TOP6, TOP7, TOP8, TOP10, TOP11, TOP12, TOP14, TOP15, TOP16, TOP21,
 TOP33, TOP36, TOP38, TOP39, TOP40, TOP41, TOP42, TOP44, TOP46, TOP47, TOP48,
 TOP49, TOP50, TOP51, TOP52, TOP53, TOP54, TOP55, TOP56, TOP62, TOP63, TOP64,
-TOP65, TOP66, TOP67, TOP90, TOP91, TOP92 — Namen und Einheiten in
+TOP65, TOP67, TOP90, TOP91, TOP92 — Namen und Einheiten in
 [`MQTT-Topics.md`](MQTT-Topics.md).
 
 Zwei davon grenzen an Abschnitt 2: TOP65 `Pump_Speed` (Byte 171, Drehzahl) und
@@ -604,7 +637,7 @@ Kompressor-Eingangs also als TOP108 `External_Compressor_Config`.
   gemessen** — es hätte den Warmwasser-Heizstab freigegeben, und dafür gab es
   keinen Grund; sein Nachbarfeld ist über SET37 mitbelegt. Die übrigen Paare
   stützen sich auf die identische
-  Byte-Position, die bei jedem einzelnen der 35 Paare zutrifft. Wo Zweifel an
+  Byte-Position, die bei jedem einzelnen der 36 Paare zutrifft. Wo Zweifel an
   einer Zuordnung bestehen, klärt sie [`test/byte_monitor.py`](test/byte_monitor.py)
   in wenigen Minuten — Byte beobachten, Wert ändern, Flanke ansehen.
 * **Abschnitt 3a listet Möglichkeiten, keine Befunde.** Dass ein Byte im

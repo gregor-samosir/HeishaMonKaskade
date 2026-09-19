@@ -40,6 +40,7 @@ TREIBER_KOPF = """#include "decode.h"
 #include <cstring>
 void write_telnet_log(char *) {}
 void write_mqtt_log(char *) {}
+void write_wert_log(char *) {} // seit 3.20.0, siehe stubs/HeishaMon.h
 
 static void dump(uint8_t *t, int marke)
 {

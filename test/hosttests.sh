@@ -167,6 +167,13 @@ decode_test byte9_test
 # trotzdem falsch sind.
 decode_test byte23_25_test
 
+# Kodierung von SET40 (Alternativer Aussenfuehler, 3.23.0) gegen den echten
+# Dekodierpfad. Byte 20 traegt AltExternalSensor neben Feldern ohne eigenes
+# Set-Kommando (Frostschutz, Optionsplatine, Wasser/Glykol) - der Rohwert ist
+# an der Anlage gemessen, alle 64 Kombinationen der Nachbarfelder lassen
+# TOP112 unberuehrt.
+decode_test byte20_test
+
 # Jede benutzte w3-Klasse muss im eingebetteten CSS definiert sein und jede
 # Farbklasse hinter .w3-button stehen. Ein Compiler prueft davon nichts. Am
 # 2026-08-20 war der Notbetriebsknopf deshalb grauer Text statt rotem Knopf;

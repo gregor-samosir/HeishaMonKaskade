@@ -79,14 +79,19 @@ TOP35, TOP37, TOP43, TOP57 and TOP82 - TOP89 are gone, on the command side
 SET7 and SET8. These plants have no zone 2, so the topics only ever carried
 decoded noise. The gaps are deliberate - every remaining topic keeps the number
 it always had, so this file, older captures and the numbers used by the
-upstream project all stay valid.
+upstream project all stay valid. **TOP66 is gone too since 3.23.0**: byte 164
+stayed at a constant `0x01` on both stages, so `Low_Pressure` never reported
+anything but 0 (see `Byte-Zuordnung.md`).
 
 *Deutsch: **Zone 2 ist in 3.4.0 entfallen**, deshalb hat die Nummerierung
 Lücken: TOP34, TOP35, TOP37, TOP43, TOP57 und TOP82 – TOP89 gibt es nicht mehr,
 auf der Kommandoseite SET7 und SET8. Diese Anlagen haben keine Zone 2, die
 Topics trugen also nur dekodiertes Rauschen. Die Lücken sind Absicht: Jedes
 verbliebene Topic behält seine bisherige Nummer, damit diese Datei, ältere
-Mitschnitte und die Nummern des Original-Projekts gültig bleiben.*
+Mitschnitte und die Nummern des Original-Projekts gültig bleiben. **Seit
+3.23.0 fehlt auch TOP66:** Byte 164 stand an beiden Stufen dauerhaft auf
+`0x01` (`Byte-Zuordnung.md`), `Low_Pressure` meldete also nie etwas anderes
+als 0.*
 
 ID | Topic | Response/Description
 :--- | --- | ---
@@ -151,7 +156,6 @@ TOP62 | Fan1_Motor_Speed | Fan 1 Motor rotation speed (R/Min)
 TOP63 | Fan2_Motor_Speed | Fan 2 Motor rotation speed (R/Min)
 TOP64 | High_Pressure | High Pressure (Kgf/Cm2)
 TOP65 | Pump_Speed | Pump Rotation Speed (R/Min)
-TOP66 | Low_Pressure | Low Pressure (Kgf/Cm2)
 TOP67 | Compressor_Current | Compressor/Outdoor unit Current (Ampere)
 TOP68 | Force_Heater_State | Force heater status (0=inactive, 1=active)
 TOP69 | Sterilization_State | Sterilisation State (0=inactive, 1=active)
@@ -189,6 +193,7 @@ TOP108 | External_Compressor_Config | External compressor switch configured (0=n
 TOP109 | External_Error_Signal_Config | External error signal configured (0=no, 1=yes) - installer setting
 TOP110 | Heat_Cool_SW_Config | External heat/cool switch configured (0=no, 1=yes) - installer setting
 TOP111 | External_Control_Config | External on/off switch configured (0=no, 1=yes) - installer setting
+TOP112 | Alt_External_Sensor | Alternative outdoor sensor in use (0=off, 1=on) - installer setting, written by SET40
 
 ### Actual states from byte 110 (TOP99 - TOP102, new in 3.7.0)
 
@@ -584,6 +589,18 @@ die H91 ausgelöst hat; ihre Bedeutung ist gegen die bekannte Beschaltung
 gegengeprüft, aber nicht gemessen. Das oberste Bitpaar von Byte 25 bekommt
 bewusst kein Topic, weil ihm die Bedeutung fehlt.*
 
+**TOP112 (3.23.0) is not covered by the three-point rule above** - it is not
+a plain installer readback but the response to its own `set/` command
+(SET40), and without it a controller would write byte 20 blind. The rule for
+plain installer readbacks is unchanged; see
+[`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md) for why every command needs a
+readback.
+
+*Deutsch: TOP112 (3.23.0) fällt nicht unter die Drei-Punkte-Regel oben - es
+ist kein reines Installer-Lese-Topic, sondern die Rücklesung des eigenen
+Set-Kommandos SET40; ohne sie würde eine Steuerung Byte 20 blind
+beschreiben. Die Regel für reine Lese-Topics bleibt davon unberührt.*
+
 ## Command Topics:
 
 Published to `<prefix>/set/<Topic>`, e.g. `panasonic_heat_pump/set/Heatpump`.
@@ -642,6 +659,7 @@ SET36 | CoolingMode | 28 | Cooling operation mode | 0=compensation curve, 1=dire
 SET37 | RoomHeaterState | 9 | Release the internal backup heater for room heating (a release, not a switch - see note) | 0=blocked, 1=free
 SET38 | DHWHeaterState | 9 | Release the internal backup heater for DHW | 0=blocked, 1=free
 SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=off, 1=on
+SET40 | AltExternalSensor | 20 | Select which outdoor sensor the unit uses (installer setting) | 0=off (casing sensor), 1=on (external sensor)
 
 > ⚠️ **SET35/SET36 are not harmlessly reversible.** Switching a circuit to the
 > compensation curve resets that curve to the Panasonic factory defaults, and
@@ -759,6 +777,43 @@ SET39 | ForceHeater | 5 | Force heater operation (substitute heat source) | 0=of
 > das Kommando bewirkt schlicht nichts. Deshalb steht `ForceHeater = 0` im
 > Notbetrieb an Position 2 und nicht hinten: Sonst käme der letzte Schritt
 > `Heatpump = 1` nie zurück und der Lauf endete in ROT.*
+
+> ⚠️ **Alternative outdoor sensor (SET40, TOP112, new in 3.23.0).** Both units
+> have two outdoor sensors: the one built into the casing and a separate
+> external sensor mounted in the shade. An installer menu entry picks which
+> one the unit uses for every control decision that depends on outdoor
+> temperature. `On` uses the external sensor, `Off` the casing sensor - the
+> casing sensor is disabled while `On` is set.
+>
+> **Why switch at all.** The external sensor gives the more realistic reading
+> in summer, especially while cooling, because the casing sensor picks up
+> sun. In winter the casing sensor matters more to the unit itself -
+> defrosting depends on it. Both units currently have their own external
+> sensor and stood on `On` when this was built (owner decision, 2026-09-19).
+>
+> **Switch via the ioBroker datapoint only, not the control panel.** The
+> ioBroker adapter replays every set topic's stored value when it
+> (re)connects (`SUBSCRIBE_GRACE`, 3.6.1). Whoever switches at the panel has
+> to set the datapoint to the same value afterwards - otherwise the next
+> replay silently turns it back.
+>
+> **The emergency sequence does not touch this setting** (owner decision,
+> 2026-09-19): both sensors give usable readings, and an extra step would
+> only have lengthened both sequences without averting a failure.
+>
+> *Deutsch: Beide Anlagen haben zwei Außenfühler - den eingebauten am Gehäuse
+> und einen externen, im Schatten montiert. Eine Installateur-Einstellung
+> legt fest, welcher für alle temperaturabhängigen Regelvorgänge gilt: `On`
+> nutzt den externen Fühler, `Off` den Gehäusefühler. Der externe Fühler
+> liefert im Sommer/Kühlbetrieb die realistischeren Werte, weil der
+> Gehäusefühler Sonne abbekommt; im Winter ist der Gehäusefühler für die
+> Wärmepumpe selbst aussagekräftiger, unter anderem wegen der
+> Abtausteuerung. Beide Stufen haben einen eigenen externen Fühler und
+> standen beim Bau auf `On`. **Umgeschaltet wird nur über den
+> ioBroker-Datenpunkt**, nicht mehr am Bedienteil: Der ioBroker spielt beim
+> Verbinden den gespeicherten Wert wieder ein, wer am Bedienteil umschaltet
+> muss den Datenpunkt von Hand nachziehen. Der Notbetrieb fasst diese
+> Einstellung nicht an.*
 
 *If you operate your Heisha with direct temperature setup: topics ending xxxRequestTemperature will set the absolute target temperature*
 

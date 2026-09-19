@@ -48,7 +48,13 @@ struct SetCommand
 /*   byte 5:  ForceHeater 0x0C  |  HolidayMode 0x30                          */
 /*   byte 8:  ForceDefrost 0x02  |  ForceSterilization 0x04                  */
 /*   byte 9:  DHWHeaterState 0x0C  |  RoomHeaterState 0x03                   */
+/*   byte 20: AltExternalSensor 0x30                                         */
 /*   byte 28: CoolingMode 0x0C  |  HeatingMode 0x03                          */
+/*                                                                           */
+/* byte 20 also carries installer fields with no set command (frost          */
+/* protection, option board); 0 in an untouched group means "no change"      */
+/* there too. Bit 1 (water/glycol) is a single bit, and every SET40          */
+/* command sends 0 there (this system runs on water, see E7).                */
 /*                                                                           */
 /* Exception - byte 7: QuietMode ((n+1)*8) and PowerfulMode (73..76) really  */
 /* do overlap in bit 3, PowerfulMode carries an implicit "quiet off". That   */
@@ -186,6 +192,22 @@ static const SetCommand setCommands[] = {
     // auch ohne anliegende Stoerung einschalten, bei laufendem Betrieb lehnt das
     // Bedienteil die Anforderung ab.
     {39,  5, 0x0C, CONV_MUL_INC, "ForceHeater",                   0,   1,   4}, // aus=4 an=8
+    // AltExternalSensor (3.23.0). Installer-Einstellung: On schaltet den
+    // eingebauten Aussenfuehler ab, der externe Fuehler auf dem Flachdach gilt
+    // dann fuer alle Regelvorgaenge - im Sommer realistischer (kein Sonnen-
+    // einfluss), im Winter ist der Gehaeusefuehler fuer die Abtausteuerung
+    // aussagekraeftiger. On setzt einen angeschlossenen externen Fuehler voraus
+    // (Owner-Entscheid E1, 2026-09-19: an beiden Stufen vorhanden).
+    // Umgeschaltet wird nur noch ueber diesen ioBroker-Datenpunkt, nicht mehr
+    // am Bedienteil: Der ioBroker spielt beim Verbinden den gespeicherten Wert
+    // wieder ein (SUBSCRIBE_GRACE, 3.6.1), der Datenpunkt muss deshalb immer
+    // den gewollten Zustand tragen. Der Notbetrieb fasst diese Einstellung
+    // nicht an (Owner-Entscheid E3).
+    // Rueckgelesen ueber TOP112 Alt_External_Sensor (getBit3and4), Klartext
+    // Off/On; die Kodierung ist aus genau diesem Dekodierer zurueckgerechnet:
+    //   AltExternalSensor 0 -> (0+1)*16 = 0x10, gelesen ((0x10>>4) & 0b11) - 1 = 0
+    //   AltExternalSensor 1 -> (1+1)*16 = 0x20, gelesen ((0x20>>4) & 0b11) - 1 = 1
+    {40, 20, 0x30, CONV_MUL_INC, "AltExternalSensor",             0,   1,  16}, // aus=16 an=32
 };
 
 static const unsigned int SETCOMMANDCOUNT = sizeof(setCommands) / sizeof(setCommands[0]);

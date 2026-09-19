@@ -1,12 +1,15 @@
 # Arbeitsplan: Alternativer Außenfühler als SET40/TOP112 (3.23.0)
 
-> **Ergebnis: offen — Plan steht, alle Entscheide vom 2026-09-19 liegen vor;
-> Umsetzung nicht begonnen.** Die Firmware steht auf 3.22.0 (alle vier Boards).
+> **Ergebnis: offen — Code und Doku fertig, `/pruefen-vor-merge` grün, Branch
+> `alt-aussenfuehler` lokal (Commits `2321c20`, `a91ca9d`); Schritte 0–14
+> erledigt.** Offen bleibt Phase E (Anlagenzugriff, vom Owner über `/rollout
+> 3.23.0` aufgerufen) und Phase F. Die Firmware steht auf 3.22.0 (alle vier
+> Boards) — noch kein OTA gelaufen.
 >
-> **Übergabe für die Umsetzungs-Session.** Dieser Plan führt vom ersten Befehl
+> **Übergabe für die Rollout-Session.** Dieser Plan führt vom ersten Befehl
 > bis zum Release in beiden Repos. Er ist vollständig entschieden; offen ist nur
 > die Arbeit. Wer ihn aufnimmt, liest zuerst „Entschieden — nicht neu
-> aufmachen“ und „Lies zuerst“, dann die Schritte der Reihe nach.
+> aufmachen“ und „Lies zuerst“, dann die Schritte ab Phase E der Reihe nach.
 
 ## Worum es geht
 

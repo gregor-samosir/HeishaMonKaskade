@@ -1036,6 +1036,10 @@ Topic behält seine bisherige Nummer, damit `MQTT-Topics.md`, ältere Mitschnitt
 und die Nummern des Original-Projekts weiter gelten. Bitte nicht
 durchnummerieren.
 
+Aus demselben Grund ist seit 3.23.0 auch **TOP66 `Low_Pressure`** weg: Byte 164
+stand an beiden Stufen dauerhaft auf `0x01`, das Topic meldete also immer 0
+(Einzelheiten in [`Byte-Zuordnung.md`](Byte-Zuordnung.md)).
+
 ### Speicher und Robustheit (2.0.1 – 2.3.1)
 
 * Dekodierpfad komplett `String`-frei — feste Puffer statt Heap-Allokationen im

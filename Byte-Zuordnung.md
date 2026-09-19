@@ -16,7 +16,7 @@ including the unused ones. For each row it names the set command that writes it
 and the state topic that reads it, using this firmware's numbering, which
 differs from the original project's. Notes are German.*
 
-**Stand:** 2026-09-18, Firmware 3.22.0 — alle 37 Set-Kommandos und alle
+**Stand:** 2026-09-19, Firmware 3.23.0 — alle 38 Set-Kommandos und alle
 99 State-Topics sind untergebracht.
 
 ## Lesehilfe
@@ -53,12 +53,13 @@ differs from the original project's. Notes are German.*
     sind bewusst weggelassen. Ein Kommando im Original heißt nur, dass dort
     jemand hinschreibt — nicht, dass diese Anlage es annimmt.
   * `unbelegt` — weder die Referenz noch das Original kennen eine Bedeutung.
-  * ¹ – ⁷ verweisen auf die gleichnamigen Fußnoten in
+  * ¹ – ⁹ verweisen auf die gleichnamigen Fußnoten in
     [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md), *(3a)* auf deren
     Abschnitt 3a: Einstellwerte, die gelesen, aber nicht geschrieben werden.
 * **Bytes 20–30 sind Installateur-Einstellungen.** Diese Firmware liest davon
-  nur Byte 23 und Byte 25, nach der Regel in [`MQTT-Topics.md`](MQTT-Topics.md),
-  Abschnitt zu TOP105–TOP111.
+  Byte 23 und Byte 25 (Regel in [`MQTT-Topics.md`](MQTT-Topics.md), Abschnitt
+  zu TOP105–TOP111) sowie seit 3.23.0 Byte 20 Bits 3+4, das sie über SET40
+  auch schreibt (dort Abschnitt zu TOP112).
 
 ## Byte 1 – 202
 
@@ -106,7 +107,7 @@ differs from the original project's. Notes are German.*
 |  |  | 19 | ganz |  |  | Referenz: stets `0x00` |
 |  |  | 20 | 1 |  |  | Referenz: Umlaufmedium Wasser/Glykol. Original: `Liquid_Type` |
 |  |  | 20 | 2 |  |  | unbelegt |
-|  |  | 20 | 3+4 |  |  | Referenz: alternativer Außenfühler aus/ein. Original: `SetAltExternalSensor`, `Alt_External_Sensor` |
+| SET40 | `AltExternalSensor` | 20 | 3+4 | TOP112 | `Alt_External_Sensor` | Alternativer (externer) Außenfühler 0 = Off (Gehäusefühler), 1 = On (extern); Installer-Einstellung, Umschalten nur über den ioBroker-Datenpunkt (Wiedereinspielung). Vorab gemessen 2026-09-19, beide Stufen: `0x2A` roh, On ⁹ |
 |  |  | 20 | 5+6 |  |  | Referenz: Frostschutz aus/ein. Original: `Anti_Freeze_Mode` |
 |  |  | 20 | 7+8 |  |  | Referenz: Optionsplatine aus/ein. Original: `Optional_PCB` |
 |  |  | 21 | ganz |  |  | Referenz: Zonenzahl und -ziel als Kennwert — `0x15` eine Zone, Raum; `0x19` eine Zone, Pool; `0x16` zwei Zonen, Z2 Raum; `0x26` zwei Zonen, Z2 Pool |
@@ -298,7 +299,7 @@ differs from the original project's. Notes are German.*
 |  |  | 161 | ganz | TOP54 | `Bypass_Outlet_Temp` | Bypass-Austritt (°C, Rohwert − 128) |
 |  |  | 162 | ganz | TOP55 | `Ipm_Temp` | Leistungsmodul IPM (°C, Rohwert − 128) |
 |  |  | 163 | ganz | TOP64 | `High_Pressure` | Hochdruck (kgf/cm², (Rohwert − 1) / 5) |
-|  |  | 164 | ganz | TOP66 | `Low_Pressure` | Niederdruck (kgf/cm², Rohwert − 1). An beiden Stufen konstant `0x01`, also 0 — dieses Modell meldet keinen Niederdruck. Wird beim nächsten Firmware-Release entfernt, die Nummer bleibt frei |
+|  |  | 164 | ganz |  |  | Referenz: Niederdruck (kgf/cm², Rohwert − 1). An beiden Stufen konstant `0x01`, also 0 — dieses Modell meldet keinen Niederdruck. TOP66 `Low_Pressure` in 3.23.0 entfernt, die Nummer bleibt frei |
 |  |  | 165 | ganz | TOP67 | `Compressor_Current` | Stromaufnahme Außeneinheit (A, (Rohwert − 1) / 5) |
 |  |  | 166 | ganz | TOP8 | `Compressor_Freq` | Verdichterfrequenz (Hz, Rohwert − 1) |
 |  |  | 167 | ganz |  |  | Referenz: stets `0x00` |
@@ -340,16 +341,15 @@ differs from the original project's. Notes are German.*
 
 ## Was beim Aufstellen aufgefallen ist
 
-* **TOP66 `Low_Pressure` trägt an dieser Anlage nichts.** Byte 164 steht an
-  beiden Stufen dauerhaft auf `0x01`: Der ioBroker-Verlauf hat seit Beginn der
-  Aufzeichnung am 2026-07-12 je rund 98 000 Werte, alle 0, auch bei laufendem
-  Verdichter. Damit ist auch die Frage nach dem Faktor erledigt — diese
-  Firmware rechnet Rohwert − 1, die Referenz (Rohwert − 1) / 5, das Original
-  seit Dezember 2023 (Rohwert − 1) × 50, und jeder davon ergibt hier 0.
-  **Owner-Entscheid 2026-09-18:** TOP66 wird bei der nächsten
-  Firmware-Änderung entfernt, die ohnehin den vollen Ablauf bis zum Rollout
-  durchläuft — kein eigener Release dafür. Vorbild ist Zone 2 in 3.4.0: Zeile
-  raus, die übrigen Topics behalten ihre Nummern.
+* **TOP66 `Low_Pressure` trug an dieser Anlage nichts, entfernt in 3.23.0.**
+  Byte 164 stand an beiden Stufen dauerhaft auf `0x01`: Der ioBroker-Verlauf
+  hatte seit Beginn der Aufzeichnung am 2026-07-12 je rund 98 000 Werte, alle
+  0, auch bei laufendem Verdichter. Damit war auch die Frage nach dem Faktor
+  erledigt — diese Firmware rechnete Rohwert − 1, die Referenz
+  (Rohwert − 1) / 5, das Original seit Dezember 2023 (Rohwert − 1) × 50, und
+  jeder davon ergab hier 0. **Owner-Entscheid 2026-09-18**, umgesetzt mit
+  3.23.0 im selben Zug wie SET40/TOP112: Zeile raus, die übrigen Topics
+  behalten ihre Nummern (Vorbild Zone 2, 3.4.0).
 * **Zwei Widersprüche zwischen Referenz und Original-Code**, beide an Feldern,
   die diese Anlage nicht hat: das zweite Raumthermostat (Byte 128 oder
   Byte 200) und die Zuordnung der Mischventil-PID zu den Zonen (Byte 177 und
