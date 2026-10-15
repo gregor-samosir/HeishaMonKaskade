@@ -1,5 +1,74 @@
 #pragma once
 // Changelog:
+// 3.23.1 - KARENZFENSTER UEBERLAUFSICHER. Nach jedem Verbinden verwirft die
+//         Firmware 5 s lang alle Set-Kommandos (SUBSCRIBE_GRACE, 3.6.1). Die
+//         Frist stand als millis() + 5000 in der Firmware und wurde mit
+//         (long)(millis() - frist) < 0 geprueft. Fehlerbehebung, keine neue
+//         Funktion.
+//
+//         PROBLEM. Das Idiom ist nur fuer Fristen ueberlaufsicher, die nach
+//         Ablauf nicht weiter verglichen werden - diese wurde es. 2^31 ms =
+//         24,86 Tage nach dem letzten Connect kippt die Differenz wieder ins
+//         Negative, die Bedingung meldet "offen", und JEDES Set-Kommando wird
+//         verworfen, bis zum naechsten Reconnect. Still: je Kommando eine
+//         Telnet-Zeile, auch die Bilanzmeldung hatte denselben Vergleich und
+//         schwieg. Irrefuehrend: Nach 12 min meldet die Webseite "Hausteuerung
+//         erreichbar, sendet aber seit ... keine Vorgaben" - die Steuerung
+//         sendete, die Firmware warf weg. Der Notbetrieb war nicht betroffen
+//         (laeuft vor der Karenzpruefung). Beide frueheren Durchsichten hatten
+//         die Stelle als "ueberlaufsicher geprueft" abgehakt, weil das Idiom
+//         bekannt aussieht; gefunden in der dritten (Befund S1, 2026-10-15,
+//         Massnahmenplan-Codedurchsicht-2026-10-15.md). Die Stelle lag im
+//         Firmware-Klebecode und nicht in einem arduino-freien Header - kein
+//         Hosttest hat sie je gesehen.
+//
+//         LIVE-STAND 2026-10-15: nicht betroffen, nur durch den Neustart des
+//         Adapters mqtt.0 am 2026-10-06 08:28. Ohne ihn waeren beide Stufen
+//         seit etwa 2026-10-14 betroffen gewesen. Naht zuletzt bestimmt auf
+//         2026-10-31 04:01 CET (letzter Connect + 2^31 ms + 5 s).
+//
+//         FIX. Neuer arduino-freier Header karenz.h: Startzeit plus Merker
+//         statt Frist. karenz_offen() rechnet die Differenz in uint32_t gegen
+//         die Dauer und schliesst das Fenster beim ersten Aufruf nach Ablauf;
+//         danach wird nichts mehr verglichen. Vorbedingung: Aufruf haeufiger
+//         als alle 49,7 Tage - loop() ruft die Regel deshalb in JEDEM
+//         Durchlauf auf (vor der Bedingung der Bilanzmeldung, nicht in ihr:
+//         der Kurzschluss haette den Aufruf ohne verworfene Kommandos
+//         uebersprungen). SUBSCRIBE_GRACE zog samt Begruendung nach karenz.h.
+//         Unveraendert: 5 s ab dem Abonnieren, zweite Armierung am Ende von
+//         setup() (3.20.0, M1), Notbetriebszweig vor der Pruefung, Herzschlag
+//         der Verbindungswacht erst danach. H1 und H2 gleich.
+//
+//         ZUSATZ. test/zeitvergleich_test.py meldet in src/ jeden
+//         vorzeichenbehafteten oder direkten millis()-Vergleich, der nicht mit
+//         der Marke "kurzlebige Frist" in derselben Zeile ausgewiesen ist.
+//         Einzige Marke: die Hydraulik-Lesefrist in notbetrieb.cpp (lebt
+//         hoechstens HYDRAULIK_LESEFRIST_MS, wird nach der Schleife nie
+//         wieder geprueft). Code unveraendert, nur Kommentar und Marke.
+//
+//         NACHWEIS: test/karenz_test.cpp (neu, bindet karenz.h direkt ein):
+//         Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms bis ueber den
+//         vollen Zaehlerumlauf, Reconnect, zweite Armierung, Nullzeiger, dazu
+//         die alte Regel als Gegenbeispiel. GEGENPROBE von Hand (alte Regel in
+//         karenz_offen() eingebaut): Fall 4 bricht, 4 Zusicherungen rot (2^31
+//         + 5 s, + 1 Tag, 2^32 - 1, voller Umlauf + 1000 ms); zurueckgebaut.
+//         Dabei fiel eine falsche Erwartung des Tests selbst auf: Die Naht der
+//         alten Regel liegt bei 2^31 ms PLUS Dauer, nicht bei 2^31 ms - die
+//         Frist steht 5 s nach dem Beginn. Der Test haette sie sonst um 5 s
+//         verfehlt. test/zeitvergleich_test.py mit eingebautem Selbsttest der
+//         Muster; GEGENPROBE: Marke aus notbetrieb.cpp entfernt -> ROT mit
+//         Datei und Zeile, zurueckgebaut. Gegen den Stand 3.23.0 gelassen
+//         meldet er genau die zwei Zeilen 814 und 1484 der HeishaMon.cpp. Alle
+//         Hosttests der CI gruen, alle sechs Envs gebaut. Zusatzabnahme an der
+//         Anlage (Bilanzzeile nach dem Connect, neue Uhr, Kommandos kommen
+//         durch): Ergebnis steht in Arbeitsplan-Karenzfenster-3.23.1.md,
+//         Schritt 18 - nicht hier, weil der Tag dann schon steht.
+//
+//         GROESSE gegen 3.23.0 (heishamon_esp32_h1_ota, frisch im Worktree
+//         gegen den Rettungsanker gebaut): RAM 61952 -> 61960 Byte (+8),
+//         Flash 1223417 -> 1223521 Byte (+104). heishamon_esp32_h2_ota: RAM
+//         61952 -> 61960 Byte (+8), Flash 1222781 -> 1222877 Byte (+96).
+//
 // 3.23.0 - ALTERNATIVER AUSSENFUEHLER PER MQTT (SET40/TOP112), TOP66
 //         ENTFAELLT. Neues Set-Kommando SET40 AltExternalSensor schaltet die
 //         Fuehlerwahl im Installateurmenue um (Byte 20, Bits 3+4): Off nutzt
@@ -2060,4 +2129,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.23.0";
+static const char* heishamon_version = "3.23.1";

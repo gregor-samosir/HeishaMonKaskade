@@ -362,6 +362,12 @@ gezielt untersucht und **nicht** bemängelt:
   deckungsgleich mit dem Original.
 * `millis()`-Arithmetik an allen Vergleichsstellen (Karenzfenster,
   Sammelfenster, Watchdog, Reconnect-Backoff).
+  **Nachtrag 2026-10-15:** Das Karenzfenster war *nicht* überlaufsicher — die
+  Frist wurde nach Ablauf weiter verglichen und kippte nach 24,86 Tagen wieder
+  auf „offen“ (Befund S1 der [Durchsicht vom 2026-10-15](Massnahmenplan-Codedurchsicht-2026-10-15.md),
+  behoben in 3.23.1). Das Idiom `(long)(millis() - frist) < 0` gilt nur für
+  Fristen, die nach Ablauf nicht mehr geprüft werden; der Punkt hier „geprüft“
+  stimmt für die übrigen Stellen, nicht für diese.
 * Timer-Kette auf Abrisspfade: terminiert auch bei fehlgeschlagenem
   `build_heatpump_command`, Deferral am Limit und aktivem Karenzfenster.
 * ESP32-Spezifika: `WiFi.setSleep(false)`, RX-Puffer 256 ≥ 203,

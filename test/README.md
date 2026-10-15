@@ -27,6 +27,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
+| `karenz_test.cpp` | Karenzfenster nach dem Verbinden: Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms samt Gegenbeispiel der alten Regel (bindet `src/karenz.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
@@ -38,6 +39,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `rtcspiegel_test.cpp` | Gueltigkeitsregel des RTC-Spiegels: Magic mit Layoutnummer, Rolle, Maskenbreite, Pruefsumme, Bitkipper und die Saettigung des Bootzaehlers (bindet `src/rtcspiegel.h` direkt ein) | nein |
 | `css_klassen_test.py` | Hosttest: jede benutzte w3-Klasse ist im eingebetteten CSS definiert, jede Farbklasse steht hinter `.w3-button` | nein |
 | `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md`, alle relativen Links gegen Dateien und Code, und die `**Ergebnis:**`-Zeile in jeder Vorhaben-/Auftrag-/Arbeitsplan-Datei | nein |
+| `zeitvergleich_test.py` | Hosttest: meldet in `src/` jeden vorzeichenbehafteten oder direkten `millis()`-Vergleich ohne die Marke `kurzlebige Frist` (Befund S1, 3.23.1) | nein |
 | `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
 | `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp`, `byte23_25_test.cpp` und `byte20_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
