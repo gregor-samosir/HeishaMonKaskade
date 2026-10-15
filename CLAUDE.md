@@ -16,6 +16,9 @@ der Fehler. Zuerst nachsehen in:
 - [`Massnahmenplan-Codedurchsicht-2026-08-18.md`](Massnahmenplan-Codedurchsicht-2026-08-18.md)
   und [`Massnahmenplan-Codedurchsicht-2026-09-02.md`](Massnahmenplan-Codedurchsicht-2026-09-02.md)
   — beide Durchsichten mit Entscheid je Punkt, auch für die verworfenen.
+- [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md)
+  — dritte Durchsicht; Empfehlungen, je Paket noch zu entscheiden. Abschnitt
+  „Ausdrücklich geprüft und in Ordnung" zuerst lesen.
 - `README.md`, Abschnitt **„Was bewusst nicht drin ist"** — Zone 2, die Relais
   der Platine, keine Unity-Testsuite, der zurückgestellte große Umbau.
 - [`src/version.h`](src/version.h) — Changelog mit Problem und Nachweis je
