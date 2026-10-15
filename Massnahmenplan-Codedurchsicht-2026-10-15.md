@@ -30,7 +30,7 @@ nachgetragen.
 
 | ID | Befund | Prio | Paket | Stand |
 | --- | --- | --- | --- | --- |
-| S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | offen — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md), Frist 2026-10-31 |
+| S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md); Releases offen |
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | offen |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | offen |
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
@@ -44,6 +44,7 @@ nachgetragen.
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | offen |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | offen |
 | D4 | Umfang und Struktur der Doku arbeiten gegen das Ziel Wartbarkeit | mittel | P7 | offen |
+| N1 | Beifang aus der Abnahme von 3.23.1: Der Notbetriebswerte-Sender schickte Dezimalwerte (33.5, 25.5), die die Firmware komplett verwirft | mittel | `nodered-flows` V1.1 | **erledigt** 2026-10-15 — [Auftrag](Auftrag-Notbetriebssender-Ganzzahl.md) |
 
 ## Reihenfolge der Pakete (Empfehlung)
 
@@ -347,8 +348,9 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 ### 3.23.1 — Karenzfenster (S1)
 
-- [ ] Nach [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md)
-      abarbeiten, **vor 2026-10-31 04:01 CET** (Frist dort neu bestimmen).
+- [x] Nach [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md)
+      abarbeiten, **vor 2026-10-31 04:01 CET** — erledigt 2026-10-15, beide
+      Stufen und beide Backups auf 3.23.1; Releases noch offen.
 
 ### P1 — Doku-Korrekturen (direkt auf `main`, keine Firmware)
 

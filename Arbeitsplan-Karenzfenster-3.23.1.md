@@ -1,13 +1,35 @@
 # Arbeitsplan: Karenzfenster überlaufsicher (3.23.1)
 
-> **Ergebnis: offen — Frist 2026-10-31 04:01 CET.** Angelegt am 2026-10-15
-> aus der Codedurchsicht desselben Tages (Befund S1 in
+> **Ergebnis: ausgerollt am 2026-10-15 auf allen vier Boards — Releases
+> offen.** Angelegt am 2026-10-15 aus der Codedurchsicht desselben Tages
+> (Befund S1 in
 > [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md)).
-> **Stand 2026-10-15:** Phasen A–E auf dem Branch `karenzfenster` erledigt
-> (Rettungsanker `rettungsanker-2026-10-15`; 17 Hosttests und alle sechs Envs
-> grün; RAM +8 Byte, Flash +104 Byte H1 / +96 Byte H2). Offen: Phase F
-> (`/rollout 3.23.1`, vom Owner aufzurufen) und G. Naht unverändert
-> 2026-10-31 04:01 CET.
+> Die Naht (2026-10-31 04:01 CET) ist damit erledigt: beide Stufen haben
+> neue Uhren (OTA 16:01:32 und 16:33:51), und die Regel kippt nicht mehr.
+>
+> **Abnahme (Schritt 18) — H1 und H2 je alle drei Punkte erfüllt:**
+>
+> | | H1 (OTA 16:01:32) | H2 (OTA 16:33:51) |
+> | --- | --- | --- |
+> | Fenster wirkt noch | Bilanz „38 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen“ um 16:01:42 | dieselbe Zeile um 16:33:59 |
+> | Neue Uhr | `boot_reason` = SW, `ts` 16:01:37, `info/version` 3.23.1 | `boot_reason` = SW, `ts` 16:33:54, `info/version` 3.23.1 |
+> | Kommandos kommen durch | Lage 0 in jeder Prüfung 16:03–16:17; Re-Assert 16:18:39 als `<SUB>` im Logring angenommen | Lage 0 in jeder Prüfung 16:34–16:50; Re-Assert 16:43:39 und 16:48:39 angenommen |
+>
+> `tablesnap`-Diff beider Stufen: nur laufende Messwerte, Sollwerte
+> unverändert. Notbetrieb nach jedem OTA bereit (`fehlendMaske` 0, `Sperre` 0,
+> `Lage` 0). Befehls-Wächter im ioBroker-Log: nur die Bridge-Meldung um den
+> OTA von H1 (OFFLINE 16:01:31, wieder online 16:02:31), keine Abweichung.
+> **Backup-Boards** (Schritt 20): `h1b` und `h2b` um 16:40:56 und 16:41:18
+> geflasht, vorher und nachher `mqtt_port` 1884, Hostnamen unverändert,
+> Notbetrieb gesperrt wie gewollt.
+>
+> **Noch offen:** Schritt 21, die beiden Releases (öffentlich und privates
+> Rollback). Erst danach steht hier „erledigt“.
+>
+> **Beifang:** Bei der Abnahme von H1 fiel auf, dass der Notbetriebszweig
+> Dezimalwerte (33.5, 25.5) komplett verwirft. Eigener Auftrag, erledigt
+> ([`Auftrag-Notbetriebssender-Ganzzahl.md`](Auftrag-Notbetriebssender-Ganzzahl.md));
+> die Firmware blieb dafür unverändert.
 >
 > **Übergabe:** Der Plan führt vom Rettungsanker bis zum Release und ist für
 > den Einstieg in einer neuen Session geschrieben. Zuerst „Lies zuerst“, dann

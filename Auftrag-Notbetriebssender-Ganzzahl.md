@@ -1,8 +1,39 @@
 # Auftrag: Notbetriebswerte-Sender rundet auf Ganzzahlen
 
-> **Ergebnis: offen** — Angelegt am 2026-10-15 aus der Abnahme von 3.23.1
-> an Stufe 1. Noch nichts umgesetzt. Owner-Entscheid 2026-10-15: Der Fix
-> kommt in den **Sender** (Option 1), die Firmware bleibt streng.
+> **Ergebnis: erledigt (2026-10-15)** — umgesetzt in `nodered-flows` als
+> `Notbetriebswerte-Sender` **V1.1** (Commit `2a6c5cd`, deployt 16:51).
+> Owner-Entscheid 2026-10-15: Der Fix kommt in den **Sender** (Option 1), die
+> Firmware bleibt streng. Offen bleibt nur, ob die Firmware künftig selbst
+> rundet (unten, „Was dieser Auftrag nicht entscheidet“).
+>
+> **Abnahme:**
+>
+> 1. **Offline, bestanden.** `nodered-flows/tests/notbetriebssender/` lädt die
+>    `func` aus `flows.json` mit Mocks: 33.5 → 34 und 25.5 → 26 an den richtigen
+>    Topics, Ganzzahlen unverändert und ohne Meldung, ungültige Werte (`abc`,
+>    `null`, `""`, `NaN`) weiter nicht gesendet, Bereichsgrenzen gelten für den
+>    gerundeten Wert (19.6 → 20 geht, 55.5 → 56 nicht), −0.4 → 0 und nicht −0.
+>    Alle Zusicherungen grün; **Gegenprobe** gegen V1.0 aus der Git-Historie:
+>    14 rot.
+> 2. **An der Anlage, bestanden.** Nach dem Deploy (16:51:11) stehen
+>    `…notbetrieb.Z1HeatCurveTargetHighTemp` = 34, `…TargetLowTemp` = 26,
+>    `…OutsideLowTemp` = −10, `…OutsideHighTemp` = 15 und `panasonic_heat_pump2.
+>    notbetrieb.DHWTemp` = 48, alle mit `ts` 16:51:11. Im Log von Node-RED die
+>    zwei erwarteten Zeilen „VL kalt: 33.5 auf 34 gerundet“ und „VL warm: 25.5
+>    auf 26 gerundet“, keine Fehler.
+> 3. **Passiv, bestanden soweit prüfbar.** Beide Notbetriebe bereit
+>    (`fehlendMaske` 0, `Sperre` 0), im `/log` von H1 keine Zeile „ist keine
+>    Zahl“ nach dem Deploy. Die Bridge-Seite des Wiedereinspiels (Verbinden mit
+>    den neuen Werten) ist damit erst beim nächsten Reconnect belegt — ein
+>    Neustart nur zu diesem Zweck lohnt nicht.
+>
+> **Beifang zur Einordnung:** Die Doku der Gegenseite nannte als „heute“ schon
+> 34 und 26, also dieselben Zahlen, die die Rundung liefert. Die Bridge hielt
+> vermutlich seit dem 2026-10-10 genau diese Werte (nicht gemessen — die
+> Firmware zeigt gehaltene Werte nirgends an). Praktisch geändert hat sich
+> für H1 heute deshalb nichts; geschlossen ist der Fall „Stromausfall bei
+> laufendem ioBroker“, in dem der Spiegel leer ist und der Knopf gesperrt
+> geblieben wäre.
 
 *Zum Kopieren in eine Session im Projekt `nodered-flows` gedacht; setzt dort
 keinen Vorkontext voraus. Gegenstück im Firmware-Repo: `HeishaMonKaskade`,
