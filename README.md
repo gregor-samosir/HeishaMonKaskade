@@ -1303,6 +1303,17 @@ Zwei Hinweise aus der Praxis:
   mosquitto wäre es aufgeschlagen. **Der Nachweis am echten Broker steht noch
   aus** und gehört in die Umzugsvorbereitung: neuer Abonnent auf `<präfix>/LWT`
   muss retained `Online` bekommen, nach dem Stromlosmachen retained `Offline`.
+* **Set-Werte sind Ganzzahlen innerhalb der Tabellengrenzen — alles andere wird
+  abgelehnt, nicht gerundet.** Ein `33.5` oder ein Wert außerhalb von Min/Max
+  verwirft den ganzen Befehl; die Wärmepumpe behält ihren alten Wert, und der
+  `set`-Datenpunkt im ioBroker zeigt weiter den eingetippten. Die Fehlerzeile
+  (`Error: Invalid integer value …`, `Error: Value … out of range …`) steht nur
+  im Ringpuffer unter `/log` und in `<präfix>/log`. Für den Betreiber steht der
+  Prüfweg samt der Liste, welche Kanäle überwacht werden, in
+  `nodered-flows/doku/referenz/BETRIEB.md` („Set-Werte von Hand im ioBroker
+  eintragen“) — ein anderes Repo, deshalb ohne Link. Eine Zählung abgelehnter
+  Befehle ist als Befund S6 vorgesehen
+  ([Maßnahmenplan](Massnahmenplan-Codedurchsicht-2026-10-15.md)).
 * **Ein fehlgeschlagenes State-Publish wird seit 3.8.2 wiederholt.** Bis dahin
   galt ein Wert auch dann als gesendet, wenn `publish()` fehlschlug. Nach einer
   MQTT-Unterbrechung stand beim Broker deshalb bis zu fünf Minuten lang der

@@ -35,6 +35,7 @@ nachgetragen.
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | offen |
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | offen |
+| S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P3 oder P4 | offen — aufgenommen auf Wunsch des Owners 2026-10-15 |
 | C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | offen |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | offen |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | offen |
@@ -192,6 +193,62 @@ danach eine Änderung an `platformio.ini` und läuft wie eine Codeänderung.
 
 *Zur Kenntnis, kein Handlungsbedarf:* `PubSubClient` 2.8 ist von 2020 und wird
 nicht mehr gepflegt. Ein Wechsel wäre ein eigenes Vorhaben mit eigenem Risiko.
+
+### S6 — Abgelehnte Set-Befehle sind nirgends dauerhaft sichtbar *(mittel)*
+
+*Aufgenommen am 2026-10-15 aus der Abnahme von 3.23.1 — kein Fund der
+Durchsicht selbst, sondern Folge von N1 (Dezimalwerte im Notbetriebszweig).*
+
+**Problem:** `build_heatpump_command()` (`src/commands.cpp`, Zeilen 284–325)
+lehnt jeden Payload ab, den `strtol` nicht vollständig als Ganzzahl liest
+(`33.5`, `1e1`, `""`, `33 `), und jeden Wert außerhalb von `min`/`max` der
+Tabelle. Der Befehl geht verloren, die Wärmepumpe behält ihren alten Wert, und
+der `set`-Datenpunkt im ioBroker zeigt weiter den eingetippten. Die Ablehnung
+steht nur als `Error:`-Zeile im Logring (32 Zeilen, vom 5-min-Re-Assert binnen
+10–30 min verdrängt, mit dem Neustart weg), in `<präfix>/log` (der Datenpunkt
+hält nur die letzte Zeile) und als Telnet-Rückfall. Das ioBroker-Log enthält sie
+nicht.
+
+**Folge / Beleg:** Vom 2026-10-10 bis 2026-10-15 verwarf die Bridge die
+Dezimalwerte des Notbetriebszweigs, ohne dass es jemand bemerkte (N1). Der
+Befehls-Wächter deckt neun Kanäle je Stufe ab, die Temperaturkanäle mit 0,5 K
+Toleranz (`<=`): `33.5` gegen einen Ist-Wert von `33` löst keinen Alarm aus.
+Der `Warmwasser-Sender` prüft `Number.isInteger` selbst. Für alle übrigen
+SET-Befehle gibt es keine Rücklesung. Später soll die Anlage von jemand
+anderem betreut werden, der im ioBroker direkt in einen `set`-Datenpunkt
+tippt.
+
+**Stand des Nachweises:** Code gelesen; am 2026-10-15 alle 76 `set.*`-Datenpunkte
+beider Stufen im ioBroker gelesen — keine Nicht-Ganzzahl. Ein Hosttest für die
+Ablehnung fehlt (das ist C1: `commands.cpp` hängt am Arduino-Code).
+
+**Vorschlag:**
+1. Regel „Payload ist eine Ganzzahl“ in einen kleinen arduino-freien Header
+   ziehen (Muster `sendwindow.h`), mit Hosttest: `33.5`, `" 33"`, `"33 "`,
+   `"+33"`, `"0x1A"`, `"1e1"`, `""`, `"-"` und ein Überlauf wie
+   `99999999999`. Damit entsteht der erste Test des Set-Pfads ohne Nachbildung.
+2. Abgelehnte Befehle zählen und den letzten sichtbar machen:
+   `info/set_abgelehnt` (Zähler seit dem Start) und
+   `info/set_abgelehnt_letzter` (Topic und Wert, auf 64 Zeichen gekürzt).
+   Eine Stelle für alle 38 SET-Befehle, ohne je Kanal eine Rücklesung zu
+   pflegen. `MQTT-Topics.md` nachziehen.
+3. Auswertung im bestehenden `WP_Bridge_Waechter` (Anstieg des Zählers wie
+   `boot_count`) — Auftrag an `nodered-flows`, erst nach der Firmware.
+
+**Offen, nicht Teil von S6:** ob die Firmware Dezimalwerte selbst rundet
+(Auftrag-Notbetriebssender-Ganzzahl.md, „Was dieser Auftrag nicht
+entscheidet“). Empfehlung: nein — bei Befehlen an die Wärmepumpe ist
+„ablehnen und melden“ sicherer als „still anders ausführen“, gerundet wird an
+der Quelle. Das ist **kein Entscheid**, nur die Empfehlung.
+
+**Nachweis:** Hosttest wie unter 1. Am Prüfling: `set/Z1HeatRequestTemperature`
+= `33.5` senden → `info/set_abgelehnt` + 1, `info/set_abgelehnt_letzter`
+nennt Topic und Wert, der State-Wert der Pumpe bleibt unverändert.
+
+**Zuordnung:** als Beigabe zu P3 (3.24.0) vorgeschlagen, thematisch näher an
+P4 (`info/`-Zähler der seriellen Strecke, gleiches `MQTT-Topics.md`-Update).
+Wo es landet, entscheidet sich beim Planen von P3/P4; die Regel „eine Version
+belegt eine Sache“ aus dem Arbeitsplan 3.23.1 spricht für P4.
 
 ### C1 — Kommandopfad nicht im Header-Muster *(hoch)*
 
@@ -394,6 +451,10 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
       `TASK_WDT`, `boot_count` + 1, Notbetriebswerte erhalten.
 - [ ] Blockadetabelle aus der Durchsicht 2026-09-02 um die neue Grenze
       ergänzen.
+- [ ] S6 (optional mitnehmen, sonst P4): Ganzzahl-Regel als Header mit
+      Hosttest; `info/set_abgelehnt` und `info/set_abgelehnt_letzter`;
+      `MQTT-Topics.md` nachziehen. Zuordnung P3 oder P4 beim Planen
+      entscheiden (siehe S6).
 
 ### P4 — Serielle Strecke (3.25.0)
 
