@@ -30,7 +30,7 @@ nachgetragen.
 
 | ID | Befund | Prio | Paket | Stand |
 | --- | --- | --- | --- | --- |
-| S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md); Releases offen |
+| S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md) |
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | offen |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | offen |
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
@@ -350,7 +350,7 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 - [x] Nach [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md)
       abarbeiten, **vor 2026-10-31 04:01 CET** — erledigt 2026-10-15, beide
-      Stufen und beide Backups auf 3.23.1; Releases noch offen.
+      Stufen und beide Backups auf 3.23.1; beide Releases angelegt.
 
 ### P1 — Doku-Korrekturen (direkt auf `main`, keine Firmware)
 

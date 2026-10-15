@@ -1,7 +1,7 @@
 # Arbeitsplan: Karenzfenster überlaufsicher (3.23.1)
 
-> **Ergebnis: ausgerollt am 2026-10-15 auf allen vier Boards — Releases
-> offen.** Angelegt am 2026-10-15 aus der Codedurchsicht desselben Tages
+> **Ergebnis: erledigt (2026-10-15) — ausgerollt auf allen vier Boards,
+> beide Releases angelegt.** Angelegt am 2026-10-15 aus der Codedurchsicht desselben Tages
 > (Befund S1 in
 > [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md)).
 > Die Naht (2026-10-31 04:01 CET) ist damit erledigt: beide Stufen haben
@@ -23,8 +23,10 @@
 > geflasht, vorher und nachher `mqtt_port` 1884, Hostnamen unverändert,
 > Notbetrieb gesperrt wie gewollt.
 >
-> **Noch offen:** Schritt 21, die beiden Releases (öffentlich und privates
-> Rollback). Erst danach steht hier „erledigt“.
+> **Schritt 21, Releases (2026-10-15, CI grün):** öffentlich
+> `v3.23.1` ohne Binaries; privat `HeishaMon-Rollback` `v3.23.1` mit beiden
+> `_ota`-Abbildern und der ini, `v3.23.0` zum Rückfallstand umbenannt,
+> Release `v3.22.0` gelöscht (Tag bleibt; Owner bestätigt).
 >
 > **Beifang:** Bei der Abnahme von H1 fiel auf, dass der Notbetriebszweig
 > Dezimalwerte (33.5, 25.5) komplett verwirft. Eigener Auftrag, erledigt
