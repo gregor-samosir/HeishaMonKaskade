@@ -56,6 +56,10 @@ Lesung im ioBroker am 2026-10-15 (nur lesend, simple-api):
 Der letzte Connect stammt von einem Neustart des Adapters `mqtt.0` um 08:28.
 Ohne ihn wären beide Stufen seit etwa 2026-10-14 betroffen gewesen.
 
+**Schritt 1 am 2026-10-15 (15:48) wiederholt:** letzter Connect unverändert
+2026-10-06 08:29:37 (beide Stufen), Naht 2026-10-31 05:01 in naiver Ortszeit
+(= 04:01 CET, Sommerzeit endet am 2026-10-25), also 16 Tage entfernt.
+
 **Naht = letzter Connect + 2³¹ ms + 5 s = 2026-10-31 04:01 CET**, sofern es
 bis dahin keinen weiteren Reconnect gibt. Jeder Reconnect und jedes OTA
 verschiebt sie nach hinten, nie nach vorn. Schritt 1 bestimmt sie neu.
@@ -89,11 +93,14 @@ um weitere 24,86 Tage, behebt aber nichts.
 | Nr. | Frage | Entscheid | Wann |
 | --- | --- | --- | --- |
 | A | Was soll 3.23.1 leisten? | Die kritischen Punkte der Durchsicht vom 2026-10-15 in **einer** Release abarbeiten; Einstieg in einer neuen Session über diesen Plan | Owner-Auftrag 2026-10-15 |
+| E1 | Umfang von 3.23.1 | **Nur S1** plus die Regressionsprüfung aus E2; S2 (Telnet) und S3 (Watchdog) folgen in 3.24.0 | Owner-Bestätigung 2026-10-15 |
+| E2 | Prüfung auf vorzeichenbehaftete `millis()`-Vergleiche | **Ja**, `test/zeitvergleich_test.py` (Schritt 9) | Owner-Bestätigung 2026-10-15 |
+| E3 | Nachweis an der Anlage | **Passiv** (Schritt 18): Bilanzzeile nach dem Connect, danach Befehls-Wächter und Startseite | Owner-Bestätigung 2026-10-15 |
 
 ## Zu Beginn vom Owner zu bestätigen
 
-Empfehlungen aus der Durchsicht — **keine Entscheide**, bis der Owner sie
-bestätigt. Die Antworten hier eintragen und in die Tabelle oben übernehmen.
+*E1–E3 am 2026-10-15 vom Owner wie empfohlen bestätigt und in die Tabelle
+oben übernommen; die Begründungen bleiben hier stehen.*
 
 | Nr. | Frage | Empfehlung | Grund |
 | --- | --- | --- | --- |
