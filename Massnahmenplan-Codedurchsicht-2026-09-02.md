@@ -346,6 +346,13 @@ festgehalten damit es beim nächsten Mal niemand neu herleiten muss.
 * **`millis()`-Überlauf** an allen Vergleichsstellen, auch den seit 3.13
   neuen (Verbindungswacht mit fortgeschriebener Dauer und 30-Tage-Deckel,
   Notbetrieb-Zeitregeln, Hydraulik-Lesefrist, Bilanz des Karenzfensters).
+  **Nachtrag 2026-10-15:** Das Karenzfenster und seine Bilanz waren *nicht*
+  überlaufsicher — die Frist wurde nach Ablauf weiter verglichen und kippte
+  nach 24,86 Tagen wieder auf „offen“ (Befund S1 der
+  [Durchsicht vom 2026-10-15](Massnahmenplan-Codedurchsicht-2026-10-15.md),
+  behoben in 3.23.1 durch `src/karenz.h`). Die Hydraulik-Lesefrist ist
+  unverändert in Ordnung: Sie lebt höchstens Sekunden und trägt seitdem die
+  Marke `kurzlebige Frist`, die `test/zeitvergleich_test.py` liest.
 * **Publish aus dem MQTT-Callback**: In `build_heatpump_command()` und
   `notbetrieb_mqtt_annehmen()` wird jede Meldung erst mit `snprintf`
   formatiert und dann publiziert; `topic` wird nach dem Publish nirgends

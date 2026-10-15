@@ -113,6 +113,13 @@ cpp_test telegramm_test
 # waere der nicht abzuwarten.
 cpp_test sendwindow_test
 
+# Karenzfenster nach dem Verbinden, bindet src/karenz.h direkt ein. Der Grund
+# ist die Naht nach 2^31 ms = 24,86 Tagen: Die Regel bis 3.23.0 (Frist, mit
+# vorzeichenbehaftetem Vergleich geprueft) meldete danach wieder "offen" und
+# verwarf still jedes Set-Kommando. Der Test fuehrt die alte Regel als
+# Gegenbeispiel mit - nur so ist belegt, dass er die Naht wirklich trifft.
+cpp_test karenz_test
+
 # Kodierung von SET35/SET36 auf Byte 28 - legt die Merge-Logik aus
 # commands.cpp und die Dekodierer aus decode.cpp nebeneinander. Byte 28 traegt
 # zwei Bitfelder; ohne bitgenaue Maske schaltet ein Kuehl-Kommando die Heizung
@@ -193,6 +200,13 @@ py_test doku_zuordnung_test
 # Pfade in CLAUDE.md und alle relativen Links. Die Durchsicht vom 2026-09-18
 # fand dort 14 Luecken, die keine Pruefung abgefangen hatte.
 py_test repo_konsistenz_test
+
+# Meldet in src/ jeden vorzeichenbehafteten oder direkten millis()-Vergleich,
+# der nicht mit `kurzlebige Frist` ausgewiesen ist. Dasselbe Muster stand in
+# 3.23.0 am Karenzfenster und wurde von zwei Durchsichten als ueberlaufsicher
+# abgehakt, weil das Idiom bekannt aussieht. Regeln ueber lange Zeitspannen
+# gehoeren in einen arduino-freien Header mit eigenem Hosttest (karenz_test).
+py_test zeitvergleich_test
 
 # --- Vollstaendigkeit -----------------------------------------------------
 # Jede test/*_test.cpp und test/*_test.py ist ein Hosttest - ausser den

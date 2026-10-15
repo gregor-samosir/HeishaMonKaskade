@@ -3,7 +3,11 @@
 > **Ergebnis: offen — Frist 2026-10-31 04:01 CET.** Angelegt am 2026-10-15
 > aus der Codedurchsicht desselben Tages (Befund S1 in
 > [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md)).
-> Noch nichts umgesetzt.
+> **Stand 2026-10-15:** Phasen A–E auf dem Branch `karenzfenster` erledigt
+> (Rettungsanker `rettungsanker-2026-10-15`; 17 Hosttests und alle sechs Envs
+> grün; RAM +8 Byte, Flash +104 Byte H1 / +96 Byte H2). Offen: Phase F
+> (`/rollout 3.23.1`, vom Owner aufzurufen) und G. Naht unverändert
+> 2026-10-31 04:01 CET.
 >
 > **Übergabe:** Der Plan führt vom Rettungsanker bis zum Release und ist für
 > den Einstieg in einer neuen Session geschrieben. Zuerst „Lies zuerst“, dann

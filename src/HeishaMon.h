@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 #include "telegram.h"   // Typ-, Laengen- und Pruefsummenregel des Antworttelegramms
 #include "sendwindow.h" // Deckel des Sammelfensters, Grenze fuers Verschieben
+#include "karenz.h"     // Karenzfenster nach dem Verbinden, ueberlaufsicher (3.23.1)
 #include "notbetrieb.h" // Werte, Schrittfolge und Zeitregeln des Notbetriebs
 #include "rtcspiegel.h" // Gueltigkeitsregel des Spiegels im RTC-Speicher
 #include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
@@ -63,13 +64,8 @@ typedef HTTPUpdateServer HTTPUpdateServerClass;
 #define MQTT_RECONNECT_MIN 5000   // erster Wiederverbindungsversuch nach 5 s
 #define MQTT_RECONNECT_MAX 60000  // Obergrenze, danach im Minutentakt
 
-// Karenzzeit nach jedem erfolgreichen Abonnieren der Set-Topics. Der
-// ioBroker-MQTT-Adapter beantwortet ein neues Abonnement aus seiner
-// Objektdatenbank und schickt den gespeicherten Wert JEDES Set-Topics -
-// teils Monate alt. Ohne diese Sperre laufen sie als frische Kommandos in die
-// Waermepumpe (gemessen 2026-08-13, s. Changelog 3.6.1). Der Schwall kommt
-// unmittelbar nach dem SUBACK, 5 s sind reichlich bemessen.
-#define SUBSCRIBE_GRACE 5000
+// SUBSCRIBE_GRACE (Karenzzeit nach dem Abonnieren der Set-Topics) steht samt
+// Begruendung in karenz.h - sie gehoert zur Regel, die der Hosttest mituebersetzt.
 
 // WLAN-Watchdog: ohne WLAN ist das Geraet fuer die Kaskadenregelung blind.
 // Stufe 1 erneuter Verbindungsversuch, Stufe 2 Neustart.

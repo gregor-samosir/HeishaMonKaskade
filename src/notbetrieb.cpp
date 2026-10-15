@@ -587,8 +587,12 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   // sich zwischen den ESP32-Core-Staenden schon geaendert. read() steht in
   // der gemeinsamen Basisklasse und bleibt davon unberuehrt.
   Stream *stream = http.getStreamPtr();
+  // Der vorzeichenbehaftete Vergleich ist hier zulaessig: Die Frist lebt
+  // hoechstens HYDRAULIK_LESEFRIST_MS und wird nach dem Ende der Schleife nie
+  // wieder geprueft - die Naht nach 2^31 ms (3.23.1, karenz.h) kann nicht
+  // erreicht werden. Die Marke am Zeilenende liest test/zeitvergleich_test.py.
   const uint32_t frist = millis() + HYDRAULIK_LESEFRIST_MS;
-  while (stream && gelesen < sizeof(antwort) - 1 && (int32_t)(millis() - frist) < 0)
+  while (stream && gelesen < sizeof(antwort) - 1 && (int32_t)(millis() - frist) < 0) // kurzlebige Frist: endet mit der Schleife
   {
     const int c = stream->read();
     if (c < 0)

@@ -848,11 +848,35 @@ den Zyklus zerhackt.
 > Kommandos kommen. Nach einem ioBroker-Update deshalb einmal einen Reconnect
 > mitschneiden (Telnet, Port 23) und die Reihenfolge prüfen. Kommen die
 > verworfenen Topics nicht mehr alle in derselben Sekunde wie das SUBACK,
-> schrumpft die Reserve — dann ist `SUBSCRIBE_GRACE` in `src/HeishaMon.h` neu
+> schrumpft die Reserve — dann ist `SUBSCRIBE_GRACE` in `src/karenz.h` neu
 > zu bewerten.
 >
 > Als Kleinpunkt K2 der Codedurchsicht vom 2026-08-18 bewusst ohne
 > Codeänderung entschieden.
+
+**Überlaufsicher seit 3.23.1.** Bis 3.23.0 stand die Frist als
+`millis() + SUBSCRIBE_GRACE` in der Firmware und wurde mit
+`(long)(millis() - frist) < 0` geprüft. Das Idiom ist nur für Fristen
+überlaufsicher, die nach Ablauf nicht weiter verglichen werden — diese wurde
+es: **2³¹ ms = 24,86 Tage** nach dem letzten Connect kippte die Differenz
+wieder ins Negative, das Fenster galt als „offen“, und jedes Set-Kommando wurde
+still verworfen (je Kommando eine Telnet-Zeile, bis zum nächsten Reconnect).
+Die Webseite meldete nach 12 Minuten „sendet aber seit … keine Vorgaben“ —
+obwohl die Steuerung sendete. Zwei frühere Durchsichten hatten die Stelle als
+„überlaufsicher geprüft“ abgehakt; entdeckt wurde sie in der dritten
+([Befund S1](Massnahmenplan-Codedurchsicht-2026-10-15.md)), bevor sie an der
+Anlage zuschlug — die Naht wäre am 2026-10-14 erreicht gewesen und wurde nur
+durch einen Neustart des Adapters `mqtt.0` am 2026-10-06 verschoben.
+
+Seitdem steht die Regel in [`src/karenz.h`](src/karenz.h): **Startzeit plus
+Merker**. Der erste Aufruf nach Ablauf schließt das Fenster, danach wird nichts
+mehr verglichen. Die Vorbedingung — häufiger als alle 49,7 Tage aufrufen — hält
+`loop()` ein, indem es die Regel in jedem Durchlauf prüft. Das Fenster wird wie
+zuvor **zweimal** geöffnet (beim Abonnieren und am Ende von `setup()`, siehe
+3.20.0). `test/karenz_test.cpp` führt die alte Regel als Gegenbeispiel mit und
+belegt, dass er die Naht trifft; `test/zeitvergleich_test.py` meldet jeden
+vorzeichenbehafteten `millis()`-Vergleich in `src/`, der nicht als kurzlebige
+Frist ausgewiesen ist.
 
 ### Nur echte Antworttelegramme werden ausgewertet (3.6.0)
 
@@ -1063,6 +1087,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/HeishaMon.h`](src/HeishaMon.h) | Plattformschicht (ESP32-S3), Timing-Konstanten |
 | [`src/telegram.h`](src/telegram.h) | Typ-, Längen- und Prüfsummenregel des Antworttelegramms (auch vom Hosttest genutzt) |
 | [`src/sendwindow.h`](src/sendwindow.h) | Zeitregeln des Kommando-Sammelfensters samt Deckel — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/karenz.h`](src/karenz.h) | Karenzfenster nach dem Verbinden (`SUBSCRIBE_GRACE`) als Startzeit plus Merker — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |

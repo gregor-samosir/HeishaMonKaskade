@@ -124,9 +124,11 @@ PubSubClient mqtt_client(mqtt_wifi_client);
 unsigned long lastReconnectAttempt = 0;
 unsigned long mqttReconnectDelay = MQTT_RECONNECT_MIN; // waechst bei Misserfolg
 
-// Karenzfenster nach dem Abonnieren (siehe SUBSCRIBE_GRACE) und Zaehler der
-// dabei verworfenen Kommandos - er wird einmal gemeldet, wenn das Fenster zu ist
-unsigned long setCommandsIgnoredUntil = 0;
+// Karenzfenster nach dem Abonnieren (Regel und Begruendung in karenz.h) und
+// Zaehler der dabei verworfenen Kommandos - er wird einmal gemeldet, wenn das
+// Fenster zu ist. Startzeit plus Merker statt Frist: eine Frist wuerde nach
+// 24,86 Tagen wieder als "offen" gelesen (3.23.1).
+Karenzfenster karenz = {0, false};
 unsigned int ignoredSetCommands = 0;
 
 // Verbindung zur Hausteuerung (siehe verbindung.h). Sie haengt am MQTT-Client
@@ -749,7 +751,7 @@ bool mqtt_reconnect()
 
     // Ab jetzt kommt der Wiedereinspiel-Schwall des Brokers - siehe
     // SUBSCRIBE_GRACE und die Pruefung in mqtt_callback()
-    setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+    karenz_oeffnen(&karenz, (uint32_t)millis());
 
     // Reset-Ursache, Bootzaehler und Version. Hier und nicht in setup(): Nach
     // einem unbemerkten Neustart ist DIESE Verbindung die erste Gelegenheit,
@@ -811,7 +813,7 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length)
   // Flag ohnehin nicht an den Callback durch. Ein in diesem Fenster wirklich
   // gemeintes Kommando geht verloren - der Re-Assert der Steuerung holt es
   // binnen 5 Minuten nach.
-  if ((long)(millis() - setCommandsIgnoredUntil) < 0)
+  if (karenz_offen(&karenz, (uint32_t)millis(), SUBSCRIBE_GRACE))
   {
     ignoredSetCommands++;
     (void)snprintf(log_msg, sizeof(log_msg), "Verworfen (Wiedereinspielung nach Connect): %.64s", topic);
@@ -1385,7 +1387,7 @@ void setup()
   // Zeitpunkt, an dem der Schwall wirklich gelesen wird. Die Zeile in
   // setupMqtt() bleibt trotzdem stehen: Sie deckt den Reconnect-Pfad ab, der
   // ueber mqtt_reconnect() laeuft und diese Zeile nie sieht.
-  setCommandsIgnoredUntil = millis() + SUBSCRIBE_GRACE;
+  karenz_oeffnen(&karenz, (uint32_t)millis());
 
   Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
@@ -1481,7 +1483,15 @@ void loop()
   // Bilanz des Karenzfensters einmal melden, sobald es zu ist. Einzeln waeren
   // das 32 MQTT-Nachrichten in einem Schwung - die Einzelheiten stehen im
   // Telnet-Log, hier reicht die Zahl.
-  if ((ignoredSetCommands > 0) && ((long)(millis() - setCommandsIgnoredUntil) >= 0))
+  //
+  // Der Aufruf steht VOR der Bedingung und laeuft damit in jedem Durchlauf,
+  // auch bei ignoredSetCommands == 0: Der Merker in karenz_offen() schliesst
+  // das Fenster erst beim ersten Aufruf nach Ablauf, und die Regel verlangt
+  // einen Aufruf haeufiger als alle 49,7 Tage (Vorbedingung in karenz.h).
+  // In die Bedingung gezogen wuerde der Kurzschluss ihn bei einem Betrieb
+  // ohne verworfene Kommandos ueberspringen.
+  const bool karenzOffen = karenz_offen(&karenz, (uint32_t)millis(), SUBSCRIBE_GRACE);
+  if ((ignoredSetCommands > 0) && !karenzOffen)
   {
     (void)snprintf(log_msg, sizeof(log_msg),
                    "%u wiedereingespielte Set-Kommandos nach dem Verbinden verworfen", ignoredSetCommands);
@@ -1491,8 +1501,10 @@ void loop()
 
   // Langzeit-Telemetrie im 5-min-Takt (M3). Eigener Takt und nicht der aus
   // publish_heatpump_data() - Begruendung bei nextInfoTime. Der Vergleich ist
-  // wie ueberall im Projekt ueberlaufsicher gerechnet: Die Differenz zweier
-  // unsigned long ist auch ueber die Naht nach 49,7 Tagen hinweg richtig.
+  // ueberlaufsicher gerechnet: Die Differenz zweier unsigned long ist auch
+  // ueber die Naht nach 49,7 Tagen hinweg richtig, und nextInfoTime wird alle
+  // 5 min nachgefuehrt. (Das Karenzfenster war es bis 3.23.0 NICHT - dort
+  // wurde eine Frist nach Ablauf weiter verglichen, siehe karenz.h.)
   if (mqtt_client.connected() && ((millis() - nextInfoTime) > UPDATEALLTIME))
   {
     nextInfoTime = millis();
