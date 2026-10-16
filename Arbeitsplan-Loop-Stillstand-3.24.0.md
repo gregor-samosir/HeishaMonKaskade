@@ -150,18 +150,39 @@ diesem Plan bis zum Rollout nicht angefasst.
    1. **HALT:** Owner leiht ein Backup-Board (`test/README.md`, „Ausleihe“;
       immer nur eines; vorher bedenken, ob die Stufe gerade ihren Notanker
       braucht). Prüfling-Build der **Vorversion** aufspielen.
-   2. **Messwerkzeug `test/telnet_haenger.py`** anlegen (Standardbibliothek,
-      Muster `telnet_mitschnitt.py`): verbindet sich auf Port 23 mit
-      `SO_RCVBUF` von ~1 KB **vor** dem `connect()`, schaltet mit `H` das Hexlog
-      ein (hebt die Lograte), liest danach **nie** wieder und fragt parallel alle
-      2 s die Startseite des Prüflings ab. Ausgabe: je Abfrage Antwortzeit oder
-      Timeout, am Ende die größte Antwortzeit. Mit `--nur-lesen` (liest normal)
-      als Gegenprobe der Gegenprobe.
+   2. **Messwerkzeug `test/telnet_haenger.py`** (Standardbibliothek): verbindet
+      sich auf Port 23 mit `SO_RCVBUF` von ~1 KB **vor** dem `connect()`, sendet
+      zu Beginn einen Schwall `M` (je Taste eine Zeile, derselbe Schreibweg wie
+      das Debug-Log, ändert keinen Zustand), liest danach **nie** wieder und
+      fragt parallel alle 2 s die Startseite ab. Ausgabe: Antwortzeit oder
+      Timeout je Abfrage, am Ende größte Antwortzeit, Urteil und ob das Gerät den
+      Client getrennt hat. Mit `--nur-lesen` als Gegenprobe der Gegenprobe;
+      `--erwarte stillstand|laeuft` setzt den Exit-Code, und „läuft“ ohne
+      Trennung des Clients gilt als **ungültig** (Puffer nie voll).
    3. Lauf gegen 3.23.2.
    *Prüfkriterium:* Startseite antwortet länger als 10 s oder gar nicht,
    solange der Testclient hängt. **Bleibt es grün, ist die Messung falsch**
-   (Puffer nicht voll geworden), nicht der Befund erledigt — dann Puffergröße
-   und Lograte prüfen, bevor irgendetwas gebaut wird.
+   (Puffer nicht voll geworden), nicht der Befund erledigt — dann Schwall und
+   Puffergröße prüfen, bevor irgendetwas gebaut wird.
+
+   **Ergebnis (2026-10-16, Prüfling `h1b`, 3.23.2 mit Test-Prefix): Stillstand
+   gemessen.** Startseite antwortet bis 4 s, danach in 90 s nicht mehr
+   (viermal „keine Antwort“ nach 20 s Timeout). Die Messung ist erst im dritten
+   Anlauf gültig geworden — jeder Fehlversuch war genau die Messfalle, vor der
+   der Plan warnt:
+
+   | Anlauf | Einstellung | Ergebnis |
+   | --- | --- | --- |
+   | 1 | Hexlog `H`, 240 s | LÄUFT, 9,6 KB im Puffer. **Ungültig:** Der Hexlog loggt nur *gesendete Kommandos*, ohne Wärmepumpe also nichts; die Lograte blieb bei rund 40 Byte/s |
+   | 2 | Schwall von 300 `M` (rund 13 KB), 90 s | LÄUFT, 15,6 KB im Puffer. **Ungültig:** Der Puffer war nicht voll |
+   | 3 | Schwall von 5000 `M`, 90 s | **STILLSTAND**, 196 KB aus dem Puffer gelesen |
+
+   Zwei Folgerungen: (a) Das `SO_RCVBUF` von 1 KB bleibt wirkungslos klein —
+   macOS nimmt hier rund 200 KB in den Empfangspuffer; ohne Schwall hätte der
+   Lauf Stunden gebraucht. (b) Der Hexlog taugt am Prüfling **nicht**, die Lograte
+   zu heben; der Schalter `H` hängt zudem am Gerät, nicht an der Sitzung (ein
+   Umschalter, dessen Zustand sich nicht lesen lässt) — das Werkzeug fasst ihn
+   deshalb nicht mehr an. Das Gerät erholte sich nach dem Lauf von selbst.
 
 ### Phase B — Code (Kommentare und Serial-Ausgaben ASCII, ohne Umlaute)
 
@@ -251,15 +272,17 @@ diesem Plan bis zum Rollout nicht angefasst.
     Fall wird rot; Ergebnis im Changelog.
 
 11. **Listen nachziehen:** `test/hosttests.sh` (`cpp_test telnetlog_test` mit
-    Begründung; `test/telnet_haenger.py` in `HARDWARE`), `test/README.md`
+    Begründung; `telnet_haenger.py` trägt kein `_test` im Namen und braucht
+    deshalb keinen Eintrag in `HARDWARE`), `test/README.md`
     (Werkzeugtabelle: beide Dateien; Abschnitt zu S2 mit der Puffer-Falle),
     `./test/hosttests.sh` grün.
 
 ### Phase D — Nachweis am Prüfling
 
 12. **Erwartung vorab festhalten**, dann messen:
-    1. **S2:** `telnet_haenger.py` gegen 3.24.0 — größte Antwortzeit der
-       Startseite unter 1 s, `info/uptime` und die State-Zeitstempel laufen
+    1. **S2:** `telnet_haenger.py --schwall 5000 --erwarte laeuft` gegen 3.24.0 —
+       größte Antwortzeit der Startseite unter 1 s, „Gerät hat den Client
+       getrennt: ja“, `info/uptime` und die State-Zeitstempel laufen
        weiter, solange der Testclient hängt. Nach spätestens 15 s ist der Client
        getrennt; ein **neuer** Mitschnitt (`telnet_mitschnitt.py`) kommt sofort
        durch und bekommt die `<INF>`-Zeile „N Zeilen verworfen“.
@@ -284,6 +307,10 @@ diesem Plan bis zum Rollout nicht angefasst.
        statt `TASK_WDT`,** entscheidet die Messung, ob es der Watchdog war
        (Zeitpunkt nach 120 s, nicht früher); die Erwartung im Plan wird dann
        korrigiert, nicht der Nachweis zurechtgebogen.
+    *Beim Warten einplanen:* Der Prüfling braucht nach einem Neustart rund
+    90 s bis zur Startseite (WLAN, Verbindungsversuche zum gesperrten Port, NTP);
+    Reset durch den Watchdog nach 120 s plus Boot sind also gut 3,5 Minuten.
+
     *Prüfkriterium:* alle sieben Punkte erfüllt. Sonst **HALT** — nicht
     ausrollen.
 
@@ -342,8 +369,9 @@ Alle Zahlen: `text / data / bss` der `.elf`.
 
 | Env | Vorher (Anker, 3.23.2) | Nachher (3.24.0) |
 | --- | --- | --- |
-| `heishamon_esp32_h1_ota` | *offen* | *offen* |
-| `heishamon_esp32_h2_ota` | *offen* | *offen* |
+| `heishamon_esp32_h1_ota` (= `h1_usb`) | 1046695 / 230062 / 2197487 | *offen* |
+| `heishamon_esp32_h2_ota` (= `h2_usb`) | 1046275 / 229822 / 2197487 | *offen* |
+| `heishamon_esp32_usb` (= `_ota`, Prüfling) | 1047727 / 230506 / 2197503 | *offen* |
 
 ## Rückweg
 
