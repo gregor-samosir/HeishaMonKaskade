@@ -448,6 +448,12 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
 /* Abfragezyklus liest ohnehin nur.                                          */
 /*****************************************************************************/
 #define HYDRAULIK_TIMEOUT_MS 5000
+// Der Hydraulikschritt blockiert loop(): zwei Requests (Schalter lesen, Schalter
+// setzen), je Connect, Antwort und Rumpf mit HYDRAULIK_TIMEOUT_MS - im Fehlerfall
+// also bis 6 x 5 s. Der loop()-Watchdog (LOOP_WDT_TIMEOUT_MS, HeishaMon.h) muss
+// mit Reserve darueber liegen.
+static_assert(LOOP_WDT_TIMEOUT_MS >= 3u * 6u * HYDRAULIK_TIMEOUT_MS,
+              "LOOP_WDT_TIMEOUT_MS muss mindestens das Dreifache der laengsten Hydraulik-Blockade betragen");
 
 /*****************************************************************************/
 /* Wie lange nach dem Antwortkopf auf den Rumpf gewartet wird                 */

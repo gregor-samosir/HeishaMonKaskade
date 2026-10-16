@@ -1,10 +1,11 @@
 # Arbeitsplan: `loop()` darf nicht stehen (3.24.0)
 
-> **Ergebnis: offen (angelegt 2026-10-16) — noch nichts umgesetzt.** Paket P3
-> der Codedurchsicht vom 2026-10-15
+> **Ergebnis: umgesetzt und am Prüfling nachgewiesen (2026-10-16), Branch
+> `loop-stillstand` noch nicht gemergt, Rollout 3.24.0 offen.** Paket P3 der
+> Codedurchsicht vom 2026-10-15
 > ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S2 und S3, K1 vom 2026-09-02). Eine Firmware-Änderung mit Funktionswirkung:
-> Der Nachweis läuft am **Prüfling**, nicht an der Anlage.
+> Der Nachweis lief am **Prüfling** (`h1b`), nicht an der Anlage.
 >
 > **Übergabe:** Der Plan führt vom Rettungsanker bis zum Release und ist für den
 > Einstieg in einer neuen Session geschrieben. Zuerst „Lies zuerst“, dann
@@ -150,18 +151,39 @@ diesem Plan bis zum Rollout nicht angefasst.
    1. **HALT:** Owner leiht ein Backup-Board (`test/README.md`, „Ausleihe“;
       immer nur eines; vorher bedenken, ob die Stufe gerade ihren Notanker
       braucht). Prüfling-Build der **Vorversion** aufspielen.
-   2. **Messwerkzeug `test/telnet_haenger.py`** anlegen (Standardbibliothek,
-      Muster `telnet_mitschnitt.py`): verbindet sich auf Port 23 mit
-      `SO_RCVBUF` von ~1 KB **vor** dem `connect()`, schaltet mit `H` das Hexlog
-      ein (hebt die Lograte), liest danach **nie** wieder und fragt parallel alle
-      2 s die Startseite des Prüflings ab. Ausgabe: je Abfrage Antwortzeit oder
-      Timeout, am Ende die größte Antwortzeit. Mit `--nur-lesen` (liest normal)
-      als Gegenprobe der Gegenprobe.
+   2. **Messwerkzeug `test/telnet_haenger.py`** (Standardbibliothek): verbindet
+      sich auf Port 23 mit `SO_RCVBUF` von ~1 KB **vor** dem `connect()`, sendet
+      zu Beginn einen Schwall `M` (je Taste eine Zeile, derselbe Schreibweg wie
+      das Debug-Log, ändert keinen Zustand), liest danach **nie** wieder und
+      fragt parallel alle 2 s die Startseite ab. Ausgabe: Antwortzeit oder
+      Timeout je Abfrage, am Ende größte Antwortzeit, Urteil und ob das Gerät den
+      Client getrennt hat. Mit `--nur-lesen` als Gegenprobe der Gegenprobe;
+      `--erwarte stillstand|laeuft` setzt den Exit-Code, und „läuft“ ohne
+      Trennung des Clients gilt als **ungültig** (Puffer nie voll).
    3. Lauf gegen 3.23.2.
    *Prüfkriterium:* Startseite antwortet länger als 10 s oder gar nicht,
    solange der Testclient hängt. **Bleibt es grün, ist die Messung falsch**
-   (Puffer nicht voll geworden), nicht der Befund erledigt — dann Puffergröße
-   und Lograte prüfen, bevor irgendetwas gebaut wird.
+   (Puffer nicht voll geworden), nicht der Befund erledigt — dann Schwall und
+   Puffergröße prüfen, bevor irgendetwas gebaut wird.
+
+   **Ergebnis (2026-10-16, Prüfling `h1b`, 3.23.2 mit Test-Prefix): Stillstand
+   gemessen.** Startseite antwortet bis 4 s, danach in 90 s nicht mehr
+   (viermal „keine Antwort“ nach 20 s Timeout). Die Messung ist erst im dritten
+   Anlauf gültig geworden — jeder Fehlversuch war genau die Messfalle, vor der
+   der Plan warnt:
+
+   | Anlauf | Einstellung | Ergebnis |
+   | --- | --- | --- |
+   | 1 | Hexlog `H`, 240 s | LÄUFT, 9,6 KB im Puffer. **Ungültig:** Der Hexlog loggt nur *gesendete Kommandos*, ohne Wärmepumpe also nichts; die Lograte blieb bei rund 40 Byte/s |
+   | 2 | Schwall von 300 `M` (rund 13 KB), 90 s | LÄUFT, 15,6 KB im Puffer. **Ungültig:** Der Puffer war nicht voll |
+   | 3 | Schwall von 5000 `M`, 90 s | **STILLSTAND**, 196 KB aus dem Puffer gelesen |
+
+   Zwei Folgerungen: (a) Das `SO_RCVBUF` von 1 KB bleibt wirkungslos klein —
+   macOS nimmt hier rund 200 KB in den Empfangspuffer; ohne Schwall hätte der
+   Lauf Stunden gebraucht. (b) Der Hexlog taugt am Prüfling **nicht**, die Lograte
+   zu heben; der Schalter `H` hängt zudem am Gerät, nicht an der Sitzung (ein
+   Umschalter, dessen Zustand sich nicht lesen lässt) — das Werkzeug fasst ihn
+   deshalb nicht mehr an. Das Gerät erholte sich nach dem Lauf von selbst.
 
 ### Phase B — Code (Kommentare und Serial-Ausgaben ASCII, ohne Umlaute)
 
@@ -231,6 +253,15 @@ diesem Plan bis zum Rollout nicht angefasst.
    je Fund in die Blockadetabelle (Schritt 13). *Prüfkriterium:* keine
    Blockade über 60 s ohne Eintrag.
 
+   **Ergebnis (2026-10-16):** Alle `delay()` und Warteschleifen in `src/` gesehen.
+   Aus `loop()` erreichbar und länger als 5 s ist nur der Hydraulikschritt
+   (≤ 30 s, jetzt per `static_assert` gegen die 120 s gehalten) und der
+   KNX-Befehl (≤ 20,5 s, ebenfalls `static_assert`). Die `delay()` in `/reboot`,
+   `/settings` und im WLAN-Watchdog (je ≤ 2 s) enden im Neustart. Das
+   WiFiManager-Portal (`setupWifi`) wird nur aus `setup()` gerufen und liegt vor
+   dem Watchdog; dasselbe gilt für die NTP-Wartezeit. Der OTA-Upload füttert den
+   Watchdog selbst. Keine Blockade über 60 s ohne Eintrag.
+
 ### Phase C — Tests
 
 10. **`test/telnetlog_test.cpp`** (bindet nur `src/telnetlog.h` ein, Aufbau wie
@@ -251,18 +282,22 @@ diesem Plan bis zum Rollout nicht angefasst.
     Fall wird rot; Ergebnis im Changelog.
 
 11. **Listen nachziehen:** `test/hosttests.sh` (`cpp_test telnetlog_test` mit
-    Begründung; `test/telnet_haenger.py` in `HARDWARE`), `test/README.md`
+    Begründung; `telnet_haenger.py` trägt kein `_test` im Namen und braucht
+    deshalb keinen Eintrag in `HARDWARE`), `test/README.md`
     (Werkzeugtabelle: beide Dateien; Abschnitt zu S2 mit der Puffer-Falle),
     `./test/hosttests.sh` grün.
 
 ### Phase D — Nachweis am Prüfling
 
 12. **Erwartung vorab festhalten**, dann messen:
-    1. **S2:** `telnet_haenger.py` gegen 3.24.0 — größte Antwortzeit der
-       Startseite unter 1 s, `info/uptime` und die State-Zeitstempel laufen
+    1. **S2:** `telnet_haenger.py --schwall 5000 --erwarte laeuft` gegen 3.24.0 —
+       größte Antwortzeit der Startseite unter 1 s, „Gerät hat den Client
+       getrennt: ja“, `info/uptime` und die State-Zeitstempel laufen
        weiter, solange der Testclient hängt. Nach spätestens 15 s ist der Client
        getrennt; ein **neuer** Mitschnitt (`telnet_mitschnitt.py`) kommt sofort
-       durch und bekommt die `<INF>`-Zeile „N Zeilen verworfen“.
+       durch. Die `<INF>`-Zeile „N Zeilen verworfen“ gehört dem Client, der
+       zeitweise nicht mitkam, aber nicht getrennt wurde (`--lesen-nach`) — ein
+       neuer Client beginnt bei null und sieht sie nicht.
     2. **Tasten:** `L D H M W I C R` einzeln, Antworttexte wie in 3.23.2
        (`R` verweist auf `/reboot`).
     3. **Mitschnittwerkzeuge:** `telnet_mitschnitt.py` und
@@ -284,8 +319,33 @@ diesem Plan bis zum Rollout nicht angefasst.
        statt `TASK_WDT`,** entscheidet die Messung, ob es der Watchdog war
        (Zeitpunkt nach 120 s, nicht früher); die Erwartung im Plan wird dann
        korrigiert, nicht der Nachweis zurechtgebogen.
+    *Beim Warten einplanen:* Der Prüfling braucht nach einem Neustart zwischen
+    11 s und rund 4 min bis zur Startseite (WLAN-Anmeldung; schon bei der
+    3.23.2-Messung davor 92 s) — das ist keine Eigenschaft dieser Änderung, aber
+    es verlängert jeden Versuch. Mit `Monitor` auf die Startseite warten.
+
     *Prüfkriterium:* alle sieben Punkte erfüllt. Sonst **HALT** — nicht
     ausrollen.
+
+    **Ergebnis (2026-10-16, `h1b`, Prüfling-Build, alle sieben Punkte erfüllt):**
+
+    | Punkt | Ergebnis |
+    | --- | --- |
+    | 1 S2 | Größte Antwortzeit der Startseite 70 ms (3.23.2: 90 s ohne Antwort), „Gerät hat den Client getrennt: ja“, 45 Abfragen ohne Ausfall. `<INF>`-Zeile mit `--lesen-nach` gesehen |
+    | 2 Tasten | `M W I R L D H C` einzeln, Antworttexte wie in 3.23.2; `C` antwortet „bye bye“ und trennt |
+    | 3 Mitschnittwerkzeuge | `telnet_mitschnitt.py` 40 s: sechs Zyklen, `<DBG>` im Takt; `produktiv_mitschnitt.py` 30 s ohne Fehler |
+    | 4 Verdrängen | die erste Sitzung wird getrennt, die zweite bekommt das Log |
+    | 5 OTA | ArduinoOTA und `/firmware` laufen durch; ein auf **153 s** gedehnter HTTP-Upload (`--limit-rate 8k`) bricht nicht ab. **Gegenprobe:** ohne die Fütterung in `Update.onProgress` bricht derselbe Upload nach **126 s** ab (curl Exit 56) |
+    | 6 Grenze nach oben | `s=90`: kein Reset, dieselbe Telnet-Sitzung läuft danach weiter |
+    | 7 Reset | Endloser Hänger: `task_wdt: Task watchdog got triggered … loopTask (CPU 1)` genau 120 s nach dem Aufruf; danach `info/boot_reason = TASK_WDT`, `info/boot_count` 7 → 8. Notbetriebswerte erhalten — auch **ohne Broker** (zweiter Hänger bei `mqtt_port` 1884: `fehlendMaske` 0, `Lage` 1) |
+
+    Zu Punkt 7: Die Erwartung `TASK_WDT` (nicht `PANIC`) hat sich bestätigt. Die
+    Prüfling-Route ist hinter dem Notbetriebs-Login; der HTTP-Updater verlangt
+    für den Upload `Origin: http://<ip>` und den Feldnamen `firmware` (sonst
+    401 — das hat zwei Fehlversuche gekostet, steht jetzt in `test/README.md`).
+    Das eigentliche Ziel von Punkt 5, der Gegenprobe, ist der wichtigere Fund:
+    Ohne sie wäre „153 s ohne Abbruch“ ein Ergebnis, das auch ohne Fütterung
+    hätte kommen können, wenn der Watchdog gar nicht angemeldet gewesen wäre.
 
 13. **Blockadetabelle nachziehen** in
     [`Massnahmenplan-Codedurchsicht-2026-09-02.md`](Massnahmenplan-Codedurchsicht-2026-09-02.md)
@@ -342,8 +402,12 @@ Alle Zahlen: `text / data / bss` der `.elf`.
 
 | Env | Vorher (Anker, 3.23.2) | Nachher (3.24.0) |
 | --- | --- | --- |
-| `heishamon_esp32_h1_ota` | *offen* | *offen* |
-| `heishamon_esp32_h2_ota` | *offen* | *offen* |
+| `heishamon_esp32_h1_ota` (= `h1_usb`) | 1046695 / 230062 / 2197487 | 1046975 / 230502 / 2196911 |
+| `heishamon_esp32_h2_ota` (= `h2_usb`) | 1046275 / 229822 / 2197487 | 1046551 / 230262 / 2196911 |
+| `heishamon_esp32_usb` (= `_ota`, Prüfling) | 1047727 / 230506 / 2197503 | 1048451 / 231162 / 2196927 |
+
+RAM/Flash laut `pio`: H1 RAM 61960 → 61384 (−576), Flash 1223541 → 1224317
+(+776); H2 RAM 61960 → 61384 (−576), Flash 1222881 → 1223653 (+772).
 
 ## Rückweg
 

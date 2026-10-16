@@ -1,5 +1,86 @@
 #pragma once
 // Changelog:
+// 3.24.0 - LOOP() DARF NICHT STEHEN. Die Telnet-Ausgabe wartet nie mehr auf
+//         einen Client (S2), und ein Task-Watchdog setzt eine haengende
+//         loop() nach 120 s zurueck (S3, K1 vom 2026-09-02). Paket P3 der
+//         dritten Codedurchsicht (Massnahmenplan-Codedurchsicht-2026-10-15.md,
+//         Arbeitsplan-Loop-Stillstand-3.24.0.md). S6 und P4 folgen als 3.25.0.
+//
+//         PROBLEM S2. TelnetStream schrieb ueber NetworkClient::write() des
+//         Cores: ist der Sendepuffer des Clients voll, wartet das bis zu
+//         10 x 1 s JE LOGZEILE, und die Bibliothek ruft das nacheinander fuer
+//         jeden der bis zu fuenf Clients auf. Am Pruefling (h1b, 3.23.2)
+//         gemessen: ein Client, der nicht mehr liest, liess die Startseite
+//         90 s lang unbeantwortet. Port 23 hat keine Anmeldung.
+//
+//         PROBLEM S3. Der Core meldet den loopTask nicht beim Task-Watchdog
+//         an (nur den Idle-Task von CPU 0). Haengt loop() - S2 ist ein
+//         konkreter Weg -, heilt nichts: Jemand muss den Stecker ziehen, das
+//         Board haengt am WP-Kabel, und der Notbetriebsknopf ist weg.
+//
+//         FIX S2. Eigene Telnet-Ausgabe (telnetausgabe.cpp, Regeln in
+//         telnetlog.h) statt der Bibliothek: send() mit MSG_DONTWAIT, kein
+//         select, keine Wiederholung. Passt eine Zeile nicht in den
+//         Sendepuffer, geht der Rest verloren und wird gezaehlt; eine
+//         <INF>-Zeile meldet danach, wie viele Zeilen fehlten. Ein Client,
+//         der 15 s nach dem ersten Fehlschlag nichts mehr aufnimmt, wird
+//         getrennt (Zeitregel statt "20 Fehlversuche": unabhaengig von der
+//         Lograte). Eine Sitzung: ein neuer Client verdraengt den alten
+//         (Owner-Entscheid 2026-10-16). Tasten L D H M W I C R unveraendert.
+//         TelnetStream und NetApiHelpers sind aus lib_deps entfallen (beide
+//         Pins aus 3.23.2).
+//
+//         FIX S3. Am Ende von setup() esp_task_wdt_reconfigure() auf 120 s
+//         (LOOP_WDT_TIMEOUT_MS, HeishaMon.h) und enableLoopWDT(); Rueckgabe-
+//         werte und Anmeldung werden geprueft (Serial-Warnung, Geraet laeuft
+//         ohne Watchdog weiter - der Zustand bis 3.23.2). Der Timeout gilt
+//         fuer ALLE angemeldeten Tasks: auch die Ueberwachung des Idle-Tasks
+//         von CPU 0 liegt damit bei 120 s statt 5 s; der Interrupt-Watchdog
+//         (300 ms) bleibt. OTA fuettert ihn je geschriebenem Block
+//         (Update.onProgress, ArduinoOTA.onProgress). static_assert gegen
+//         KNX_BEFEHL_DECKEL_MS (20 s) und die Hydraulik-Blockade (6 x 5 s) mit
+//         Faktor 3. Nur im Pruefling-Build (LOOP_PRUEFZUGANG, stage_test_esp32):
+//         POST /pruefen/haenger?s=<Sekunden>, haelt loop() ohne Fuetterung an.
+//
+//         NACHWEIS, am Pruefling h1b (Test-Prefix, Port 1884 bzw. 1883).
+//         S2: test/telnet_haenger.py (Client mit kleinem SO_RCVBUF, liest nie,
+//         Startseite alle 2 s). Gegen 3.23.2: STILLSTAND, Startseite nach 4 s
+//         ohne Antwort, 90 s lang. Zwei Anlaeufe davor waren UNGUELTIG und
+//         zeigten genau die Messfalle, vor der der Plan warnt: der Hexlog
+//         loggt ohne Waermepumpe nichts (Lograte ~40 Byte/s), und ein Schwall
+//         von 300 'M'-Tasten fuellt den Empfangspuffer des Macs nicht (rund
+//         200 KB, nicht die 1 KB aus SO_RCVBUF); erst 5000 Tasten fuellen ihn.
+//         Gegen 3.24.0: groesste Antwortzeit 70 ms, "Geraet hat den Client
+//         getrennt: ja"; mit --lesen-nach erscheint die <INF>-Zeile "Zeilen
+//         verworfen". Tasten L D H M W I R C einzeln, ein neuer Client
+//         verdraengt den alten, telnet_mitschnitt.py (6 Zyklen in 40 s) und
+//         produktiv_mitschnitt.py laufen unveraendert.
+//         S3: OTA ueber ArduinoOTA und /firmware laufen durch; ein auf 153 s
+//         gedehnter HTTP-Upload (curl --limit-rate 8k) bricht NICHT ab.
+//         GEGENPROBE: ohne die Fuetterung in Update.onProgress bricht
+//         derselbe Upload nach 126 s ab (curl Exit 56, Geraet per Watchdog
+//         zurueckgesetzt). Blockade von 90 s: kein Reset, dieselbe
+//         Telnet-Sitzung laeuft weiter. Endloser Haenger: "task_wdt: Task
+//         watchdog got triggered ... loopTask (CPU 1)" 120 s nach dem Aufruf,
+//         danach info/boot_reason = TASK_WDT, info/boot_count 7 -> 8. Die
+//         Notbetriebswerte ueberleben den Reset auch OHNE Broker (zweiter
+//         Haenger bei mqtt_port 1884: fehlendMaske 0, Lage 1).
+//         Hosttest test/telnetlog_test.cpp (Grenze auf die Millisekunde,
+//         Ueberlauf, Naht nach 2^31 ms, Gegenbeispiel); GEGENPROBEN: Grenze
+//         um 1 verschoben -> 5 Zusicherungen rot, vorzeichenbehaftete Regel
+//         -> 2 rot. Alle 18 Hosttests gruen, alle sechs Envs ohne Warnung,
+//         die Stufen-Envs enthalten die Haenger-Route nicht (0 Treffer).
+//         Beobachtung am Rande, nicht von dieser Aenderung: der Pruefling
+//         brauchte nach Neustarts zwischen 11 s und 4 min bis zur Startseite
+//         (WLAN-Anmeldung), die 3.23.2-Messung davor eingeschlossen.
+//
+//         GROESSE gegen 3.23.2 (heishamon_esp32_h1_ota): RAM 61960 -> 61384
+//         Byte (-576), Flash 1223541 -> 1224317 Byte (+776).
+//         heishamon_esp32_h2_ota: RAM 61960 -> 61384 Byte (-576), Flash
+//         1222881 -> 1223653 Byte (+772). Der Wegfall von TelnetStream (fuenf
+//         Client-Objekte) bringt das RAM, die neue Ausgabe und der Watchdog
+//         kosten Flash.
+//
 // 3.23.2 - BUILD-HYGIENE. Keine Funktionsaenderung: Bibliotheken exakt
 //         gepinnt, Compiler-Warnungen fuer den eigenen Code wieder an, ein
 //         toter Zweig und veraltete Kommentare bereinigt. Paket P2 der dritten
@@ -2198,4 +2279,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.23.2";
+static const char* heishamon_version = "3.24.0";

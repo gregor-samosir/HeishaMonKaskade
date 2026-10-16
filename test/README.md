@@ -28,6 +28,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `karenz_test.cpp` | Karenzfenster nach dem Verbinden: Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms samt Gegenbeispiel der alten Regel (bindet `src/karenz.h` direkt ein) | nein |
+| `telnetlog_test.cpp` | Regeln der nicht blockierenden Telnet-Ausgabe: wann ein Client, der nicht mehr liest, als tot gilt (15 s ab dem ersten Fehlschlag), auf die Millisekunde, ueber den `millis()`-Ueberlauf und die Naht nach 2^31 ms samt Gegenbeispiel (bindet `src/telnetlog.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
@@ -59,6 +60,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `knx_tunnel.py` | Minimaler KNXnet/IP-Tunnel-Client: verbinden, lesen, schreiben, 1-Bit-Aktor schalten mit Ruecklesung und Rueckstellung, `mischer` als Referenz des Notbetriebsschritts "Vorderhaus". `selbsttest` prueft die Rahmen gegen xknx und die Ablaeufe gegen einen Simulator; `simulator` (1.7.0) bietet denselben Simulator im LAN an, damit der Pruefling den Schritt ohne Bus fahren kann (Route `/vorderhaus/pruefen`, nur im Pruefling-Build) | KNX-IP-Schnittstelle (`selbsttest`, `simulator`: nein) |
 | `heisha_probe.py` | gemeinsame Helfer (Telnet, Hexlog-Parser) | - |
 | `telnet_mitschnitt.py` | Passiver Telnet-Mitschnitt eines Geraets - sendet NICHTS, roher Socket auf Port 23 (telnetlib ist ab Python 3.13 entfernt). Fuer die Antwortquote und fuer `<DBG>`-Zeilen, die `produktiv_mitschnitt.py` nicht zeigt | Geraet im Netz |
+| `telnet_haenger.py` | Telnet-Client, der nicht mehr liest, mit Startseiten-Abfrage nebenher: weist nach, ob ein stehender Client `loop()` anhaelt (S2, 3.24.0). Schwall `M` fuellt den Puffer, weil `nc` mit Ctrl-Z am Mac Stunden braeuchte; `--erwarte` setzt den Exit-Code, "laeuft" ohne getrennten Client gilt als ungueltig | Pruefling (nie Produktivgeraet) |
 | `mqtt_pub.py` | minimaler MQTT-Publisher ohne Abhaengigkeiten | - |
 | `mqtt_sub.py` | minimaler MQTT-Subscriber - zeigt, was der Broker einem NEUEN Abonnenten von sich aus einspielt | Broker |
 | `stubs/` | Arduino-Ersatzheader, gemeinsam genutzt von `byte110_test.cpp`, `byte9_test.cpp`, `byte20_test.cpp` und `decode_vergleich.py` | - |
@@ -134,6 +136,37 @@ Solange ein Backup-Board Pruefstand ist, hat die betreffende Stufe **keinen
 Notanker**. Deshalb: immer nur **ein** Board gleichzeitig ausleihen, und vorher
 kurz pruefen, ob an der eigenen Stufe gerade etwas ansteht (Rollout,
 Heizperiode, Abwesenheit). Ein Pruefstand ist selten dringend.
+
+## Telnet-Client, der nicht liest (telnet_haenger.py, 3.24.0)
+
+Nachweis für S2 der Durchsicht 2026-10-15: Hält ein Telnet-Client, der nicht
+mehr liest, `loop()` an? Bis 3.23.2 ja — am Prüfling blieb die Startseite 90 s
+lang unbeantwortet. Seit 3.24.0 nicht mehr: Die Ausgabe wartet nie, verwirft
+Zeilen und trennt den Client nach 15 s.
+
+```bash
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 5000 --erwarte stillstand   # Vorversion
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 5000 --erwarte laeuft       # ab 3.24.0
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 1500 --lesen-nach 4         # <INF>-Zeile
+```
+
+**Die Messfalle, die dieses Werkzeug umgeht:** `nc` mit Ctrl-Z reicht nicht.
+Der Kernel des Macs bestätigt weiter und nimmt das Log in seinen
+Empfangspuffer — gemessen rund 200 KB, auch mit `SO_RCVBUF` von 1 KB vor dem
+`connect()`. Bei ~40 Byte/s Debug-Log ohne Wärmepumpe wäre das erst nach Stunden
+voll; „läuft weiter“ nach 10 Minuten bewiese nichts. Der Hexlog (`H`) hilft nicht
+(er loggt nur gesendete Kommandos, am Prüfling also nichts) und lässt sich am
+Gerät nicht zurücklesen. Deshalb sendet das Werkzeug einen Schwall `M`
+(je Taste eine Zeile, ändert nichts) — 300 Tasten füllen den Puffer **nicht**,
+5000 tun es. Ein „läuft“ gilt nur, wenn das Gerät den Client dabei getrennt hat;
+sonst meldet das Werkzeug **ungültig** (Exit 2).
+
+Der Watchdog (S3) wird am Prüfling-Build nachgewiesen: `POST
+/pruefen/haenger?s=<Sekunden>` (nur `stage_test_esp32`, hinter dem
+Notbetriebs-Login, `curl --basic -u notbetrieb:<pw>`) hält `loop()` ohne
+Fütterung an. 90 s: kein Reset; ohne `s`: Reset nach 120 s, `info/boot_reason`
+= `TASK_WDT`. Der HTTP-Updater verlangt zusätzlich `-H "Origin: http://<ip>"`
+und den Feldnamen `firmware` (`curl -F firmware=@…`), sonst antwortet er 401.
 
 ## Antwortquote messen
 
