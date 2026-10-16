@@ -1088,6 +1088,8 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/telegram.h`](src/telegram.h) | Typ-, Längen- und Prüfsummenregel des Antworttelegramms (auch vom Hosttest genutzt) |
 | [`src/sendwindow.h`](src/sendwindow.h) | Zeitregeln des Kommando-Sammelfensters samt Deckel — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/karenz.h`](src/karenz.h) | Karenzfenster nach dem Verbinden (`SUBSCRIBE_GRACE`) als Startzeit plus Merker — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/telnetlog.h`](src/telnetlog.h) | Regeln der Telnet-Ausgabe ohne Warten: wann ein Client, der nicht mehr liest, als tot gilt (15 s ab dem ersten Fehlschlag) — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/telnetausgabe.h`](src/telnetausgabe.h), [`src/telnetausgabe.cpp`](src/telnetausgabe.cpp) | Der Telnet-Teil selbst (ersetzt seit 3.24.0 die Bibliothek `TelnetStream`): ein Client, `send(…, MSG_DONTWAIT)`, Verwerfen statt Warten |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
@@ -1118,7 +1120,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md) | Umsetzung der Durchsicht vom 2026-09-02 (M1–M4) samt Nachweisen; 3.20.0 |
 | [`Arbeitsplan-AltExternalSensor.md`](Arbeitsplan-AltExternalSensor.md) | Alternativer Außenfühler als SET40/TOP112, TOP66 entfällt — Entscheide und Ablauf bis zum Release; ausgerollt als 3.23.0 |
 | [`Arbeitsplan-Build-Hygiene-3.23.2.md`](Arbeitsplan-Build-Hygiene-3.23.2.md) | Bibliotheken pinnen, Compiler-Warnungen wieder an, tote Zweige und veraltete Kommentare (Paket P2 der Durchsicht 2026-10-15) — in Arbeit |
-| [`Arbeitsplan-Loop-Stillstand-3.24.0.md`](Arbeitsplan-Loop-Stillstand-3.24.0.md) | Telnet-Ausgabe nicht blockierend (S2), Watchdog für `loop()` (S3) — Paket P3 der Durchsicht 2026-10-15 — angelegt, noch nichts umgesetzt |
+| [`Arbeitsplan-Loop-Stillstand-3.24.0.md`](Arbeitsplan-Loop-Stillstand-3.24.0.md) | Telnet-Ausgabe nicht blockierend (S2), Watchdog für `loop()` (S3) — Paket P3 der Durchsicht 2026-10-15 — in Arbeit |
 | [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md) | Karenzfenster nach dem Subscribe überlaufsicher machen (Befund S1 der Durchsicht 2026-10-15) — erledigt, 3.23.1 am 2026-10-15 ausgerollt |
 | [`Auftrag-Befehlswaechter-AltExternalSensor.md`](Auftrag-Befehlswaechter-AltExternalSensor.md) | Auftrag an `nodered-flows`: SET40/TOP112 in den `WP_Befehls_Waechter` aufnehmen — erledigt am 2026-09-19 im Projekt `nodered-flows` |
 | [`Auftrag-Notbetriebssender-Ganzzahl.md`](Auftrag-Notbetriebssender-Ganzzahl.md) | Auftrag an `nodered-flows`: Notbetriebswerte-Sender rundet die Kurvenwerte auf Ganzzahlen, weil die Firmware Dezimalwerte verwirft — erledigt am 2026-10-15 im Projekt `nodered-flows` (V1.1) |
@@ -1241,6 +1243,17 @@ Beobachtungsweg: Logausgabe, die Umschalter `L` (MQTT-Log), `D` (Debug),
 antwortet die Taste nur noch mit dem Verweis auf `http://<ip>/reboot`, das hinter
 dem Web-Login liegt. Ein Neustart trennt die Wärmepumpe für die Dauer des Boots
 von der Steuerung; das soll niemand ohne Anmeldung auslösen können.
+
+**Telnet wartet nie auf einen Client (seit 3.24.0).** Bis 3.23.2 schrieb die
+Bibliothek `TelnetStream` blockierend: Ein Client, der nicht mehr las — Laptop
+zugeklappt, `nc` angehalten —, ließ `loop()` je Logzeile bis zu 10 s warten, bei
+mehreren Clients entsprechend länger; am Prüfling stand die Startseite 90 s ohne
+Antwort. Die eigene Ausgabe (`src/telnetausgabe.cpp`) schreibt mit
+`MSG_DONTWAIT`: Passt eine Zeile nicht in den Sendepuffer, geht der Rest
+verloren und wird gezählt; sobald es wieder geht, meldet eine `<INF>`-Zeile,
+wie viele Zeilen fehlten. Liest ein Client 15 s lang nichts, wird er getrennt.
+Es gibt **eine** Sitzung — ein neuer Client verdrängt den alten. Die Regeln
+stehen in `src/telnetlog.h` und laufen im Hosttest.
 
 ### Erstflash eines ESP32-Boards, das noch die Original-Firmware trägt
 

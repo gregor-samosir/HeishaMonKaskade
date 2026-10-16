@@ -3,6 +3,7 @@
 #include "decode.h"
 #include "commands.h"
 #include "version.h" // heishamon_version fuer info/version
+#include <esp_task_wdt.h> // esp_task_wdt_reconfigure(), esp_task_wdt_status()
 
 Ticker Send_Pana_Command_Timer(send_pana_command, COMMANDTIMER, 1);   // one time
 Ticker Send_Pana_Mainquery_Timer(send_pana_mainquery, QUERYTIMER, 1); // one time
@@ -191,9 +192,62 @@ void setupOTA()
   ArduinoOTA.setPassword(ota_password);  // Set authentication
   ArduinoOTA.onStart([]() {});
   ArduinoOTA.onEnd([]() {});
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {});
+  // Jeder geschriebene Block fuettert den loop()-Watchdog: Ein Upload ueber
+  // ein langsames WLAN darf laenger als LOOP_WDT_TIMEOUT_MS dauern, solange er
+  // voranschreitet (S3). Der HTTP-Updater hat keinen eigenen Rueckruf, er
+  // schreibt ueber dieselbe Update-Klasse - siehe setupLoopWatchdog().
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                        { feedLoopWDT(); });
   ArduinoOTA.onError([](ota_error_t error) {});
   ArduinoOTA.begin();
+}
+
+/*****************************************************************************/
+/* Task-Watchdog fuer loop()  (S3, 3.24.0)                                   */
+/*                                                                           */
+/* Der Core meldet den loopTask nicht an; ohne diese Funktion heilt ein      */
+/* haengender loop() nichts, und jemand muss den Stecker ziehen (das Board   */
+/* haengt am WP-Kabel). Timeout und Begruendung: LOOP_WDT_TIMEOUT_MS in      */
+/* HeishaMon.h.                                                              */
+/*                                                                           */
+/* AUFRUF: ganz am Ende von setup(), nach NTP-Wartezeit und WiFiManager-     */
+/* Portal. Der erste esp_task_wdt_reset() kommt danach aus dem Core, bevor   */
+/* loop() das erste Mal laeuft - zwischen dem Einschalten und dem ersten     */
+/* Durchlauf liegt also keine Luecke von 120 s.                              */
+/*                                                                           */
+/* Scheitert eine der beiden Anmeldungen, laeuft das Geraet ohne Watchdog    */
+/* weiter - das ist der Zustand bis 3.23.2 und kein Grund, die Regelung zu   */
+/* stoppen. Die Meldung steht im USB-Log.                                    */
+/*                                                                           */
+/* Die Fuetterung beim OTA: Update::onProgress() wird je geschriebenem Block */
+/* gerufen und deckt ArduinoOTA und den HTTP-Updater ab, weil beide ueber    */
+/* dieselbe Update-Instanz schreiben.                                        */
+/*****************************************************************************/
+// Der Timeout muss mit Reserve (Faktor 3) ueber der laengsten legitimen
+// Blockade liegen, soweit sie als Konstante existiert (Hydraulik: notbetrieb.cpp).
+static_assert(LOOP_WDT_TIMEOUT_MS >= 3u * KNX_BEFEHL_DECKEL_MS,
+              "LOOP_WDT_TIMEOUT_MS muss mindestens das Dreifache des KNX-Befehlsdeckels betragen");
+
+static void setupLoopWatchdog()
+{
+  Update.onProgress([](size_t geschrieben, size_t gesamt)
+                    { feedLoopWDT(); });
+
+  esp_task_wdt_config_t konfig;
+  konfig.timeout_ms = LOOP_WDT_TIMEOUT_MS;
+  konfig.idle_core_mask = (1u << 0); // wie bisher: nur der Idle-Task von CPU 0
+  konfig.trigger_panic = true;       // Panic + Neustart + Coredump, wie bisher
+  const esp_err_t rc = esp_task_wdt_reconfigure(&konfig);
+  if (rc != ESP_OK)
+  {
+    Serial.printf("Warning: esp_task_wdt_reconfigure failed (%d), loop watchdog stays at the core default\n", (int)rc);
+    return; // ohne neuen Timeout den loopTask NICHT anmelden: die 5 s des Cores wuerden ihn zerstoeren
+  }
+
+  enableLoopWDT();
+  // Gegenprobe: ist der loopTask jetzt wirklich angemeldet?
+  if (esp_task_wdt_status(nullptr) != ESP_OK)
+    Serial.println("Warning: loop task is not registered with the task watchdog");
 }
 
 /*****************************************************************************/
@@ -691,6 +745,44 @@ void setupHttp()
       vorderhaus_pruefung_status(antwort, sizeof(antwort));
     }
     httpServer.send(200, "text/plain", antwort); });
+#endif
+#ifdef LOOP_PRUEFZUGANG
+  // Nur im Pruefling-Build (S3, 3.24.0, Arbeitsplan Loop-Stillstand, E6): haelt
+  // loop() absichtlich an, OHNE den Watchdog zu fuettern - der Nachweis, dass
+  // er greift. POST /pruefen/haenger?s=<Sekunden> blockiert so lange und kehrt
+  // dann zurueck (belegt die Grenze nach oben: eine Blockade unter dem Timeout
+  // darf KEINEN Reset ausloesen); ohne s haengt sie endlos (Reset nach
+  // LOOP_WDT_TIMEOUT_MS). Hinter dem Notbetriebszugang wie der KNX-Pruefzugang.
+  // GET zeigt nur die Bedienung und blockiert nie.
+  httpServer.on("/pruefen/haenger", []()
+                {
+    if (!httpServer.authenticate(notbetrieb_username, notbetrieb_password))
+    {
+      return httpServer.requestAuthentication();
+    }
+    if (httpServer.method() != HTTP_POST)
+    {
+      httpServer.send(200, "text/plain", "POST /pruefen/haenger?s=<1..600> blockiert loop() so lange; ohne s endlos\n");
+      return;
+    }
+    // s einlesen und klemmen: 0 = endlos, sonst 1..600 s
+    uint32_t sekunden = 0;
+    if (httpServer.hasArg("s"))
+    {
+      long wert = httpServer.arg("s").toInt();
+      if (wert < 1)
+        wert = 1;
+      if (wert > 600)
+        wert = 600;
+      sekunden = (uint32_t)wert;
+    }
+    // Antwort zuerst, damit der Aufrufer sie hat, bevor loop() stehen bleibt
+    httpServer.send(200, "text/plain", sekunden ? "blockiere loop() zeitlich begrenzt\n" : "blockiere loop() endlos\n");
+    const uint32_t start = (uint32_t)millis();
+    while (sekunden == 0 || (uint32_t)((uint32_t)millis() - start) < sekunden * 1000u)
+    {
+      __asm__ __volatile__("nop"); // absichtlich: kein feedLoopWDT(), kein yield()
+    } });
 #endif
   httpServer.on("/togglelog", []()
                 {
@@ -1378,7 +1470,7 @@ void setup()
   switchSerial();
 
   setupTime();
-  TelnetStream.begin();
+  TelnetStream.begin(zeitstempel);
 
   memcpy(cleanCommand, mainCommand, QUERYSIZE); // copy the empty command
 
@@ -1408,6 +1500,9 @@ void setup()
   Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;
+
+  // Als Letztes: ab hier ueberwacht der Task-Watchdog loop() (S3, 3.24.0).
+  setupLoopWatchdog();
 }
 
 void loop()

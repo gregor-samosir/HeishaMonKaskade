@@ -24,7 +24,7 @@
 // quotes on purpose: pulls sstaub/Ticker from lib_deps. <Ticker.h> would find
 // the core's own Ticker with a different API and break the timing chain.
 #include "Ticker.h"
-#include <TelnetStream.h>
+#include "telnetausgabe.h" // Telnet-Ausgabe ohne Warten, ersetzt die Bibliothek TelnetStream (3.24.0)
 
 // class names kept behind typedefs since the 3.0.0 port
 typedef WebServer WebServerClass;
@@ -66,6 +66,19 @@ typedef HTTPUpdateServer HTTPUpdateServerClass;
 
 // SUBSCRIBE_GRACE (Karenzzeit nach dem Abonnieren der Set-Topics) steht samt
 // Begruendung in karenz.h - sie gehoert zur Regel, die der Hosttest mituebersetzt.
+
+// Task-Watchdog fuer loop() (S3 der Durchsicht 2026-10-15, K1 vom 2026-09-02).
+// Alles laeuft in EINEM Task; haengt loop(), steht auch der Notbetriebsknopf.
+// Der Timeout muss ueber jeder LEGITIMEN Blockade liegen: Hydraulikschritt bis
+// 30 s im Fehlerfall (2 Requests, je Connect, Antwort und Rumpf 5 s), KNX-Befehl
+// bis 20,5 s (KNX_BEFEHL_DECKEL_MS), MQTT-Reconnect bis 5 s, WebServer 5 s je
+// Request. NTP (30 s) und das WiFiManager-Portal (180 s) liegen in setup(),
+// BEVOR der Watchdog scharf wird. OTA fuettert ihn selbst (setupOTA).
+// Es gibt nur EINEN Timeout fuer alle angemeldeten Tasks: 120 s gelten damit
+// auch fuer den Idle-Task von CPU 0 (bisher 5 s). Der Interrupt-Watchdog
+// (300 ms) bleibt unberuehrt. Die Pruefung gegen die Dauerkonstanten steht
+// per static_assert bei KNX (HeishaMon.cpp) und Hydraulik (notbetrieb.cpp).
+#define LOOP_WDT_TIMEOUT_MS 120000u
 
 // WLAN-Watchdog: ohne WLAN ist das Geraet fuer die Kaskadenregelung blind.
 // Stufe 1 erneuter Verbindungsversuch, Stufe 2 Neustart.

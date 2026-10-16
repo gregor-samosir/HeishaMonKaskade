@@ -120,6 +120,14 @@ cpp_test sendwindow_test
 # Gegenbeispiel mit - nur so ist belegt, dass er die Naht wirklich trifft.
 cpp_test karenz_test
 
+# Regeln der nicht blockierenden Telnet-Ausgabe (S2, 3.24.0): wann ein Client,
+# der nicht mehr liest, als tot gilt - auf die Millisekunde, ueber den
+# millis()-Ueberlauf und die Naht nach 2^31 ms, samt Gegenbeispiel der
+# vorzeichenbehafteten Frist. Bindet src/telnetlog.h direkt ein. Das Schreiben
+# auf den Socket ist nicht hosttestbar; dafuer gibt es telnet_haenger.py am
+# Pruefling.
+cpp_test telnetlog_test
+
 # Kodierung von SET35/SET36 auf Byte 28 - legt die Merge-Logik aus
 # commands.cpp und die Dekodierer aus decode.cpp nebeneinander. Byte 28 traegt
 # zwei Bitfelder; ohne bitgenaue Maske schaltet ein Kuehl-Kommando die Heizung
