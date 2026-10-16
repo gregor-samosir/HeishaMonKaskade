@@ -94,18 +94,18 @@ Fall, dass niemand da ist. Zwei Befunde, ein Thema:
 | E1 | Umfang von 3.24.0 | **Nur P3** (S2 und S3). S6 und P4 folgen gemeinsam als 3.25.0 | Owner 2026-10-16 |
 | E2 | Mehrere Telnet-Verbindungen | **Ein Client; ein neuer verdrängt den alten** | Owner 2026-10-16 |
 | E3 | Form | Eigener Arbeitsplan nach dem Muster von 3.23.1 (diese Datei) | Owner 2026-10-16 (Auftrag) |
+| E4 | Timeout des `loop()`-Watchdogs | **120 s** | Owner 2026-10-16 (V1 wie vorgeschlagen) |
+| E5 | Wann trennt der Telnet-Teil einen Client? | **15 s ohne gelungenes Schreiben** (Zeitregel), nicht „20 Fehlversuche“ | Owner 2026-10-16 (V2) |
+| E6 | Hänger-Route für den Nachweis | **Nur im Prüfling-Build**, hinter dem Notbetriebs-Login | Owner 2026-10-16 (V3) |
+| E7 | Abgeschnittene Zeilen | **Hinnehmen**; danach eine `<INF>`-Zeile mit der Zahl der fehlenden Zeilen | Owner 2026-10-16 (V4) |
+| E8 | Prüfling | **`h1b`**, Freigabe durch den Owner am 2026-10-16; `mqtt_port` bleibt für Phase A–C bei 1884 (Telnet und HTTP brauchen keinen Broker) | Owner 2026-10-16 |
 
-## Zu Beginn vom Owner zu bestätigen
+*V1–V4 aus dem Entwurf hat der Owner am 2026-10-16 wie vorgeschlagen bestätigt; sie stehen als E4–E7 in der Tabelle oben. Die Begründungen aus dem Entwurf:*
 
-Eigene Entwurfsentscheidungen, **keine** Owner-Entscheide — bis zur Bestätigung
-nicht in die Tabelle oben übernehmen.
-
-| Nr. | Frage | Empfehlung | Grund |
-| --- | --- | --- | --- |
-| V1 | Timeout des `loop()`-Watchdogs | **120 s**, wie K1 vorgeschlagen | Längste legitime Blockaden: Hydraulikschritt bis 30 s, KNX 20,5 s. Das WiFiManager-Portal (180 s) und NTP (30 s) liegen in `setup()` vor dem Einschalten. Ab etwa 15 s fehlt dem Broker der Keepalive — das ist die andere, bekannte Grenze |
-| V2 | Wann trennt der Telnet-Teil einen Client? | **Wenn 15 s lang kein Schreiben gelungen ist** (Zeitregel, `millis()`-überlaufsicher), statt „nach 20 Fehlversuchen“ wie im Maßnahmenplan | Eine Zeitregel hängt nicht davon ab, wie dicht geloggt wird (mit Hexlog sind 20 Zeilen in einer Sekunde da, im Leerlauf dauern sie über eine Minute) |
-| V3 | Hänger-Route für den Nachweis | **Nur im Prüfling-Build** (`stage_test_esp32`, Muster `KNX_PRUEFZUGANG`), hinter dem Notbetriebs-Login | Dieselbe Regel wie beim KNX-Prüfzugang: nie in den Stufen |
-| V4 | Abgeschnittene Zeilen | **Hinnehmen.** Gelingt nur ein Teil einer Zeile, wird der Rest verworfen. Nach der nächsten gelungenen Ausgabe meldet eine `<INF>`-Zeile, wie viele Zeilen fehlten | Besser eine zerschnittene Logzeile als ein stehender `loop()`; die Mitschnittwerkzeuge zählen Zeilen, die sie kennen |
+* **E4 (120 s):** längste legitime Blockaden Hydraulikschritt bis 30 s, KNX 20,5 s; WiFiManager-Portal (180 s) und NTP (30 s) liegen in `setup()` vor dem Einschalten. Ab etwa 15 s fehlt dem Broker der Keepalive — die andere, bekannte Grenze.
+* **E5 (15 s):** Eine Zeitregel hängt nicht davon ab, wie dicht geloggt wird (mit Hexlog sind 20 Zeilen in einer Sekunde da, im Leerlauf dauern sie über eine Minute).
+* **E6:** dieselbe Regel wie beim KNX-Prüfzugang (`KNX_PRUEFZUGANG`): nie in den Stufen.
+* **E7:** besser eine zerschnittene Logzeile als ein stehender `loop()`.
 
 ### Was aus dem Code folgt — kein Entscheid, aber festgelegt
 
