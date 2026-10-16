@@ -1,11 +1,24 @@
 # Arbeitsplan: `loop()` darf nicht stehen (3.24.0)
 
-> **Ergebnis: umgesetzt und am Prüfling nachgewiesen (2026-10-16), Branch
-> `loop-stillstand` noch nicht gemergt, Rollout 3.24.0 offen.** Paket P3 der
-> Codedurchsicht vom 2026-10-15
+> **Ergebnis: erledigt (2026-10-16) — ausgerollt auf allen vier Boards, beide
+> Releases angelegt, CI grün.** Paket P3 der Codedurchsicht vom 2026-10-15
 > ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S2 und S3, K1 vom 2026-09-02). Eine Firmware-Änderung mit Funktionswirkung:
 > Der Nachweis lief am **Prüfling** (`h1b`), nicht an der Anlage.
+>
+> **Rollout (2026-10-16):** Merge `c222602` und Tag `v3.24.0`; OTA H1 17:00:46,
+> H2 17:03:36, `h2b` 17:07:07 (`h1b` trug 3.24.0 schon vom Rückgabe-Flash des
+> Prüflings, aus dem identischen Quelltext). Abnahme beider Stufen: Version
+> 3.24.0 auf der Startseite und im ioBroker (`info/version`, `boot_reason` SW,
+> `ts` nach dem OTA; `boot_count` je 9), Tabellen-Diff H1 ein laufender Messwert,
+> H2 leer, Sollwerte unverändert, Notbetrieb bereit (`fehlendMaske`, `Sperre`,
+> `Lage` je 0), passiver Telnet-Mitschnitt von 45 s an beiden Stufen mit 100 %
+> Antwortquote (8 und 7 Abfragen, nichts verworfen). Backups: `h2b` auf
+> Stufe 2, `mqtt_port` 1884, Hostname und Pflichtfelder unverändert, Notbetrieb
+> gesperrt wie gewollt. `CI` und `CodeQL` grün. Öffentlich `v3.24.0` ohne
+> Binaries; privat `HeishaMon-Rollback` `v3.24.0` mit beiden `_ota`-Abbildern und
+> der ini, `v3.23.2` zum Rückfallstand umbenannt, Release `v3.23.1` gelöscht (Tag
+> bleibt; Owner bestätigt).
 >
 > **Übergabe:** Der Plan führt vom Rettungsanker bis zum Release und ist für den
 > Einstieg in einer neuen Session geschrieben. Zuerst „Lies zuerst“, dann
