@@ -12,13 +12,13 @@ am Ende.*
 
 ID | Topic | Response
 --- | --- | ---
-|| LWT | Online/Offline (automatically returns to Offline if connection with the HeishaMon lost)
+|| info/LWT | Online/Offline (automatically returns to Offline if connection with the HeishaMon lost)
 
 ## Log Topic:
 
 ID | Topic | Response
 --- | --- | ---
-LOG1 | log | response from headpump (level switchable)
+LOG1 | info/log | response from headpump (level switchable)
 
 ## Info Topics (`<prefix>/info/`, new in 3.20.0)
 

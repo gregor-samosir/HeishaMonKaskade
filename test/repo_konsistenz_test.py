@@ -27,6 +27,13 @@ Was geprueft wird
   3. MQTT-Topics.md gegen den Code: jedes State-Topic mit Nummer und Name,
      jedes Set-Kommando mit Nummer, Name, Byte und Wertebereich - in beide
      Richtungen.
+  3b. README.md, "MQTT-Schnittstelle": die Zahlen "N State-Topics und M
+     Set-Kommandos" gegen die Tabellen im Code, und die Pfade im Codeblock
+     gegen die Wurzeln in src/Topics.cpp - in beide Richtungen. MQTT-Topics.md
+     nennt LWT und Log mit vollem Pfad (info/LWT, info/log). Anlass: Die
+     Durchsicht vom 2026-10-15 (D1) fand "92 und 37" statt 99 und 38 und ein
+     LWT-Topic, das es so nicht gibt - wer danach einen Waechter baut,
+     abonniert ins Leere.
   4. CLAUDE.md: jeder Pfad in `...` existiert. Ein blosser Dateiname ohne '/'
      gilt auch, wenn er in src/ oder test/ liegt (CLAUDE.md nennt die Header
      so: `notbetrieb.h`).
@@ -229,6 +236,43 @@ def main():
     erg.pruefung("MQTT-Topics.md", befunde,
                  f"{len(code_tops)} State-Topics und {len(code_sets)} Set-Kommandos wie im Code "
                  f"(Nummer, Name, Byte, Wertebereich)")
+
+    # --- 3b. README, MQTT-Schnittstelle: Zahlen und Pfad-Wurzeln --------------
+    befunde = []
+    schnittstelle = abschnitt((REPO / "README.md").read_text(), "MQTT-Schnittstelle", "README.md")
+    zahlen = re.search(r"(\d+) State-Topics und (\d+) Set-Kommandos", schnittstelle)
+    if not zahlen:
+        befunde.append("Satz 'N State-Topics und M Set-Kommandos' nicht gefunden")
+    else:
+        if int(zahlen.group(1)) != len(code_tops):
+            befunde.append(f"README nennt {zahlen.group(1)} State-Topics, der Code hat {len(code_tops)}")
+        if int(zahlen.group(2)) != len(code_sets):
+            befunde.append(f"README nennt {zahlen.group(2)} Set-Kommandos, der Code hat {len(code_sets)}")
+    # Pfade im Codeblock: '<praefix>/info/LWT ...' -> 'info/LWT'; ein Platzhalter
+    # '<Wert>' schneidet den Pfad davor ab ('info/<Wert>' -> 'info').
+    block = re.search(r"```\n(.*?)```", schnittstelle, re.S)
+    readme_pfade = set()
+    for zeile in (block.group(1) if block else "").splitlines():
+        pfad = re.match(r"<[^>]+>/(\S+)", zeile)
+        if pfad:
+            readme_pfade.add(re.sub(r"/?<.*$", "", pfad.group(1)))
+    # Wurzeln aus Topics.cpp: '<Bausteinname> + s + "blatt"'; infTopicPrefix
+    # steht fuer '<praefix>/info'
+    topics_cpp = (REPO / "src" / "Topics.cpp").read_text()
+    code_pfade = {("info/" if basis == "infTopicPrefix" else "") + blatt
+                  for basis, blatt in re.findall(r'(mqttPrefix|infTopicPrefix) \+ s \+ "(\w+)"', topics_cpp)}
+    if not code_pfade or not readme_pfade:
+        befunde.append("Pfade nicht lesbar - Aufbau von Codeblock oder Topics.cpp geaendert?")
+    for pfad in sorted(code_pfade - readme_pfade):
+        befunde.append(f"<praefix>/{pfad} steht in Topics.cpp, fehlt im Codeblock der README")
+    for pfad in sorted(readme_pfade - code_pfade):
+        befunde.append(f"<praefix>/{pfad} steht im Codeblock der README, aber nicht in Topics.cpp")
+    for pfad in ("info/LWT", "info/log"):
+        if not re.search(rf"^(?:\|\||LOG1 \|) {re.escape(pfad)} \|", topics, re.M):
+            befunde.append(f"MQTT-Topics.md nennt '{pfad}' nicht mit vollem Pfad in der Tabelle")
+    erg.pruefung("README, MQTT-Schnittstelle", befunde,
+                 f"Zahlen {len(code_tops)}/{len(code_sets)} und {len(code_pfade)} Pfad-Wurzeln wie im Code, "
+                 f"LWT und Log in MQTT-Topics.md mit vollem Pfad")
 
     # --- 4. CLAUDE.md: Pfade in `...` ----------------------------------------
     befunde = []

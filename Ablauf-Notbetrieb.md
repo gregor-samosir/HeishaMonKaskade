@@ -4,11 +4,13 @@ Was in der Firmware passiert, wenn jemand den Notbetriebsknopf drückt, und was
 passiert, wenn die Kaskadensteuerung zurückkommt. Beide Abläufe Schritt für
 Schritt, jeweils mit der Zeit ab dem auslösenden Ereignis.
 
-**Stand:** 2026-09-14, Firmware 3.22.0 (Vorderhausschritt an beiden Stufen,
-nur bei Heizbetrieb, Abschnitt 1c — noch nicht ausgerollt); davor 3.21.0
-(Vorderhausschritt nur an Stufe 1, am Prüfling und an Mischer und Pumpe
-abgenommen, am 2026-09-13 ausgerollt) und
-3.18.0 (Heizstabschritt, 2026-08-30).
+**Stand:** gilt ab Firmware 3.22.0 (Vorderhausschritt an beiden Stufen,
+nur bei Heizbetrieb, Abschnitt 1c; seit 3.22.0 ausgerollt — die laufende
+Version steht in `src/version.h`, hier bewusst nicht, sie veraltet bei jedem
+Rollout). Davor 3.21.0 (Vorderhausschritt nur an Stufe 1, am Prüfling und an
+Mischer und Pumpe abgenommen, am 2026-09-13 ausgerollt) und 3.18.0
+(Heizstabschritt, 2026-08-30). Am Ablauf selbst hat sich seit 3.22.0 nichts geändert (3.23.x berühren
+ihn nicht); zuletzt gegen den Code gelesen am 2026-09-14.
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in

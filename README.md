@@ -1270,17 +1270,19 @@ keiner Zeit ein Leerwert (−128, −1) auf einem produktiven State-Topic.
 
 ## MQTT-Schnittstelle
 
-92 State-Topics und 37 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
+99 State-Topics und 38 Set-Kommandos, Namen kompatibel zum Original-HeishaMon.
 Die vollständige Referenz mit Byte-Spalte und Wertebereichen steht in
 [`MQTT-Topics.md`](MQTT-Topics.md). Welches State-Topic ein Set-Kommando
 zurückliest — und welche zwei Kommandos gar keine Rückmeldung haben —, steht in
 [`SET-TOP-Zuordnung.md`](SET-TOP-Zuordnung.md).
 
 ```
-<präfix>/LWT                       Online / Offline
-<präfix>/log                       Klartext-Log (umschaltbar)
+<präfix>/info/LWT                  Online / Offline
+<präfix>/info/log                  Klartext-Log (umschaltbar)
+<präfix>/info/<Wert>               Langzeit-Telemetrie (Neustarts, Heap, Laufzeit)
 <präfix>/state/<Topic>             dekodierte Werte, mit Retain-Flag
 <präfix>/set/<Kommando>            Kommandos an die Wärmepumpe
+<präfix>/notbetrieb/<Name>         Notbetriebswerte (nur Eingang, gehen nie von selbst an die WP)
 ```
 
 Zwei Hinweise aus der Praxis:
@@ -1301,14 +1303,14 @@ Zwei Hinweise aus der Praxis:
   Kaskaden-Wächter), hielt eine laufende Stufe für tot. Der ioBroker-Adapter
   verdeckt das, weil er aus seiner State-DB bedient; beim Umzug auf einen
   mosquitto wäre es aufgeschlagen. **Der Nachweis am echten Broker steht noch
-  aus** und gehört in die Umzugsvorbereitung: neuer Abonnent auf `<präfix>/LWT`
+  aus** und gehört in die Umzugsvorbereitung: neuer Abonnent auf `<präfix>/info/LWT`
   muss retained `Online` bekommen, nach dem Stromlosmachen retained `Offline`.
 * **Set-Werte sind Ganzzahlen innerhalb der Tabellengrenzen — alles andere wird
   abgelehnt, nicht gerundet.** Ein `33.5` oder ein Wert außerhalb von Min/Max
   verwirft den ganzen Befehl; die Wärmepumpe behält ihren alten Wert, und der
   `set`-Datenpunkt im ioBroker zeigt weiter den eingetippten. Die Fehlerzeile
   (`Error: Invalid integer value …`, `Error: Value … out of range …`) steht nur
-  im Ringpuffer unter `/log` und in `<präfix>/log`. Für den Betreiber steht der
+  im Ringpuffer unter `/log` und in `<präfix>/info/log`. Für den Betreiber steht der
   Prüfweg samt der Liste, welche Kanäle überwacht werden, in
   `nodered-flows/doku/referenz/BETRIEB.md` („Set-Werte von Hand im ioBroker
   eintragen“) — ein anderes Repo, deshalb ohne Link. Eine Zählung abgelehnter

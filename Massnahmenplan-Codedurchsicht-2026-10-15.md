@@ -41,9 +41,9 @@ nachgetragen.
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | offen |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
 | C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | offen |
-| D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | offen |
-| D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | offen |
-| D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | offen |
+| D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
+| D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
+| D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
 | D4 | Umfang und Struktur der Doku arbeiten gegen das Ziel Wartbarkeit | mittel | P7 | offen |
 | N1 | Beifang aus der Abnahme von 3.23.1: Der Notbetriebswerte-Sender schickte Dezimalwerte (33.5, 25.5), die die Firmware komplett verwirft | mittel | `nodered-flows` V1.1 | **erledigt** 2026-10-15 — [Auftrag](Auftrag-Notbetriebssender-Ganzzahl.md) |
 
@@ -376,6 +376,23 @@ Hauptmodus-Verteiler zyklisch und unabhängig vom Adapter sendet; danach die
 Kommentare und den README-Abschnitt 3.6.1 an den richtigen Stand anpassen.
 Messen nur, wenn die Doku dort nicht eindeutig ist (Aufwand/Nutzen).
 
+**Ergebnis (2026-10-16, gelesen in `nodered-flows`, nichts gemessen):** Es gibt
+keinen Widerspruch mehr, nur zwei Zeitstände. Der Hauptmodus-Verteiler (V6.9,
+`flows.json`, Funktion `ed07159ced1835eb`) setzt im 5-min-Takt
+(`hmv_timer_inject`) `state.lastSent = {}` und sendet damit **alle** Kanäle
+bedingungslos neu — je Wärmepumpe sieben (`heattarget`, `cooltarget`,
+`heatpump`, `heater`, `opmode`, `uwpmode`, `pumpspeed`), an Stufe 1 zusätzlich
+`HeatingMode`, also acht. Bis 2026-07-25 verpuffte das, weil der mqtt-Adapter
+mit `onchange:true` unveränderte Werte nicht ausgab; seither steht
+`onchange:false`, und die Kommandos kommen an (gemessen 2026-08-21 an H2:
+sieben je Takt; 2026-10-15 als `<SUB>`-Zeilen an beiden Stufen). Die
+Wächter-Dokumentation beschreibt den Zustand **davor**; die Aussage „erreicht die
+WPs nicht“ gilt heute nicht mehr. Damit stimmen `HeishaMon.cpp` (812–813) und
+`verbindung.h` (63–66), und der README-Abschnitt 3.6.1 bleibt unverändert. Zwei
+Einschränkungen, beide bekannt: Im Wartungsmodus des Verteilers ruht der
+Re-Assert, und die Einstellung `onchange:false` steht nicht in
+`config-snapshot.json` — nach einer Adapter-Neuinstallation nachprüfen.
+
 ### D4 — Umfang und Struktur der Doku *(mittel)*
 
 Rund 16 000 Zeilen Markdown in 27 Dateien, 26 davon im Wurzelverzeichnis.
@@ -411,16 +428,16 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 ### P1 — Doku-Korrekturen (direkt auf `main`, keine Firmware)
 
-- [ ] D1: README „MQTT-Schnittstelle“ — Zahlen, `info/LWT`, `info/log`, Zweige
+- [x] D1: README „MQTT-Schnittstelle“ — Zahlen, `info/LWT`, `info/log`, Zweige
       `info/` und `notbetrieb/`; `MQTT-Topics.md` mit vollem Pfad.
-- [ ] D1: `repo_konsistenz_test` um Zahlen und Topic-Wurzeln der README
+- [x] D1: `repo_konsistenz_test` um Zahlen und Topic-Wurzeln der README
       erweitern; Gegenprobe (alte Zahl eintragen → rot).
-- [ ] D2: Stand-Zeile in `Ablauf-Notbetrieb.md`; übrige `Ablauf-`Dateien
+- [x] D2: Stand-Zeile in `Ablauf-Notbetrieb.md`; übrige `Ablauf-`Dateien
       auf dieselbe Art veralteter Stände durchsehen.
-- [ ] D3: in `nodered-flows` klären, welche Kanäle zyklisch gesendet werden;
+- [x] D3: in `nodered-flows` klären, welche Kanäle zyklisch gesendet werden;
       Ergebnis hier eintragen. Die Kommentarkorrektur in `src/` wandert in
       den nächsten Firmware-Branch (P2).
-- [ ] `./test/hosttests.sh --schnell` grün, Commit auf `main`.
+- [x] `./test/hosttests.sh --schnell` grün, Commit auf `main`.
 
 ### P2 — Build-Hygiene (3.23.2, ohne Funktionsänderung)
 
@@ -429,7 +446,8 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 - [ ] C2: `build_unflags = -Wall` entfernen, `build_src_flags = -Wall -Wextra
       -Wno-unused-parameter`; die 21 Warnungen beheben (`%u` per Cast oder
       `PRIu32` so, dass auch der Hosttest auf dem Mac sauber bleibt).
-- [ ] C5a, C5f; die veralteten Kommentare aus C3; Kommentarkorrektur aus D3.
+- [ ] C5a, C5f; die veralteten Kommentare aus C3. (Die Kommentarkorrektur aus D3
+      entfällt: D3 ergab keinen Korrekturbedarf in `src/`.)
 - [ ] Build ohne Warnung, dann `-Werror` in `build_src_flags`.
 - [ ] Nachweis: `.elf` gegen vorher — Unterschiede nur dort, wo Code
       tatsächlich wegfiel (C5a) oder die Versionszeichenkette sich änderte;
