@@ -506,29 +506,26 @@ void handleTableRefresh(WebServerClass *httpServer, char actual_data[][MAXVALUEL
       // ein zu grosser Index das Geraet zum Absturz bringen konnte.
       topicdesc = desc_text(topic.desc, atoi(actual_data[index]));
     }
-    if (strcmp(actual_data[index], "unused") != 0)
+    int written = snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", topic.number, topic.name, actual_data[index], topicdesc);
+    if (written < 0)
     {
-      int written = snprintf(rowbuf, sizeof(rowbuf), "<tr><td>TOP%u</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", topic.number, topic.name, actual_data[index], topicdesc);
-      if (written < 0)
-      {
-        continue; // formatting failed, skip this row
-      }
-      // snprintf returns what it WOULD have written: clamp to what fits
-      size_t rowlen = ((size_t)written >= sizeof(rowbuf)) ? sizeof(rowbuf) - 1 : (size_t)written;
+      continue; // formatting failed, skip this row
+    }
+    // snprintf returns what it WOULD have written: clamp to what fits
+    size_t rowlen = ((size_t)written >= sizeof(rowbuf)) ? sizeof(rowbuf) - 1 : (size_t)written;
 
-      // flush before the row would overflow the block (+1 for the terminator)
-      if (used + rowlen + 1 > sizeof(sendbuf))
-      {
-        sendbuf[used] = '\0';
-        httpServer->sendContent(sendbuf);
-        used = 0;
-      }
-      // a single row can never exceed the block, but stay defensive
-      if (rowlen + 1 <= sizeof(sendbuf))
-      {
-        memcpy(sendbuf + used, rowbuf, rowlen);
-        used += rowlen;
-      }
+    // flush before the row would overflow the block (+1 for the terminator)
+    if (used + rowlen + 1 > sizeof(sendbuf))
+    {
+      sendbuf[used] = '\0';
+      httpServer->sendContent(sendbuf);
+      used = 0;
+    }
+    // a single row can never exceed the block, but stay defensive
+    if (rowlen + 1 <= sizeof(sendbuf))
+    {
+      memcpy(sendbuf + used, rowbuf, rowlen);
+      used += rowlen;
     }
   }
   if (used > 0) // send whatever is left over
@@ -1088,8 +1085,9 @@ void handleNotbetrieb(WebServerClass *httpServer)
 /* Der POST-Handler: anstossen und sofort antworten                          */
 /*                                                                           */
 /* Hier laeuft nichts Langes ab - die Schrittfolge tickt aus loop(). Ein      */
-/* Handler, der 48 s auf die Waermepumpe wartet, wuerde den Abfragezyklus     */
-/* blockieren und den Browser in einen Timeout laufen lassen.                */
+/* Handler, der auf die Waermepumpe wartet (ein Lauf dauert bis zu 88 s),    */
+/* wuerde den Abfragezyklus blockieren und den Browser in einen Timeout      */
+/* laufen lassen.                                                            */
 /*****************************************************************************/
 void handleNotbetriebStart(WebServerClass *httpServer)
 {

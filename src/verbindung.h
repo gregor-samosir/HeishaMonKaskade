@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <inttypes.h> // PRIu32: uint32_t ist auf dem ESP32 unsigned long, auf dem Mac unsigned int
 
 /*****************************************************************************/
 /* Ist die Hausteuerung noch da? - Zeitregeln der Verbindungswacht           */
@@ -410,17 +411,17 @@ inline void verbindung_dauer_text(char *out, size_t len, uint32_t sekunden,
   if (sekunden < 5400u) // unter 90 Minuten
   {
     uint32_t minuten = sekunden / 60u;
-    (void)snprintf(out, len, "%u %s", minuten, (minuten == 1u) ? "Minute" : "Minuten");
+    (void)snprintf(out, len, "%" PRIu32 " %s", minuten, (minuten == 1u) ? "Minute" : "Minuten");
     return;
   }
 
   if (sekunden < 172800u) // unter 48 Stunden
   {
     uint32_t stunden = sekunden / 3600u;
-    (void)snprintf(out, len, "%u %s", stunden, (stunden == 1u) ? "Stunde" : "Stunden");
+    (void)snprintf(out, len, "%" PRIu32 " %s", stunden, (stunden == 1u) ? "Stunde" : "Stunden");
     return;
   }
 
   uint32_t tage = sekunden / 86400u;
-  (void)snprintf(out, len, "%u %s", tage, (tage == 1u) ? "Tag" : "Tagen");
+  (void)snprintf(out, len, "%" PRIu32 " %s", tage, (tage == 1u) ? "Tag" : "Tagen");
 }

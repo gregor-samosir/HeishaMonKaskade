@@ -85,8 +85,11 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: pio-${{ runner.os }}-
 
+      # Exakt die Version, mit der lokal gebaut wird (Befund S5 der Durchsicht
+      # 2026-10-15). "--upgrade" zog bei jedem Lauf die neueste; ein Update ist
+      # jetzt eine bewusste Aenderung an dieser Zeile.
       - name: PlatformIO installieren
-        run: pip install --upgrade platformio
+        run: pip install platformio==6.1.19
 
       # Die echte platformio_user_env.ini ist nicht in git (Ports, IPs, OTA-
       # Passwort). Für einen Build genügt die Vorlage: sie enthält alle

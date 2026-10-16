@@ -1,6 +1,7 @@
 # Arbeitsplan: Build-Hygiene (3.23.2)
 
-> **Ergebnis: in Arbeit (angelegt 2026-10-16).** Paket P2 der Codedurchsicht
+> **Ergebnis: umgesetzt und geprüft auf Branch `build-hygiene` (2026-10-16),
+> noch nicht gemergt und nicht ausgerollt.** Paket P2 der Codedurchsicht
 > vom 2026-10-15
 > ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S5, C2, C5a, C5f und die Kommentarbeispiele aus C3). **Ohne
@@ -82,7 +83,38 @@ Jeder Schritt endet mit seinem Prüfkriterium. Kein Gerätezugriff in diesem Pla
 
 ## Messwerte
 
-*(wird in Schritt 2 und 6 gefüllt)*
+Alle Zahlen: `text / data / bss` der `.elf` (`xtensa-esp32s3-elf-size`).
+
+| Env | Vorher (Anker, NetApiHelpers 1.0.2) | Nachher (3.23.2) |
+| --- | --- | --- |
+| `heishamon_esp32_h1_ota` (= `h1_usb`) | 1046675 / 230062 / 2197487 | 1046695 / 230062 / 2197487 |
+| `heishamon_esp32_h2_ota` (= `h2_usb`) | 1046255 / 229838 / 2197487 | 1046275 / 229822 / 2197487 |
+
+`nm --size-sort` zeigt in beiden Envs genau zwei geänderte Funktionen:
+`zeitstempel` 0xbb → 0xeb (+48 Byte, Klemmung der Zeitfelder) und
+`handleTableRefresh` 0x1d7 → 0x1be (−25 Byte, toter Zweig C5a). Die 16 Byte
+`data` bei H2 tragen kein Symbol (Ausrichtung). `decode_vergleich.py` gegen den
+Anker: IDENTISCH (99 Topics, 74844 Zeilen). RAM/Flash laut `pio`: H1 Flash
+1223521 → 1223541 (+20), H2 1222877 → 1222881 (+4), RAM unverändert.
+
+### Was beim Nachweis aufgefallen ist (nicht im Plan vorhergesehen)
+
+1. **S5 wurde am eigenen Nachweis sichtbar.** Ein frischer Worktree am
+   Rettungsanker löste `NetApiHelpers` auf **1.0.3** auf; geflasht und lokal
+   gebaut war 1.0.2. Im Abbild unterschied sich `TelnetStream::flush()`. Das
+   bestätigt E2 (transitive Bibliothek mitpinnen) im Nachhinein: Ohne den Pin
+   hätte ein Neubau still eine andere Firmware geliefert. Für den Vergleich
+   wurde im Anker-Worktree nur diese eine Bibliothek auf 1.0.2 gesetzt.
+2. **`-Werror` allein greift nicht.** Die Arduino-Plattform setzt vorab
+   `-Wno-error=unused-function/-variable/-but-set-variable`,
+   `-Wno-error=deprecated-declarations`, `-Wno-error=extra`,
+   `-Wno-error=uninitialized/-maybe-uninitialized`, `-Wno-error=array-bounds`,
+   und eine spezifische Einstellung schlägt das allgemeine `-Werror`. Eine
+   absichtlich eingebaute ungenutzte Variable ließ den Build mit Exit 0 durch.
+   Deshalb stehen dieselben Klassen zusätzlich als `-Werror=<klasse>` in
+   `platformio.ini`; die Gegenprobe bricht den Build jetzt (Exit 1,
+   `-Werror=unused-variable`). Das ist eine Ergänzung zu E3, kein
+   Gegenentscheid: E3 wollte, dass neue Warnungen den Build brechen.
 
 ## Rückweg
 

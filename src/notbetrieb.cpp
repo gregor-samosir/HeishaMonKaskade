@@ -412,17 +412,17 @@ bool notbetrieb_mqtt_annehmen(const char *topic, const char *msg)
 /* unterwegs und kein Sammelfenster offen. Eine einmalige Blockade trifft nur */
 /* den Abfragezyklus, der ohnehin nur liest, und verschiebt ihn.              */
 /*                                                                           */
-/* Damit sie im Fehlerfall nicht ausufert: Timeout 1,5 s statt der            */
-/* voreingestellten 5 s (der Switch haengt im selben Subnetz - antwortet er   */
-/* in 1,5 s nicht, antwortet er nicht), hoechstens ein Timeout je Lauf (der   */
-/* Lesevorgang bricht ab, bevor der zweite Request kommt) und KEIN            */
-/* Wiederholungsversuch: Der Mensch steht vor der Seite, er drueckt erneut,   */
-/* und das ist der bessere Wiederholungsversuch.                              */
-/*                                                                           */
-/* Eine asynchrone Loesung (AsyncTCP, eigener Task) ist verworfen: Sie braechte*/
-/* Nebenlaeufigkeit in einen Zustandsautomaten, der vollstaendig aus loop()    */
-/* getrieben wird, und kaufte dafuer 1,5 s in einem Fehlerfall zurueck, der   */
-/* ohnehin im Abbruch endet.                                                  */
+/* Damit sie im Fehlerfall nicht ausufert: Timeout HYDRAULIK_TIMEOUT_MS       */
+/* (5 s, Begruendung weiter unten) statt der voreingestellten Werte,          */
+/* hoechstens ein Timeout je Lauf (der Lesevorgang bricht ab, bevor der       */
+/* zweite Request kommt) und KEIN Wiederholungsversuch: Der Mensch steht      */
+/* vor der Seite, er drueckt erneut, und das ist der bessere                  */
+/* Wiederholungsversuch.                                                      */
+/*                                                                            */
+/* Eine asynchrone Loesung (AsyncTCP, eigener Task) ist verworfen: Sie        */
+/* braechte Nebenlaeufigkeit in einen Zustandsautomaten, der vollstaendig     */
+/* aus loop() getrieben wird, und kaufte dafuer nur einen Teil der Blockade   */
+/* in einem Fehlerfall zurueck, der ohnehin im Abbruch endet.                 */
 /*****************************************************************************/
 /*****************************************************************************/
 /* 5000 ms - AM GERAET GEMESSEN, nicht geschaetzt (2026-08-27)                */
@@ -569,9 +569,8 @@ static HydraulikAntwort hydraulik_kommando(const char *kommando)
   /*    Klartext darin.                                                       */
   /* 2. readBytes(puffer, 63) waere die naheliegende Zeile - und sie wartet,  */
   /*    bis 63 Byte da sind ODER das Timeout ablaeuft. Bei einer 15 Byte      */
-  /*    langen Antwort saesse jeder Lauf die vollen 1,5 s ab, auch im         */
-  /*    Erfolgsfall, und der Notbetrieb blockierte loop() dreimal so lange    */
-  /*    wie noetig.                                                           */
+  /*    langen Antwort saesse jeder Lauf das ganze Timeout ab, auch im        */
+  /*    Erfolgsfall, und der Notbetrieb blockierte loop() unnoetig lange.     */
   /* 3. getString() loest die Chunks zwar sauber auf, allokiert aber auf dem  */
   /*    Heap in der Groesse der Antwort. Zeigt die eingetragene Adresse aus   */
   /*    Versehen auf einen richtigen Webserver, waere das eine ganze          */
@@ -868,7 +867,7 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
     // Schritt mit dem Sollwert 0.
     // ACHTUNG: s->top ist die TOP-NUMMER, actual_data[] wird ueber den
     // ZEILENINDEX adressiert. Beides ist nicht dasselbe - die Nummerierung hat
-    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 111 bei 99 Zeilen. Wer
+    // Luecken (Zone 2 entfiel in 3.4.0) und reicht bis 112 bei 99 Zeilen. Wer
     // hier direkt mit der Nummer indiziert, liest die falsche Zeile.
     const int index = (s->top >= 0) ? state_topic_index((unsigned)s->top) : -1;
     bestaetigt = (index >= 0) ? notbetrieb_rueckgelesen(actual[index], soll) : false;
@@ -951,9 +950,10 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
 /* SEIT 3.15.0 SETZT DIESER HANDLER KEINEN SCHRITT MEHR AB. Bis 3.14.2 ging  */
 /* das erste Kommando von hier aus raus - fuer ein Set-Kommando eine Sache   */
 /* von Mikrosekunden. Schritt 1 ist jetzt der Hydraulikschritt und damit ein */
-/* HTTP-Request von bis zu 1,5 s; laege er hier, hinge der Browser so lange  */
-/* an einer Seite, die noch nichts anzeigen kann. Der erste Tick aus loop()  */
-/* holt ihn im naechsten Millisekundentakt nach.                             */
+/* HTTP-Request (normal rund 0,2 s, im Fehlerfall bis rund 30 s, siehe       */
+/* Blockadetabelle der Durchsicht 2026-09-02); laege er hier, hinge der      */
+/* Browser so lange an einer Seite, die noch nichts anzeigen kann. Der erste */
+/* Tick aus loop() holt ihn im naechsten Millisekundentakt nach.             */
 /*****************************************************************************/
 bool notbetrieb_starten(void)
 {

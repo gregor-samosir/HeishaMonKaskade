@@ -793,7 +793,8 @@ inline NotbetriebAbbruchgrund notbetrieb_grund_fuer_schritt(NotbetriebRolle roll
 /* seine Bestaetigung" von "er steht noch aus". Seit 3.15.0 wird das         */
 /* gebraucht: Bis 3.14.2 setzte der POST-Handler den ersten Schritt selbst   */
 /* ab, was fuer ein Set-Kommando in Mikrosekunden erledigt ist. Der          */
-/* Hydraulikschritt macht daraus einen HTTP-Request von bis zu 1,5 s - so    */
+/* Hydraulikschritt macht daraus einen HTTP-Request (normal rund 0,2 s, im   */
+/* Fehlerfall bis rund 30 s - Blockadetabelle der Durchsicht 2026-09-02). So */
 /* lange darf kein Webhandler haengen. Also setzt ihn jetzt der Tick aus     */
 /* loop() ab, und dieses Flag sagt ihm, dass noch etwas aussteht.            */
 /*                                                                           */
