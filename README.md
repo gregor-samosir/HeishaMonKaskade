@@ -1117,7 +1117,8 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Arbeitsplan-Notbetrieb-NodeRED.md`](Arbeitsplan-Notbetrieb-NodeRED.md) | Node-RED-Seite des Notbetriebs (Werte-Sender, Verteiler-Ausgang) — erledigt am 2026-08-20 im Projekt `nodered-flows` |
 | [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md) | Umsetzung der Durchsicht vom 2026-09-02 (M1–M4) samt Nachweisen; 3.20.0 |
 | [`Arbeitsplan-AltExternalSensor.md`](Arbeitsplan-AltExternalSensor.md) | Alternativer Außenfühler als SET40/TOP112, TOP66 entfällt — Entscheide und Ablauf bis zum Release; ausgerollt als 3.23.0 |
-| [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md) | Karenzfenster nach dem Subscribe überlaufsicher machen (Befund S1 der Durchsicht 2026-10-15) — offen, Frist 2026-10-31 |
+| [`Arbeitsplan-Build-Hygiene-3.23.2.md`](Arbeitsplan-Build-Hygiene-3.23.2.md) | Bibliotheken pinnen, Compiler-Warnungen wieder an, tote Zweige und veraltete Kommentare (Paket P2 der Durchsicht 2026-10-15) — in Arbeit |
+| [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md) | Karenzfenster nach dem Subscribe überlaufsicher machen (Befund S1 der Durchsicht 2026-10-15) — erledigt, 3.23.1 am 2026-10-15 ausgerollt |
 | [`Auftrag-Befehlswaechter-AltExternalSensor.md`](Auftrag-Befehlswaechter-AltExternalSensor.md) | Auftrag an `nodered-flows`: SET40/TOP112 in den `WP_Befehls_Waechter` aufnehmen — erledigt am 2026-09-19 im Projekt `nodered-flows` |
 | [`Auftrag-Notbetriebssender-Ganzzahl.md`](Auftrag-Notbetriebssender-Ganzzahl.md) | Auftrag an `nodered-flows`: Notbetriebswerte-Sender rundet die Kurvenwerte auf Ganzzahlen, weil die Firmware Dezimalwerte verwirft — erledigt am 2026-10-15 im Projekt `nodered-flows` (V1.1) |
 | [`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md) | Auftrag aus `nodered-flows`: der Notbetrieb nimmt SET39 zurück — beantwortet, gebaut in 3.18.0 |
