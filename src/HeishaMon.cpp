@@ -224,6 +224,12 @@ void setupOTA()
 // 1970. Frueher kam die Konstante als SECS_YR_2000 aus TimeLib.
 #define ZEIT_PLAUSIBEL_AB 946684800
 
+// Klemmt ein Zeitfeld auf [lo, hi] - fuer snprintf mit fester Breite
+static inline int zeitfeld(int wert, int lo, int hi)
+{
+  return (wert < lo) ? lo : ((wert > hi) ? hi : wert);
+}
+
 static void zeitstempel(char *out, size_t len)
 {
   if (!out || len == 0)
@@ -238,9 +244,14 @@ static void zeitstempel(char *out, size_t len)
     // Locale-Apparat mit und kostete im Abbild rund 12 KB Flash (gemessen
     // 2026-09-02). Fuer ein festes Format ohne Sprach- oder Landesbezug ist
     // das ein hoher Preis fuer nichts.
+    // Jedes Feld auf seinen gueltigen Bereich geklemmt: ein tm mit
+    // Muellwerten koennte sonst mehr als die 19 Zeichen schreiben, die
+    // ZEITSTEMPEL_LEN fasst (und der Compiler kann die Laenge nur mit
+    // bekannten Grenzen nachvollziehen - -Wformat-truncation, Befund C2).
     (void)snprintf(out, len, "%04d-%02d-%02d %02d:%02d:%02d",
-                   lokal.tm_year + 1900, lokal.tm_mon + 1, lokal.tm_mday,
-                   lokal.tm_hour, lokal.tm_min, lokal.tm_sec);
+                   zeitfeld(lokal.tm_year + 1900, 0, 9999), zeitfeld(lokal.tm_mon + 1, 0, 99),
+                   zeitfeld(lokal.tm_mday, 0, 99), zeitfeld(lokal.tm_hour, 0, 99),
+                   zeitfeld(lokal.tm_min, 0, 99), zeitfeld(lokal.tm_sec, 0, 99));
     return;
   }
 
@@ -428,7 +439,10 @@ void write_telnet_log(char *string)
 /*****************************************************************************/
 void write_hex_log(uint8_t *hex, unsigned int hex_len)
 {
-  int bytesperline = 32; // please be aware of max mqtt message size - 32 bytes per line does not work
+  // 32 Byte je Zeile. Das Hex-Log geht nur nach Telnet (write_telnet_log), nie
+  // nach MQTT - die Warnung zur MQTT-Nachrichtengroesse aus dem Upstream gilt
+  // hier nicht (C5f der Durchsicht 2026-10-15).
+  int bytesperline = 32;
   for (unsigned int i = 0; i < hex_len; i += bytesperline)
   {
     char buffer[(bytesperline * 3) + 1];
@@ -1045,18 +1059,20 @@ void flush_serial_input()
 }
 
 /*****************************************************************************/
-/* Register new command
-/* Wait COMMANDTIMER for multible commands from mqtt
-/*
-/* Das Sammelfenster hat seit 3.8.0 einen Deckel: Bis dahin stiess JEDES
-/* eintreffende SET den 500-ms-Timer neu an, damit mehrere Felder in ein
-/* Telegramm wandern. Kommen die SETs dichter als 500 ms, wurde das Fenster
-/* damit unbegrenzt verlaengert - Senden und Abfrage standen still, ohne dass
-/* im Log etwas aufgefallen waere. Die Regel dafuer steht in sendwindow.h.
-/*
-/* Das Feld selbst ist zu diesem Zeitpunkt bereits in mainCommand eingetragen
-/* (build_heatpump_command macht das VOR dem Aufruf hier). Am Deckel geht
-/* also nichts verloren - der Wert faehrt mit dem gleich abgehenden Telegramm.
+/* Register new command                                                      */
+/* Wait COMMANDTIMER for multible commands from mqtt                         */
+/*                                                                           */
+/* Das Sammelfenster hat seit 3.8.0 einen Deckel: Bis dahin stiess JEDES     */
+/* eintreffende SET den 500-ms-Timer neu an, damit mehrere Felder in ein     */
+/* Telegramm wandern. Kommen die SETs dichter als 500 ms, wurde das          */
+/* Fenster damit unbegrenzt verlaengert - Senden und Abfrage standen still,  */
+/* ohne dass im Log etwas aufgefallen waere. Die Regel dafuer steht in       */
+/* sendwindow.h.                                                             */
+/*                                                                           */
+/* Das Feld selbst ist zu diesem Zeitpunkt bereits in mainCommand            */
+/* eingetragen (build_heatpump_command macht das VOR dem Aufruf hier). Am    */
+/* Deckel geht also nichts verloren - der Wert faehrt mit dem gleich         */
+/* abgehenden Telegramm.                                                     */
 /*****************************************************************************/
 void register_new_command()
 {
@@ -1092,9 +1108,9 @@ void register_new_command()
 }
 
 /*****************************************************************************/
-/* Send commands from buffer to pana  (called from loop)
-/* send the set command global mainCommand[]
-/* chk calculation must be on each time we send
+/* Send commands from buffer to pana  (called from loop)                     */
+/* send the set command global mainCommand[]                                 */
+/* chk calculation must be on each time we send                              */
 /*****************************************************************************/
 void send_pana_command()
 {
@@ -1171,8 +1187,8 @@ void send_pana_command()
 }
 
 /*****************************************************************************/
-/* Send query to buffer  (called from loop)
-/* only to trigger the next query if we have no new set command on buffer
+/* Send query to buffer  (called from loop)                                  */
+/* only to trigger the next query if we have no new set command on buffer    */
 /*****************************************************************************/
 void send_pana_mainquery()
 {

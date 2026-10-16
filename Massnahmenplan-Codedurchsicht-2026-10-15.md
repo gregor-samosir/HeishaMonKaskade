@@ -34,13 +34,13 @@ nachgetragen.
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | offen |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | offen |
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
-| S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | offen |
+| S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **umgesetzt in 3.23.2** (Branch `build-hygiene`, noch nicht ausgerollt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
 | S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P3 oder P4 | offen — aufgenommen auf Wunsch des Owners 2026-10-15 |
 | C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | offen |
-| C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | offen |
-| C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | offen |
+| C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **umgesetzt in 3.23.2**, mit `-Werror` und Klassenliste |
+| C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **umgesetzt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
-| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | offen |
+| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **umgesetzt in 3.23.2**; b, c (P5) und d, e (P6) offen |
 | D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
@@ -441,18 +441,23 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 ### P2 — Build-Hygiene (3.23.2, ohne Funktionsänderung)
 
-- [ ] Vorher: `text/data/bss` der `.elf` aller Envs festhalten.
-- [ ] S5: Bibliotheken exakt pinnen, CI auf `platformio==6.1.19`.
-- [ ] C2: `build_unflags = -Wall` entfernen, `build_src_flags = -Wall -Wextra
+- [x] Vorher: `text/data/bss` der `.elf` aller Envs festhalten.
+- [x] S5: Bibliotheken exakt pinnen, CI auf `platformio==6.1.19`.
+- [x] C2: `build_unflags = -Wall` entfernen, `build_src_flags = -Wall -Wextra
       -Wno-unused-parameter`; die 21 Warnungen beheben (`%u` per Cast oder
       `PRIu32` so, dass auch der Hosttest auf dem Mac sauber bleibt).
-- [ ] C5a, C5f; die veralteten Kommentare aus C3. (Die Kommentarkorrektur aus D3
+- [x] C5a, C5f; die veralteten Kommentare aus C3. (Die Kommentarkorrektur aus D3
       entfällt: D3 ergab keinen Korrekturbedarf in `src/`.)
-- [ ] Build ohne Warnung, dann `-Werror` in `build_src_flags`.
-- [ ] Nachweis: `.elf` gegen vorher — Unterschiede nur dort, wo Code
+- [x] Build ohne Warnung, dann `-Werror` in `build_src_flags`.
+- [x] Nachweis: `.elf` gegen vorher — Unterschiede nur dort, wo Code
       tatsächlich wegfiel (C5a) oder die Versionszeichenkette sich änderte;
-      `decode_vergleich.py` identisch.
-- [ ] Changelog mit Nachweis und GROESSE.
+      `decode_vergleich.py` identisch. Ergebnis: genau zwei Funktionen
+      geändert (C5a −25 Byte; `zeitstempel` +48 Byte durch die Klemmung gegen
+      `-Wformat-truncation`), siehe Arbeitsplan. Dabei fielen zwei Dinge auf:
+      `NetApiHelpers` löste sich ungepinnt auf 1.0.3 statt 1.0.2 auf, und
+      `-Werror` allein greift auf der Arduino-Plattform nicht (Klassenliste
+      nötig).
+- [x] Changelog mit Nachweis und GROESSE.
 
 ### P3 — `loop()` darf nicht stehen (3.24.0, Prüfling)
 

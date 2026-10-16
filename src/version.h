@@ -1,5 +1,74 @@
 #pragma once
 // Changelog:
+// 3.23.2 - BUILD-HYGIENE. Keine Funktionsaenderung: Bibliotheken exakt
+//         gepinnt, Compiler-Warnungen fuer den eigenen Code wieder an, ein
+//         toter Zweig und veraltete Kommentare bereinigt. Paket P2 der dritten
+//         Codedurchsicht (Befunde S5, C2, C5a, C5f und die Beispiele aus C3,
+//         Massnahmenplan-Codedurchsicht-2026-10-15.md, Arbeitsplan
+//         Arbeitsplan-Build-Hygiene-3.23.2.md).
+//
+//         PROBLEM S5. sstaub/Ticker (traegt die gesamte Zeitkette) stand ohne
+//         Version in platformio.ini, die uebrigen Bibliotheken mit "^", die CI
+//         installierte PlatformIO mit --upgrade. Wie weit das traegt, zeigte
+//         sich beim Nachweis selbst: Ein frischer Worktree am Rettungsanker
+//         loeste NetApiHelpers (kommt ungepinnt ueber TelnetStream) auf 1.0.3
+//         auf, geflasht war 1.0.2 - der Telnet-Code (flush()) war im Abbild
+//         ein anderer. Ohne den Pin haette ein Neubau still eine andere
+//         Firmware geliefert als die ausgerollte.
+//
+//         PROBLEM C2. "build_unflags = -Wall" hielt alle Warnungen aus. Mit
+//         -Wall -Wextra ergaben sich 21 im eigenen Code, alle harmlos: 17 x
+//         -Wcomment (Kommentarkoepfe ohne "*/" je Zeile), 3 x %u mit uint32_t
+//         in verbindung.h (auf dem ESP32 unsigned long, auf dem Mac unsigned
+//         int - der Hosttest kann die Warnung nie zeigen) und 1 x
+//         -Wformat-truncation im Zeitstempel.
+//
+//         FIX. platformio.ini: alle Bibliotheken exakt (PubSubClient 2.8.0,
+//         ArduinoJson 7.4.3, TelnetStream 1.3.0, NetApiHelpers 1.0.2,
+//         WiFiManager 2.0.17, Ticker 4.4.0), CI mit platformio==6.1.19.
+//         build_src_flags = -Wall -Wextra -Wno-unused-parameter -Werror, nur
+//         fuer src/. Dabei zeigte eine absichtliche Warnung, dass -Werror
+//         allein NICHT greift: Die Arduino-Plattform setzt vorab
+//         -Wno-error=<klasse> (unused-variable, unused-function, extra,
+//         uninitialized, array-bounds u.a.), und die spezifische Einstellung
+//         schlaegt das allgemeine -Werror - der Build lief mit Exit 0 durch.
+//         Deshalb stehen dieselben Klassen zusaetzlich als -Werror=<klasse>
+//         in der Liste. Die 21 Stellen: Kommentarkoepfe geschlossen, PRIu32
+//         (inttypes.h) statt %u, Zeitfelder im Zeitstempel auf ihren
+//         Wertebereich geklemmt (der Compiler kann die Laenge der 19 Zeichen
+//         sonst nicht nachvollziehen).
+//         C5a: der Zweig strcmp(actual_data[index], "unused") in
+//         webfunctions.cpp ist entfallen - "unused" wird nirgends gesetzt.
+//         C5f: Kommentar in write_hex_log nennt jetzt den wahren Grund (das
+//         Hex-Log geht nur nach Telnet, nie nach MQTT). C3: "1,5 s" in den
+//         Hydraulik-Kommentaren (tatsaechlich 5 s Timeout, im Fehlerfall bis
+//         rund 30 s), "48 s" -> 88 s und "bis 111" -> 112 in decode.h,
+//         decode.cpp, notbetrieb.cpp. D3 (Re-Assert) ergab keinen Korrektur-
+//         bedarf in src/: der Re-Assert erreicht die Waermepumpen seit
+//         onchange:false (2026-07-25), siehe Massnahmenplan, Befund D3.
+//
+//         NACHWEIS (Umbau ohne Funktionsaenderung): text/data/bss der .elf
+//         gegen einen frischen Worktree am Rettungsanker, dort NetApiHelpers
+//         auf 1.0.2 gepinnt (= der geflashte Stand). h1: text 1046675 ->
+//         1046695, data und bss gleich. h2: text 1046255 -> 1046275, data
+//         229838 -> 229822, bss gleich (die 16 Byte data tragen kein Symbol -
+//         Ausrichtung). nm --size-sort zeigt in BEIDEN Envs genau zwei
+//         geaenderte Funktionen: zeitstempel 0xbb -> 0xeb (Klemmung) und
+//         handleTableRefresh 0x1d7 -> 0x1be (C5a). Sonst nichts.
+//         decode_vergleich.py gegen den Anker: IDENTISCH (99 Topics, 74844
+//         Zeilen). GEGENPROBEN: absichtlich ungenutzte Variable in karenz.h
+//         -> mit nur -Werror Exit 0, mit der Klassenliste Exit 1
+//         ("-Werror=unused-variable"); zurueckgebaut. Alle 17 Hosttests
+//         gruen, alle sechs Envs bauen ohne Warnung. Keine Aenderung am
+//         Verhalten, daher keine Zusatzabnahme am Geraet ausser der ueblichen
+//         Abnahme nach dem OTA.
+//
+//         GROESSE gegen 3.23.1 (heishamon_esp32_h1_ota, im Worktree am
+//         Rettungsanker mit NetApiHelpers 1.0.2 gebaut): RAM 61960 -> 61960
+//         Byte (+0), Flash 1223521 -> 1223541 Byte (+20).
+//         heishamon_esp32_h2_ota: RAM 61960 -> 61960 Byte (+0), Flash
+//         1222877 -> 1222881 Byte (+4).
+//
 // 3.23.1 - KARENZFENSTER UEBERLAUFSICHER. Nach jedem Verbinden verwirft die
 //         Firmware 5 s lang alle Set-Kommandos (SUBSCRIBE_GRACE, 3.6.1). Die
 //         Frist stand als millis() + 5000 in der Firmware und wurde mit
@@ -2129,4 +2198,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.23.1";
+static const char* heishamon_version = "3.23.2";
