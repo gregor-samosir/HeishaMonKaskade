@@ -1,12 +1,24 @@
 # Arbeitsplan: Build-Hygiene (3.23.2)
 
-> **Ergebnis: umgesetzt und geprüft auf Branch `build-hygiene` (2026-10-16),
-> noch nicht gemergt und nicht ausgerollt.** Paket P2 der Codedurchsicht
+> **Ergebnis: erledigt (2026-10-16) — ausgerollt auf allen vier Boards, beide
+> Releases angelegt, CI grün.** Paket P2 der Codedurchsicht
 > vom 2026-10-15
 > ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S5, C2, C5a, C5f und die Kommentarbeispiele aus C3). **Ohne
 > Funktionsänderung** — der Nachweis ist ein Größenvergleich der `.elf`, kein
-> Gerätetest. Der Rollout (`/rollout 3.23.2`) ist Sache des Owners.
+> Gerätetest.
+>
+> **Rollout (2026-10-16):** Merge `fdec85a` und Tag `v3.23.2`; OTA H1 09:53:58,
+> H2 09:56:13, Backups `h1b` 09:58:46 und `h2b` 09:59:12. Abnahme beider Stufen:
+> Version 3.23.2 auf der Startseite und im ioBroker (`info/version`,
+> `boot_reason` SW, `ts` nach dem OTA), Tabellen-Diff nur laufende Messwerte
+> (H1 zwei, H2 einer), Sollwerte unverändert, Notbetrieb bereit
+> (`fehlendMaske`, `Sperre`, `Lage` je 0). Backups: `mqtt_port` 1884 vor und
+> nach dem Flash, Hostnamen und KNX-Schnittstelle unverändert, Notbetrieb
+> gesperrt wie gewollt. `CI` und `CodeQL` grün. Öffentlich `v3.23.2` ohne
+> Binaries; privat `HeishaMon-Rollback` `v3.23.2` mit beiden `_ota`-Abbildern
+> und der ini, `v3.23.1` zum Rückfallstand umbenannt, Release `v3.23.0`
+> gelöscht (Tag bleibt; Owner bestätigt).
 
 ## Worum es geht
 
