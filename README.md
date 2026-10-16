@@ -1125,7 +1125,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md) | Re-Assert-Sperre bei Wartung — beantwortet am 2026-08-20: die Sperre war nie eingeschaltet |
 | [`Massnahmenplan-Codedurchsicht-2026-08-18.md`](Massnahmenplan-Codedurchsicht-2026-08-18.md) | Erste Codedurchsicht: Befunde mit Entscheid je Punkt, auch für die verworfenen; umgesetzt bis 3.9.0 |
 | [`Massnahmenplan-Codedurchsicht-2026-09-02.md`](Massnahmenplan-Codedurchsicht-2026-09-02.md) | Zweite Durchsicht (Robustheit, Langzeitstabilität): Befunde mit Entscheid je Punkt; umgesetzt in 3.20.0 |
-| [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md) | Dritte Durchsicht (Langzeitstabilität, Code, Doku): 14 Befunde mit Empfehlung, geordnet in Pakete; S1 kritisch, siehe Arbeitsplan 3.23.1 |
+| [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md) | Dritte Durchsicht (Langzeitstabilität, Code, Doku): 14 Befunde mit Empfehlung, geordnet in Pakete; erledigt sind S1 (3.23.1), P1 Doku-Korrekturen und P2 Build-Hygiene (3.23.2), P3–P7 offen |
 | [`test/`](test/README.md) | Diagnose- und Nachweiswerkzeuge |
 | [`.githooks/`](.githooks/pre-commit) | pre-commit-Hook: `test/hosttests.sh --schnell` vor jedem Commit, auch vor reinen Doku-Commits; einmal je Klon aktivieren mit `git config core.hooksPath .githooks` |
 | [`ProtocolByteDecrypt.md`](ProtocolByteDecrypt.md) | Notizen zum Protokoll auf Byte-Ebene |
