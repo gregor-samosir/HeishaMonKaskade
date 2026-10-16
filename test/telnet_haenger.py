@@ -56,6 +56,9 @@ def lese_argumente():
                    help="Empfangspuffer in Byte (Vorgabe 1024)")
     p.add_argument("--nur-lesen", action="store_true",
                    help="Gegenprobe: Client liest normal weiter")
+    p.add_argument("--lesen-nach", type=float, default=0.0, metavar="SEK",
+                   help="nach SEK Sekunden wieder lesen (Vorgabe 0 = nie); weist die "
+                        "<INF>-Zeile 'Zeilen verworfen' nach")
     p.add_argument("--schwall", type=int, default=300,
                    help="Anzahl 'M'-Tasten zu Beginn (Vorgabe 300, 0 = nur Log)")
     p.add_argument("--erwarte", choices=("stillstand", "laeuft"),
@@ -65,6 +68,8 @@ def lese_argumente():
         sys.exit(f"Dauer muss zwischen 10 und 3600 s liegen, nicht {a.dauer:g}")
     if not (0.5 <= a.intervall <= 60):
         sys.exit(f"Intervall muss zwischen 0,5 und 60 s liegen, nicht {a.intervall:g}")
+    if not (0 <= a.lesen_nach <= a.dauer):
+        sys.exit(f"lesen-nach muss zwischen 0 und der Dauer liegen, nicht {a.lesen_nach:g}")
     if not (0 <= a.schwall <= 5000):
         sys.exit(f"Schwall muss zwischen 0 und 5000 liegen, nicht {a.schwall}")
     if not (256 <= a.rcvbuf <= 65536):
@@ -117,11 +122,15 @@ def main():
     zeiten = []
     ausfaelle = 0
     gelesen = 0
+    gesehen = b""
     while time.monotonic() < ende:
-        if a.nur_lesen:
+        if a.nur_lesen or (a.lesen_nach and time.monotonic() - start >= a.lesen_nach):
             try:
-                gelesen += len(s.recv(65536))
-            except socket.timeout:
+                d = s.recv(65536)
+                gelesen += len(d)
+                gesehen += d
+                gesehen = gesehen[-65536:]  # nur das Ende behalten
+            except (socket.timeout, ConnectionResetError):
                 pass
         dt = probe(a.ziel)
         rel = time.monotonic() - start
@@ -146,6 +155,7 @@ def main():
                 getrennt = True
                 break
             puffer_bytes += len(d)
+            gesehen = (gesehen + d)[-65536:]
             if puffer_bytes > 4_000_000:
                 break
     except (ConnectionResetError, BrokenPipeError):
@@ -163,6 +173,9 @@ def main():
           f"groesste Antwortzeit: {groesste:.2f} s")
     print(f"Im Puffer gelesen: {puffer_bytes} Byte")
     print(f"Gerät hat den Client getrennt: {'ja' if getrennt else 'nein'}")
+    if a.lesen_nach:
+        print(f"<INF>-Zeile 'Zeilen verworfen' gesehen: "
+              f"{'ja' if b'Zeilen verworfen' in gesehen else 'nein'}")
     urteil = "STILLSTAND" if steht else ("LAEUFT" if laeuft else "UNKLAR")
     print(f"Urteil: {urteil}")
 

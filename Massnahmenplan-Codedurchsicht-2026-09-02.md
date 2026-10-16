@@ -210,6 +210,15 @@ HTTP-Updater müssen den Watchdog in ihrem Fortschritts-Callback füttern, sonst
 bricht ein Upload nach zwei Minuten ab. Wegen dieser Nebenwirkungen niedrig
 priorisiert; wer es umsetzt, testet OTA auf dem Testboard zuerst.
 
+**Nachtrag 2026-10-16 zu K1 — umgesetzt in 3.24.0** (Paket P3 der Durchsicht
+vom 2026-10-15, [`Arbeitsplan-Loop-Stillstand-3.24.0.md`](Arbeitsplan-Loop-Stillstand-3.24.0.md)),
+mit 120 s wie hier vorgeschlagen. Am Prüfling nachgewiesen: OTA über beide Wege
+läuft durch, ein auf 153 s gedehnter Upload bricht nicht ab (ohne die Fütterung
+bricht er nach 126 s ab), ein endloser Hänger endet nach 120 s mit
+`boot_reason = TASK_WDT`. Eine Nebenwirkung steht nicht oben: Der Timeout gilt
+für alle angemeldeten Tasks, auch die Überwachung des Idle-Tasks von CPU 0
+liegt nun bei 120 s statt 5 s.
+
 **K2 — Zeitstempel driften.** `setupTime()` setzt TimeLib einmal beim Boot;
 danach läuft `now()` frei auf `millis()`. Über Monate driftet das um Minuten,
 und die Sommerzeit-Umstellung im Oktober erreicht die Log-Zeitstempel erst
@@ -330,6 +339,16 @@ Reconnect samt Wiedereinspielung; ab 120 s würde der Watchdog aus K1 greifen.
 | Hydraulikschritt: zwei HTTP-Requests, je Connect 5 s + Antwort 5 s + Rumpf 5 s | ≤ 30 s im Fehlerfall, ~0,2 s normal | einmal je Notbetriebslauf |
 | OTA-Upload (ArduinoOTA, HTTP-Updater) | 15–60 s | nur beim Flashen |
 | `setupTime()` NTP | ≤ 30 s | nur im Boot, siehe M1 |
+| Telnet-Ausgabe an einen Client, der nicht liest | **nie** (bis 3.23.2: ≤ 10 s je Zeile und Client, gemessen 90 s Stillstand) | seit 3.24.0 `send(MSG_DONTWAIT)`, siehe unten |
+| `delay()` vor `ESP.restart()` (`/reboot`, `/settings`, WLAN-Watchdog) | ≤ 2 s | endet im Neustart |
+| WiFiManager-Portal 180 s, NTP 30 s | in `setup()` | vor dem Einschalten des Watchdogs, nicht überwacht |
+| **Watchdog für `loop()`** | **120 s** (3.24.0) | `LOOP_WDT_TIMEOUT_MS`; OTA füttert je Block |
+
+**Nachtrag 2026-10-16 (3.24.0):** Die Grenze „ab 120 s greift der Watchdog aus
+K1“ gilt seit 3.24.0. Die längste legitime Blockade im Betrieb ist der
+Hydraulikschritt mit 30 s, der Timeout liegt mit Faktor 4 darüber
+(`static_assert` bei Hydraulik und KNX). Der Telnet-Weg, der `loop()` Minuten
+anhalten konnte (S2 der Durchsicht vom 2026-10-15), blockiert nicht mehr.
 
 Der Hydraulikschritt kann mit 30 s über dem Keepalive liegen. Folge ist nur
 ein Reconnect, der Notbetrieb selbst ist davon unabhängig, weil seine Werte

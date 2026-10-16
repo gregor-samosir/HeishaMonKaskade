@@ -137,6 +137,37 @@ Notanker**. Deshalb: immer nur **ein** Board gleichzeitig ausleihen, und vorher
 kurz pruefen, ob an der eigenen Stufe gerade etwas ansteht (Rollout,
 Heizperiode, Abwesenheit). Ein Pruefstand ist selten dringend.
 
+## Telnet-Client, der nicht liest (telnet_haenger.py, 3.24.0)
+
+Nachweis für S2 der Durchsicht 2026-10-15: Hält ein Telnet-Client, der nicht
+mehr liest, `loop()` an? Bis 3.23.2 ja — am Prüfling blieb die Startseite 90 s
+lang unbeantwortet. Seit 3.24.0 nicht mehr: Die Ausgabe wartet nie, verwirft
+Zeilen und trennt den Client nach 15 s.
+
+```bash
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 5000 --erwarte stillstand   # Vorversion
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 5000 --erwarte laeuft       # ab 3.24.0
+python3 -u test/telnet_haenger.py <ip-des-pruefstands> --schwall 1500 --lesen-nach 4         # <INF>-Zeile
+```
+
+**Die Messfalle, die dieses Werkzeug umgeht:** `nc` mit Ctrl-Z reicht nicht.
+Der Kernel des Macs bestätigt weiter und nimmt das Log in seinen
+Empfangspuffer — gemessen rund 200 KB, auch mit `SO_RCVBUF` von 1 KB vor dem
+`connect()`. Bei ~40 Byte/s Debug-Log ohne Wärmepumpe wäre das erst nach Stunden
+voll; „läuft weiter“ nach 10 Minuten bewiese nichts. Der Hexlog (`H`) hilft nicht
+(er loggt nur gesendete Kommandos, am Prüfling also nichts) und lässt sich am
+Gerät nicht zurücklesen. Deshalb sendet das Werkzeug einen Schwall `M`
+(je Taste eine Zeile, ändert nichts) — 300 Tasten füllen den Puffer **nicht**,
+5000 tun es. Ein „läuft“ gilt nur, wenn das Gerät den Client dabei getrennt hat;
+sonst meldet das Werkzeug **ungültig** (Exit 2).
+
+Der Watchdog (S3) wird am Prüfling-Build nachgewiesen: `POST
+/pruefen/haenger?s=<Sekunden>` (nur `stage_test_esp32`, hinter dem
+Notbetriebs-Login, `curl --basic -u notbetrieb:<pw>`) hält `loop()` ohne
+Fütterung an. 90 s: kein Reset; ohne `s`: Reset nach 120 s, `info/boot_reason`
+= `TASK_WDT`. Der HTTP-Updater verlangt zusätzlich `-H "Origin: http://<ip>"`
+und den Feldnamen `firmware` (`curl -F firmware=@…`), sonst antwortet er 401.
+
 ## Antwortquote messen
 
 Die aussagekraeftigste einzelne Zahl ueber die serielle Strecke: Wie viele der

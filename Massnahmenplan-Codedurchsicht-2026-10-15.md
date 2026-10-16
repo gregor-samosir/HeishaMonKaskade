@@ -31,8 +31,8 @@ nachgetragen.
 | ID | Befund | Prio | Paket | Stand |
 | --- | --- | --- | --- | --- |
 | S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md) |
-| S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | offen — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) angelegt 2026-10-16 |
-| S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | offen — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) angelegt 2026-10-16 |
+| S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | **umgesetzt und am Prüfling nachgewiesen** (2026-10-16), Rollout 3.24.0 offen — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
+| S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | **umgesetzt und am Prüfling nachgewiesen** (2026-10-16), Rollout 3.24.0 offen — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **erledigt in 3.23.2** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
 | S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P3 oder P4 | offen — aufgenommen auf Wunsch des Owners 2026-10-15 |
