@@ -165,8 +165,8 @@ Strecke zur WP läuft. Auf ioBroker-Seite gibt es dafür einen Stale-Guard über
    Mindestwarte ein gültiges Telegramm eingegangen ist. Regel in
    `notbetrieb.h`, Hosttest mit eingefrorenen Werten.
 3. Neuer Sperrgrund „keine Verbindung zur Wärmepumpe“, wenn das letzte gültige
-   Telegramm älter als z. B. 30 s ist — **Wortlaut der Notfallseite gibt der
-   Owner vor** (wie bei allen Texten dort).
+   Telegramm älter als 30 s ist — **Wortlaut der Notfallseite gibt der
+   Owner vor** (wie bei allen Texten dort). **Entschieden 2026-10-16, siehe P4.**
 4. Auftrag an `nodered-flows`: Wächter auf `info/telegram_age`.
 
 **Nachweis:** Hosttest; am Prüfling ohne WP: `telegram_age` wächst,
@@ -485,8 +485,18 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 ### P4 — Serielle Strecke (3.25.0)
 
-- [ ] Vorab mit dem Owner: Wortlaut des neuen Sperrhinweises auf der
-      Notfallseite; Schwelle (Vorschlag 30 s); STOPP-Regel H1/H2 gegenprüfen.
+- [x] Vorab mit dem Owner — **entschieden am 2026-10-16** (Owner, Vorschlag A):
+      * **Wortlaut** des Sperrhinweises, als Überschrift und Absatz:
+        > **Keine Verbindung zur Wärmepumpe**
+        > Die Steuerung bekommt von der Wärmepumpe keine Antwort mehr und kann
+        > deshalb nicht umschalten. Die Wärmepumpe läuft mit den zuletzt gesetzten
+        > Werten weiter. Bitte nach der ausgedruckten Anleitung am Bedienfeld der
+        > Wärmepumpe weitermachen.
+        Bewusst ohne Hinweis auf Stecker oder Ersatz-Board. Der letzte Satz ist
+        derselbe wie `NB_TXT_PLAN_B` in `webfunctions.cpp`.
+      * **H1 und H2 gleich** — derselbe Text und dieselbe Schwelle an beiden
+        Stufen (STOPP-Regel damit ausdrücklich geprüft).
+      * **Schwelle 30 s** ohne gültiges Telegramm.
 - [ ] Zähler und `info/telegram_ok`, `info/telegram_err`, `info/telegram_age`;
       `MQTT-Topics.md` nachziehen.
 - [ ] Bestätigungsregel „gültiges Telegramm nach der Mindestwarte“ in
