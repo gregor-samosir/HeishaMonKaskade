@@ -1,7 +1,9 @@
 # Auftrag: Wächter auf die serielle Strecke und auf abgelehnte Set-Befehle
 
-> **Ergebnis: offen (2026-10-17) — erst nach dem Rollout von 3.25.0 zu
-> übergeben**, vorher gibt es die Topics nicht. Gegenstück im Firmware-Repo:
+> **Ergebnis: offen (2026-10-17) — 3.25.0 ist ausgerollt, der Auftrag ist
+> an `nodered-flows` zu übergeben.** Die Topics liegen seit dem 2026-10-17 an
+> beiden Stufen im ioBroker (`telegram_ok` nach zehn Minuten 101, `err` und
+> `timeout` 0). Gegenstück im Firmware-Repo:
 > [`Arbeitsplan-Serielle-Strecke-3.25.0.md`](Arbeitsplan-Serielle-Strecke-3.25.0.md),
 > Befunde S4 und S6 im
 > [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md).
