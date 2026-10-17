@@ -35,6 +35,12 @@ Topic | Content | Published
 `info/heap_min` | Smallest free heap seen since boot, bytes | every 5 min
 `info/heap_maxblock` | Largest contiguous allocatable block, bytes | every 5 min
 `info/stack` | Stack high water mark of the loopTask (8 KB stack), bytes | every 5 min
+`info/telegram_ok` | Valid answer telegrams from the heat pump since boot (saturates at 4294967295) | every 5 min, on connect, on every change of state of the serial line
+`info/telegram_err` | Queries answered with bytes that were not a valid telegram (checksum, type, truncated, too long, buffer overflow) since boot | same
+`info/telegram_timeout` | Queries that got no byte at all before the serial timeout (line silent) since boot | same
+`info/telegram_age` | Seconds since the last valid telegram; before the first one, since the start of the query cycle. 30 s or more = serial line is silent | same
+`info/set_abgelehnt` | Set commands rejected since boot (payload not an integer, value outside the table limits, unknown set topic) | on change (at most every 2 s), every 5 min, on connect
+`info/set_abgelehnt_letzter` | The last rejected command as `Name=Value`, cut to 64 characters, anything but printable ASCII shown as `?` | same
 
 ### Warum es diesen Zweig gibt (deutsch)
 
@@ -66,6 +72,28 @@ bleiben.
 
 `info/stack` ist der Wasserstand des loopTask. Die tiefste Verschachtelung ist
 der Hydraulikschritt mit `HTTPClient` auf dem Stack.
+
+**Die serielle Strecke (seit 3.25.0).** Bis 3.24.0 blieben bei einem
+abgerissenen Kabel, Pegelwandler oder einer ausgefallenen WP-Platine die
+letzten Werte stehen — auf der Webseite, retained beim Broker und als
+Rücklesequelle des Notbetriebs. `telegram_age` ist die Zahl dafür: Sie wächst
+ohne gültiges Telegramm, ab 30 s gilt die Strecke als stumm (der
+Abfragezyklus liegt bei rund 6 s). Die drei Zähler trennen die Ursachen:
+`telegram_timeout` steigt, wenn die Leitung stumm ist (Kabel, Pegelwandler),
+`telegram_err`, wenn Bytes ankommen, die kein Telegramm ergeben (Baudrate,
+Störung); ein Fehlerzyklus zählt genau einmal. Sie gelten seit dem Start —
+ein Rückgang heißt Neustart, wie bei `boot_count`. Zusätzlich zum 5-min-Takt
+gehen die vier Werte bei jedem Wechsel zwischen stumm und lebendig sofort
+raus, sonst stünde `telegram_age` nach einem Kabelabriss bis zu fünf Minuten
+auf dem letzten Wert von wenigen Sekunden.
+
+**Abgelehnte Set-Befehle (seit 3.25.0).** Ein Payload, der keine Ganzzahl ist
+(`33.5`, `1e1`, leer), oder ein Wert außerhalb der Tabellengrenzen verwirft
+den ganzen Befehl; die Wärmepumpe behält ihren alten Wert, der `set`-Datenpunkt
+im ioBroker zeigt weiter den eingetippten. Bis 3.24.0 stand das nur als
+`Error:`-Zeile im Logring. `set_abgelehnt` steigt mit jeder Ablehnung,
+`set_abgelehnt_letzter` nennt Kanal und Wert. Die Auswertung gehört in einen
+Wächter („Zähler gestiegen“, wie bei `boot_count`), nicht auf die Firmware.
 
 **Der 5-min-Takt ist ein eigener** und hängt nicht am Vollupdate der
 Messwerte. Jenes läuft nur nach einem gültigen Antworttelegramm der

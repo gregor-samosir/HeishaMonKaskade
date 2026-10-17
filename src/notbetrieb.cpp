@@ -811,7 +811,14 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   // unterwegs ist - die Seite fragt ihn alle zwei Sekunden ab und gibt den
   // Knopf von selbst frei, sobald der KNX-Schalter auf Heizen steht. Ohne das
   // muesste jemand die Seite neu laden und wuesste nicht, wann.
-  notbetriebSperre = notbetrieb_sperrgrund(notbetriebRolle, &notbetriebWerte, richtung);
+  //
+  // Die Verbindung zur Waermepumpe (3.25.0, S4) ist die dritte Bedingung: Ohne
+  // gueltige Telegramme der letzten 30 s ist actual_data[] - also auch TOP101
+  // und jeder Ruecklesewert - nur der letzte Stand. Die Sperre wirkt nur beim
+  // START: Ein laufender Lauf wird von ihr nicht abgebrochen, sondern endet bei
+  // stehender Strecke durch die Bestaetigungsregel im Tick regulaer in ROT.
+  const bool wpVerbunden = !serielle_strecke_stumm(&serielleStrecke, (uint32_t)millis());
+  notbetriebSperre = notbetrieb_sperrgrund(notbetriebRolle, &notbetriebWerte, richtung, wpVerbunden);
 
   // Ein Ergebnis von gestern ist keine Auskunft mehr: GRUEN und ROT fallen
   // nach 15 Minuten auf BEREIT zurueck, der Knopf steht dann wieder da.
@@ -880,7 +887,10 @@ void notbetrieb_loop(char actual[][MAXVALUELEN])
   }
 
   char log_line[160];
-  switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt, richtung))
+  // serielleStrecke.ok: Ein SET-Schritt gilt erst als bestaetigt, wenn seit
+  // dem Absetzen ein gueltiges Telegramm eingegangen ist (Regel im Tick)
+  switch (notbetrieb_tick(&notbetriebLauf, notbetriebRolle, millis(), bestaetigt,
+                          serielleStrecke.ok, richtung))
   {
   case NOTBETRIEB_SENDEN:
     if (!notbetrieb_schritt_absetzen(richtung))
@@ -968,6 +978,8 @@ bool notbetrieb_starten(void)
   {
     write_mqtt_log(sperre == NOTBETRIEB_SPERRE_HEIZBETRIEB
                        ? (char *)"Notbetrieb abgelehnt: die Anlage steht nicht auf Heizen (TOP101)"
+                   : sperre == NOTBETRIEB_SPERRE_WP
+                       ? (char *)"Notbetrieb abgelehnt: keine gueltigen Telegramme der Waermepumpe"
                        : (char *)"Notbetrieb abgelehnt: es fehlen Werte");
     return false;
   }

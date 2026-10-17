@@ -29,6 +29,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `karenz_test.cpp` | Karenzfenster nach dem Verbinden: Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms samt Gegenbeispiel der alten Regel (bindet `src/karenz.h` direkt ein) | nein |
 | `telnetlog_test.cpp` | Regeln der nicht blockierenden Telnet-Ausgabe: wann ein Client, der nicht mehr liest, als tot gilt (15 s ab dem ersten Fehlschlag), auf die Millisekunde, ueber den `millis()`-Ueberlauf und die Naht nach 2^31 ms samt Gegenbeispiel (bindet `src/telnetlog.h` direkt ein) | nein |
+| `serielle_strecke_test.cpp` | Gesundheit der seriellen Strecke: Zaehler ok/err/timeout (ein Fehlerzyklus zaehlt einmal), Alter des letzten gueltigen Telegramms, Schwelle 30 s, ueber den `millis()`-Ueberlauf und die Faltung (2^30 ms) bis 40 Tage samt Gegenbeispiel der vorzeichenbehafteten Frist (bindet `src/serielle_strecke.h` direkt ein) | nein |
+| `setpayload_test.cpp` | Ganzzahlregel der Set-Befehle (`33.5`, `1e1`, `" 33"`, `"+33"`, `0x1A`, Ueberlauf) und Buchfuehrung ueber abgelehnte Befehle: Zaehler, letzter Befehl auf 64 Zeichen, Fremdtext, Mindestabstand des Veroeffentlichens (bindet `src/setpayload.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |

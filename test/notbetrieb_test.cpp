@@ -55,6 +55,26 @@ static void pruefe(bool bedingung, const char *was)
     fehler++;
 }
 
+/*****************************************************************************/
+/* Die Faelle bis 3.24.0 pruefen Zeit- und Ablaufregeln bei LEBENDER Strecke  */
+/*                                                                           */
+/* Seit 3.25.0 bekommt notbetrieb_tick() den Zaehler gueltiger Telegramme     */
+/* und laesst einen SET-Schritt nur bestaetigen, wenn er seit dem Absetzen    */
+/* gewachsen ist. Dieser Huellaufruf zaehlt bei JEDEM Tick einen hoch: So     */
+/* steht jeder Aufruf fuer eine Leserunde mit frischem Telegramm, und die     */
+/* alten Faelle behalten ihre Bedeutung unveraendert. Die Faelle fuer die     */
+/* stehende Strecke (test_serielle_strecke) rufen notbetrieb_tick() selbst.   */
+/*****************************************************************************/
+static uint32_t telegrammZaehler = 0;
+
+static NotbetriebAktion tick_lebt(NotbetriebLauf *lauf, NotbetriebRolle rolle,
+                                  uint32_t jetzt, bool schritt_bestaetigt,
+                                  const char *heiz_kuehl_text)
+{
+  telegrammZaehler++;
+  return notbetrieb_tick(lauf, rolle, jetzt, schritt_bestaetigt, telegrammZaehler, heiz_kuehl_text);
+}
+
 static void pruefe_zahl(int ist, int soll, const char *was)
 {
   bool ok = (ist == soll);
@@ -479,7 +499,7 @@ static uint8_t lauf_durchspielen(NotbetriebRolle rolle, uint32_t start,
   for (unsigned runde = 0; runde < 10000; runde++)
   {
     bool bestaetigt = (seit_schritt >= antwortzeit);
-    NotbetriebAktion a = notbetrieb_tick(&lauf, rolle, jetzt, bestaetigt, richtung);
+    NotbetriebAktion a = tick_lebt(&lauf, rolle, jetzt, bestaetigt, richtung);
     if (a == NOTBETRIEB_SENDEN)
       seit_schritt = 0;
     if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH || a == NOTBETRIEB_ABBRUCH_KUEHLEN)
@@ -502,7 +522,7 @@ static uint8_t lauf_durchspielen(NotbetriebRolle rolle, uint32_t start,
 static void lauf_anstossen(NotbetriebLauf *lauf, NotbetriebRolle rolle, uint32_t jetzt)
 {
   (void)notbetrieb_start(lauf, jetzt);
-  (void)notbetrieb_tick(lauf, rolle, jetzt, false, "0");
+  (void)tick_lebt(lauf, rolle, jetzt, false, "0");
 }
 
 static void test_automat()
@@ -525,24 +545,24 @@ static void test_automat()
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler unveraendert");
 
   // Der erste Tick setzt Schritt 1 ab und startet dessen Uhr
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000, false, "0"), NOTBETRIEB_SENDEN,
+  pruefe_zahl(tick_lebt(&lauf, NOTBETRIEB_HEIZEN, 1000, false, "0"), NOTBETRIEB_SENDEN,
               "der erste Tick setzt Schritt 1 ab");
   pruefe_zahl(lauf.schritt_gesendet, 1, "und merkt sich das");
   pruefe_zahl((int)lauf.schritt_start, 1000, "die Schrittuhr laeuft ab dem Absetzen");
 
   // Warten ohne Rueckmeldung: nichts passiert, solange das Timeout laeuft
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 5000, false, "0"), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(&lauf, NOTBETRIEB_HEIZEN, 5000, false, "0"), NOTBETRIEB_TU_NICHTS,
               "ohne Rueckmeldung wird gewartet");
   pruefe_zahl(lauf.zustand, NOTBETRIEB_LAEUFT, "immer noch LAEUFT");
 
   // Eine Rueckmeldung VOR der Mindestwarte zaehlt noch nicht - sie koennte vom
   // Zustand vor dem Kommando stammen
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, 1000 + 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(&lauf, NOTBETRIEB_HEIZEN, 1000 + 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Rueckmeldung nach 5 s zaehlt noch nicht");
   pruefe_zahl(lauf.schritt, 0, "Schrittzaehler bleibt auf 0");
 
   // nach der Mindestwarte zaehlt sie
-  pruefe_zahl(notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN,
+  pruefe_zahl(tick_lebt(&lauf, NOTBETRIEB_HEIZEN,
                               1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "0"),
               NOTBETRIEB_SENDEN, "Rueckmeldung nach der Mindestwarte stoesst den naechsten Schritt an");
   pruefe_zahl(lauf.schritt, 1, "Schrittzaehler auf 1");
@@ -574,7 +594,7 @@ static void test_automat()
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
+    a = tick_lebt(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "ohne Rueckmeldung wird es ROT");
   pruefe_zahl((int)(t - 1000), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -594,15 +614,15 @@ static void test_automat()
   NotbetriebLauf mitte;
   notbetrieb_lauf_leeren(&mitte);
   lauf_anstossen(&mitte, NOTBETRIEB_HEIZEN, 1000);
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 10000, true, "0"); // Schritt 1 ok
-  (void)notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, 19000, true, "0"); // Schritt 2 ok
+  (void)tick_lebt(&mitte, NOTBETRIEB_HEIZEN, 10000, true, "0"); // Schritt 1 ok
+  (void)tick_lebt(&mitte, NOTBETRIEB_HEIZEN, 19000, true, "0"); // Schritt 2 ok
   pruefe_zahl(mitte.schritt, 2, "steht bei Schritt 3");
   a = NOTBETRIEB_TU_NICHTS;
   t = 19000;
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&mitte, NOTBETRIEB_HEIZEN, t, false, "0");
+    a = tick_lebt(&mitte, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(mitte.zustand, NOTBETRIEB_ROT, "Abbruch mitten in der Folge wird ROT");
   pruefe_zahl(mitte.schritt, 2, "der Zaehler bleibt stehen, es wird nicht weitergemacht");
@@ -614,7 +634,7 @@ static void test_automat()
   NotbetriebLauf knapp;
   notbetrieb_lauf_leeren(&knapp);
   lauf_anstossen(&knapp, NOTBETRIEB_HEIZEN, 1000);
-  pruefe_zahl(notbetrieb_tick(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true, "0"),
+  pruefe_zahl(tick_lebt(&knapp, NOTBETRIEB_HEIZEN, 1000 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true, "0"),
               NOTBETRIEB_SENDEN, "Rueckmeldung im Timeout-Moment zaehlt noch");
   // (liegt hinter der Mindestwarte, sonst waere sie gar nicht gezaehlt worden)
   pruefe_zahl(knapp.zustand, NOTBETRIEB_LAEUFT, "kein ROT im selben Tick");
@@ -623,11 +643,11 @@ static void test_automat()
   NotbetriebLauf fertig;
   notbetrieb_lauf_leeren(&fertig);
   fertig.zustand = NOTBETRIEB_GRUEN;
-  pruefe_zahl(notbetrieb_tick(&fertig, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(&fertig, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Tick auf GRUEN tut nichts");
 
   // Nullzeiger duerfen nicht abstuerzen
-  pruefe_zahl(notbetrieb_tick(0, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(0, NOTBETRIEB_HEIZEN, 5000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "Tick mit Nullzeiger abgefangen");
   pruefe_zahl(notbetrieb_start(0, 5000), NOTBETRIEB_TU_NICHTS, "Start mit Nullzeiger abgefangen");
 
@@ -705,7 +725,7 @@ static void test_ueberlauf()
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
+    a = tick_lebt(&tot, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "Timeout greift auch ueber den Ueberlauf");
   pruefe_zahl((int)(uint32_t)(t - kurz_vor_ende), (int)NOTBETRIEB_SCHRITT_TIMEOUT_MS,
@@ -827,7 +847,7 @@ static void test_freigabe()
 
   // Die eine Freigabe
   pruefe(notbetrieb_heizbetrieb_belegt("0"), "TOP101 = 0 (Heizen) gibt frei");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "0"), NOTBETRIEB_FREI,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "0", true), NOTBETRIEB_FREI,
               "und damit ist der Knopf frei");
 
   // Alle vier Sperrfaelle
@@ -840,9 +860,9 @@ static void test_freigabe()
   // actual_data traegt die Zahl, die Klartexte entstehen erst beim Anzeigen
   pruefe(!notbetrieb_heizbetrieb_belegt("Heat"), "\"Heat\" als Text gibt NICHT frei");
 
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "1"), NOTBETRIEB_SPERRE_HEIZBETRIEB,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "1", true), NOTBETRIEB_SPERRE_HEIZBETRIEB,
               "Kuehlbetrieb sperrt den Knopf");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, ""), NOTBETRIEB_SPERRE_HEIZBETRIEB,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "", true), NOTBETRIEB_SPERRE_HEIZBETRIEB,
               "keine Rueckmeldung sperrt den Knopf");
 
   // Warmwasser ist NICHT betroffen: OperationMode 3 traegt auch im
@@ -850,20 +870,20 @@ static void test_freigabe()
   NotbetriebSpeicher wasser;
   notbetrieb_speicher_leeren(&wasser);
   pruefe(annehmen(&wasser, NOTBETRIEB_WASSER, "DHWTemp", 48), "DHWTemp gesetzt");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "1"), NOTBETRIEB_FREI,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "1", true), NOTBETRIEB_FREI,
               "Warmwasser bleibt im Kuehlbetrieb frei");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, ""), NOTBETRIEB_FREI,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "", true), NOTBETRIEB_FREI,
               "Warmwasser braucht TOP101 gar nicht");
 
   // Fehlende Werte schlagen durch, auch wenn die Betriebsart stimmt
   NotbetriebSpeicher halb;
   notbetrieb_speicher_leeren(&halb);
   pruefe(annehmen(&halb, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34), "nur ein Wert da");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "0"), NOTBETRIEB_SPERRE_WERTE,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "0", true), NOTBETRIEB_SPERRE_WERTE,
               "fehlende Werte sperren trotz Heizbetrieb");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "1"), NOTBETRIEB_SPERRE_WERTE,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &halb, "1", true), NOTBETRIEB_SPERRE_WERTE,
               "und sie werden zuerst gemeldet, wenn beides fehlt");
-  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, 0, "0"), NOTBETRIEB_SPERRE_WERTE,
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, 0, "0", true), NOTBETRIEB_SPERRE_WERTE,
               "Nullzeiger auf den Speicher sperrt");
 
   /***************************************************************************/
@@ -905,7 +925,7 @@ static void test_freigabe()
     seit_schritt += 1000;
     // ab Schritt 4 meldet die Anlage Kuehlen
     const char *richtung = (um.schritt >= 3) ? "1" : "0";
-    a = notbetrieb_tick(&um, NOTBETRIEB_HEIZEN, t, seit_schritt >= 9000, richtung);
+    a = tick_lebt(&um, NOTBETRIEB_HEIZEN, t, seit_schritt >= 9000, richtung);
     if (a == NOTBETRIEB_SENDEN)
       seit_schritt = 0;
     if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH || a == NOTBETRIEB_ABBRUCH_KUEHLEN)
@@ -949,11 +969,11 @@ static void test_hydraulikschritt()
   lauf_anstossen(&ok, NOTBETRIEB_WASSER, 1000);
   pruefe_zahl(ok.schritt, 0, "der Lauf steht auf dem Hydraulikschritt");
 
-  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER, 1000 + 3000, true, ""), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(&ok, NOTBETRIEB_WASSER, 1000 + 3000, true, ""), NOTBETRIEB_TU_NICHTS,
               "der sofort bestaetigte Switch schaltet nicht sofort weiter");
   pruefe_zahl(ok.schritt, 0, "er steht noch auf Schritt 1");
 
-  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER,
+  pruefe_zahl(tick_lebt(&ok, NOTBETRIEB_WASSER,
                               1000 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, ""),
               NOTBETRIEB_SENDEN, "nach der Mindestwarte geht es zum Heizstabschritt weiter");
   pruefe_zahl(ok.schritt, 1, "Schrittzaehler auf 1");
@@ -971,7 +991,7 @@ static void test_hydraulikschritt()
   for (unsigned i = 0; i < 100 && a != NOTBETRIEB_ABBRUCH; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_WASSER, t, false, "");
+    a = tick_lebt(&tot, NOTBETRIEB_WASSER, t, false, "");
   }
   pruefe_zahl(tot.zustand, NOTBETRIEB_ROT, "ein stummer Switch wird ROT");
   pruefe_zahl(tot.grund, NOTBETRIEB_GRUND_HYDRAULIK, "mit dem Hydraulik-Grund");
@@ -982,7 +1002,7 @@ static void test_hydraulikschritt()
   NotbetriebLauf kuehl;
   notbetrieb_lauf_leeren(&kuehl);
   lauf_anstossen(&kuehl, NOTBETRIEB_HEIZEN, 1000);
-  pruefe_zahl(notbetrieb_tick(&kuehl, NOTBETRIEB_HEIZEN, 2000, false, "1"),
+  pruefe_zahl(tick_lebt(&kuehl, NOTBETRIEB_HEIZEN, 2000, false, "1"),
               NOTBETRIEB_ABBRUCH_KUEHLEN, "Kuehlbetrieb bricht auch im Hydraulikschritt ab");
   pruefe_zahl(kuehl.grund, NOTBETRIEB_GRUND_KUEHLEN, "und meldet den Kuehl-Grund");
 }
@@ -1009,7 +1029,7 @@ static uint32_t bis_zum_vorderhaus(NotbetriebLauf *lauf, uint32_t start, uint32_
   for (unsigned runde = 0; runde < 100 && lauf->schritt < vh && lauf->zustand == NOTBETRIEB_LAEUFT; runde++)
   {
     t += je_schritt;
-    (void)notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t, true, "0");
+    (void)tick_lebt(lauf, NOTBETRIEB_HEIZEN, t, true, "0");
   }
   return t;
 }
@@ -1021,7 +1041,7 @@ static uint32_t ticken_bis_ende(NotbetriebLauf *lauf, uint32_t t, NotbetriebAkti
   for (unsigned i = 0; i < 1000 && a != NOTBETRIEB_ABBRUCH && a != NOTBETRIEB_FERTIG; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t, false, "0");
+    a = tick_lebt(lauf, NOTBETRIEB_HEIZEN, t, false, "0");
   }
   if (a_out)
     *a_out = a;
@@ -1035,7 +1055,7 @@ static bool bleibt_laufend(NotbetriebLauf *lauf, uint32_t t0, uint32_t von, uint
   bool laeuft = true;
   for (uint32_t d = von; d < bis; d += takt)
   {
-    (void)notbetrieb_tick(lauf, NOTBETRIEB_HEIZEN, t0 + d, false, "0");
+    (void)tick_lebt(lauf, NOTBETRIEB_HEIZEN, t0 + d, false, "0");
     if (lauf->zustand != NOTBETRIEB_LAEUFT)
       laeuft = false;
   }
@@ -1073,9 +1093,9 @@ static void test_vorderhausschritt()
   const uint32_t t_ok = bis_zum_vorderhaus(&ok, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
   pruefe_zahl(ok.schritt, (int)vh, "der Lauf steht auf dem Vorderhausschritt");
   pruefe_zahl((int)(t_ok - 1000), 80000, "erreicht nach 80 s - wo bisher GRUEN kam");
-  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_HEIZEN, t_ok + 3000, true, "0"), NOTBETRIEB_TU_NICHTS,
+  pruefe_zahl(tick_lebt(&ok, NOTBETRIEB_HEIZEN, t_ok + 3000, true, "0"), NOTBETRIEB_TU_NICHTS,
               "sofort bestaetigt, aber vor der Mindestwarte: noch nicht fertig");
-  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_HEIZEN, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "0"),
+  pruefe_zahl(tick_lebt(&ok, NOTBETRIEB_HEIZEN, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "0"),
               NOTBETRIEB_FERTIG, "nach der Mindestwarte GRUEN");
   pruefe_zahl((int)(ok.ende - 1000), 88000, "der ganze Lauf dauert 88 s");
 
@@ -1085,7 +1105,7 @@ static void test_vorderhausschritt()
   const uint32_t t_rf = bis_zum_vorderhaus(&rf, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
   pruefe(bleibt_laufend(&rf, t_rf, 10000, 230000, 10000),
          "Rueckfall: nach 20 s, 100 s und 220 s weiter LAEUFT, kein ROT");
-  pruefe_zahl(notbetrieb_tick(&rf, NOTBETRIEB_HEIZEN, t_rf + 230000, true, "0"), NOTBETRIEB_FERTIG,
+  pruefe_zahl(tick_lebt(&rf, NOTBETRIEB_HEIZEN, t_rf + 230000, true, "0"), NOTBETRIEB_FERTIG,
               "Endstellung nach 230 s bestaetigt -> GRUEN");
 
   // KEINE ENDSTELLUNG: ROT genau nach 240 s, mit dem Vorderhaus-Grund
@@ -1105,7 +1125,7 @@ static void test_vorderhausschritt()
   pruefe_zahl(lang.schritt, (int)vh, "auch mit 19 s je Schritt erreicht");
   pruefe(bleibt_laufend(&lang, t_lang, 1000, 235000, 1000),
          "190 s Vorlauf plus 234 s Rueckfall: der Gesamtdeckel greift nicht");
-  pruefe_zahl(notbetrieb_tick(&lang, NOTBETRIEB_HEIZEN, t_lang + 235000, true, "0"), NOTBETRIEB_FERTIG,
+  pruefe_zahl(tick_lebt(&lang, NOTBETRIEB_HEIZEN, t_lang + 235000, true, "0"), NOTBETRIEB_FERTIG,
               "und die Endstellung nach 235 s macht ihn GRUEN");
 
   // AM RAND: Jeder der ersten zehn Schritte braucht die vollen 20 s, das
@@ -1122,7 +1142,7 @@ static void test_vorderhausschritt()
   // KUEHLEN mitten im Vorderhausschritt: Der Kuehl-Grund geht vor
   NotbetriebLauf kuehl;
   const uint32_t t_k = bis_zum_vorderhaus(&kuehl, 1000, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
-  pruefe_zahl(notbetrieb_tick(&kuehl, NOTBETRIEB_HEIZEN, t_k + 5000, false, "1"), NOTBETRIEB_ABBRUCH_KUEHLEN,
+  pruefe_zahl(tick_lebt(&kuehl, NOTBETRIEB_HEIZEN, t_k + 5000, false, "1"), NOTBETRIEB_ABBRUCH_KUEHLEN,
               "Kuehlbetrieb bricht auch im Vorderhausschritt ab");
   pruefe_zahl(kuehl.grund, NOTBETRIEB_GRUND_KUEHLEN, "mit dem Kuehl-Grund, nicht dem des Vorderhauses");
 
@@ -1133,7 +1153,7 @@ static void test_vorderhausschritt()
   const uint32_t t_u = bis_zum_vorderhaus(&ueber, vor_naht, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
   pruefe(bleibt_laufend(&ueber, t_u, 10000, 200000, 10000),
          "Ueberlauf: der Rueckfall laeuft ueber die Naht weiter");
-  pruefe_zahl(notbetrieb_tick(&ueber, NOTBETRIEB_HEIZEN, t_u + 200000, true, "0"), NOTBETRIEB_FERTIG,
+  pruefe_zahl(tick_lebt(&ueber, NOTBETRIEB_HEIZEN, t_u + 200000, true, "0"), NOTBETRIEB_FERTIG,
               "und wird hinter der Naht GRUEN");
   NotbetriebLauf ueber_tot;
   const uint32_t t_ut = bis_zum_vorderhaus(&ueber_tot, vor_naht, NOTBETRIEB_SCHRITT_MINDESTWARTE_MS);
@@ -1165,7 +1185,7 @@ static uint32_t wasser_bis_zum_vorderhaus(NotbetriebLauf *lauf, uint32_t start)
   for (unsigned runde = 0; runde < 100 && lauf->schritt < vw && lauf->zustand == NOTBETRIEB_LAEUFT; runde++)
   {
     t += NOTBETRIEB_SCHRITT_MINDESTWARTE_MS;
-    (void)notbetrieb_tick(lauf, NOTBETRIEB_WASSER, t, true, "0");
+    (void)tick_lebt(lauf, NOTBETRIEB_WASSER, t, true, "0");
   }
   return t;
 }
@@ -1190,7 +1210,7 @@ static void test_vorderhaus_beide_rollen()
   const uint32_t t_ok = wasser_bis_zum_vorderhaus(&ok, 1000);
   pruefe_zahl(ok.schritt, (int)vw, "Wasser erreicht das Vorderhaus");
   pruefe_zahl((int)(t_ok - 1000), 48000, "nach 48 s - wo bis 3.21.0 GRUEN kam");
-  pruefe_zahl(notbetrieb_tick(&ok, NOTBETRIEB_WASSER, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "1"),
+  pruefe_zahl(tick_lebt(&ok, NOTBETRIEB_WASSER, t_ok + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, "1"),
               NOTBETRIEB_FERTIG, "nach der Mindestwarte GRUEN, auch bei gemeldetem Kuehlen");
   pruefe_zahl((int)(ok.ende - 1000), 56000, "der ganze Warmwasser-Lauf dauert 56 s");
 
@@ -1202,12 +1222,12 @@ static void test_vorderhaus_beide_rollen()
   bool laeuft = true;
   for (uint32_t d = 10000; d < 230000; d += 10000)
   {
-    (void)notbetrieb_tick(&rf, NOTBETRIEB_WASSER, t_rf + d, false, "1");
+    (void)tick_lebt(&rf, NOTBETRIEB_WASSER, t_rf + d, false, "1");
     if (rf.zustand != NOTBETRIEB_LAEUFT)
       laeuft = false;
   }
   pruefe(laeuft, "Rueckfall an Stufe 2 laeuft auch bei gemeldetem Kuehlen weiter");
-  pruefe_zahl(notbetrieb_tick(&rf, NOTBETRIEB_WASSER, t_rf + 230000, true, "1"), NOTBETRIEB_FERTIG,
+  pruefe_zahl(tick_lebt(&rf, NOTBETRIEB_WASSER, t_rf + 230000, true, "1"), NOTBETRIEB_FERTIG,
               "und wird mit der Endstellung nach 230 s GRUEN");
 
   // KEINE ENDSTELLUNG an Stufe 2: ROT genau nach 240 s mit dem
@@ -1219,7 +1239,7 @@ static void test_vorderhaus_beide_rollen()
   for (unsigned i = 0; i < 1000 && a != NOTBETRIEB_ABBRUCH && a != NOTBETRIEB_FERTIG; i++)
   {
     t += 1000;
-    a = notbetrieb_tick(&tot, NOTBETRIEB_WASSER, t, false, "0");
+    a = tick_lebt(&tot, NOTBETRIEB_WASSER, t, false, "0");
   }
   pruefe_zahl(a, NOTBETRIEB_ABBRUCH, "ohne Endstellung wird es auch an Stufe 2 ROT");
   pruefe_zahl((int)(t - t_tot), 240000, "genau nach 240 s");
@@ -1321,7 +1341,7 @@ static void test_kurvenplausibilitaet()
          "VL kalt 26 unter VL warm 34 wird gemeldet");
 
   // ... und sie bleibt trotzdem startbar: warnen ist nicht sperren
-  pruefe(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &v, "0") == NOTBETRIEB_FREI,
+  pruefe(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &v, "0", true) == NOTBETRIEB_FREI,
          "die verdrehte Kurve sperrt den Knopf NICHT");
 
   // flache Kurve: zulaessige Vorgabe, keine Warnung (so faehrt die Kuehlseite)
@@ -1380,6 +1400,172 @@ static void test_kurvenplausibilitaet()
          "Warmwasser meldet nie eine Kurvenwarnung");
 }
 
+/*****************************************************************************/
+/* 16. Serielle Strecke (3.25.0, S4)                                         */
+/*                                                                           */
+/* Reisst die Strecke zur Waermepumpe ab, bleiben actual_data[] und damit     */
+/* jeder Ruecklesewert auf dem letzten Stand. Entsprach der Sollwert dem      */
+/* letzten Stand, wurde der Schritt bis 3.24.0 OHNE Antwort der Waermepumpe   */
+/* abgehakt. Jetzt braucht ein SET-Schritt ein gueltiges Telegramm seit dem   */
+/* Absetzen, und eine stumme Strecke sperrt den Knopf.                        */
+/*****************************************************************************/
+
+// Index des ersten Schritts eines Typs; -1, wenn es keinen gibt
+static int erster_schritt(NotbetriebRolle rolle, NotbetriebSchrittTyp typ)
+{
+  for (unsigned i = 0; i < notbetrieb_schritt_anzahl(rolle); i++)
+  {
+    const NotbetriebSchritt *s = notbetrieb_schritt(rolle, i);
+    if (s && s->typ == typ)
+      return (int)i;
+  }
+  return -1;
+}
+
+// Lauf, der auf Schritt 'index' steht und diesen schon abgesetzt hat. Der
+// Zaehler gueltiger Telegramme steht beim Absetzen auf 'zaehler'.
+static void lauf_auf_schritt(NotbetriebLauf *lauf, NotbetriebRolle rolle, unsigned index,
+                             uint32_t t0, uint32_t zaehler)
+{
+  notbetrieb_lauf_leeren(lauf);
+  (void)notbetrieb_start(lauf, t0);
+  lauf->schritt = (uint8_t)index;
+  lauf->schritt_gesendet = 0;
+  (void)notbetrieb_tick(lauf, rolle, t0, false, zaehler, "0"); // setzt den Schritt ab
+}
+
+static void test_serielle_strecke()
+{
+  printf("\n== Serielle Strecke (3.25.0) ==\n");
+
+  NotbetriebSpeicher voll;
+  notbetrieb_speicher_leeren(&voll);
+  annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetHighTemp", 34);
+  annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveTargetLowTemp", 26);
+  annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideLowTemp", -10);
+  annehmen(&voll, NOTBETRIEB_HEIZEN, "Z1HeatCurveOutsideHighTemp", 15);
+  NotbetriebSpeicher wasser;
+  notbetrieb_speicher_leeren(&wasser);
+  annehmen(&wasser, NOTBETRIEB_WASSER, "DHWTemp", 48);
+  NotbetriebSpeicher leer;
+  notbetrieb_speicher_leeren(&leer);
+
+  // --- Sperrgrund -----------------------------------------------------------
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "0", false), NOTBETRIEB_SPERRE_WP,
+              "Heizen: stumme Strecke sperrt (Wert 3)");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "", false), NOTBETRIEB_SPERRE_WP,
+              "Wasser (H2): stumme Strecke sperrt ebenso - Rollen gleich behandelt");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "0", true), NOTBETRIEB_FREI,
+              "Gegenprobe: lebende Strecke, Heizen, alles da -> frei");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_WASSER, &wasser, "", true), NOTBETRIEB_FREI,
+              "Gegenprobe: lebende Strecke, Wasser -> frei");
+
+  // Reihenfolge: Werte, dann WP, dann Heizbetrieb (Owner 2026-10-17)
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &leer, "0", false), NOTBETRIEB_SPERRE_WERTE,
+              "fehlende Werte gehen der WP-Sperre vor");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "1", false), NOTBETRIEB_SPERRE_WP,
+              "WP-Sperre geht dem Heizbetrieb vor (TOP101 ist dann nur der eingefrorene Wert)");
+  pruefe_zahl(notbetrieb_sperrgrund(NOTBETRIEB_HEIZEN, &voll, "1", true), NOTBETRIEB_SPERRE_HEIZBETRIEB,
+              "mit lebender Strecke bleibt der Heizbetrieb eine eigene Sperre");
+  pruefe_zahl(NOTBETRIEB_SPERRE_WP, 3, "der Wert der WP-Sperre ist 3 (Feld 4 der Statusroute, JS: sp==3)");
+
+  // --- Bestaetigungsregel ----------------------------------------------------
+  const int set_idx = erster_schritt(NOTBETRIEB_HEIZEN, NB_SCHRITT_SET);
+  pruefe(set_idx >= 0, "die Heizen-Folge hat einen SET-Schritt");
+  NotbetriebLauf l;
+
+  // Kernfall der Gegenprobe: eingefrorene Werte. Der Sollwert entspricht dem
+  // letzten Stand (schritt_bestaetigt = true), aber seit dem Absetzen kam kein
+  // Telegramm.
+  const uint32_t t0 = 50000;
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 7);
+  pruefe_zahl(l.telegramme_bei_absetzen, 7, "beim Absetzen wird der Zaehler gemerkt");
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, 7, "0"),
+              NOTBETRIEB_TU_NICHTS, "NEU: eingefroren (kein Telegramm seit dem Absetzen) -> nicht bestaetigt");
+  pruefe_zahl(l.schritt, set_idx, "der Schritt bleibt stehen");
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + NOTBETRIEB_SCHRITT_TIMEOUT_MS, true, 7, "0"),
+              NOTBETRIEB_ABBRUCH, "eingefroren bis zum Schritt-Timeout -> ROT, nicht GRUEN");
+  pruefe_zahl(l.zustand, NOTBETRIEB_ROT, "Zustand ROT");
+
+  // ALTE REGEL (Gegenprobe): derselbe Fall mit mitlaufendem Zaehler, wie ihn
+  // die Faelle bis 3.24.0 unbewusst vorgaukelten, bestaetigt - und genau das
+  // war der Fehler an der stehenden Strecke.
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 7);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, 8, "0"),
+              NOTBETRIEB_SENDEN, "ein Telegramm seit dem Absetzen -> bestaetigt, naechster Schritt");
+
+  // ein Telegramm VOR dem Absetzen zaehlt nicht: es steckt schon im gemerkten Zaehler
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 100);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + 9000, true, 100, "0"), NOTBETRIEB_TU_NICHTS,
+              "Telegramm vor dem Absetzen (Zaehler 100 beim Absetzen) bestaetigt nicht");
+
+  // Mindestwarte gilt weiterhin: ein frisches Telegramm allein reicht nicht
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 7);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + 3000, true, 8, "0"), NOTBETRIEB_TU_NICHTS,
+              "frisches Telegramm nach 3 s: die Mindestwarte gilt trotzdem");
+
+  // ohne Rueckmeldung bestaetigt auch ein frisches Telegramm nichts
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 7);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + 9000, false, 8, "0"), NOTBETRIEB_TU_NICHTS,
+              "frisches Telegramm, aber Sollwert nicht zurueckgelesen -> nicht bestaetigt");
+
+  // Zaehlerueberlauf: die Regel vergleicht auf Ungleichheit, nicht auf "groesser"
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)set_idx, t0, 0xFFFFFFFFu);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + 9000, true, 0u, "0"), NOTBETRIEB_SENDEN,
+              "Zaehler laeuft von 0xFFFFFFFF auf 0 -> zaehlt als neues Telegramm");
+
+  // Hydraulik und Vorderhaus bestaetigen nicht ueber Telegramme
+  const int hyd_idx = erster_schritt(NOTBETRIEB_HEIZEN, NB_SCHRITT_HYDRAULIK);
+  pruefe(hyd_idx >= 0, "die Heizen-Folge hat einen Hydraulikschritt");
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)hyd_idx, t0, 7);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, 7, "0"),
+              NOTBETRIEB_SENDEN, "Hydraulik: bestaetigt auch ohne neues Telegramm");
+  const int vh_idx = erster_schritt(NOTBETRIEB_HEIZEN, NB_SCHRITT_VORDERHAUS);
+  pruefe(vh_idx >= 0, "die Heizen-Folge hat einen Vorderhausschritt");
+  lauf_auf_schritt(&l, NOTBETRIEB_HEIZEN, (unsigned)vh_idx, t0, 7);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_HEIZEN, t0 + NOTBETRIEB_SCHRITT_MINDESTWARTE_MS, true, 7, "0"),
+              NOTBETRIEB_FERTIG, "Vorderhaus: bestaetigt auch ohne neues Telegramm (letzter Schritt -> FERTIG)");
+
+  // Warmwasser (H2) verhaelt sich gleich
+  const int w_set = erster_schritt(NOTBETRIEB_WASSER, NB_SCHRITT_SET);
+  pruefe(w_set >= 0, "die Wasser-Folge hat einen SET-Schritt");
+  lauf_auf_schritt(&l, NOTBETRIEB_WASSER, (unsigned)w_set, t0, 3);
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_WASSER, t0 + 9000, true, 3, ""), NOTBETRIEB_TU_NICHTS,
+              "Wasser: eingefroren -> nicht bestaetigt");
+  pruefe_zahl(notbetrieb_tick(&l, NOTBETRIEB_WASSER, t0 + 9000, true, 4, ""), NOTBETRIEB_SENDEN,
+              "Wasser: mit Telegramm -> bestaetigt");
+
+  // --- Laufzeit bleibt (Owner-Entscheid A, 2026-10-17) ----------------------
+  // Telegramme alle 6 s, WP antwortet sofort. Die Regel "seit dem Absetzen"
+  // darf die Laufzeit nicht verlaengern: 11 Schritte zu 8 s = 88 s. Gaelte
+  // stattdessen "nach der Mindestwarte", brauchte jeder Schritt bis zum
+  // naechsten Telegramm nach den 8 s, also bis 12 s.
+  {
+    NotbetriebLauf lauf;
+    notbetrieb_lauf_leeren(&lauf);
+    (void)notbetrieb_start(&lauf, 1000);
+    uint32_t zaehler = 0;
+    uint32_t jetzt = 1000;
+    uint32_t naechstes_telegramm = 1000 + 6000;
+    NotbetriebAktion a = NOTBETRIEB_TU_NICHTS;
+    for (unsigned runde = 0; runde < 100000; runde++)
+    {
+      if ((int32_t)(jetzt - naechstes_telegramm) >= 0)
+      {
+        zaehler++;
+        naechstes_telegramm += 6000;
+      }
+      a = notbetrieb_tick(&lauf, NOTBETRIEB_HEIZEN, jetzt, true, zaehler, "0");
+      if (a == NOTBETRIEB_FERTIG || a == NOTBETRIEB_ABBRUCH)
+        break;
+      jetzt += 100;
+    }
+    pruefe_zahl(a, NOTBETRIEB_FERTIG, "Heizen mit Telegrammen alle 6 s wird GRUEN");
+    printf("       (Laufdauer: %u ms)\n", (unsigned)(jetzt - 1000));
+    pruefe((jetzt - 1000) <= 88000u, "Laufdauer bleibt bei 88 s (Seitentext \"bis zu anderthalb Minuten\" stimmt)");
+  }
+}
+
 int main()
 {
   printf("Hosttest Notbetrieb (src/notbetrieb.h)\n");
@@ -1398,6 +1584,7 @@ int main()
   test_vorderhaus_beide_rollen();
   test_anzeigeverfall();
   test_kurvenplausibilitaet();
+  test_serielle_strecke();
 
   printf("\n%s (%d Fehler)\n", fehler == 0 ? "ALLE PRUEFUNGEN BESTANDEN" : "FEHLGESCHLAGEN", fehler);
   return fehler == 0 ? 0 : 1;

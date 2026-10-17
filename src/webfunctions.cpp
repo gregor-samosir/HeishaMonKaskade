@@ -780,6 +780,18 @@ void handleSettings(WebServerClass *httpServer, char *wifi_hostname, char *ota_p
 #define NB_TXT_PLAN_B "Bitte nach der ausgedruckten Anleitung am Bedienfeld der Wärmepumpe weitermachen."
 
 /*****************************************************************************/
+/* Sperrhinweis "Keine Verbindung zur Waermepumpe" (seit 3.25.0, S4)         */
+/*                                                                           */
+/* Wortlaut vom Owner vorgegeben (2026-10-16), Ueberschrift und Absatz. Der   */
+/* letzte Satz ist NB_TXT_PLAN_B. Bewusst ohne Hinweis auf Stecker oder       */
+/* Ersatz-Board: Wer die Seite im Ernstfall liest, soll nichts aufmachen,     */
+/* sondern am Bedienfeld weitermachen. Gleicher Text an beiden Stufen und in   */
+/* beiden Rollen (H1 = Heizen, H2 = Warmwasser).                              */
+/*****************************************************************************/
+#define NB_TXT_WP_TITEL "Keine Verbindung zur Wärmepumpe"
+#define NB_TXT_WP_KEINE_VERBINDUNG "Die Steuerung bekommt von der Wärmepumpe keine Antwort mehr und kann deshalb nicht umschalten. Die Wärmepumpe läuft mit den zuletzt gesetzten Werten weiter. " NB_TXT_PLAN_B
+
+/*****************************************************************************/
 /* Die Meldung, wenn die Hydraulik nicht umschaltet (3.15.0)                 */
 /*                                                                           */
 /* Sie tritt an die Stelle des generischen "Hat nicht geklappt" - und zwar    */
@@ -862,6 +874,9 @@ static const char notbetriebJS[] PROGMEM =
     "var nbGruen='<h3>GRÜN</h3><p>Der Notbetrieb ist aktiviert.</p><p>Die Temperatur lässt sich am Display im Waschraum in kleinen Schritten einstellen.</p><p>Sobald die Steuerung wieder aktiv ist, kehrt die Wärmepumpe in den Normalbetrieb zurück.</p>';"
     "function nbFehlt(m){var l='';for(var i=0;i<nbNamen.length;i++){if(m&(1<<i))l+='<li>'+nbNamen[i]+'</li>';}return l;}"
     "function nbSperrtext(sp,m){"
+    // 3 = keine Verbindung zur Waermepumpe (3.25.0), VOR dem Rueckfall auf
+    // "Nicht bereit": Der Rueckfall nennt fehlende Werte und waere hier falsch.
+    "if(sp==3)return '<h3>" NB_TXT_WP_TITEL "</h3><p>" NB_TXT_WP_KEINE_VERBINDUNG "</p>';"
     "if(sp==2)return '<h3>" NB_TXT_NUR_HEIZEN "</h3><p>" NB_TXT_HEIZEN_HINWEIS "</p>';"
     "return '<h3>Nicht bereit</h3><p>" NB_TXT_WERTE_FEHLEN "</p><p>Fehlt:</p><ul>'+nbFehlt(m)+'</ul><p>" NB_TXT_PLAN_B "</p>';}"
     "function nbState(){fetch('/notbetrieb/status').then(r=>r.text()).then(t=>{"
@@ -1018,7 +1033,14 @@ void handleNotbetrieb(WebServerClass *httpServer)
   // koennen - auch in der Sekunde vor der ersten Statusabfrage.
   httptext += "<div id='nbsperre' class='w3-panel w3-orange'";
   httptext += (sperre == NOTBETRIEB_FREI) ? " style='display:none'>" : ">";
-  if (sperre == NOTBETRIEB_SPERRE_HEIZBETRIEB)
+  if (sperre == NOTBETRIEB_SPERRE_WP)
+  {
+    // Keine gueltigen Telegramme der Waermepumpe seit 30 s (3.25.0). Der Knopf
+    // gibt sich von selbst frei, sobald wieder Antworten kommen - die
+    // Statusabfrage alle zwei Sekunden holt das nach.
+    httptext += "<h3>" NB_TXT_WP_TITEL "</h3><p>" NB_TXT_WP_KEINE_VERBINDUNG "</p>";
+  }
+  else if (sperre == NOTBETRIEB_SPERRE_HEIZBETRIEB)
   {
     // Der externe KNX-Schalter gibt die Richtung vor. Steht er auf Kuehlen,
     // verwirft die Waermepumpe jeden Heizmodus stillschweigend - der Lauf

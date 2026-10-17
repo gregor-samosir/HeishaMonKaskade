@@ -666,24 +666,34 @@ inline bool notbetrieb_kuehlbetrieb_gemeldet(NotbetriebRolle rolle, const char *
 /* der POST-Handler lesen dieselbe Antwort. Ohne das koennte die Seite einen  */
 /* Knopf zeigen, den der Handler ablehnt, oder umgekehrt.                     */
 /*                                                                           */
-/* Reihenfolge: Fehlende Werte zuerst. Beides sind Sackgassen, aber die       */
-/* fehlenden Werte sind der tiefer liegende Mangel - wer sie behebt, steht    */
-/* danach immer noch vor der Betriebsart, waehrend umgekehrt der Umweg ueber  */
-/* den KNX-Schalter vergeblich waere.                                         */
+/* Reihenfolge: Fehlende Werte zuerst, dann die Verbindung zur Waermepumpe,   */
+/* dann die Betriebsart. Alle drei sind Sackgassen, aber der tiefer liegende  */
+/* Mangel kommt vor: Wer die fehlenden Werte behebt, steht danach immer noch  */
+/* vor der Betriebsart, waehrend umgekehrt der Umweg ueber den KNX-Schalter   */
+/* vergeblich waere. Die Verbindung steht vor der Betriebsart, weil TOP101    */
+/* ohne Telegramme nur der letzte, eingefrorene Wert ist.                     */
 /*****************************************************************************/
 enum NotbetriebSperre
 {
     NOTBETRIEB_FREI = 0,             // der Knopf darf gedrueckt werden
     NOTBETRIEB_SPERRE_WERTE = 1,     // es fehlen gehaltene Werte
-    NOTBETRIEB_SPERRE_HEIZBETRIEB = 2 // die Anlage steht nicht auf Heizen
+    NOTBETRIEB_SPERRE_HEIZBETRIEB = 2, // die Anlage steht nicht auf Heizen
+    NOTBETRIEB_SPERRE_WP = 3          // keine gueltigen Telegramme der WP (seit 3.25.0)
 };
 
 inline NotbetriebSperre notbetrieb_sperrgrund(NotbetriebRolle rolle,
                                               const NotbetriebSpeicher *sp,
-                                              const char *heiz_kuehl_text)
+                                              const char *heiz_kuehl_text,
+                                              bool wp_verbunden)
 {
     if (!notbetrieb_vollstaendig(sp, rolle))
         return NOTBETRIEB_SPERRE_WERTE;
+    // Zwischen Werten und Heizbetrieb (Owner 2026-10-17): Ohne Telegramme ist
+    // TOP101 ein eingefrorener Wert, ueber den die Heizbetriebspruefung
+    // darunter nichts mehr aussagen kann. Die Rolle Wasser ist ebenso
+    // betroffen - die Verbindung zur WP braucht jeder Lauf, H1 und H2 gleich.
+    if (!wp_verbunden)
+        return NOTBETRIEB_SPERRE_WP;
     if (rolle != NOTBETRIEB_WASSER && !notbetrieb_heizbetrieb_belegt(heiz_kuehl_text))
         return NOTBETRIEB_SPERRE_HEIZBETRIEB;
     return NOTBETRIEB_FREI;
@@ -812,6 +822,10 @@ struct NotbetriebLauf
     uint32_t schritt_start;
     uint32_t lauf_start;
     uint32_t ende; // Zeitpunkt von GRUEN/ROT, fuer den Anzeigeverfall
+    // Zaehler gueltiger Telegramme (SerielleStrecke::ok) im Moment, in dem der
+    // aktuelle Schritt abgesetzt wurde. Ein SET-Schritt gilt erst als
+    // bestaetigt, wenn der Zaehler seither gewachsen ist (3.25.0, S4).
+    uint32_t telegramme_bei_absetzen;
 };
 
 inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
@@ -825,6 +839,7 @@ inline void notbetrieb_lauf_leeren(NotbetriebLauf *lauf)
     lauf->schritt_start = 0;
     lauf->lauf_start = 0;
     lauf->ende = 0;
+    lauf->telegramme_bei_absetzen = 0;
 }
 
 /*****************************************************************************/
@@ -965,9 +980,33 @@ inline NotbetriebAktion notbetrieb_start(NotbetriebLauf *lauf, uint32_t jetzt)
 /*                                                                            */
 /* heiz_kuehl_text ist der Rohtext von TOP101 aus actual_data[]. 0 (Nullzeiger)*/
 /* heisst "keine Aussage" und bricht nichts ab.                               */
+/*                                                                            */
+/* telegramme ist der Zaehler gueltiger Telegramme (SerielleStrecke::ok). Er   */
+/* macht aus "der TOP traegt den Sollwert" erst eine Bestaetigung (3.25.0,     */
+/* S4): Actual_data[] wird nur durch ein gueltiges Telegramm fortgeschrieben.  */
+/* Reisst die Strecke mitten im Lauf ab, bleibt der letzte Wert stehen - und   */
+/* entspricht er dem Sollwert, wurde der Schritt bis dahin OHNE Antwort der    */
+/* Waermepumpe abgehakt (im Warmwasserzweig im unguenstigen Fall alle fuenf    */
+/* WP-Schritte, GRUEN ohne ein angekommenes Kommando). Jetzt muss seit dem     */
+/* Absetzen mindestens ein gueltiges Telegramm eingegangen sein.               */
+/*                                                                            */
+/* "Seit dem Absetzen" und nicht "nach der Mindestwarte" (Owner 2026-10-17):   */
+/* Die Telegramme kommen alle rund 6 s; ein Telegramm NACH den 8 s Mindestwarte */
+/* verlaengerte jeden Schritt auf rund 12 s und den Heizen-Lauf von 88 s auf   */
+/* gut zwei Minuten - der Seitentext "bis zu anderthalb Minuten" stimmte nicht */
+/* mehr. Die Mindestwarte bleibt daneben bestehen: Sie schuetzt vor dem        */
+/* veralteten Rueckgabewert, die Zaehlerregel vor der toten Strecke.           */
+/* Restunschaerfe: Ein Telegramm, das zwischen dem Absetzen und dem Senden im   */
+/* Sammelfenster (bis 500 ms) eintrifft, zaehlt mit. Es belegt nur, dass die   */
+/* Leitung in diesem Moment lebt - fuer den Zweck, eine STEHENDE Strecke zu    */
+/* erkennen, reicht das.                                                       */
+/*                                                                            */
+/* Nur SET-Schritte: Hydraulik (Antwort des Switch) und Vorderhaus (KNX)       */
+/* bestaetigen nicht ueber Telegramme.                                         */
 /*****************************************************************************/
 inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle rolle,
                                         uint32_t jetzt, bool schritt_bestaetigt,
+                                        uint32_t telegramme,
                                         const char *heiz_kuehl_text)
 {
     if (!lauf || lauf->zustand != NOTBETRIEB_LAEUFT)
@@ -991,8 +1030,15 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
     {
         lauf->schritt_gesendet = 1;
         lauf->schritt_start = jetzt;
+        lauf->telegramme_bei_absetzen = telegramme;
         return NOTBETRIEB_SENDEN;
     }
+
+    // Nur ein SET-Schritt braucht ein frisches Telegramm (siehe oben)
+    const NotbetriebSchritt *aktuell = notbetrieb_schritt(rolle, lauf->schritt);
+    if (aktuell && aktuell->typ == NB_SCHRITT_SET &&
+        telegramme == lauf->telegramme_bei_absetzen)
+        schritt_bestaetigt = false;
 
     // Schritt geschafft? Erst nach der Mindestwartezeit - vorher koennte die
     // Rueckmeldung noch vom Zustand VOR dem Kommando stammen (siehe
@@ -1008,6 +1054,7 @@ inline NotbetriebAktion notbetrieb_tick(NotbetriebLauf *lauf, NotbetriebRolle ro
         }
         lauf->schritt_start = jetzt;
         lauf->schritt_gesendet = 1; // dieser Tick erteilt den Auftrag mit
+        lauf->telegramme_bei_absetzen = telegramme;
         return NOTBETRIEB_SENDEN;
     }
 

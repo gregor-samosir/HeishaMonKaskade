@@ -279,10 +279,10 @@ bool build_heatpump_command(char *topic, char *msg)
 {
   char log_line[256];
 
-  // parse and validate the payload as integer
-  char *endptr;
-  long msg_long = strtol(msg, &endptr, 10);
-  if (endptr == msg || *endptr != '\0')
+  // parse and validate the payload as integer. Die Regel steht in
+  // setpayload.h (testbar, Hosttest); sie ist die des bisherigen strtol.
+  int32_t msg_long = 0;
+  if (setpayload_ganzzahl(msg, &msg_long) != SETPAYLOAD_OK)
   {
     // Laengenbegrenzung im Format ist Pflicht, nicht Kosmetik: msg kommt vom
     // Broker und darf bis ~200 Zeichen lang sein. Mit sprintf und ohne %.32s
@@ -292,6 +292,7 @@ bool build_heatpump_command(char *topic, char *msg)
     // zu sehen, was da ankam, und die Meldung passt in ein MQTT-Paket.
     (void)snprintf(log_line, sizeof(log_line), "Error: Invalid integer value '%.32s' received for topic %.64s", msg, topic);
     write_mqtt_log(log_line);
+    setabgelehnt_merken(&setAbgelehnt, topic, msg); // 3.25.0: dauerhaft sichtbar (info/set_abgelehnt)
     return false;
   }
 
@@ -304,6 +305,7 @@ bool build_heatpump_command(char *topic, char *msg)
   {
     (void)snprintf(log_line, sizeof(log_line), "Error: Unknown set topic %.64s", topic);
     write_mqtt_log(log_line);
+    setabgelehnt_merken(&setAbgelehnt, topic, msg);
     return false;
   }
   const char *topic_name = topic + prefixlen + 1;
@@ -320,8 +322,9 @@ bool build_heatpump_command(char *topic, char *msg)
     // range check before touching mainCommand
     if (msg_long < cmd.min || msg_long > cmd.max)
     {
-      (void)snprintf(log_line, sizeof(log_line), "Error: Value %ld out of range [%d..%d] for topic %s", msg_long, cmd.min, cmd.max, cmd.name);
+      (void)snprintf(log_line, sizeof(log_line), "Error: Value %ld out of range [%d..%d] for topic %s", (long)msg_long, cmd.min, cmd.max, cmd.name);
       write_mqtt_log(log_line);
+      setabgelehnt_merken(&setAbgelehnt, topic, msg);
       return false;
     }
 
@@ -364,7 +367,7 @@ bool build_heatpump_command(char *topic, char *msg)
     // at 256, which used to drop whole command telegrams silently
     setDataPending = true;
 
-    (void)snprintf(log_line, sizeof(log_line), "<SUB> SET%d %s: %ld", cmd.number, cmd.name, msg_long);
+    (void)snprintf(log_line, sizeof(log_line), "<SUB> SET%d %s: %ld", cmd.number, cmd.name, (long)msg_long);
     write_mqtt_log(log_line);
     // trigger buffer
     register_new_command();
@@ -374,5 +377,6 @@ bool build_heatpump_command(char *topic, char *msg)
   // no table entry matched
   (void)snprintf(log_line, sizeof(log_line), "Error: Unknown set topic %.64s", topic);
   write_mqtt_log(log_line);
+  setabgelehnt_merken(&setAbgelehnt, topic, msg);
   return false;
 }

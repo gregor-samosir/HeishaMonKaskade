@@ -1089,6 +1089,8 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/sendwindow.h`](src/sendwindow.h) | Zeitregeln des Kommando-Sammelfensters samt Deckel — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/karenz.h`](src/karenz.h) | Karenzfenster nach dem Verbinden (`SUBSCRIBE_GRACE`) als Startzeit plus Merker — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/telnetlog.h`](src/telnetlog.h) | Regeln der Telnet-Ausgabe ohne Warten: wann ein Client, der nicht mehr liest, als tot gilt (15 s ab dem ersten Fehlschlag) — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/serielle_strecke.h`](src/serielle_strecke.h) | Gesundheit der seriellen Strecke zur Wärmepumpe: Zähler gültiger, verworfener und ausgebliebener Telegramme, Alter des letzten gültigen, Schwelle „stumm“ (30 s) — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/setpayload.h`](src/setpayload.h) | Ganzzahlregel der Set-Befehle und Buchführung über abgelehnte (Zähler, letzter Befehl) — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/telnetausgabe.h`](src/telnetausgabe.h), [`src/telnetausgabe.cpp`](src/telnetausgabe.cpp) | Der Telnet-Teil selbst (ersetzt seit 3.24.0 die Bibliothek `TelnetStream`): ein Client, `send(…, MSG_DONTWAIT)`, Verwerfen statt Warten |
 | [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
@@ -1121,9 +1123,11 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Arbeitsplan-AltExternalSensor.md`](Arbeitsplan-AltExternalSensor.md) | Alternativer Außenfühler als SET40/TOP112, TOP66 entfällt — Entscheide und Ablauf bis zum Release; ausgerollt als 3.23.0 |
 | [`Arbeitsplan-Build-Hygiene-3.23.2.md`](Arbeitsplan-Build-Hygiene-3.23.2.md) | Bibliotheken pinnen, Compiler-Warnungen wieder an, tote Zweige und veraltete Kommentare (Paket P2 der Durchsicht 2026-10-15) — in Arbeit |
 | [`Arbeitsplan-Loop-Stillstand-3.24.0.md`](Arbeitsplan-Loop-Stillstand-3.24.0.md) | Telnet-Ausgabe nicht blockierend (S2), Watchdog für `loop()` (S3) — Paket P3 der Durchsicht 2026-10-15 — erledigt, 3.24.0 am 2026-10-16 ausgerollt |
+| [`Arbeitsplan-Serielle-Strecke-3.25.0.md`](Arbeitsplan-Serielle-Strecke-3.25.0.md) | Serielle Strecke überwacht (S4), abgelehnte Set-Befehle sichtbar (S6) — Paket P4 der Durchsicht 2026-10-15 — in Arbeit |
 | [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md) | Karenzfenster nach dem Subscribe überlaufsicher machen (Befund S1 der Durchsicht 2026-10-15) — erledigt, 3.23.1 am 2026-10-15 ausgerollt |
 | [`Auftrag-Befehlswaechter-AltExternalSensor.md`](Auftrag-Befehlswaechter-AltExternalSensor.md) | Auftrag an `nodered-flows`: SET40/TOP112 in den `WP_Befehls_Waechter` aufnehmen — erledigt am 2026-09-19 im Projekt `nodered-flows` |
 | [`Auftrag-Notbetriebssender-Ganzzahl.md`](Auftrag-Notbetriebssender-Ganzzahl.md) | Auftrag an `nodered-flows`: Notbetriebswerte-Sender rundet die Kurvenwerte auf Ganzzahlen, weil die Firmware Dezimalwerte verwirft — erledigt am 2026-10-15 im Projekt `nodered-flows` (V1.1) |
+| [`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md) | Auftrag an `nodered-flows`: Wächter auf `info/telegram_*` und `info/set_abgelehnt*` — offen, erst nach dem Rollout von 3.25.0 |
 | [`Auftrag-Heizstab-Notbetrieb.md`](Auftrag-Heizstab-Notbetrieb.md) | Auftrag aus `nodered-flows`: der Notbetrieb nimmt SET39 zurück — beantwortet, gebaut in 3.18.0 |
 | [`Auftrag-Wartungsschalter-NodeRED.md`](Auftrag-Wartungsschalter-NodeRED.md) | Re-Assert-Sperre bei Wartung — beantwortet am 2026-08-20: die Sperre war nie eingeschaltet |
 | [`Massnahmenplan-Codedurchsicht-2026-08-18.md`](Massnahmenplan-Codedurchsicht-2026-08-18.md) | Erste Codedurchsicht: Befunde mit Entscheid je Punkt, auch für die verworfenen; umgesetzt bis 3.9.0 |
@@ -1255,6 +1259,28 @@ wie viele Zeilen fehlten. Liest ein Client 15 s lang nichts, wird er getrennt.
 Es gibt **eine** Sitzung — ein neuer Client verdrängt den alten. Die Regeln
 stehen in `src/telnetlog.h` und laufen im Hosttest.
 
+**Die serielle Strecke zur Wärmepumpe wird überwacht (seit 3.25.0).** Bis 3.24.0
+wurde `actual_data[]` nur bei einem gültigen Telegramm fortgeschrieben; riss die
+Strecke ab (Kabel, Pegelwandler, WP-Platine), blieben die letzten Werte stehen —
+auf der Webseite, retained beim Broker und als Rücklesequelle des Notbetriebs.
+Jetzt gibt es unter `<präfix>/info/` vier Zahlen: `telegram_ok`, `telegram_err`
+(Bytes kamen, aber kein gültiges Telegramm), `telegram_timeout` (gar nichts kam)
+und `telegram_age` (Sekunden seit dem letzten gültigen Telegramm). Die drei
+Zähler gelten seit dem Start; ein Rückgang heißt Neustart. Zwei Folgen im
+Notbetrieb, beide mit der Verbindung zur Wärmepumpe als Grund:
+
+* **Sperre „Keine Verbindung zur Wärmepumpe“,** wenn 30 s lang kein gültiges
+  Telegramm eingegangen ist — an beiden Stufen und in beiden Rollen mit
+  demselben Text. Sie wirkt nur beim Start; der Knopf gibt sich von selbst frei,
+  sobald wieder Antworten kommen.
+* **Ein Schritt gilt erst als bestätigt, wenn seit seinem Absetzen ein gültiges
+  Telegramm eingegangen ist.** Vorher reichte es, dass der Rückgabewert dem
+  Sollwert entsprach — auch dann, wenn er nur der eingefrorene Stand von vor
+  dem Kommando war. Die Laufzeit (88 s) ändert das nicht.
+
+Die Regeln stehen in `src/serielle_strecke.h` und `src/notbetrieb.h` und laufen
+im Hosttest.
+
 ### Erstflash eines ESP32-Boards, das noch die Original-Firmware trägt
 
 Der erste Flash muss **über USB** laufen: die Original-Firmware bringt eine
@@ -1294,7 +1320,7 @@ zurückliest — und welche zwei Kommandos gar keine Rückmeldung haben —, ste
 ```
 <präfix>/info/LWT                  Online / Offline
 <präfix>/info/log                  Klartext-Log (umschaltbar)
-<präfix>/info/<Wert>               Langzeit-Telemetrie (Neustarts, Heap, Laufzeit)
+<präfix>/info/<Wert>               Langzeit-Telemetrie (Neustarts, Heap, Laufzeit, serielle Strecke, abgelehnte Set-Befehle)
 <präfix>/state/<Topic>             dekodierte Werte, mit Retain-Flag
 <präfix>/set/<Kommando>            Kommandos an die Wärmepumpe
 <präfix>/notbetrieb/<Name>         Notbetriebswerte (nur Eingang, gehen nie von selbst an die WP)
@@ -1328,9 +1354,13 @@ Zwei Hinweise aus der Praxis:
   im Ringpuffer unter `/log` und in `<präfix>/info/log`. Für den Betreiber steht der
   Prüfweg samt der Liste, welche Kanäle überwacht werden, in
   `nodered-flows/doku/referenz/BETRIEB.md` („Set-Werte von Hand im ioBroker
-  eintragen“) — ein anderes Repo, deshalb ohne Link. Eine Zählung abgelehnter
-  Befehle ist als Befund S6 vorgesehen
-  ([Maßnahmenplan](Massnahmenplan-Codedurchsicht-2026-10-15.md)).
+  eintragen“) — ein anderes Repo, deshalb ohne Link. **Seit 3.25.0 ist die
+  Ablehnung dauerhaft sichtbar:** `<präfix>/info/set_abgelehnt` zählt die
+  abgelehnten Befehle seit dem Start, `<präfix>/info/set_abgelehnt_letzter`
+  nennt den letzten (`Name=Wert`, auf 64 Zeichen gekürzt). Ein Zähler, der
+  steigt, ohne dass jemand von Hand etwas eingetragen hat, ist der Hinweis auf
+  einen Sender, der Dezimalwerte schickt (Befund S6, Anlass war der
+  Notbetriebssender bis 2026-10-15).
 * **Ein fehlgeschlagenes State-Publish wird seit 3.8.2 wiederholt.** Bis dahin
   galt ein Wert auch dann als gesendet, wenn `publish()` fehlschlug. Nach einer
   MQTT-Unterbrechung stand beim Broker deshalb bis zu fünf Minuten lang der
