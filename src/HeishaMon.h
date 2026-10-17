@@ -8,6 +8,8 @@
 #include "rtcspiegel.h" // Gueltigkeitsregel des Spiegels im RTC-Speicher
 #include "verbindung.h" // Karenz und Ausfalldauer der Verbindung zur Hausteuerung
 #include "knxtunnel.h"  // KNX-Tunnel und Rueckleseregel A des Vorderhausschritts
+#include "serielle_strecke.h" // Zaehler und Alter der seriellen Strecke zur WP (3.25.0)
+#include "setpayload.h" // Ganzzahlregel der Set-Befehle und Buchfuehrung ueber abgelehnte (3.25.0)
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
 // platform layer: the official HeishaMon ESP32-S3 board. Until 3.15.0 the same
@@ -192,3 +194,14 @@ extern RtcSpiegel rtcSpiegel;
 // nicht am WLAN - der Ausfall, um den es geht, ist der des ioBroker, und
 // der laesst das WLAN unberuehrt.
 extern VerbindungsWacht hausteuerung;
+
+// Gesundheit der seriellen Strecke zur Waermepumpe (serielle_strecke.h).
+// Fortgeschrieben in readSerial() und timeout_serial(), gelesen von den
+// info/-Topics und vom Notbetrieb (Sperrgrund "keine Verbindung zur WP" und
+// Bestaetigungsregel).
+extern SerielleStrecke serielleStrecke;
+
+// Abgelehnte Set-Befehle (setpayload.h). Fortgeschrieben in
+// build_heatpump_command() - also im MQTT-Callback; veroeffentlicht wird aus
+// loop(), siehe den Kopf von setpayload.h.
+extern SetAbgelehnt setAbgelehnt;

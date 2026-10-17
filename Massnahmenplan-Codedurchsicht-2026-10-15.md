@@ -33,9 +33,9 @@ nachgetragen.
 | S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md) |
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
-| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | offen |
+| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **in Arbeit (3.25.0)**, Code und Hosttests fertig, Prüfling und Rollout offen — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **erledigt in 3.23.2** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
-| S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P3 oder P4 | offen — aufgenommen auf Wunsch des Owners 2026-10-15 |
+| S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **in Arbeit (3.25.0)** zusammen mit S4 — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
 | C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | offen |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
@@ -497,15 +497,24 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
       * **H1 und H2 gleich** — derselbe Text und dieselbe Schwelle an beiden
         Stufen (STOPP-Regel damit ausdrücklich geprüft).
       * **Schwelle 30 s** ohne gültiges Telegramm.
-- [ ] Zähler und `info/telegram_ok`, `info/telegram_err`, `info/telegram_age`;
-      `MQTT-Topics.md` nachziehen.
-- [ ] Bestätigungsregel „gültiges Telegramm nach der Mindestwarte“ in
-      `notbetrieb.h`, Hosttest mit eingefrorenen Werten (Gegenprobe: alte
-      Regel bestätigt, neue nicht).
-- [ ] Sperrgrund „keine Verbindung zur Wärmepumpe“, Seite und Statusroute
-      (neues Feld **hinten** anhängen — die Startseite liest Index 5 und 6).
-- [ ] Prüfling ohne WP: Alter wächst, Sperre erscheint.
-- [ ] `Auftrag-…-nodered-flows.md`: Wächter auf `info/telegram_age`.
+- [x] Zähler und `info/telegram_ok`, `info/telegram_err`, `info/telegram_age`;
+      `MQTT-Topics.md` nachziehen. *(Owner 2026-10-17: vier Topics, dazu
+      `info/telegram_timeout`; erledigt in 3.25.0, Code und Doku.)*
+- [x] Bestätigungsregel in `notbetrieb.h`, Hosttest mit eingefrorenen Werten
+      (Gegenprobe: alte Regel bestätigt, neue nicht). *(Owner 2026-10-17:
+      „Telegramm **seit dem Absetzen**“ statt „nach der Mindestwarte“ — Letzteres
+      verlängerte jeden Schritt auf rund 12 s und den Heizen-Lauf auf gut zwei
+      Minuten. Gegenproben: Regel entschärft → 7 Zusicherungen rot.)*
+- [x] Sperrgrund „keine Verbindung zur Wärmepumpe“, Seite und Statusroute.
+      *(Kein neues Feld: Der Grund ist der Wert 3 im Sperre-Feld 4; Index 5
+      und 6 der Startseite bleiben unberührt.)*
+- [x] Prüfling ohne WP: Alter wächst, Sperre erscheint. *(2026-10-17 an `h1b`;
+      dabei zwei Fehler gefunden und behoben, siehe Arbeitsplan.)*
+- [x] S6: Ganzzahl-Regel als Header (`src/setpayload.h`) mit Hosttest;
+      `info/set_abgelehnt` und `info/set_abgelehnt_letzter`.
+- [ ] [`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md):
+      Wächter auf `info/telegram_*` und `info/set_abgelehnt*` — angelegt, erst
+      nach dem Rollout zu übergeben.
 
 ### P5 — Kommandopfad als Header (ohne Funktionsänderung)
 

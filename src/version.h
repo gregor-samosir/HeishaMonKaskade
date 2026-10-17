@@ -1,5 +1,114 @@
 #pragma once
 // Changelog:
+// 3.25.0 - SERIELLE STRECKE UEBERWACHT, ABGELEHNTE SET-BEFEHLE SICHTBAR.
+//         Paket P4 der dritten Codedurchsicht (Befunde S4 und S6,
+//         Massnahmenplan-Codedurchsicht-2026-10-15.md, Arbeitsplan
+//         Arbeitsplan-Serielle-Strecke-3.25.0.md). Funktionsaenderung im
+//         Notbetrieb; Nachweis am Pruefling.
+//
+//         PROBLEM S4. actual_data[] wurde nur bei einem gueltigen Telegramm
+//         fortgeschrieben. Riss die Strecke ab (Kabel, Pegelwandler, WP-
+//         Platine), blieben die letzten Werte stehen - auf der Webseite,
+//         retained beim Broker und als Ruecklesequelle des Notbetriebs. Ein
+//         Schritt, dessen Sollwert dem letzten Stand entsprach, wurde ohne
+//         Antwort der WP abgehakt (im Warmwasserzweig im unguenstigen Fall
+//         alle fuenf WP-Schritte: GRUEN, ohne dass ein Kommando ankam). Und in
+//         info/ fehlte die aussagekraeftigste Zahl einer Bridge: wie gut die
+//         Strecke laeuft.
+//
+//         PROBLEM S6. Ein Set-Payload, der keine Ganzzahl ist (33.5, 1e1,
+//         leer), oder ein Wert ausserhalb der Tabellengrenzen verwirft den
+//         ganzen Befehl; die WP behaelt ihren Wert, der set-Datenpunkt im
+//         ioBroker zeigt den eingetippten. Die Ablehnung stand nur als Error-
+//         Zeile im Logring (32 Zeilen, binnen Minuten verdraengt). Vom
+//         2026-10-10 bis 2026-10-15 verwarf die Bridge so die Dezimalwerte des
+//         Notbetriebszweigs, ohne dass es jemand bemerkte (N1).
+//
+//         FIX S4. Neuer arduino-freier Header serielle_strecke.h: Zaehler ok,
+//         err (Bytes kamen, aber kein Telegramm) und timeout (kein Byte), das
+//         Alter des letzten gueltigen Telegramms und die Schwelle "stumm" von
+//         30 s (Owner 2026-10-16). Ein Fehlerzyklus zaehlt genau einmal. Das
+//         Alter ist ueberlaufsicher (Lehre aus S1/karenz.h): tick() faltet je
+//         2^30 ms in ein 64-Bit-Vorab, das Alter laeuft ueber den millis()-
+//         Ueberlauf und die Naht nach 2^31 ms richtig weiter. Neue Topics
+//         info/telegram_ok, telegram_err, telegram_timeout, telegram_age (vier
+//         statt drei: stumm und Muell haben verschiedene Ursachen, Owner
+//         2026-10-17), im 5-min-Takt, beim Verbinden und bei jedem Wechsel
+//         stumm <-> lebendig; dabei je eine MQTT-Logzeile, beim Ende der
+//         Stille mit der Dauer. Am Ende von setup() startet die Uhr der
+//         Strecke und veroeffentlicht gleich neu: Verbindet setupMqtt()
+//         innerhalb von setup(), stand sonst das Alter seit millis() = 0
+//         (am Pruefling 324 s nach einem langsamen Boot) retained beim
+//         Broker - ein Waechter auf telegram_age haette bei jedem langsamen
+//         Boot grundlos angeschlagen. Beim ersten Nachweis am Pruefling
+//         aufgefallen, kein Hosttest haette es gefunden.
+//
+//         NOTBETRIEB. (1) Neuer Sperrgrund "Keine Verbindung zur Waermepumpe"
+//         (NOTBETRIEB_SPERRE_WP = 3 im bestehenden Sperre-Feld der Statusroute,
+//         kein neues Feld; Wortlaut vom Owner 2026-10-16), H1 und H2 und beide
+//         Rollen gleich, Reihenfolge Werte -> WP -> Heizbetrieb (Owner
+//         2026-10-17). Die Sperre wirkt nur beim Start. (2) Neue
+//         Bestaetigungsregel: Ein SET-Schritt gilt erst als bestaetigt, wenn
+//         seit dem Absetzen mindestens ein gueltiges Telegramm eingegangen ist
+//         (Zaehlerstand wird beim Absetzen gemerkt). Hydraulik und Vorderhaus
+//         bestaetigen anders und bleiben unberuehrt. Bewusst "seit dem
+//         Absetzen" und nicht "nach der Mindestwarte" (Owner 2026-10-17): Die
+//         Telegramme kommen alle rund 6 s, ein Telegramm nach den 8 s
+//         verlaengerte jeden Schritt auf rund 12 s und den Heizen-Lauf auf
+//         gut zwei Minuten; der Seitentext "bis zu anderthalb Minuten" stimmte
+//         dann nicht mehr. Die Mindestwarte bleibt daneben bestehen.
+//         Restunschaerfe: ein Telegramm im Sammelfenster zwischen Absetzen und
+//         Senden zaehlt mit - es belegt nur, dass die Leitung in diesem
+//         Moment lebt. notbetrieb_tick() bekommt dafuer den Zaehler als
+//         Parameter, NotbetriebLauf das Feld telegramme_bei_absetzen.
+//
+//         FIX S6. Neuer Header setpayload.h: die Ganzzahlregel (verhaltens-
+//         gleich zum bisherigen strtol, " 33" und "+33" bleiben gueltig; ein
+//         Ueberlauf wird auf int32_t geklemmt, damit Mac-Hosttest und ESP32
+//         gleich urteilen) und die Buchfuehrung: info/set_abgelehnt (Zaehler
+//         seit dem Start) und info/set_abgelehnt_letzter ("Name=Wert", auf 64
+//         Zeichen gekuerzt, Fremdtext zu '?'). Jede Ablehnung in
+//         build_heatpump_command() wird gebucht (ungueltige Zahl, ausserhalb
+//         der Grenzen, unbekanntes Topic). Veroeffentlicht wird NICHT im MQTT-
+//         Callback - PubSubClient teilt einen Puffer, topic und msg zeigen
+//         hinein -, sondern aus loop(), hoechstens alle 2 s. Gebucht wird VOR
+//         write_mqtt_log(): das veroeffentlicht im Callback und ueberschreibt
+//         den Puffer; die erste Fassung buchte danach, am Pruefling stand
+//         "??=33.5" statt "Z1HeatRequestTemperature=33.5".
+//
+//         NACHWEIS. Hosttests: test/serielle_strecke_test.cpp (36 Faelle,
+//         Ueberlauf, 40 Tage Faltung, Gegenbeispiel der vorzeichenbehafteten
+//         Frist), test/setpayload_test.cpp (52 Faelle, die Vektoren aus S6),
+//         test/notbetrieb_test.cpp um Abschnitt 16 erweitert (bisherige Faelle
+//         rufen den Tick ueber einen Huellaufruf mit mitlaufendem Zaehler, sie
+//         behalten ihre Bedeutung). GEGENPROBEN: Bestaetigungsregel
+//         entschaerft -> 7 Zusicherungen rot (eingefroren bestaetigt); Sperre
+//         entfernt -> 3 rot. Laufdauer bleibt in der Simulation mit
+//         Telegrammen alle 6 s bei 88 s. Alle 20 Hosttests gruen, alle sechs
+//         Envs ohne Warnung (-Werror).
+//         PRUEFLING h1b (Test-Prefix panasonic_heat_pump32, ohne WP = stumme
+//         Strecke, 2026-10-17): Passiver Mitschnitt 60 s: 10 Abfragen, 10
+//         Timeouts, keine Doppelzaehlung; telegram_timeout = 4 bei
+//         telegram_age = 30 (Wechsel auf stumm, sofort veroeffentlicht),
+//         MQTT-Log "Keine gueltigen Telegramme ... (Strecke stumm)". Sperre:
+//         Feld 4 der Statusroute wechselt nach 30 s von 2 auf 3, die Seite
+//         traegt Ueberschrift und Absatz im Wortlaut des Owners, der Knopf ist
+//         ausgeblendet. S6: "33.5" -> set_abgelehnt 1, letzter
+//         "Z1HeatRequestTemperature=33.5"; Wert 99 auf DHWTemp -> 2; zwei
+//         leere Payloads -> 4. Der POST /notbetrieb/start wurde NICHT
+//         ausgeloest (der Pruefling traegt die Adresse des Hydraulik-Switch).
+//         Zwei Fehler fand erst der Pruefling, beide behoben: (1) Alter seit
+//         millis() = 0 retained beim Broker (siehe oben), (2) letzter
+//         abgelehnter Befehl mit zerstoertem Namen (siehe FIX S6). NICHT am
+//         Pruefling pruefbar: der Positivpfad mit gueltigen Telegrammen, das
+//         Ende der Stille und der Lauf des Notbetriebs - das gehoert zur
+//         Abnahme nach dem Rollout.
+//
+//         GROESSE gegen 3.24.0 (heishamon_esp32_h1_ota): RAM 61384 -> 61512
+//         Byte (+128), Flash 1224317 -> 1226437 Byte (+2120).
+//         heishamon_esp32_h2_ota: RAM 61384 -> 61512 Byte (+128), Flash
+//         1223653 -> 1225809 Byte (+2156).
+//
 // 3.24.0 - LOOP() DARF NICHT STEHEN. Die Telnet-Ausgabe wartet nie mehr auf
 //         einen Client (S2), und ein Task-Watchdog setzt eine haengende
 //         loop() nach 120 s zurueck (S3, K1 vom 2026-09-02). Paket P3 der
@@ -2279,4 +2388,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.24.0";
+static const char* heishamon_version = "3.25.0";

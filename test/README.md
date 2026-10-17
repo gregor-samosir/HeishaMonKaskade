@@ -29,6 +29,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `karenz_test.cpp` | Karenzfenster nach dem Verbinden: Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms samt Gegenbeispiel der alten Regel (bindet `src/karenz.h` direkt ein) | nein |
 | `telnetlog_test.cpp` | Regeln der nicht blockierenden Telnet-Ausgabe: wann ein Client, der nicht mehr liest, als tot gilt (15 s ab dem ersten Fehlschlag), auf die Millisekunde, ueber den `millis()`-Ueberlauf und die Naht nach 2^31 ms samt Gegenbeispiel (bindet `src/telnetlog.h` direkt ein) | nein |
+| `serielle_strecke_test.cpp` | Gesundheit der seriellen Strecke: Zaehler ok/err/timeout (ein Fehlerzyklus zaehlt einmal), Alter des letzten gueltigen Telegramms, Schwelle 30 s, ueber den `millis()`-Ueberlauf und die Faltung (2^30 ms) bis 40 Tage samt Gegenbeispiel der vorzeichenbehafteten Frist (bindet `src/serielle_strecke.h` direkt ein) | nein |
+| `setpayload_test.cpp` | Ganzzahlregel der Set-Befehle (`33.5`, `1e1`, `" 33"`, `"+33"`, `0x1A`, Ueberlauf) und Buchfuehrung ueber abgelehnte Befehle: Zaehler, letzter Befehl auf 64 Zeichen, Fremdtext, Mindestabstand des Veroeffentlichens (bindet `src/setpayload.h` direkt ein) | nein |
 | `byte110_test.cpp` | Die vier Ist-Zustands-Topics aus Byte 110 (TOP99-102) gegen den echten Dekodierpfad pruefen | nein |
 | `byte28_test.cpp` | Kodierung von SET35/SET36 gegen die Dekodierer aus `decode.cpp` haltbar machen (Byte 28, zwei Bitfelder) | nein |
 | `byte9_test.cpp` | Kodierung der Heizstab-Kommandos SET37-SET39 gegen den echten Dekodierpfad (Byte 9 traegt beide Freigaben, Byte 5 ForceHeater neben HolidayMode) | nein |
@@ -102,7 +104,17 @@ anrichten.
 3. Ueber `http://<ip>/settings` den **MQTT-Port auf 1883** setzen. Erst jetzt
    erreicht der Pruefling den Broker - auf dem Test-Prefix, an das der
    Node-RED-Verteiler nichts sendet.
-4. Testen.
+4. **`hydraulik_switch` und `knx_schnittstelle` leeren** (Owner-Entscheid
+   2026-10-17), bevor ein Notbetriebsschritt oder ein POST auf
+   `/notbetrieb/start` im Spiel ist. Das Backup-Board traegt die Adressen der
+   echten Anlage; scheitert eine Sperre im Test, ginge der Hydraulikschritt als
+   Request an den echten Switch. Leer heisst der Schritt scheitert am Pruefling
+   statt an der Anlage. *(Beim ersten Einsatz zu pruefen: ob `/settings` einen
+   leeren Wert annimmt - bis 3.25.0 nicht erprobt.)* Die Adressen stehen in
+   [`Ablauf-Backup-Boards.md`](../Ablauf-Backup-Boards.md); vor der Rueckgabe
+   **wieder eintragen**, sonst ist das Backup-Board im Ernstfall ohne
+   Hydraulik- und Vorderhausschritt.
+5. Testen.
 
 Der Hostname bleibt dabei `HeishaMon32_h1b`. Das ist kein Fehler, sondern die
 zweite Sicherung: Er ist zugleich die MQTT-Client-ID und kollidiert mit keinem
@@ -121,6 +133,8 @@ die `set`-Topics parallel zum laufenden Board, ohne ueberhaupt an einer
 Waermepumpe zu haengen. Der abweichende Hostname verhindert nur den
 gegenseitigen Client-ID-Rauswurf, nicht das Mitschreiben.
 
+0. Wurden `hydraulik_switch` und `knx_schnittstelle` geleert (Ausleihe,
+   Schritt 4): **beide wieder eintragen** und ueber `/settings` ablesen.
 1. Ueber `/settings` des Prueflings **`mqtt_port` auf 1884** setzen. Das Geraet
    startet neu und erreicht den Broker nicht mehr.
 2. Erst danach `pio run -e heishamon_esp32_h1_usb -t upload` (bzw. `_h2_usb`).

@@ -15,6 +15,20 @@ Ticker Timeout_Serial_Timer(timeout_serial, SERIALTIMEOUT, 1);        // one tim
 // Senden auch tatsaechlich geprueft (send_pana_command).
 bool serialquerysent = false;
 
+// Gesundheit der seriellen Strecke (3.25.0, S4). Der Startzeitpunkt wird am
+// Ende von setup() gesetzt - vorher laeuft keine Abfrage, und das Alter soll
+// nicht die Zeit im WLAN-Portal oder bei NTP mitzaehlen.
+SerielleStrecke serielleStrecke;
+
+// Dauer der zuletzt beendeten Stille der Strecke in Sekunden, wartet aufs
+// Loggen aus loop() (readSerial setzt sie, loop() meldet sie - gleiches Muster
+// wie stilleBeendetSekunden). 0 = keine zu melden.
+static uint32_t serielleStilleBeendetS = 0;
+
+// Abgelehnte Set-Befehle (3.25.0, S6). Fortgeschrieben im MQTT-Callback,
+// veroeffentlicht aus loop().
+SetAbgelehnt setAbgelehnt;
+
 // Default settings if config does not exists
 // stage-specific hostname comes as build flag from platformio.ini, fallback = stage 1
 // (config.json on the device overrides this default at boot)
@@ -666,6 +680,51 @@ static void publish_info_laufzeit()
 }
 
 /*****************************************************************************/
+/* Gesundheit der seriellen Strecke (3.25.0, S4)                             */
+/*                                                                           */
+/* telegram_ok / _err / _timeout sind Zaehler seit dem Start (ein Rueckgang  */
+/* heisst Neustart, wie bei boot_count), telegram_age ist das Alter des       */
+/* letzten gueltigen Telegramms in Sekunden. Warum drei Zaehler: stumm        */
+/* (timeout) und Muell (err) haben verschiedene Ursachen - Kabel/Pegelwandler */
+/* gegen Baudrate/Stoerung.                                                   */
+/*                                                                           */
+/* Aufgerufen im 5-min-Takt, beim Verbinden UND bei jedem Wechsel stumm <->   */
+/* lebendig: Sonst stuende das Alter nach einem Kabelabriss bis zu fuenf       */
+/* Minuten retained auf dem letzten Wert von wenigen Sekunden, und ein        */
+/* Waechter auf dem Alter saehe den Abriss erst mit dieser Verzoegerung.      */
+/*****************************************************************************/
+static void publish_info_telegram()
+{
+  char wert[16];
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)serielleStrecke.ok);
+  publish_info("telegram_ok", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)serielleStrecke.err);
+  publish_info("telegram_err", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)serielleStrecke.timeout);
+  publish_info("telegram_timeout", wert);
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)serielle_strecke_alter_s(&serielleStrecke, (uint32_t)millis()));
+  publish_info("telegram_age", wert);
+}
+
+/*****************************************************************************/
+/* Abgelehnte Set-Befehle (3.25.0, S6)                                       */
+/*                                                                           */
+/* set_abgelehnt zaehlt seit dem Start, set_abgelehnt_letzter nennt den       */
+/* letzten ("Name=Wert", auf 64 Zeichen gekuerzt). Aus loop() und nicht aus   */
+/* dem MQTT-Callback: PubSubClient teilt einen Puffer fuer ein- und           */
+/* ausgehende Pakete - ein publish() im Callback ueberschriebe topic und msg, */
+/* auf die der Callback noch zeigt (Begruendung: setpayload.h).               */
+/*****************************************************************************/
+static void publish_info_set_abgelehnt()
+{
+  char wert[16];
+  (void)snprintf(wert, sizeof(wert), "%u", (unsigned)setAbgelehnt.zaehler);
+  publish_info("set_abgelehnt", wert);
+  publish_info("set_abgelehnt_letzter", setAbgelehnt.letzter);
+  setabgelehnt_veroeffentlicht(&setAbgelehnt, (uint32_t)millis());
+}
+
+/*****************************************************************************/
 /* HTTP                                                                      */
 /*****************************************************************************/
 void setupHttp()
@@ -867,6 +926,8 @@ bool mqtt_reconnect()
     // Die fortlaufenden Werte gleich mit, sonst steht der info-Zweig nach
     // einem Reconnect bis zu fuenf Minuten auf dem Stand von davor.
     publish_info_laufzeit();
+    publish_info_telegram();
+    publish_info_set_abgelehnt();
     nextInfoTime = millis();
 
     // ein waehrend des Ausfalls gemerkter WLAN-Abriss wird jetzt meldbar
@@ -1083,6 +1144,7 @@ bool readSerial()
           (void)heatpumpSerial.read();
         }
         serial_length = 0;
+        serielle_strecke_fehler(&serielleStrecke); // Bytes kamen, aber kein Telegramm
         return false;
       }
       serial_data[serial_length] = heatpumpSerial.read();
@@ -1107,6 +1169,15 @@ bool readSerial()
     if (outputHexLog)
       write_hex_log(serial_data, serial_length);
     serial_length = 0;
+
+    // Strecke lebt (3.25.0). War sie stumm, wird die Dauer VOR dem Zuruecksetzen
+    // des Alters gemerkt - danach waere sie weg - und von loop() gemeldet.
+    const uint32_t millisJetzt = (uint32_t)millis();
+    if (serielle_strecke_stumm(&serielleStrecke, millisJetzt))
+    {
+      serielleStilleBeendetS = serielle_strecke_alter_s(&serielleStrecke, millisJetzt);
+    }
+    serielle_strecke_ok(&serielleStrecke, millisJetzt);
     return true;
   }
 
@@ -1118,6 +1189,11 @@ bool readSerial()
   write_telnet_log(log_msg);
   if (outputHexLog && (serial_length > 0))
     write_hex_log(serial_data, serial_length);
+  // Nur mit Bytes ist es ein verworfenes Telegramm. Eine Leserunde ohne ein
+  // einziges Byte ist Stille und wird als timeout_serial() gezaehlt - sonst
+  // zaehlte dieselbe stumme Abfrage zweimal.
+  if (serial_length > 0)
+    serielle_strecke_fehler(&serielleStrecke);
   serial_length = 0;
   return false;
 }
@@ -1253,6 +1329,10 @@ void send_pana_command()
   // zu einem abgeschlossenen Zyklus und darf die neue Antwort nicht stoeren.
   flush_serial_input();
 
+  // Ab hier gilt ein neues Abfrageergebnis (ok, err ODER timeout - je Abfrage
+  // genau eines, siehe serielle_strecke.h)
+  serielle_strecke_abfrage_beginn(&serielleStrecke);
+
   if (!setDataPending)
   {
     heatpumpSerial.write(mainQuery, QUERYSIZE);
@@ -1317,6 +1397,7 @@ void timeout_serial()
   {
     serialquerysent = false; // we are allowed to send a new command
     write_telnet_log((char *)"Serial interface read timeout");
+    serielle_strecke_timeout(&serielleStrecke); // zaehlt nur, wenn die Abfrage nicht schon als err zaehlte
     Send_Pana_Mainquery_Timer.start();
   }
 }
@@ -1414,6 +1495,7 @@ void setupTime()
 void setup()
 {
   getFreeMemory();
+  setabgelehnt_start(&setAbgelehnt); // vor dem ersten MQTT-Callback (3.25.0)
   setupSerial();
 
   // Den RTC-Spiegel als ALLERERSTES beurteilen - vor notbetrieb_init(), das
@@ -1497,6 +1579,21 @@ void setup()
   // ueber mqtt_reconnect() laeuft und diese Zeile nie sieht.
   karenz_oeffnen(&karenz, (uint32_t)millis());
 
+  // Die Strecke gilt ab hier als beobachtet (S4, 3.25.0): Erst jetzt beginnt
+  // die erste Abfrage, das Alter des letzten Telegramms zaehlt ab diesem
+  // Moment. Vor setup()-Ende waere es durch NTP und WLAN-Portal verfaelscht.
+  serielle_strecke_start(&serielleStrecke, (uint32_t)millis());
+
+  // Steht der Broker schon (setupMqtt() verbindet innerhalb von setup()), hat
+  // der Verbindungsaufbau die Zaehler VOR diesem Start veroeffentlicht - mit
+  // dem Alter seit millis() = 0, am Pruefling gemessen 324 s nach einem
+  // langsamen Boot. Dieser Stand bliebe retained beim Broker, bis der
+  // Wechsel zu "stumm" oder der 5-min-Takt ihn ersetzt, und ein Waechter auf
+  // telegram_age schluege bei jedem langsamen Boot grundlos an. Deshalb sofort
+  // nachfuehren.
+  if (mqtt_client.connected())
+    publish_info_telegram();
+
   Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;
@@ -1512,6 +1609,11 @@ void loop()
 
   handle_telnetstream();
   check_wifi();
+
+  // Alter der seriellen Strecke nachfuehren (S4, 3.25.0): faltet das Alter
+  // gegen den millis()-Ueberlauf, muss haeufiger als alle 12 Tage laufen. Es
+  // steht VOR notbetrieb_loop(), das den Sperrgrund daraus bildet.
+  serielle_strecke_tick(&serielleStrecke, (uint32_t)millis());
 
   // Notbetrieb: senden -> zuruecklesen -> naechster Schritt. Laeuft kein
   // Schaltvorgang, kehrt der Aufruf sofort zurueck. Er steht VOR der
@@ -1610,6 +1712,40 @@ void loop()
     ignoredSetCommands = 0;
   }
 
+  // Serielle Strecke: Wechsel stumm <-> lebendig genau einmal melden (S4,
+  // 3.25.0). Zwei Wege, ein Ziel: die Logzeile ist die Spur fuer die Nachschau,
+  // das sofortige Veroeffentlichen haelt info/telegram_age aktuell, solange es
+  // darauf ankommt. Beides nur mit Broker; ohne ihn holt der Verbindungsaufbau
+  // beides nach. Der Wechsel selbst ist auch ohne Broker verbucht - die
+  // Notbetriebssperre hat ihn unabhaengig davon.
+  {
+    bool serielleStumm = false;
+    if (serielle_strecke_wechsel(&serielleStrecke, (uint32_t)millis(), &serielleStumm))
+    {
+      if (serielleStumm)
+      {
+        (void)snprintf(log_msg, sizeof(log_msg),
+                       "Keine gueltigen Telegramme der Waermepumpe seit %u s (Strecke stumm)",
+                       (unsigned)(SERIELL_STUMM_SCHWELLE_MS / 1000u));
+        write_mqtt_log(log_msg);
+      }
+      else
+      {
+        (void)snprintf(log_msg, sizeof(log_msg),
+                       "Waermepumpe antwortet wieder, Strecke war %u s stumm",
+                       (unsigned)serielleStilleBeendetS);
+        write_mqtt_log(log_msg);
+        serielleStilleBeendetS = 0;
+      }
+      if (mqtt_client.connected())
+        publish_info_telegram();
+    }
+  }
+
+  // Abgelehnte Set-Befehle (S6, 3.25.0): hoechstens alle 2 s veroeffentlichen
+  if (mqtt_client.connected() && setabgelehnt_faellig(&setAbgelehnt, (uint32_t)millis()))
+    publish_info_set_abgelehnt();
+
   // Langzeit-Telemetrie im 5-min-Takt (M3). Eigener Takt und nicht der aus
   // publish_heatpump_data() - Begruendung bei nextInfoTime. Der Vergleich ist
   // ueberlaufsicher gerechnet: Die Differenz zweier unsigned long ist auch
@@ -1620,6 +1756,8 @@ void loop()
   {
     nextInfoTime = millis();
     publish_info_laufzeit();
+    publish_info_telegram();
+    publish_info_set_abgelehnt();
   }
 
   Send_Pana_Command_Timer.update();   // trigger send_pana_command()   - send command or query from buffer

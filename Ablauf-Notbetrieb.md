@@ -9,8 +9,10 @@ nur bei Heizbetrieb, Abschnitt 1c; seit 3.22.0 ausgerollt — die laufende
 Version steht in `src/version.h`, hier bewusst nicht, sie veraltet bei jedem
 Rollout). Davor 3.21.0 (Vorderhausschritt nur an Stufe 1, am Prüfling und an
 Mischer und Pumpe abgenommen, am 2026-09-13 ausgerollt) und 3.18.0
-(Heizstabschritt, 2026-08-30). Am Ablauf selbst hat sich seit 3.22.0 nichts geändert (3.23.x berühren
-ihn nicht); zuletzt gegen den Code gelesen am 2026-09-14.
+(Heizstabschritt, 2026-08-30). Am Ablauf selbst hat sich seit 3.22.0 nur 3.25.0
+geändert (Sperre „keine Verbindung zur Wärmepumpe“ und die Bestätigungsregel
+„Telegramm seit dem Absetzen“, siehe unten); 3.23.x und 3.24.0 berühren ihn
+nicht. Zuletzt gegen den Code gelesen am 2026-10-17.
 Quelle sind der Code — [`src/notbetrieb.h`](src/notbetrieb.h),
 [`src/notbetrieb.cpp`](src/notbetrieb.cpp), [`src/HeishaMon.cpp`](src/HeishaMon.cpp) —
 und die Messläufe vom 2026-08-21, protokolliert in
@@ -52,7 +54,7 @@ und antwortet sofort; er wartet auf nichts.
 t | Was passiert | Wo
 :--- | :--- | :---
 0 s | `POST /notbetrieb/start` trifft ein | [`webfunctions.cpp:893`](src/webfunctions.cpp#L893)
-0 s | **Sperre serverseitig geprüft.** Fehlen gehaltene Werte, oder steht TOP101 nicht sauber auf 0, endet der Ablauf hier: Logzeile, 303 zurück auf die Seite, kein Kommando an die Wärmepumpe | [`notbetrieb.cpp:423`](src/notbetrieb.cpp#L423)
+0 s | **Sperre serverseitig geprüft.** Fehlen gehaltene Werte, kam seit 30 s kein gültiges Telegramm der Wärmepumpe, oder steht TOP101 nicht sauber auf 0, endet der Ablauf hier (in dieser Reihenfolge der Gründe): Logzeile, 303 zurück auf die Seite, kein Kommando an die Wärmepumpe | [`notbetrieb.cpp:423`](src/notbetrieb.cpp#L423)
 0 s | Zustand BEREIT → LÄUFT, Schrittzähler auf 1, Lauf- und Schrittuhr gestartet, das Ergebnis des vorigen Laufs verworfen | `notbetrieb_start()`
 0 s | MQTT-Log: „NOTBETRIEB ausgeloest ueber die Weboberflaeche" |
 0 s | 303 zurück auf `/notbetrieb`. **Der Handler setzt keinen Schritt mehr ab** | `notbetrieb_starten()`
@@ -68,6 +70,19 @@ Millisekunden.
 Die Sperre wird hier **noch einmal** geprüft, obwohl die Seite den Knopf schon
 versteckt: Ein POST lässt sich auch ohne die Seite absetzen, und zwischen dem
 Aufbau der Seite und dem Klick können Minuten liegen.
+
+**Sperre „Keine Verbindung zur Wärmepumpe“ (seit 3.25.0).** Ohne gültiges
+Telegramm der letzten 30 s ist `actual_data[]` — und damit TOP101 und jeder
+Rücklesewert — nur der letzte Stand. Der Knopf bleibt dann weg, und die Seite
+sagt, dass die Steuerung nicht umschalten kann und die Wärmepumpe mit den
+zuletzt gesetzten Werten weiterläuft; der letzte Satz verweist auf die
+ausgedruckte Anleitung am Bedienfeld. Die Sperre gilt an beiden Stufen und in
+beiden Rollen gleich und wirkt **nur beim Start**: Ein laufender Lauf wird von
+ihr nicht abgebrochen, sondern endet bei stehender Strecke durch die
+Bestätigungsregel (nächster Abschnitt) nach dem Schritt-Timeout in ROT. Die
+Seite fragt alle zwei Sekunden den Status ab; der Knopf kommt von selbst
+zurück, sobald wieder Antworten eingehen. Die Statusroute trägt den Grund als
+Wert 3 im Sperre-Feld (Feld 4), es gibt kein neues Feld.
 
 ## Phase 2 — Die Schrittfolge (0 bis 88 s)
 
@@ -85,6 +100,7 @@ Zeit im Schritt | Was passiert
 +2 bis 8 s | Die Wärmepumpe übernimmt das Kommando (KNX-Messung 2026-08-16); der Abfragezyklus liest den zugehörigen TOP alle 5 bis 6 s zurück
 laufend | `notbetrieb_loop()` vergleicht den zurückgelesenen TOP mit dem Sollwert — leerer Text zählt dabei **nicht** als Bestätigung
 **+8 s** | Frühestens jetzt gilt der Schritt als erledigt und der nächste geht raus. Die Mindestwartezeit verhindert, dass ein Rückgabewert von *vor* dem Kommando den Schritt bestätigt
+**+8 s** | **und** seit dem Absetzen ist mindestens ein gültiges Telegramm eingegangen (seit 3.25.0, nur bei Set-Schritten). Die Telegramme kommen alle rund 6 s, die Bedingung ist nach den 8 s also im Regelfall längst erfüllt und kostet keine Zeit. Sie schließt aus, dass eine abgerissene Strecke den letzten, eingefrorenen Wert als „zurückgelesen“ ausgibt: Entsprach er dem Sollwert, wurde der Schritt bis 3.24.0 ohne Antwort der Wärmepumpe abgehakt
 +20 s | Kam der Wert bis dahin nicht zurück: ROT, sofortiger Abbruch
 
 Die Schritte laufen **einzeln** und nicht in einem Sammelfenster. Ein Handler,

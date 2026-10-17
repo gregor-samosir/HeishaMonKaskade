@@ -128,6 +128,21 @@ cpp_test karenz_test
 # Pruefling.
 cpp_test telnetlog_test
 
+# Gesundheit der seriellen Strecke (S4, 3.25.0): Zaehler ok/err/timeout,
+# Alter des letzten gueltigen Telegramms, die 30-s-Schwelle fuer "stumm" und
+# das Alter ueber den millis()-Ueberlauf und die Faltung (2^30 ms) hinweg,
+# mit der vorzeichenbehafteten Frist als Gegenbeispiel. Bindet
+# src/serielle_strecke.h direkt ein. Dass ein Fehlerzyklus genau einmal zaehlt
+# (err ODER timeout), ist Fall 4; das Zusammenspiel mit dem echten Serial-Timer
+# ist nicht hosttestbar und gehoert zum Nachweis am Pruefling.
+cpp_test serielle_strecke_test
+
+# Ganzzahlregel der Set-Befehle und Buchfuehrung ueber abgelehnte (S6,
+# 3.25.0): 33.5, 1e1, " 33", "+33", 0x1A, Ueberlauf - die Regel des bisherigen
+# strtol, jetzt ohne Nachbildung geprueft. Bindet src/setpayload.h direkt ein.
+# Erster Test des Set-Pfads, der nicht an einer Nachbildung haengt (C1).
+cpp_test setpayload_test
+
 # Kodierung von SET35/SET36 auf Byte 28 - legt die Merge-Logik aus
 # commands.cpp und die Dekodierer aus decode.cpp nebeneinander. Byte 28 traegt
 # zwei Bitfelder; ohne bitgenaue Maske schaltet ein Kuehl-Kommando die Heizung
