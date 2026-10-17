@@ -35,7 +35,13 @@
 //         statt drei: stumm und Muell haben verschiedene Ursachen, Owner
 //         2026-10-17), im 5-min-Takt, beim Verbinden und bei jedem Wechsel
 //         stumm <-> lebendig; dabei je eine MQTT-Logzeile, beim Ende der
-//         Stille mit der Dauer.
+//         Stille mit der Dauer. Am Ende von setup() startet die Uhr der
+//         Strecke und veroeffentlicht gleich neu: Verbindet setupMqtt()
+//         innerhalb von setup(), stand sonst das Alter seit millis() = 0
+//         (am Pruefling 324 s nach einem langsamen Boot) retained beim
+//         Broker - ein Waechter auf telegram_age haette bei jedem langsamen
+//         Boot grundlos angeschlagen. Beim ersten Nachweis am Pruefling
+//         aufgefallen, kein Hosttest haette es gefunden.
 //
 //         NOTBETRIEB. (1) Neuer Sperrgrund "Keine Verbindung zur Waermepumpe"
 //         (NOTBETRIEB_SPERRE_WP = 3 im bestehenden Sperre-Feld der Statusroute,
@@ -65,7 +71,10 @@
 //         build_heatpump_command() wird gebucht (ungueltige Zahl, ausserhalb
 //         der Grenzen, unbekanntes Topic). Veroeffentlicht wird NICHT im MQTT-
 //         Callback - PubSubClient teilt einen Puffer, topic und msg zeigen
-//         hinein -, sondern aus loop(), hoechstens alle 2 s.
+//         hinein -, sondern aus loop(), hoechstens alle 2 s. Gebucht wird VOR
+//         write_mqtt_log(): das veroeffentlicht im Callback und ueberschreibt
+//         den Puffer; die erste Fassung buchte danach, am Pruefling stand
+//         "??=33.5" statt "Z1HeatRequestTemperature=33.5".
 //
 //         NACHWEIS. Hosttests: test/serielle_strecke_test.cpp (36 Faelle,
 //         Ueberlauf, 40 Tage Faltung, Gegenbeispiel der vorzeichenbehafteten
@@ -77,10 +86,28 @@
 //         entfernt -> 3 rot. Laufdauer bleibt in der Simulation mit
 //         Telegrammen alle 6 s bei 88 s. Alle 20 Hosttests gruen, alle sechs
 //         Envs ohne Warnung (-Werror).
-//         PRUEFLING: siehe Arbeitsplan-Serielle-Strecke-3.25.0.md.
+//         PRUEFLING h1b (Test-Prefix panasonic_heat_pump32, ohne WP = stumme
+//         Strecke, 2026-10-17): Passiver Mitschnitt 60 s: 10 Abfragen, 10
+//         Timeouts, keine Doppelzaehlung; telegram_timeout = 4 bei
+//         telegram_age = 30 (Wechsel auf stumm, sofort veroeffentlicht),
+//         MQTT-Log "Keine gueltigen Telegramme ... (Strecke stumm)". Sperre:
+//         Feld 4 der Statusroute wechselt nach 30 s von 2 auf 3, die Seite
+//         traegt Ueberschrift und Absatz im Wortlaut des Owners, der Knopf ist
+//         ausgeblendet. S6: "33.5" -> set_abgelehnt 1, letzter
+//         "Z1HeatRequestTemperature=33.5"; Wert 99 auf DHWTemp -> 2; zwei
+//         leere Payloads -> 4. Der POST /notbetrieb/start wurde NICHT
+//         ausgeloest (der Pruefling traegt die Adresse des Hydraulik-Switch).
+//         Zwei Fehler fand erst der Pruefling, beide behoben: (1) Alter seit
+//         millis() = 0 retained beim Broker (siehe oben), (2) letzter
+//         abgelehnter Befehl mit zerstoertem Namen (siehe FIX S6). NICHT am
+//         Pruefling pruefbar: der Positivpfad mit gueltigen Telegrammen, das
+//         Ende der Stille und der Lauf des Notbetriebs - das gehoert zur
+//         Abnahme nach dem Rollout.
 //
 //         GROESSE gegen 3.24.0 (heishamon_esp32_h1_ota): RAM 61384 -> 61512
-//         Byte (+128), Flash 1224317 -> 1226409 Byte (+2092).
+//         Byte (+128), Flash 1224317 -> 1226437 Byte (+2120).
+//         heishamon_esp32_h2_ota: RAM 61384 -> 61512 Byte (+128), Flash
+//         1223653 -> 1225809 Byte (+2156).
 //
 // 3.24.0 - LOOP() DARF NICHT STEHEN. Die Telnet-Ausgabe wartet nie mehr auf
 //         einen Client (S2), und ein Task-Watchdog setzt eine haengende

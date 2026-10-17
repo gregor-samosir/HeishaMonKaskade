@@ -508,7 +508,8 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 - [x] Sperrgrund „keine Verbindung zur Wärmepumpe“, Seite und Statusroute.
       *(Kein neues Feld: Der Grund ist der Wert 3 im Sperre-Feld 4; Index 5
       und 6 der Startseite bleiben unberührt.)*
-- [ ] Prüfling ohne WP: Alter wächst, Sperre erscheint.
+- [x] Prüfling ohne WP: Alter wächst, Sperre erscheint. *(2026-10-17 an `h1b`;
+      dabei zwei Fehler gefunden und behoben, siehe Arbeitsplan.)*
 - [x] S6: Ganzzahl-Regel als Header (`src/setpayload.h`) mit Hosttest;
       `info/set_abgelehnt` und `info/set_abgelehnt_letzter`.
 - [ ] [`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md):

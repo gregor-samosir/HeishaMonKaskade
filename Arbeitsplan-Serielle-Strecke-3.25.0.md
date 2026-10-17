@@ -1,7 +1,7 @@
 # Arbeitsplan: Serielle Strecke überwacht, abgelehnte Set-Befehle sichtbar (3.25.0)
 
-> **Ergebnis: in Arbeit (2026-10-17) — Code, Hosttests und Builds fertig, Nachweis
-> am Prüfling und Rollout stehen aus.** Paket P4 der Codedurchsicht vom
+> **Ergebnis: in Arbeit (2026-10-17) — Code, Hosttests, Builds und Prüflingsnachweis
+> fertig; Rückgabe des Prüflings, Merge und Rollout stehen aus.** Paket P4 der Codedurchsicht vom
 > 2026-10-15 ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S4, dazu S6 als Beigabe). Eine Firmware-Änderung mit Funktionswirkung im
 > Notbetrieb: Der Nachweis läuft am **Prüfling** (`h1b`), nicht an der Anlage.
@@ -101,20 +101,33 @@ aufsetzen“. Immer nur **ein** Board; vorher bedenken, ob die Stufe gerade ihre
 Notanker braucht. Der Prüfling hat **keine Wärmepumpe** — das ist hier der
 Messaufbau, nicht eine Lücke: Er ist die stumme Strecke.
 
-- [ ] **HALT:** Owner leiht `h1b`; Prüfling-Build (`stage_test_esp32`) aufspielen.
-- [ ] **Stumme Strecke:** `info/telegram_age` wächst, `info/telegram_timeout`
-      steigt mit jeder Abfrage (rund alle 5 bis 6 s), `telegram_ok` bleibt 0,
-      `telegram_err` bleibt 0. Prüfkriterium: `timeout` ≈ Abfragen — **nicht
-      doppelt** (Merker `abfrage_fehler`).
-- [ ] **Sperre:** nach 30 s Feld 4 der Statusroute = 3, die Seite zeigt Überschrift
-      und Absatz laut E2; `POST /notbetrieb/start` wird abgewiesen
-      (MQTT-Log „Notbetrieb abgelehnt: keine gueltigen Telegramme der
-      Waermepumpe“); MQTT-Log „Keine gueltigen Telegramme … (Strecke stumm)“.
-      Vor dem Ablauf der 30 s: kein Sperrgrund 3.
-- [ ] **S6:** `set/Z1HeatRequestTemperature` = `33.5` → `info/set_abgelehnt` + 1,
-      `info/set_abgelehnt_letzter` = `Z1HeatRequestTemperature=33.5`, der
-      State-Wert unverändert. Dasselbe mit einem Wert außerhalb der Grenzen und
-      mit leerem Payload.
+- [x] **HALT:** Owner leiht `h1b` (usbmodem1101, IP 192.168.2.194); Prüfling-Build
+      (`heishamon_esp32_usb`, Port per `--upload-port`, die ini bleibt
+      unberührt) aufgespielt; `mqtt_port` für die Topics auf 1883.
+- [x] **Stumme Strecke:** 60-s-Mitschnitt: 10 Abfragen, 10 Timeouts, kein `err`.
+      `telegram_timeout` = 4 bei `telegram_age` = 30; `ok` und `err` bleiben 0.
+      **Nicht doppelt gezählt.**
+- [x] **Sperre:** Feld 4 der Statusroute wechselt nach 30 s von 2 auf 3; die Seite
+      trägt Überschrift und Absatz laut E2, der Knopf ist ausgeblendet; MQTT-Log
+      „Keine gueltigen Telegramme … (Strecke stumm)“.
+      **Nicht ausgelöst:** `POST /notbetrieb/start` — der Prüfling trägt die
+      Adresse des Hydraulik-Switch (192.168.2.180) und die des KNX-Zugangs aus
+      der Backup-Konfiguration; ein Fehlschlag der Sperre hätte einen Request an
+      den Switch bedeutet. Die Abweisung ist dieselbe Variable, die die Seite
+      liest (`notbetrieb_starten()`), und im Hosttest belegt.
+- [x] **S6:** `33.5` → `set_abgelehnt` 1, `…_letzter` = `Z1HeatRequestTemperature=33.5`;
+      Wert 99 auf `DHWTemp` → 2 (`DHWTemp=99`); zwei leere Payloads → 4. Die
+      Test-Datenpunkte stehen danach auf `NaN` bzw. `null` (der Adapter wandelt
+      um); beim nächsten Verbinden werden sie im Karenzfenster verworfen und
+      nicht als abgelehnt gezählt.
+- [x] **Zwei Fehler fand erst der Prüfling,** beide behoben und neu geflasht:
+      (1) Das Alter stand nach einem Verbinden *innerhalb* von `setup()` mit dem
+      Wert seit `millis()` = 0 retained beim Broker (324 s) — ein Wächter hätte
+      bei jedem langsamen Boot angeschlagen; jetzt wird nach dem Start der Uhr
+      sofort neu veröffentlicht. (2) `set_abgelehnt_letzter` lautete `??=33.5`:
+      `write_mqtt_log()` veröffentlicht im MQTT-Callback und überschrieb den
+      Puffer, auf den `topic` zeigt; jetzt wird davor gebucht. Beide wären kein
+      Hosttest aufgefallen.
 - [ ] **Rückgabe** in der sicherheitskritischen Reihenfolge: **erst `mqtt_port`
       auf 1884, dann die Stufen-Firmware flashen.** Gegenprobe über `/settings`:
       Port 1884 und Hostname `HeishaMon32_h1b` ablesen.
@@ -140,9 +153,9 @@ bisher in 88 s). Er wird bei der Abnahme nach dem Rollout belegt.
 | | Baseline 3.24.0 | 3.25.0 | Delta |
 | --- | --- | --- | --- |
 | `heishamon_esp32_h1_ota` RAM | 61384 | 61512 | +128 |
-| `heishamon_esp32_h1_ota` Flash | 1224317 | 1226409 | +2092 |
+| `heishamon_esp32_h1_ota` Flash | 1224317 | 1226437 | +2120 |
 | `heishamon_esp32_h2_ota` RAM | 61384 | 61512 | +128 |
-| `heishamon_esp32_h2_ota` Flash | 1223653 | 1225833 | +2180 |
+| `heishamon_esp32_h2_ota` Flash | 1223653 | 1225809 | +2156 |
 
 ## Offene Punkte
 

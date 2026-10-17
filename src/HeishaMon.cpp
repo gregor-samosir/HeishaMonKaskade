@@ -1584,6 +1584,16 @@ void setup()
   // Moment. Vor setup()-Ende waere es durch NTP und WLAN-Portal verfaelscht.
   serielle_strecke_start(&serielleStrecke, (uint32_t)millis());
 
+  // Steht der Broker schon (setupMqtt() verbindet innerhalb von setup()), hat
+  // der Verbindungsaufbau die Zaehler VOR diesem Start veroeffentlicht - mit
+  // dem Alter seit millis() = 0, am Pruefling gemessen 324 s nach einem
+  // langsamen Boot. Dieser Stand bliebe retained beim Broker, bis der
+  // Wechsel zu "stumm" oder der 5-min-Takt ihn ersetzt, und ein Waechter auf
+  // telegram_age schluege bei jedem langsamen Boot grundlos an. Deshalb sofort
+  // nachfuehren.
+  if (mqtt_client.connected())
+    publish_info_telegram();
+
   Send_Pana_Mainquery_Timer.start(); // start only the query timer
 
   lastReconnectAttempt = 0;

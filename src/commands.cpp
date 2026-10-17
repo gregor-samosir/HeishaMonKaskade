@@ -291,8 +291,13 @@ bool build_heatpump_command(char *topic, char *msg)
     // set-Topic konnte das Geraet abstuerzen lassen. 32 Zeichen genuegen, um
     // zu sehen, was da ankam, und die Meldung passt in ein MQTT-Paket.
     (void)snprintf(log_line, sizeof(log_line), "Error: Invalid integer value '%.32s' received for topic %.64s", msg, topic);
+    // 3.25.0: dauerhaft sichtbar (info/set_abgelehnt). IMMER VOR write_mqtt_log():
+    // Das veroeffentlicht mitten im MQTT-Callback und ueberschreibt dabei den
+    // Puffer des PubSubClient, auf den topic und msg zeigen. Gebucht wurde in
+    // der ersten Fassung danach - der Pruefling zeigte "??=33.5" statt des
+    // Namens. Kein Hosttest kann das finden, der Puffer gehoert der Bibliothek.
+    setabgelehnt_merken(&setAbgelehnt, topic, msg);
     write_mqtt_log(log_line);
-    setabgelehnt_merken(&setAbgelehnt, topic, msg); // 3.25.0: dauerhaft sichtbar (info/set_abgelehnt)
     return false;
   }
 
@@ -304,8 +309,8 @@ bool build_heatpump_command(char *topic, char *msg)
   if ((strncmp(topic, Topics::SET.c_str(), prefixlen) != 0) || (topic[prefixlen] != '/'))
   {
     (void)snprintf(log_line, sizeof(log_line), "Error: Unknown set topic %.64s", topic);
-    write_mqtt_log(log_line);
     setabgelehnt_merken(&setAbgelehnt, topic, msg);
+    write_mqtt_log(log_line);
     return false;
   }
   const char *topic_name = topic + prefixlen + 1;
@@ -323,8 +328,8 @@ bool build_heatpump_command(char *topic, char *msg)
     if (msg_long < cmd.min || msg_long > cmd.max)
     {
       (void)snprintf(log_line, sizeof(log_line), "Error: Value %ld out of range [%d..%d] for topic %s", (long)msg_long, cmd.min, cmd.max, cmd.name);
-      write_mqtt_log(log_line);
       setabgelehnt_merken(&setAbgelehnt, topic, msg);
+      write_mqtt_log(log_line);
       return false;
     }
 
@@ -376,7 +381,7 @@ bool build_heatpump_command(char *topic, char *msg)
 
   // no table entry matched
   (void)snprintf(log_line, sizeof(log_line), "Error: Unknown set topic %.64s", topic);
-  write_mqtt_log(log_line);
   setabgelehnt_merken(&setAbgelehnt, topic, msg);
+  write_mqtt_log(log_line);
   return false;
 }
