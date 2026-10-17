@@ -1,10 +1,26 @@
 # Arbeitsplan: Serielle Strecke überwacht, abgelehnte Set-Befehle sichtbar (3.25.0)
 
-> **Ergebnis: in Arbeit (2026-10-17) — Code, Hosttests, Builds und Prüflingsnachweis
-> fertig; Rückgabe des Prüflings, Merge und Rollout stehen aus.** Paket P4 der Codedurchsicht vom
+> **Ergebnis: erledigt (2026-10-17) — ausgerollt auf allen vier Boards, beide
+> Releases angelegt, CI grün; nur der Auftrag an `nodered-flows` ist noch zu
+> übergeben.** Paket P4 der Codedurchsicht vom
 > 2026-10-15 ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > S4, dazu S6 als Beigabe). Eine Firmware-Änderung mit Funktionswirkung im
 > Notbetrieb: Der Nachweis läuft am **Prüfling** (`h1b`), nicht an der Anlage.
+>
+> **Rollout (2026-10-17):** Merge `4231e41` und Tag `v3.25.0`; OTA H1 16:25:50,
+> H2 16:27:31, `h2b` 16:30:11 (`h1b` trug 3.25.0 schon vom Rückgabe-Flash des
+> Prüflings, aus dem identischen Quelltext). Abnahme beider Stufen: Version 3.25.0
+> auf der Startseite und im ioBroker (`info/version`, `boot_reason` SW, `ts` nach
+> dem OTA), Tabellen-Diff je 99 Zeilen mit nur zwei laufenden Messwerten und
+> unveränderten Sollwerten, Notbetrieb bereit (`fehlendMaske`, `Sperre`, `Lage`
+> je 0), passiver Telnet-Mitschnitt mit 100 % Antwortquote (H1 8/8, H2 7/7).
+> **Positivpfad zehn Minuten nach dem OTA:** `telegram_ok` 101 an beiden Stufen
+> (rund eines je 6 s), `telegram_err` 0, `telegram_timeout` 0, `telegram_age`
+> 3 bis 4 s, `set_abgelehnt` 0. Backups: `h2b` auf Stufe 2, `mqtt_port` 1884,
+> Hostname und Pflichtfelder unverändert, stillgelegt. `CI` und `CodeQL` grün.
+> Öffentlich `v3.25.0` ohne Binaries; privat `HeishaMon-Rollback` `v3.25.0` mit
+> beiden `_ota`-Abbildern und der ini, `v3.24.0` zum Rückfallstand umbenannt,
+> Release `v3.23.2` gelöscht (Tag bleibt; Owner bestätigt).
 >
 > **Übergabe:** Der Plan führt vom Rettungsanker bis zum Release und ist für den
 > Einstieg in einer neuen Session geschrieben. Zuerst „Lies zuerst“, dann der
@@ -128,7 +144,7 @@ Messaufbau, nicht eine Lücke: Er ist die stumme Strecke.
       `write_mqtt_log()` veröffentlicht im MQTT-Callback und überschrieb den
       Puffer, auf den `topic` zeigt; jetzt wird davor gebucht. Beide wären kein
       Hosttest aufgefallen.
-- [ ] **Rückgabe** in der sicherheitskritischen Reihenfolge: **erst `mqtt_port`
+- [x] **Rückgabe** in der sicherheitskritischen Reihenfolge: **erst `mqtt_port`
       auf 1884, dann die Stufen-Firmware flashen.** Gegenprobe über `/settings`:
       Port 1884 und Hostname `HeishaMon32_h1b` ablesen.
 
@@ -138,15 +154,15 @@ bisher in 88 s). Er wird bei der Abnahme nach dem Rollout belegt.
 
 ### Phase C — Merge, Rollout, Abnahme
 
-- [ ] `/pruefen-vor-merge`.
-- [ ] `/rollout` nach Freigabe des Owners; Abnahme an der Anlage: `telegram_ok`
+- [x] `/pruefen-vor-merge` (alle Schritte grün).
+- [x] `/rollout` nach Freigabe des Owners; Abnahme an der Anlage: `telegram_ok`
       steigt, `telegram_age` einstellig, `telegram_err` und `telegram_timeout`
       im Betrieb nahe 0, Notbetrieb bereit (`Sperre` 0). Ein Lauf an der Anlage
       nur auf ausdrücklichen Auftrag und einzeln aufgerufen.
 - [ ] Auftrag an `nodered-flows` anlegen und übergeben
       ([`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md)) —
       **erst nach dem Rollout**, vorher gibt es die Topics nicht.
-- [ ] Maßnahmenplan: S4, S6, P4 auf erledigt setzen.
+- [x] Maßnahmenplan: S4, S6, P4 auf erledigt setzen.
 
 ## Messwerte
 

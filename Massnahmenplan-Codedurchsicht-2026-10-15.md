@@ -33,9 +33,9 @@ nachgetragen.
 | S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md) |
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
-| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **in Arbeit (3.25.0)**, Code und Hosttests fertig, Prüfling und Rollout offen — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
+| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **erledigt in 3.25.0** (ausgerollt 2026-10-17, alle vier Boards, Releases angelegt); offen nur die Übergabe des Wächter-Auftrags an `nodered-flows` — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **erledigt in 3.23.2** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
-| S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **in Arbeit (3.25.0)** zusammen mit S4 — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
+| S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **erledigt in 3.25.0** zusammen mit S4 (ausgerollt 2026-10-17) — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
 | C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | offen |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
@@ -476,7 +476,7 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
       `TASK_WDT`, `boot_count` + 1, Notbetriebswerte erhalten.
 - [x] Blockadetabelle aus der Durchsicht 2026-09-02 um die neue Grenze
       ergänzen.
-- [ ] S6 (optional mitnehmen, sonst P4): Ganzzahl-Regel als Header mit
+- [x] S6 (optional mitnehmen, sonst P4) — *erledigt in 3.25.0 (P4):* Ganzzahl-Regel als Header mit
       Hosttest; `info/set_abgelehnt` und `info/set_abgelehnt_letzter`;
       `MQTT-Topics.md` nachziehen. Zuordnung P3 oder P4 beim Planen
       entscheiden (siehe S6).
