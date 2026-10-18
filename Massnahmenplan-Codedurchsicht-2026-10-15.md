@@ -40,7 +40,7 @@ nachgetragen.
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
-| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **erledigt in 3.25.1**; d, e (P6) offen |
+| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **erledigt in 3.25.1**; d **bewusst nicht geändert** (Owner 2026-10-18, siehe P6); e (P6) **vorgemerkt** für den nächsten Firmware-Durchlauf |
 | D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
@@ -57,7 +57,7 @@ nachgetragen.
 | 4 | **P3** `loop()` darf nicht stehen (3.24.0) | S2, S3 | Fix | Prüfling, OTA-Test |
 | 5 | **P4** Serielle Strecke (3.25.0) | S4 | Ausbau | Owner-Wortlaut für die Notfallseite, Auftrag an `nodered-flows` |
 | 6 | **P5** Kommandopfad als Header | C1, C5b, C5c | ohne Funktionsänderung | Vorher/Nachher-Liste aller Kodierungen |
-| 7 | **P6** Weboberfläche | C5d, C5e | Härtung | Owner-Entscheid: Notfallablauf benutzt GET |
+| 7 | **P6** Weboberfläche | C5d, C5e | Härtung | d entschieden: bleibt GET (2026-10-18); e wartet auf den nächsten Firmware-Durchlauf |
 | 8 | **P7** Struktur | D4, C3, C4 | Umbau Doku/Format | Owner-Entscheid über Umfang |
 
 Warum diese Reihenfolge: Risiko zuerst. P1 ist billig und beseitigt falsche
@@ -332,7 +332,7 @@ formatieren (Nachweis `.elf`-Vergleich) oder nur Neues — Owner-Entscheid in P7
 | b | `static const`-Tabellen in `notbetrieb.h` landen in jeder Übersetzungseinheit — `inline constexpr` (C++17) | P5 |
 | c | `cleanCommand` wird zur Laufzeit aus `mainCommand` kopiert (`HeishaMon.cpp`, Zeile 1365) — die leere Vorlage gehört als `static const` an eine Stelle | P5 |
 | d | `/settings`, `/reboot`, `/togglelog`, `/toggledebug` ändern Zustand auch per GET. Mit im Browser gemerkter Basic-Auth genügt eine fremde Seite mit eingebettetem Link (CSRF). **Achtung:** Der Notfallablauf in `Ablauf-Backup-Boards.md` setzt den MQTT-Port per `curl … /settings?mqtt_port=…` — bei Umstellung auf POST dort und auf dem Notfallblatt `curl -d` eintragen | P6 |
-| e | `/settings` schreibt gespeicherte Werte unmaskiert in `value='…'` (`webfunctions.cpp`, ab Zeile 711) | P6 |
+| e | `/settings` schreibt die gespeicherten Textwerte (Hostname, Server, Benutzername, Hydraulik- und KNX-Adresse) unverändert in `value='…'`, ohne HTML-Kodierung (`webfunctions.cpp`, ab Zeile 711). **Passwörter sind nicht betroffen:** deren Felder bleiben leer. Ein `'` oder `<` im Wert zerstört die Seite; Nutzen ist Robustheit, kein Schutz vor Angreifern (wer dort einträgt, ist schon als Admin angemeldet) | P6 |
 | f | `write_hex_log`: Kommentar „32 bytes per line does not work“ neben `bytesperline = 32` (`HeishaMon.cpp`, Zeile 429) | P2 |
 
 ### D1 — README-Einstieg falsch *(hoch für Dritte)*
@@ -537,12 +537,25 @@ Zusatztest der Notbetriebs-Tabellen).
       Byte, Flash +64 Byte.
 - [x] Merge, Tag `v3.25.1`, Rollout und Abnahme am Gerät (2026-10-18, alle vier Boards), Releases angelegt.
 
-### P6 — Weboberfläche (Owner-Entscheid nötig)
+### P6 — Weboberfläche (entschieden 2026-10-18)
 
-- [ ] Entscheid: zustandsändernde Routen nur noch per POST? Dafür
-      `Ablauf-Backup-Boards.md` „Im Ernstfall“, die Backup-Pflege und das
-      ausgedruckte Notfallblatt auf `curl -d` umstellen — **vor** dem Rollout.
-- [ ] C5e: Werte in `/settings` HTML-maskiert ausgeben.
+- [x] C5d, Entscheid (Owner 2026-10-18, Option 3): **nichts ändern.** Die
+      zustandsändernden Routen bleiben per GET erreichbar, weil Menülinks,
+      `curl`-Anleitungen und das ausgedruckte Notfallblatt davon leben. Gründe:
+      Heimnetz, geringe Wahrscheinlichkeit; POST allein schützt nicht vor einem
+      gezielten Angriff (eine fremde Seite kann auch ein Formular abschicken),
+      sondern nur vor versehentlichem Aufruf; ein echter Schutz bräuchte einen
+      Prüfschlüssel pro Seite — für diese Anlage zu viel. Festgehalten im README
+      unter „Was bewusst nicht drin ist“. Der Notbetrieb-Knopf ist schon POST.
+      Wiederaufmachen nur, wenn sich die Lage ändert (Board aus dem Heimnetz
+      erreichbar, fremde Nutzer im Netz).
+- [ ] C5e: Textwerte in `/settings` HTML-kodiert ausgeben (`&`, `<`, `>`, `'`,
+      `"`), die Regel als kleine Funktion in einem arduino-freien Header mit
+      Hosttest. **Vorgemerkt, nicht eigens auszurollen** (Owner 2026-10-18):
+      Die Änderung braucht einen vollen Firmware-Durchlauf (Rettungsanker,
+      Branch, Version, Rollout) und ist dafür allein zu klein. Wird mit dem
+      nächsten Firmware-Paket mitgenommen, das ohnehin ausgerollt wird;
+      einen eigenen Rollout dafür gibt es nicht.
 
 ### P7 — Struktur (Owner-Entscheid nötig)
 

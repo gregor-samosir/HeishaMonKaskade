@@ -1417,6 +1417,16 @@ Client-IDs bei schnellen Reconnects.
 * **Keine Unity-Testsuite.** Die Werkzeuge in `test/` sind eigenständige
   Diagnoseprogramme, `pio test` nutzt sie nicht. `merge_test.cpp` wäre die
   Vorlage für echte Unit-Tests.
+* **Zustandsändernde Webadressen bleiben per GET erreichbar.** `/reboot`,
+  `/settings`, `/togglelog` und `/toggledebug` verändern etwas am Board, nehmen
+  aber weiter einen einfachen Aufruf an (Menülinks, `curl "…/settings?mqtt_port=1884"`
+  in den Anleitungen und auf dem ausgedruckten Notfallblatt). Das Risiko: Ist ein
+  Browser am Board angemeldet, kann eine fremde Seite eine dieser Adressen im
+  Hintergrund aufrufen. Geprüft und bewusst nicht geändert (Owner 2026-10-18):
+  Heimnetz, geringe Wahrscheinlichkeit, und POST allein schützt nicht vor einem
+  gezielten Angriff, nur vor versehentlichem Aufruf. Der Notbetrieb-Knopf ist
+  davon ausgenommen — er ist ein POST-Formular. Hintergrund:
+  [`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md), C5d.
 * Ein größerer Umbauplan (RX-State-Machine, FreeRTOS-Tasks, Verify/Ack mit
   Retry, `set/batch`) wurde erarbeitet und bewusst zurückgestellt: für diesen
   Einsatzzweck zu viel Komplexität.
