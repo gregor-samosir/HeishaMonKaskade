@@ -9,7 +9,8 @@
 //
 // Geprueft wird gegen den ECHTEN Dekodierpfad: src/decode.cpp wird
 // mituebersetzt und ueber getTopicPayload() aufgerufen, wie in byte9_test.cpp.
-// Nachgebildet ist nur die Merge-Zeile aus commands.cpp.
+// Die Merge-Zeile ist der echte Code aus setcommands.h (seit 3.25.1; vorher
+// nachgebildet).
 //
 // Der On-Testvektor 0x2A ist an der Anlage gemessen (Arbeitsplan-
 // AltExternalSensor.md, Schritt 1, 2026-09-19): beide Stufen identisch, Byte
@@ -35,6 +36,7 @@
 #include <cstdint>
 
 #include "decode.h"
+#include "setcommands.h" // der echte Kommandopfad (copy ins Bauverzeichnis: decode_hosttest.sh)
 
 // decode.cpp loggt beim Publizieren - hier nicht gebraucht
 void write_telnet_log(char *) {}
@@ -50,12 +52,46 @@ static void pruefe(bool bedingung, const char *was)
     fehler++;
 }
 
-// aus commands.cpp: (value + 1) * param, danach bitgenau eingesetzt
-static byte merge(byte b, byte mask, int value, int param)
+// Der ECHTE Code aus setcommands.h (bis 3.25.0 stand hier eine Nachbildung der
+// Merge-Zeile): einen Wert unter seinem Set-Topic-Namen in ein Byte einsetzen.
+// Frischer Puffer je Aufruf, damit kein Konflikt entsteht - es geht um die
+// Maske, nicht um die Belegung. Eine fehlende Tabellenzeile ist ein Fehler.
+static byte merge(byte b, const char *set_name, int value)
 {
-  byte set_byte = (byte)((value + 1) * param);
-  return (byte)((b & ~mask) | (set_byte & mask));
+  const SetCommand *c = setcommand_finden(set_name);
+  if (!c)
+  {
+    printf("  [FEHLER] %s steht nicht in setCommands[]\n", set_name);
+    fehler++;
+    return b;
+  }
+  byte befehl[QUERYSIZE] = {0};
+  byte belegt[QUERYSIZE] = {0};
+  befehl[c->pos] = b;
+  (void)setcommand_anwenden(*c, value, befehl, belegt);
+  return befehl[c->pos];
 }
+
+// Dasselbe mit ANDERER Maske, fuer die Gegenproben "ohne Maske": Die Zeile
+// wird kopiert und nur die Maske getauscht, angewendet wird wieder der echte Code.
+static byte merge_mit_maske(byte b, const char *set_name, byte maske, int value)
+{
+  const SetCommand *c = setcommand_finden(set_name);
+  if (!c)
+  {
+    printf("  [FEHLER] %s steht nicht in setCommands[]\n", set_name);
+    fehler++;
+    return b;
+  }
+  SetCommand kopie = *c;
+  kopie.mask = maske;
+  byte befehl[QUERYSIZE] = {0};
+  byte belegt[QUERYSIZE] = {0};
+  befehl[kopie.pos] = b;
+  (void)setcommand_anwenden(kopie, value, befehl, belegt);
+  return befehl[kopie.pos];
+}
+
 
 // Tabellenzeile ueber den Topic-Namen finden. Der Index IST nicht die
 // TOP-Nummer, deshalb gesucht statt gerechnet.
@@ -105,7 +141,7 @@ int main()
   printf("\n== Fall 2: gesendet -> Rohbyte -> zurueckgelesen ==\n");
   for (int aussen = 0; aussen <= 1; aussen++)
   {
-    byte b = merge(0, 0x30, aussen, 16); // SET40 AltExternalSensor
+    byte b = merge(0, "AltExternalSensor", aussen); // SET40
     snprintf(text, sizeof text, "AltExternalSensor=%d -> 0x%02X, gelesen %d (%s)",
              aussen, b, wert_der_zeile(z_top112, b), text_der_zeile(z_top112, b));
     pruefe(wert_der_zeile(z_top112, b) == aussen, text);
@@ -160,12 +196,20 @@ int main()
   pruefe(gepruefte_kombinationen == 64, text);
 
   printf("\n== Fall 4: keine Kodierung tritt aus der Maske 0x30 heraus ==\n");
-  for (int v = 0; v <= 1; v++) // min..max aus setCommands[]
   {
-    byte set_byte = (byte)((v + 1) * 16); // SET40, param=16
-    snprintf(text, sizeof text, "AltExternalSensor Wert %d -> 0x%02X liegt ganz in Maske 0x30",
-             v, set_byte);
-    pruefe((set_byte & (byte)~0x30) == 0, text);
+    // Bereich und Maske kommen aus der Tabelle, nicht aus Konstanten im Test
+    const SetCommand *c = setcommand_finden("AltExternalSensor");
+    pruefe(c != nullptr && c->mask == 0x30 && c->pos == 20, "SET40 steht auf Byte 20 mit Maske 0x30");
+    if (c)
+    {
+      for (int v = c->min; v <= c->max; v++)
+      {
+        byte set_byte = setcommand_kodieren(*c, v);
+        snprintf(text, sizeof text, "AltExternalSensor Wert %d -> 0x%02X liegt ganz in Maske 0x%02X",
+                 v, set_byte, c->mask);
+        pruefe((set_byte & (byte)~c->mask) == 0, text);
+      }
+    }
   }
 
   printf("\n%s (%d Fehler)\n", fehler ? "FEHLGESCHLAGEN" : "ALLE ZUSICHERUNGEN ERFUELLT", fehler);

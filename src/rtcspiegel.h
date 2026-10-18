@@ -47,8 +47,9 @@
 /* hat.                                                                      */
 /*                                                                           */
 /* WAS DIESER HEADER NICHT PRUEFT: ob ein einzelner Wert im erlaubten        */
-/* Bereich liegt. Die Grenzen stehen in setCommands[] (commands.cpp) und     */
-/* sind ohne Arduino nicht erreichbar. Die Firmware laesst deshalb jeden     */
+/* Bereich liegt. Die Grenzen stehen in setCommands[] (setcommands.h); dieser*/
+/* Header kennt sie bewusst nicht, er soll ohne die Tabelle pruefbar sein.   */
+/* Die Firmware laesst deshalb jeden                                         */
 /* uebernommenen Wert erneut durch set_command_range() und                   */
 /* notbetrieb_wert_annehmen() laufen - denselben Weg, den auch eine frische  */
 /* MQTT-Nachricht geht. Hier faellt nur die Entscheidung, ob der Spiegel     */

@@ -1,5 +1,8 @@
-// Nachbildung der Merge-Logik aus commands.cpp, um den Fix vor dem Flashen
-// zu belegen. Werte 1:1 aus der setCommands-Tabelle uebernommen.
+// Nachweis der Merge-Logik (Masken) des Kommandopfads vor dem Flashen. Seit
+// 3.25.1 laeuft hier der ECHTE Code aus src/setcommands.h; bis 3.25.0 war es
+// eine Nachbildung mit Werten, die aus der Tabelle abgeschrieben waren. Nur
+// "applyOld" (die Maskenlosigkeit der 3.0.1, bewusst historisch) bildet
+// noch etwas nach - und das ist der Fehler, den dieser Test zeigen soll.
 //
 // Seit 3.6.0 prueft das Programm seine Ergebnisse selbst: jede Zeile hat eine
 // Zusicherung, und der Rueckgabewert ist != 0, sobald eine davon bricht.
@@ -10,23 +13,34 @@
 //   c++ -std=c++17 -O2 -Wall -o /tmp/merge_test test/merge_test.cpp
 //   /tmp/merge_test
 #include <cstdio>
+#include <cstdlib>
+#include <cstdint>
 #include <cstring>
 
 typedef unsigned char byte;
 
-enum ConvType { CONV_ADD, CONV_MUL, CONV_MUL_INC, CONV_OPMODE };
-static const byte opModeBytes[] = {18, 19, 24, 33, 34, 35, 40};
+#include "../src/setcommands.h"
 
-struct Field { const char *name; byte pos; byte mask; ConvType conv; int param; };
-
-// die sechs Kanaele, die der Node-RED-Verteiler pro WP gleichzeitig ausgibt
-static const Field Heatpump   = {"Heatpump",   4,  0x03, CONV_ADD,     1};
-static const Field WaterPump  = {"WaterPump",  4,  0x30, CONV_MUL_INC, 16};
-static const Field ForceDHW   = {"ForceDHW",   4,  0xC0, CONV_MUL_INC, 64};
-static const Field OpMode     = {"OperationMode", 6, 0xFF, CONV_OPMODE, 0};
-static const Field Z1Heat     = {"Z1HeatReq",  38, 0xFF, CONV_ADD,   128};
-static const Field Z1Cool     = {"Z1CoolReq",  39, 0xFF, CONV_ADD,   128};
-static const Field PumpSpeed  = {"PumpSpeed",  45, 0xFF, CONV_ADD,     1};
+// die Kanaele, die der Node-RED-Verteiler pro WP gleichzeitig ausgibt - als
+// Zeilen der ECHTEN Tabelle, ueber den Topic-Namen gefunden. Fehlt eine Zeile,
+// bricht der Test sofort ab, statt mit einer Null-Zeile weiterzumachen.
+static const SetCommand &zeile(const char *name)
+{
+  const SetCommand *c = setcommand_finden(name);
+  if (!c)
+  {
+    printf("FEHLER: %s steht nicht in setCommands[]\n", name);
+    exit(2);
+  }
+  return *c;
+}
+static const SetCommand &Heatpump = zeile("Heatpump");
+static const SetCommand &WaterPump = zeile("WaterPump");
+static const SetCommand &ForceDHW = zeile("ForceDHW");
+static const SetCommand &OpMode = zeile("OperationMode");
+static const SetCommand &Z1Heat = zeile("Z1HeatRequestTemperature");
+static const SetCommand &Z1Cool = zeile("Z1CoolRequestTemperature");
+static const SetCommand &PumpSpeed = zeile("WaterPumpSpeed");
 
 static int fehler = 0;
 
@@ -46,24 +60,17 @@ static void pruefe_byte(int ist, int soll, const char *was)
     fehler++;
 }
 
-static byte encode(const Field &f, int v)
-{
-  switch (f.conv) {
-    case CONV_ADD:     return (byte)(v + f.param);
-    case CONV_MUL:     return (byte)(v * f.param);
-    case CONV_MUL_INC: return (byte)((v + 1) * f.param);
-    case CONV_OPMODE:  return opModeBytes[v];
-  }
-  return 0;
-}
-
 static byte buf[110];
+static byte belegt[110]; // usedMask: Konflikte sind hier gewollt und egal
 
-static void applyNew(const Field &f, int v)   // 3.1.0
-{ buf[f.pos] = (buf[f.pos] & ~f.mask) | (encode(f, v) & f.mask); }
+// 3.1.0 bis heute: der echte Code aus setcommands.h
+static void applyNew(const SetCommand &f, int v)
+{ (void)setcommand_anwenden(f, v, buf, belegt); }
 
-static void applyOld(const Field &f, int v)   // 3.0.1
-{ buf[f.pos] = encode(f, v); }
+// 3.0.1: das ganze Byte statt der Maske - der Fehler, den Fall 1 reproduziert.
+// Kodiert wird trotzdem mit dem echten Code, nur das Einsetzen ist das alte.
+static void applyOld(const SetCommand &f, int v)
+{ buf[f.pos] = setcommand_kodieren(f, v); }
 
 static byte sumFrom4()   // die alte calculate_commandset-Heuristik
 { byte s = 0; for (int i = 4; i < 110; i++) s += buf[i]; return s; }
@@ -128,7 +135,7 @@ int main()
   applyOld(Z1Heat, 20); applyOld(Z1Cool, 20); applyOld(PumpSpeed, 79);
   printf("  Z1Heat=20, Z1Cool=20, PumpSpeed=79 -> Summe ab Byte 4 = %d\n", sumFrom4());
   pruefe(sumFrom4() == 120, "148+148+80 = 376, als Byte 120 -> waere gesendet worden");
-  static const Field ForceDefrost = {"ForceDefrost", 8, 0x02, CONV_MUL, 2};
+  const SetCommand &ForceDefrost = zeile("ForceDefrost");
   memset(buf, 0, sizeof buf);
   applyOld(ForceDefrost, 0);
   printf("  SetForceDefrost 0 (ausschalten)   -> Summe ab Byte 4 = %d\n", sumFrom4());

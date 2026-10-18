@@ -101,8 +101,20 @@ py_test() {
 # Zusicherung != 0 zurueck - gefangen werden also nicht nur Uebersetzungs-
 # fehler und Abstuerze. Zu jedem Test steht, WARUM er hier steht.
 
-# Merge-Logik der Set-Kommandos (Masken, Umrechnung)
+# Merge-Logik der Set-Kommandos (Masken, Umrechnung) - seit 3.25.1 gegen den
+# echten Kommandopfad aus src/setcommands.h, nicht mehr gegen eine Nachbildung
 cpp_test merge_test
+
+# Tabelle und Regeln des Kommandopfads (C1, 3.25.1): bindet src/setcommands.h
+# direkt ein. Der Grund ist ein falscher Parameter in einer Tabellenzeile (64
+# statt 16 bei SET40, Maske 0x30): das Kommando sendet dann still "keine
+# Aenderung" und kein Test der Kodierung faellt auf, wenn er die Tabelle nur
+# nachbildet. Jede Pruefregel hat ihre Gegenprobe (kaputte Kopie der Tabelle),
+# dazu Stichproben der Kodierung, anwenden() samt Konflikt und leerer Vorlage
+# und der Abgleich der Notbetriebs-Tabellen mit setCommands[]. Mit --liste
+# druckt das Programm alle (SET, Wert) -> (Byte, Maske, Rohwert) fuer den
+# Vorher/Nachher-Vergleich nach einer Tabellenaenderung.
+cpp_test setcommands_test
 
 # Typ-, Laengen- und Pruefsummenregel fuer das Antworttelegramm - bindet
 # src/telegram.h direkt ein, prueft also den Code, der auf dem Geraet laeuft
@@ -144,7 +156,7 @@ cpp_test serielle_strecke_test
 cpp_test setpayload_test
 
 # Kodierung von SET35/SET36 auf Byte 28 - legt die Merge-Logik aus
-# commands.cpp und die Dekodierer aus decode.cpp nebeneinander. Byte 28 traegt
+# setcommands.h und die Dekodierer aus decode.cpp nebeneinander. Byte 28 traegt
 # zwei Bitfelder; ohne bitgenaue Maske schaltet ein Kuehl-Kommando die Heizung
 # mit um, und genau das prueft die Gegenprobe.
 cpp_test byte28_test

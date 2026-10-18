@@ -19,7 +19,7 @@ is the only proof a write arrived — where that column is empty, a controller
 writes blind. Tables are language-neutral; the notes are German.*
 
 **Stand:** 2026-09-19, Firmware 3.23.0. Quelle sind ausschließlich die beiden
-Tabellen im Code — `setCommands[]` in [`src/commands.cpp`](src/commands.cpp)
+Tabellen im Code — `setCommands[]` in [`src/setcommands.h`](src/setcommands.h)
 und `stateTopics[]` in [`src/decode.cpp`](src/decode.cpp). Die Tabellen unten
 sind nicht von Hand gepflegt, sondern von
 [`test/set_top_zuordnung.py`](test/set_top_zuordnung.py) erzeugt; nach jeder
@@ -163,7 +163,7 @@ SET9 = 6 (Auto+DHW) | 40 | TOP4 = 6 `Auto(Heat)+DHW` **oder** 8 `Auto(Cool)+DHW`
 Praktische Folge: **Eine Steuerung darf nach `set/OperationMode 2` nicht auf
 `TOP4 == 2` warten** — sie muss 2 und 7 als Erfolg werten. Für die anderen fünf
 Modi stimmt der zurückgelesene Wert mit dem geschriebenen überein. Abgeleitet
-aus den Tabellen in `commands.cpp` und `decode.cpp` (`opModeBytes[2] = 24`,
+aus den Tabellen in `setcommands.h` und `decode.cpp` (`opModeBytes[2] = 24`,
 aber `getOpMode()` kennt keinen Fall 24, sondern 25 → 2 und 26 → 7); an dieser
 Anlage nicht nachgemessen, weil sie nicht im Auto-Betrieb läuft.
 
@@ -337,7 +337,7 @@ und nicht sofort nach dem Senden zurückzulesen — sonst hält man ein
 angekommenes Kommando für verworfen.
 
 Zusätzlich ohne Gerät belegt: [`test/byte9_test.cpp`](test/byte9_test.cpp) legt
-die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus `decode.cpp`
+die Merge-Zeile aus `setcommands.h` und die echten Dekodierer aus `decode.cpp`
 nebeneinander, samt Gegenprobe ohne Maske. Einzelheiten und der volle Ablauf:
 [`Vorhaben-HeaterSet.md`](Vorhaben-HeaterSet.md), Abschnitt 8.
 
@@ -388,7 +388,7 @@ Stufen haben einen externen Fühler und standen auf On) und E7, bevor eine
 Zeile Code geschrieben wurde.
 
 Zusätzlich ohne Gerät belegt: [`test/byte20_test.cpp`](test/byte20_test.cpp)
-legt die Merge-Zeile aus `commands.cpp` und die echten Dekodierer aus
+legt die Merge-Zeile aus `setcommands.h` und die echten Dekodierer aus
 `decode.cpp` nebeneinander, mit dem gemessenen Rohwert als Testvektor und
 allen 64 Kombinationen der Nachbarfelder (Frostschutz, Optionsplatine,
 Wasser/Glykol-Bitpaar) — TOP112 bleibt in jeder davon unberührt.
@@ -649,7 +649,7 @@ Kompressor-Eingangs also als TOP108 `External_Compressor_Config`.
   Topic-Nummer, keine Byte-Position.
 * **SG Ready ist an dieser Anlage ausgetestet und arbeitet wie gewollt.** Die
   Referenz führt Byte 71 als *Heating* und Byte 72 als *DHW*, `decode.cpp` und
-  `commands.cpp` halten es umgekehrt — maßgeblich ist die Firmware, die
+  `setcommands.h` halten es umgekehrt — maßgeblich ist die Firmware, die
   Abweichung in der Referenz ist damit für dieses Projekt erledigt. Für die
   Zuordnung war sie ohnehin folgenlos: SET23 und TOP94 zeigen beide auf
   Byte 71, das Paar stimmt unabhängig von der Beschriftung.

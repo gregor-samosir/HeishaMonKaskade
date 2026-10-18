@@ -1,5 +1,93 @@
 #pragma once
 // Changelog:
+// 3.25.1 - KOMMANDOPFAD ALS HEADER, OHNE FUNKTIONSAENDERUNG.
+//         Paket P5 der dritten Codedurchsicht (Befunde C1, C5b, C5c,
+//         Massnahmenplan-Codedurchsicht-2026-10-15.md, Arbeitsplan
+//         Arbeitsplan-Kommandopfad-3.25.1.md). Das Verhalten der Firmware
+//         bleibt bitgleich; belegt durch eine Vorher/Nachher-Liste.
+//
+//         PROBLEM C1. setCommands[], Umrechnung, Maske und Konfliktpruefung
+//         standen in commands.cpp, das an der Arduino-Welt haengt. merge_test
+//         und byte9/20/28_test bildeten die Merge-Zeile nach und trugen
+//         Masken und Parameter als eigene Konstanten. Ein Fehler in einer
+//         Tabellenzeile liess alle C++-Tests gruen. Beispiel aus dem Befund:
+//         Parameter 64 statt 16 bei SET40 (Maske 0x30) ergibt 0x40 & 0x30 = 0,
+//         das Kommando sendet still "keine Aenderung".
+//
+//         FIX C1. Neuer arduino-freier Header setcommands.h (Muster
+//         setpayload.h): Tabelle als inline constexpr, setcommand_finden(),
+//         setcommand_kodieren(), setcommand_anwenden() (die Maskenzeile samt
+//         Konfliktmeldung), kommando_zuruecksetzen(). commands.cpp behaelt
+//         Abonnieren, Payload-Annahme und Logzeilen; set_command_range() ruft
+//         setcommand_finden(), die Schnittstelle in commands.h bleibt, die
+//         Reihenfolge von setabgelehnt_merken() vor write_mqtt_log() auch.
+//         Dazu setcommands_pruefen(): ein static_assert im Header prueft die
+//         Tabelle ZUR UEBERSETZUNGSZEIT - Name und Nummer einmalig, pos 4..109,
+//         Maske ungleich 0, jeder Wert von min bis max ergibt einen Rohwert in
+//         0..255 und vollstaendig innerhalb der Maske, Ueberlappung am selben
+//         Byte nur fuer QuietMode/PowerfulMode (Byte 7). Ein falscher
+//         Parameter bricht jetzt den Firmware-Build. QUERYSIZE hat nur noch
+//         eine Definition (setcommands.h, HeishaMon.h bindet sie ein).
+//
+//         C5c. cleanCommand (110 Byte RAM) und der 110-Byte-Initialisierer von
+//         mainCommand sind weg; die leere Vorlage steht einmal als
+//         KOMMANDO_VORLAGE im Flash. mainCommand startet leer (bss) und wird
+//         als ALLERERSTES in setup() daraus gefuellt, nach dem Senden stellt
+//         kommando_zuruecksetzen() Puffer und usedMask zusammen wieder her.
+//         Vorher wurde die Vorlage erst am Ende von setup() aus dem
+//         Arbeitspuffer gesichert - kaeme in setup() ein Set-Kommando an,
+//         haette sie das mitgenommen; das Fenster war nie erreichbar
+//         (Callbacks laufen erst in loop()), ist jetzt aber auch im Prinzip zu.
+//
+//         C5b. Die Tabellen in notbetrieb.h (gehaltene Werte, Schrittfolgen,
+//         Anzahlen) sind inline constexpr statt static const: eine Kopie im
+//         Programm statt einer je Uebersetzungseinheit, die sie einbindet
+//         (NOTBETRIEB_WERTE_HEIZEN lag zweimal im Abbild). Auf dem ESP32-S3
+//         lagen die Tabellen schon vorher im Flash (.flash.rodata) - der
+//         Gewinn dort ist die entfallene Doppelkopie, nicht RAM.
+//
+//         NACHWEIS.
+//         1. Vorher/Nachher-Liste aller Paare (SET, Wert) -> (Byte, Maske,
+//            Rohwert): 2265 Zeilen, vorher aus der ALTEN Tabelle mit dem
+//            Python-Parser (set_top_zuordnung.py), nachher aus dem Header
+//            mit dem C++-Programm (setcommands_test --liste) und mit dem
+//            auf den Header umgestellten Parser - drei Listen, byte-
+//            identisch, SHA-256 d430a6e0...75371d2.
+//         2. Hosttests: neu test/setcommands_test.cpp (Tabellenregeln mit
+//            Gegenprobe je Regel an einer kaputten Tabellenkopie, Stichproben
+//            der Kodierung, anwenden() mit Konflikt und Unfug, leere
+//            Vorlage, Notbetriebs-Tabellen gegen setCommands[]). merge_test,
+//            byte9/20/28_test rufen jetzt den echten Code; ihre Testvektoren
+//            und Gegenproben ("ohne Maske") bleiben. Alle 21 Hosttests
+//            gruen, alle sechs Envs ohne Warnung (-Werror).
+//         3. GEGENPROBE: SET40 Parameter 64 statt 16 -> der Firmware-Build
+//            bricht am static_assert; setcommands_test meldet "AUSSERHALB,
+//            Zeile 37" und zwei Stichproben (3 Zusicherungen rot); merge_test,
+//            byte9/20/28_test und doku_zuordnung_test werden ebenfalls rot
+//            (6 von 21 Hosttests). Zurueckgenommen, wieder gruen.
+//         4. .elf-Vergleich (h1_ota; nm --size-sort): nur die erwarteten
+//            Stellen - build_heatpump_command -16 Byte, set_command_range
+//            -34, neu setcommand_finden (+66), setup +12, mainCommand von
+//            .data nach .bss, cleanCommand weg, KOMMANDO_VORLAGE im Flash,
+//            die Tabellen aus notbetrieb.h je einmal statt doppelt. RAM
+//            -112 Byte (.dram0.data -112; .bss gleich gross: cleanCommand
+//            -110, mainCommand +110), Flash +64 (Text +32, rodata +144,
+//            Initialwerte in .data -112).
+//            Neu ist eine Fehlermeldung "Command ... could not be applied"
+//            fuer den nicht erreichbaren Fall, dass anwenden() nach der
+//            Bereichspruefung ablehnt (+34 Byte Text).
+//
+//         NICHT abgedeckt: das Zusammenspiel von build_heatpump_command() mit
+//         dem MQTT-Callback und dem Senden bleibt Firmware-Klebecode. Das
+//         gehoert zur Abnahme nach dem Rollout (Re-Assert als <SUB>-Zeilen
+//         angenommen, keine "Field conflict"-Warnung, tablesnap-Diff nur
+//         Messwerte).
+//
+//         GROESSE gegen 3.25.0 (heishamon_esp32_h1_ota): RAM 61512 -> 61400
+//         Byte (-112), Flash 1226437 -> 1226501 Byte (+64).
+//         heishamon_esp32_h2_ota: RAM 61512 -> 61400 Byte (-112), Flash
+//         1225809 -> 1225873 Byte (+64).
+//
 // 3.25.0 - SERIELLE STRECKE UEBERWACHT, ABGELEHNTE SET-BEFEHLE SICHTBAR.
 //         Paket P4 der dritten Codedurchsicht (Befunde S4 und S6,
 //         Massnahmenplan-Codedurchsicht-2026-10-15.md, Arbeitsplan
@@ -2388,4 +2476,4 @@
 //         Query-Zyklus blieb nach ungueltigem MQTT-Wert stehen,
 //         Bounds-Check fuer den seriellen Empfangspuffer
 // 2.0.0 - Stand vor Bugfix-Session (Tag: rettungsanker-2026-08-01)
-static const char* heishamon_version = "3.25.0";
+static const char* heishamon_version = "3.25.1";
