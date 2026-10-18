@@ -1,14 +1,26 @@
 # Arbeitsplan: Kommandopfad als Header (3.25.1)
 
-> **Ergebnis: umgesetzt und geprüft (2026-10-18), Rollout steht aus.** Paket P5
+> **Ergebnis: erledigt (2026-10-18) — ausgerollt auf allen vier Boards, beide
+> Releases angelegt, CI grün.** Paket P5
 > der Codedurchsicht vom 2026-10-15
 > ([`Massnahmenplan-Codedurchsicht-2026-10-15.md`](Massnahmenplan-Codedurchsicht-2026-10-15.md):
 > C1, C5b, C5c). **Ohne Funktionsänderung** — der Nachweis ist ein Vergleich
 > aller Kodierungen und der `.elf`, kein Gerätetest. Branch
 > `kommandopfad-header`, Rettungsanker `rettungsanker-2026-10-18`.
 >
-> **Offen:** Merge nach `main`, Tag `v3.25.1`, `/rollout 3.25.1` auf Aufruf des
-> Owners (Abnahme am Gerät: siehe Schritt 8).
+> **Rollout (2026-10-18):** Merge `d1cc623` und Tag `v3.25.1`; OTA H1 12:46:20,
+> H2 12:54:56, Backups `h1b` 12:58:10 und `h2b` 12:58:32. Abnahme beider
+> Stufen: Version 3.25.1 auf der Startseite und im ioBroker (`info/version`,
+> `boot_reason` SW, `ts` nach dem OTA), Tabellen-Diff nur laufende Messwerte
+> (H1 drei, H2 sieben Zeilen), Sollwerte unverändert, Notbetrieb bereit
+> (`fehlendMaske`, `Sperre`, `Lage` je 0), Re-Assert als `<SUB>`-Zeilen
+> angenommen (H1 12:51:12 acht, H2 12:56:12 sieben), kein `Error`, keine
+> `Warning`, kein „Field conflict“. Backups: `mqtt_port` 1884 vor und nach dem
+> Flash, Hostnamen und KNX-Schnittstelle unverändert, Notbetrieb gesperrt wie
+> gewollt. `CI` und `CodeQL` grün. Öffentlich `v3.25.1` ohne Binaries; privat
+> `HeishaMon-Rollback` `v3.25.1` mit beiden `_ota`-Abbildern und der ini,
+> `v3.25.0` zum Rückfallstand umbenannt, Release `v3.24.0` gelöscht (Tag
+> bleibt; Owner bestätigt).
 
 ## Worum es geht
 
@@ -86,7 +98,7 @@ rollenunabhängig, es entsteht keine Abweichung (STOPP-Regel nicht berührt).
       `Byte-Zuordnung.md`, `SET-TOP-Zuordnung.md`, `MQTT-Topics.md`,
       `test/README.md`, `CLAUDE.md` (Liste der arduino-freien Header) und in den
       Kommentaren unter `src/`. Changelog 3.25.1 in `src/version.h`.
-- [ ] **10. Merge, Tag, Rollout.** `/pruefen-vor-merge`, `git merge --no-ff`,
+- [x] **10. Merge, Tag, Rollout.** `/pruefen-vor-merge`, `git merge --no-ff`,
       annotierter Tag `v3.25.1`, dann `/rollout 3.25.1` **auf Aufruf des
       Owners**. Abnahme am Gerät je Stufe: `info/version` 3.25.1,
       `tablesnap`-Diff nur Messwerte, ein Re-Assert als `<SUB>`-Zeilen

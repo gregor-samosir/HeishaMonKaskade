@@ -33,14 +33,14 @@ nachgetragen.
 | S1 | Karenzfenster kippt nach 24,86 Tagen — alle Set-Kommandos werden still verworfen | **kritisch** | 3.23.1 | **erledigt in 3.23.1** (ausgerollt 2026-10-15, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Karenzfenster-3.23.1.md) |
 | S2 | Ein Telnet-Client, der nicht mehr liest, hält `loop()` minutenlang an | hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
 | S3 | Kein Watchdog für `loop()` (= K1 vom 2026-09-02) | mittel–hoch | P3 | **erledigt in 3.24.0** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Loop-Stillstand-3.24.0.md) |
-| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **erledigt in 3.25.0** (ausgerollt 2026-10-17, alle vier Boards, Releases angelegt); offen nur die Übergabe des Wächter-Auftrags an `nodered-flows` — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
+| S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **erledigt in 3.25.0** (ausgerollt 2026-10-17, alle vier Boards, Releases angelegt); der Wächter-Auftrag ist in `nodered-flows` umgesetzt (V1.5.0) — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **erledigt in 3.23.2** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
 | S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **erledigt in 3.25.0** zusammen mit S4 (ausgerollt 2026-10-17) — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
-| C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | **umgesetzt in 3.25.1** (Branch `kommandopfad-header`, Nachweis erbracht; Rollout steht aus) — [Arbeitsplan](Arbeitsplan-Kommandopfad-3.25.1.md) |
+| C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | **erledigt in 3.25.1** (ausgerollt 2026-10-18, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Kommandopfad-3.25.1.md) |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
-| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **umgesetzt in 3.25.1** (Rollout steht aus); d, e (P6) offen |
+| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **erledigt in 3.25.1**; d, e (P6) offen |
 | D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
@@ -512,9 +512,10 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
       dabei zwei Fehler gefunden und behoben, siehe Arbeitsplan.)*
 - [x] S6: Ganzzahl-Regel als Header (`src/setpayload.h`) mit Hosttest;
       `info/set_abgelehnt` und `info/set_abgelehnt_letzter`.
-- [ ] [`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md):
-      Wächter auf `info/telegram_*` und `info/set_abgelehnt*` — angelegt, erst
-      nach dem Rollout zu übergeben.
+- [x] [`Auftrag-Waechter-Serielle-Strecke.md`](Auftrag-Waechter-Serielle-Strecke.md):
+      Wächter auf `info/telegram_*` und `info/set_abgelehnt*` — übergeben und
+      umgesetzt (`WP_Bridge_Waechter` V1.5.0, 2026-10-17; Owner-Bestätigung
+      2026-10-18).
 
 ### P5 — Kommandopfad als Header (ohne Funktionsänderung)
 
@@ -534,7 +535,7 @@ Zusatztest der Notbetriebs-Tabellen).
 - [x] Nachweis: Liste identisch (drei Wege, gleiche SHA-256), alle 21
       Hosttests, `decode_vergleich.py` identisch, `.elf`-Vergleich: RAM −112
       Byte, Flash +64 Byte.
-- [ ] Merge, Tag `v3.25.1`, Rollout auf Aufruf des Owners, Abnahme am Gerät.
+- [x] Merge, Tag `v3.25.1`, Rollout und Abnahme am Gerät (2026-10-18, alle vier Boards), Releases angelegt.
 
 ### P6 — Weboberfläche (Owner-Entscheid nötig)
 
