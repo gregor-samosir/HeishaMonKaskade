@@ -38,7 +38,7 @@ single-unit, hand-operated setups. The most important one:
 > Upstream assigns the whole byte; every other field in it falls back to
 > `0 = no change`. Two set commands inside the same 500 ms collection window
 > therefore cancelled each other — while the log still cheerfully confirmed both.
-> This fork merges each value through a bit mask (`src/commands.cpp`).
+> This fork merges each value through a bit mask (`src/setcommands.h`).
 > Measured proof: [`test/README.md`](test/README.md).
 
 Other notable changes: range validation for every set command (with limits
@@ -117,7 +117,7 @@ Die spannende Frage ist dabei nicht „funktioniert es?" — sondern „würde i
 
 Diese Firmware ist für *eine* Anlage konfiguriert — aber sie ist so gebaut, dass
 das Umkonfigurieren die leichteste Übung daran ist. Ein Set-Kommando sieht hier
-vollständig so aus ([`src/commands.cpp`](src/commands.cpp)):
+vollständig so aus ([`src/setcommands.h`](src/setcommands.h)):
 
 ```c
 // Nr pos mask conversion    topic-name     min  max  param
@@ -140,7 +140,7 @@ Was heißt das praktisch?
 | Vorhaben | Aufwand |
 | --- | --- |
 | Eigene Topic-Namen, eigenes MQTT-Präfix | Build-Flags, kein Code |
-| Ein Set-Kommando ergänzen | eine Zeile in `commands.cpp` |
+| Ein Set-Kommando ergänzen | eine Zeile in `setcommands.h` (die Tabellenprüfung bricht den Build bei einem Tippfehler) |
 | Ein Topic ergänzen | eine Zeile in `decode.cpp` + Zeilenzahl in `decode.h` |
 | Zone 2 zurückholen | die entfernten Tabellenzeilen wieder eintragen |
 
@@ -1092,7 +1092,8 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`src/serielle_strecke.h`](src/serielle_strecke.h) | Gesundheit der seriellen Strecke zur Wärmepumpe: Zähler gültiger, verworfener und ausgebliebener Telegramme, Alter des letzten gültigen, Schwelle „stumm“ (30 s) — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/setpayload.h`](src/setpayload.h) | Ganzzahlregel der Set-Befehle und Buchführung über abgelehnte (Zähler, letzter Befehl) — arduino-frei, vom Hosttest direkt eingebunden |
 | [`src/telnetausgabe.h`](src/telnetausgabe.h), [`src/telnetausgabe.cpp`](src/telnetausgabe.cpp) | Der Telnet-Teil selbst (ersetzt seit 3.24.0 die Bibliothek `TelnetStream`): ein Client, `send(…, MSG_DONTWAIT)`, Verwerfen statt Warten |
-| [`src/commands.cpp`](src/commands.cpp) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos |
+| [`src/setcommands.h`](src/setcommands.h) | Tabelle `setCommands` — Quelle der Wahrheit für alle Set-Kommandos —, Umrechnung, Maske, Konfliktmeldung, leere Kommandovorlage und die Tabellenprüfung zur Übersetzungszeit (seit 3.25.1) — arduino-frei, vom Hosttest direkt eingebunden |
+| [`src/commands.cpp`](src/commands.cpp) | Anbindung an MQTT: Set-Topics abonnieren, Payload annehmen, Logzeilen — die Regeln selbst stehen in `setcommands.h` |
 | [`src/decode.cpp`](src/decode.cpp) | Tabelle `stateTopics` und die Dekodierer |
 | [`src/Topics.cpp`](src/Topics.cpp) | Wurzeln der MQTT-Pfade (`state`, `set`, `info`) — die Topic-Namen stehen in den Tabellen |
 | [`src/webfunctions.cpp`](src/webfunctions.cpp) | Weboberfläche und Einstellungen |
@@ -1124,6 +1125,7 @@ Der vollständige Changelog mit Begründung und Nachweis je Version steht in
 | [`Arbeitsplan-Build-Hygiene-3.23.2.md`](Arbeitsplan-Build-Hygiene-3.23.2.md) | Bibliotheken pinnen, Compiler-Warnungen wieder an, tote Zweige und veraltete Kommentare (Paket P2 der Durchsicht 2026-10-15) — in Arbeit |
 | [`Arbeitsplan-Loop-Stillstand-3.24.0.md`](Arbeitsplan-Loop-Stillstand-3.24.0.md) | Telnet-Ausgabe nicht blockierend (S2), Watchdog für `loop()` (S3) — Paket P3 der Durchsicht 2026-10-15 — erledigt, 3.24.0 am 2026-10-16 ausgerollt |
 | [`Arbeitsplan-Serielle-Strecke-3.25.0.md`](Arbeitsplan-Serielle-Strecke-3.25.0.md) | Serielle Strecke überwacht (S4), abgelehnte Set-Befehle sichtbar (S6) — Paket P4 der Durchsicht 2026-10-15 — erledigt, 3.25.0 am 2026-10-17 ausgerollt |
+| [`Arbeitsplan-Kommandopfad-3.25.1.md`](Arbeitsplan-Kommandopfad-3.25.1.md) | Kommandopfad als arduino-freier Header (C1, C5b, C5c) — Paket P5 der Durchsicht 2026-10-15 — ohne Funktionsänderung, umgesetzt und geprüft, Rollout steht aus |
 | [`Arbeitsplan-Karenzfenster-3.23.1.md`](Arbeitsplan-Karenzfenster-3.23.1.md) | Karenzfenster nach dem Subscribe überlaufsicher machen (Befund S1 der Durchsicht 2026-10-15) — erledigt, 3.23.1 am 2026-10-15 ausgerollt |
 | [`Auftrag-Befehlswaechter-AltExternalSensor.md`](Auftrag-Befehlswaechter-AltExternalSensor.md) | Auftrag an `nodered-flows`: SET40/TOP112 in den `WP_Befehls_Waechter` aufnehmen — erledigt am 2026-09-19 im Projekt `nodered-flows` |
 | [`Auftrag-Notbetriebssender-Ganzzahl.md`](Auftrag-Notbetriebssender-Ganzzahl.md) | Auftrag an `nodered-flows`: Notbetriebswerte-Sender rundet die Kurvenwerte auf Ganzzahlen, weil die Firmware Dezimalwerte verwirft — erledigt am 2026-10-15 im Projekt `nodered-flows` (V1.1) |
@@ -1448,5 +1450,5 @@ anderen Modellreihen genauso liegen, weiß ich nicht.
 Und der übliche, hier ernst gemeinte Hinweis: Diese Firmware schreibt in eine
 Heizungsanlage. Was sie an die Wärmepumpe schickt, verantwortet der Betreiber.
 Vor dem ersten Einsatz an einer fremden Anlage bitte die Wertebereiche in
-`src/commands.cpp` gegen das eigene Gerät prüfen — sie sind an *dieser* Anlage
+`src/setcommands.h` gegen das eigene Gerät prüfen — sie sind an *dieser* Anlage
 ausgemessen.

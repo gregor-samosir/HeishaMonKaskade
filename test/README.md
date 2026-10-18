@@ -24,7 +24,8 @@ bewusst unveraendert - dort warnt die Firmware nur.
 
 | Datei | Zweck | Braucht Hardware |
 | --- | --- | --- |
-| `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich | nein |
+| `merge_test.cpp` | Merge-Logik auf dem Host durchspielen, inkl. Suchlauf ueber den realen Wertebereich (seit 3.25.1 gegen den echten Code aus `src/setcommands.h`) | nein |
+| `setcommands_test.cpp` | Kommandopfad ohne Nachbildung (C1, 3.25.1): Tabellenregeln samt Gegenprobe je Regel (kaputte Kopie der Tabelle), Stichproben der Kodierung, `setcommand_anwenden()` mit Konflikt und Unfug, leere Vorlage, Notbetriebs-Tabellen gegen `setCommands[]`; `--liste` druckt alle (SET, Wert) -> (Byte, Maske, Rohwert) fuer den Vorher/Nachher-Vergleich (bindet `src/setcommands.h` direkt ein) | nein |
 | `telegramm_test.cpp` | Typ-, Laengen- und Pruefsummenpruefung des Antworttelegramms (bindet `src/telegram.h` direkt ein) | nein |
 | `sendwindow_test.cpp` | Zeitregeln des Kommando-Sammelfensters inkl. `millis()`-Ueberlauf (bindet `src/sendwindow.h` direkt ein) | nein |
 | `karenz_test.cpp` | Karenzfenster nach dem Verbinden: Raender, Ueberlauf im Fenster, die Naht nach 2^31 ms samt Gegenbeispiel der alten Regel (bindet `src/karenz.h` direkt ein) | nein |
@@ -44,7 +45,7 @@ bewusst unveraendert - dort warnt die Firmware nur.
 | `repo_konsistenz_test.py` | Hosttest: README "Aufbau", diese Werkzeugtabelle, `MQTT-Topics.md`, die Pfade in `CLAUDE.md`, alle relativen Links gegen Dateien und Code, und die `**Ergebnis:**`-Zeile in jeder Vorhaben-/Auftrag-/Arbeitsplan-Datei | nein |
 | `zeitvergleich_test.py` | Hosttest: meldet in `src/` jeden vorzeichenbehafteten oder direkten `millis()`-Vergleich ohne die Marke `kurzlebige Frist` (Befund S1, 3.23.1) | nein |
 | `hosttests.sh` | Alle Hosttests in einem Lauf - dieselbe Liste lokal und in der CI, samt Begruendung je Test; ROT auch, wenn eine `*_test.cpp` oder `*_test.py` nicht in der Liste steht (ausser den drei Hardware-Tests). `--schnell` faehrt nur die Python-Pruefungen - das ruft der pre-commit-Hook in `.githooks/` | nein |
-| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp`, `byte23_25_test.cpp` und `byte20_test.cpp` - kopiert `decode.cpp` neben die Ersatzheader aus `stubs/` | nein |
+| `decode_hosttest.sh` | Baurahmen fuer `byte110_test.cpp`, `byte9_test.cpp`, `byte23_25_test.cpp` und `byte20_test.cpp` - kopiert `decode.cpp` und `setcommands.h` neben die Ersatzheader aus `stubs/` | nein |
 | `hexlog_test.py` | Kerntest: Heatpump + WaterPump muessen in einem Telegramm landen | Pruefstand |
 | `verteiler_test.py` | Abnahmetest: alle sechs Kanaele des Node-RED-Verteilers gleichzeitig | Pruefstand |
 | `produktiv_mitschnitt.py` | Passiv am laufenden Geraet mithoeren, sendet nichts | Produktivgeraet |
@@ -842,7 +843,7 @@ Error: Value 10 out of range [15..35] for topic Z1HeatCurveOutsideHighTemp
 
 Die in Umlauf befindlichen Wertebereiche der Kurvenparameter stimmen fuer
 diese Geraete nicht durchgaengig. `kurven_grenzen.py` prueft je Parameter die
-beiden Raender des in `commands.cpp` hinterlegten Bereichs: setzen, warten,
+beiden Raender des in `setcommands.h` hinterlegten Bereichs: setzen, warten,
 ueber das state-Topic zurueckvergleichen, am Ende Ausgangswerte wiederherstellen.
 
 Nur laufen lassen, wenn die Anlage NICHT im Kurvenbetrieb faehrt.
@@ -900,7 +901,7 @@ Belege in `pictures/`: `IMG_4887` (Heizkurve), `IMG_4889` (Kuehlkurve),
 Foto der Kuehlkurve mit auf 15 C gesetztem unteren Punkt:
 `Kuehlen_Kurve.png` (2026-08-25).
 
-Schrittweite laut Terminal ±1 Grad, wie in `commands.cpp` angenommen. Damit
+Schrittweite laut Terminal ±1 Grad, wie in `setcommands.h` angenommen. Damit
 sind besonders die beiden fett markierten Korrekturen aus 3.2.x vom Geraet
 selbst bestaetigt: `Z1HeatCurveOutsideHighTemp` reicht BIS 15, und
 `Z1CoolCurveOutsideHighTemp` beginnt bei 15.
@@ -929,7 +930,7 @@ Bis 3.14.1 wies die Firmware 15 selbst ab, bevor das Kommando zur WP ging:
 Error: Value 15 out of range [20..30] for topic Z1CoolCurveOutsideLowTemp
 ```
 
-Seit 3.14.2 steht 15 als Untergrenze in `commands.cpp`, in `kurven_sync.py`
+Seit 3.14.2 steht 15 als Untergrenze in `setcommands.h` (damals noch `commands.cpp`), in `kurven_sync.py`
 und in `kurven_grenzen.py`. **Gegenprobe ueber den Set-Pfad an WP1 nach dem
 Rollout** (2026-08-25, Firmware 3.14.2, Kuehlkreis auf Direktvorgabe): `SET33 =
 15` gesendet, TOP75 meldet 15 zurueck, im Telnet-Mitschnitt keine Fehlerzeile.
@@ -992,7 +993,7 @@ dicht hintereinander (hier 20 ms Abstand).
 **Die WP nimmt beide Felder an.** TOP76 und TOP81 gingen zusammen auf 0. Die
 Firmware-Seite war ohnehin belegt - `byte28_test.cpp` baut `0x05` aus denselben
 zwei Merge-Aufrufen, und die Masken `0x03` und `0x0C` sind disjunkt, so dass
-die Konfliktwarnung in `commands.cpp` nicht anschlaegt. Offen war allein, was
+die Konfliktwarnung (`commands.cpp`, Regel in `setcommands.h`) nicht anschlaegt. Offen war allein, was
 die WP mit einem doppelten Wechsel macht.
 
 **Fuer das Notbetriebskonzept heisst das:** Umschalten geht in einem Rutsch,

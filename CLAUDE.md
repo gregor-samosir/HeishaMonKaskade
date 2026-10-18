@@ -101,7 +101,8 @@ gegen den Stand davor abgenommen.
   eigentliche Entwicklungsgeschichte.
 - **Prüfbare Regeln kommen in arduino-freie Header** (`notbetrieb.h`,
   `verbindung.h`, `sendwindow.h`, `karenz.h`, `telnetlog.h`, `rtcspiegel.h`,
-  `serielle_strecke.h`, `setpayload.h`, `telegram.h`, `knxtunnel.h`),
+  `serielle_strecke.h`, `setpayload.h`, `setcommands.h`, `telegram.h`,
+  `knxtunnel.h`),
   die Firmware und Hosttest gemeinsam einbinden. Alles mit Zeitbezug muss den
   `millis()`-Überlauf nach 49,7 Tagen aushalten — an der Anlage wäre er nicht
   abzuwarten.

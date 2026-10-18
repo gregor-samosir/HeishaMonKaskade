@@ -203,22 +203,22 @@ struct NotbetriebSchritt
 /* Die Namen sind identisch mit den Set-Kommandos - so gilt fuer den         */
 /* notbetrieb-Zweig dieselbe Bereichspruefung wie fuer set, ohne dass die    */
 /* Grenzen hier ein zweites Mal stehen muessten. Sie stehen ausschliesslich  */
-/* in setCommands[] (commands.cpp); die Firmware schlaegt sie dort nach und  */
+/* in setCommands[] (setcommands.h); die Firmware schlaegt sie dort nach und */
 /* reicht sie an notbetrieb_wert_annehmen() weiter. Zwei Tabellen mit        */
 /* denselben Zahlen waeren zwei Tabellen, die auseinanderlaufen koennen.     */
 /*****************************************************************************/
-static const char *const NOTBETRIEB_WERTE_HEIZEN[] = {
+inline constexpr const char *NOTBETRIEB_WERTE_HEIZEN[] = {
     "Z1HeatCurveTargetHighTemp", // "VL kalt" - Vorlauf bei KAELTE, zu OutsideLow
     "Z1HeatCurveTargetLowTemp",  // "VL warm" - Vorlauf bei WAERME, zu OutsideHigh
     "Z1HeatCurveOutsideLowTemp", // "AT kalt"
     "Z1HeatCurveOutsideHighTemp"}; // "AT warm"
 
-static const char *const NOTBETRIEB_WERTE_WASSER[] = {
+inline constexpr const char *NOTBETRIEB_WERTE_WASSER[] = {
     "DHWTemp"};
 
-static const unsigned NOTBETRIEB_ANZAHL_HEIZEN =
+inline constexpr unsigned NOTBETRIEB_ANZAHL_HEIZEN =
     sizeof(NOTBETRIEB_WERTE_HEIZEN) / sizeof(NOTBETRIEB_WERTE_HEIZEN[0]);
-static const unsigned NOTBETRIEB_ANZAHL_WASSER =
+inline constexpr unsigned NOTBETRIEB_ANZAHL_WASSER =
     sizeof(NOTBETRIEB_WERTE_WASSER) / sizeof(NOTBETRIEB_WERTE_WASSER[0]);
 
 /*****************************************************************************/
@@ -325,7 +325,7 @@ static const unsigned NOTBETRIEB_ANZAHL_WASSER =
 /* Ernstfall zuerst gedrueckt wird, weiss niemand. Faellig ist der Schritt   */
 /* aber nur bei Heizbetrieb - siehe notbetrieb_vorderhaus_faellig().         */
 /*****************************************************************************/
-static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
+inline constexpr NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
     {NB_SCHRITT_SET, "ForceHeater", 68, NOTBETRIEB_FESTER_WERT, 0}, // Heizstab zurueck
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 0}, // Heat only
@@ -355,7 +355,7 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_HEIZEN[] = {
 /* diese Folge auch im Kuehlbetrieb laeuft, entfaellt er dort               */
 /* (notbetrieb_vorderhaus_faellig()).                                        */
 /*****************************************************************************/
-static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
+inline constexpr NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_HYDRAULIK, NOTBETRIEB_HYDRAULIK_NAME, -1, NOTBETRIEB_FESTER_WERT, 0},
     {NB_SCHRITT_SET, "ForceHeater", 68, NOTBETRIEB_FESTER_WERT, 0}, // Heizstab zurueck
     {NB_SCHRITT_SET, "OperationMode", 4, NOTBETRIEB_FESTER_WERT, 3},
@@ -364,9 +364,9 @@ static const NotbetriebSchritt NOTBETRIEB_SCHRITTE_WASSER[] = {
     {NB_SCHRITT_SET, "Heatpump", 0, NOTBETRIEB_FESTER_WERT, 1},    // dann einschalten
     {NB_SCHRITT_VORDERHAUS, NOTBETRIEB_VORDERHAUS_NAME, -1, NOTBETRIEB_FESTER_WERT, 0}}; // zuletzt das Vorderhaus
 
-static const unsigned NOTBETRIEB_SCHRITTE_HEIZEN_N =
+inline constexpr unsigned NOTBETRIEB_SCHRITTE_HEIZEN_N =
     sizeof(NOTBETRIEB_SCHRITTE_HEIZEN) / sizeof(NOTBETRIEB_SCHRITTE_HEIZEN[0]);
-static const unsigned NOTBETRIEB_SCHRITTE_WASSER_N =
+inline constexpr unsigned NOTBETRIEB_SCHRITTE_WASSER_N =
     sizeof(NOTBETRIEB_SCHRITTE_WASSER) / sizeof(NOTBETRIEB_SCHRITTE_WASSER[0]);
 
 /*****************************************************************************/

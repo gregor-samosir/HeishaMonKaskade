@@ -35,7 +35,7 @@ differs from the original project's. Notes are German.*
   deshalb kann ein Kommando ein Bitpaar schreiben, ohne die Nachbarn
   anzufassen.
 * **SET und TOP** sind die Nummern *dieser* Firmware, aus `setCommands[]` in
-  [`src/commands.cpp`](src/commands.cpp) und `stateTopics[]` in
+  [`src/setcommands.h`](src/setcommands.h) und `stateTopics[]` in
   [`src/decode.cpp`](src/decode.cpp). SET9 belegt zwei Bitgruppen und steht in
   beiden Zeilen; Topics über zwei Bytes (TOP1, TOP11, TOP12, TOP44, TOP90,
   TOP91) stehen auf beiden Bytes.

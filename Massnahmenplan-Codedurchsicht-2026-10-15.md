@@ -36,11 +36,11 @@ nachgetragen.
 | S4 | Serielle Strecke ohne Gesundheitsanzeige; Notbetrieb bestätigt gegen eingefrorene Werte | mittel | P4 | **erledigt in 3.25.0** (ausgerollt 2026-10-17, alle vier Boards, Releases angelegt); offen nur die Übergabe des Wächter-Auftrags an `nodered-flows` — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md) |
 | S5 | Build nicht reproduzierbar — Bibliotheken und PlatformIO nicht gepinnt | mittel | P2 | **erledigt in 3.23.2** (ausgerollt 2026-10-16, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Build-Hygiene-3.23.2.md) |
 | S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **erledigt in 3.25.0** zusammen mit S4 (ausgerollt 2026-10-17) — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
-| C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | offen |
+| C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | **umgesetzt in 3.25.1** (Branch `kommandopfad-header`, Nachweis erbracht; Rollout steht aus) — [Arbeitsplan](Arbeitsplan-Kommandopfad-3.25.1.md) |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
 | C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
-| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c (P5) und d, e (P6) offen |
+| C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **umgesetzt in 3.25.1** (Rollout steht aus); d, e (P6) offen |
 | D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
@@ -518,14 +518,23 @@ Firmware-Änderung“: Rettungsanker, Branch, Version und Changelog,
 
 ### P5 — Kommandopfad als Header (ohne Funktionsänderung)
 
-- [ ] Vorher/Nachher-Liste aller (SET, Wert) → (Byte, Maske, Rohwert)
-      erzeugen (z. B. über den Tabellenparser in `set_top_zuordnung.py`).
-- [ ] C1: `src/setcommands.h` mit `constexpr`-Tabelle, Umrechnung,
-      Bereichsprüfung und den Prüfungen zur Übersetzungszeit.
-- [ ] Tests auf den Header umstellen, Nachbildungen entfernen, Testvektoren
-      behalten; Gegenprobe mit falschem Parameter.
-- [ ] C5b, C5c.
-- [ ] Nachweis: Liste identisch, alle Hosttests, `decode_vergleich.py`.
+Eigener Arbeitsplan: [`Arbeitsplan-Kommandopfad-3.25.1.md`](Arbeitsplan-Kommandopfad-3.25.1.md)
+(Owner-Entscheide E1–E3 vom 2026-10-18: Version 3.25.1, eine Vorlage für C5c,
+Zusatztest der Notbetriebs-Tabellen).
+
+- [x] Vorher/Nachher-Liste aller (SET, Wert) → (Byte, Maske, Rohwert)
+      erzeugen (über den Tabellenparser in `set_top_zuordnung.py`) — 2265
+      Zeilen.
+- [x] C1: `src/setcommands.h` mit `constexpr`-Tabelle, Umrechnung,
+      Bereichsprüfung und den Prüfungen zur Übersetzungszeit (`static_assert`).
+- [x] Tests auf den Header umstellen, Nachbildungen entfernen, Testvektoren
+      behalten; Gegenprobe mit falschem Parameter (Build bricht, 6 von 21
+      Hosttests rot).
+- [x] C5b, C5c.
+- [x] Nachweis: Liste identisch (drei Wege, gleiche SHA-256), alle 21
+      Hosttests, `decode_vergleich.py` identisch, `.elf`-Vergleich: RAM −112
+      Byte, Flash +64 Byte.
+- [ ] Merge, Tag `v3.25.1`, Rollout auf Aufruf des Owners, Abnahme am Gerät.
 
 ### P6 — Weboberfläche (Owner-Entscheid nötig)
 

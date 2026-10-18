@@ -2,16 +2,16 @@
 //
 // Byte 9 traegt ZWEI Freigaben (Raumheizung, Warmwasser), Byte 5 traegt
 // ForceHeater neben HolidayMode und dem Zeitprogramm. Beide Bytes sind damit
-// genau der Fall, fuer den die Maskenspalte in commands.cpp existiert - ohne
+// genau der Fall, fuer den die Maskenspalte in setcommands.h existiert - ohne
 // sie legt ein Kommando das Nachbarfeld mit um. Das ist an der Anlage der
 // Schritt M2 des Messplans; hier faellt es schon vor dem Flashen auf.
 //
 // Geprueft wird gegen den ECHTEN Dekodierpfad: src/decode.cpp wird
 // mituebersetzt und ueber getTopicPayload() aufgerufen, die Klartexte kommen
 // aus desc_text() im Header - es gibt keine Nachbildung der Bitzuordnung, die
-// auseinanderlaufen koennte. Nachgebildet ist nur die Merge-Zeile aus
-// commands.cpp (dessen Uebersetzungseinheit zieht die halbe Arduino-Welt
-// nach); sie steht als merge() an genau einer Stelle.
+// auseinanderlaufen koennte. Auch die Merge-Zeile ist der echte Code: Seit
+// 3.25.1 steht sie in setcommands.h (arduino-frei) und wird hier ueber
+// setcommand_anwenden() gerufen; vorher war sie nachgebildet.
 //
 // Sechs Faelle:
 //  1. Die fuenf betroffenen Zeilen stehen mit den erwarteten Bytes in der
@@ -35,6 +35,7 @@
 #include <cstdint>
 
 #include "decode.h"
+#include "setcommands.h" // der echte Kommandopfad (copy ins Bauverzeichnis: decode_hosttest.sh)
 
 // decode.cpp loggt beim Publizieren - hier nicht gebraucht
 void write_telnet_log(char *) {}
@@ -50,12 +51,46 @@ static void pruefe(bool bedingung, const char *was)
     fehler++;
 }
 
-// aus commands.cpp: (value + 1) * param, danach bitgenau eingesetzt
-static byte merge(byte b, byte mask, int value, int param)
+// Der ECHTE Code aus setcommands.h (bis 3.25.0 stand hier eine Nachbildung der
+// Merge-Zeile): einen Wert unter seinem Set-Topic-Namen in ein Byte einsetzen.
+// Frischer Puffer je Aufruf, damit kein Konflikt entsteht - es geht um die
+// Maske, nicht um die Belegung. Eine fehlende Tabellenzeile ist ein Fehler.
+static byte merge(byte b, const char *set_name, int value)
 {
-  byte set_byte = (byte)((value + 1) * param);
-  return (byte)((b & ~mask) | (set_byte & mask));
+  const SetCommand *c = setcommand_finden(set_name);
+  if (!c)
+  {
+    printf("  [FEHLER] %s steht nicht in setCommands[]\n", set_name);
+    fehler++;
+    return b;
+  }
+  byte befehl[QUERYSIZE] = {0};
+  byte belegt[QUERYSIZE] = {0};
+  befehl[c->pos] = b;
+  (void)setcommand_anwenden(*c, value, befehl, belegt);
+  return befehl[c->pos];
 }
+
+// Dasselbe mit ANDERER Maske, fuer die Gegenproben "ohne Maske": Die Zeile
+// wird kopiert und nur die Maske getauscht, angewendet wird wieder der echte Code.
+static byte merge_mit_maske(byte b, const char *set_name, byte maske, int value)
+{
+  const SetCommand *c = setcommand_finden(set_name);
+  if (!c)
+  {
+    printf("  [FEHLER] %s steht nicht in setCommands[]\n", set_name);
+    fehler++;
+    return b;
+  }
+  SetCommand kopie = *c;
+  kopie.mask = maske;
+  byte befehl[QUERYSIZE] = {0};
+  byte belegt[QUERYSIZE] = {0};
+  befehl[kopie.pos] = b;
+  (void)setcommand_anwenden(kopie, value, befehl, belegt);
+  return befehl[kopie.pos];
+}
+
 
 // Tabellenzeile ueber den Topic-Namen finden. Der Index IST nicht die
 // TOP-Nummer, deshalb gesucht statt gerechnet.
@@ -135,8 +170,8 @@ int main()
     for (int dhw = 0; dhw <= 1; dhw++)
     {
       byte b = 0;
-      b = merge(b, 0x03, room, 1); // SET37 RoomHeaterState
-      b = merge(b, 0x0C, dhw, 4);  // SET38 DHWHeaterState
+      b = merge(b, "RoomHeaterState", room); // SET37
+      b = merge(b, "DHWHeaterState", dhw);  // SET38
       snprintf(text, sizeof text, "Room=%d DHW=%d -> 0x%02X, Room gelesen %d (%s)",
                room, dhw, b, wert_der_zeile(z_room, b), text_der_zeile(z_room, b));
       pruefe(wert_der_zeile(z_room, b) == room, text);
@@ -153,17 +188,17 @@ int main()
 
   printf("\n== Fall 3: Byte 9 - Nachbarschutz ==\n");
   // Ausgangslage wie an der Anlage: beide Heizstaebe blockiert (M0 des Messplans)
-  byte b9 = merge(merge(0, 0x03, 0, 1), 0x0C, 0, 4);
+  byte b9 = merge(merge(0, "RoomHeaterState", 0), "DHWHeaterState", 0);
   snprintf(text, sizeof text, "Ausgangslage 'beide blockiert' ist 0x%02X (erwartet 0x05)", b9);
   pruefe(b9 == 0x05, text);
 
-  byte nur_room = merge(b9, 0x03, 1, 1); // set/RoomHeaterState 1 - der Schritt M2
+  byte nur_room = merge(b9, "RoomHeaterState", 1); // set/RoomHeaterState 1 - der Schritt M2
   snprintf(text, sizeof text, "0x05 + RoomHeaterState 1 -> 0x%02X (erwartet 0x06)", nur_room);
   pruefe(nur_room == 0x06, text);
   pruefe(wert_der_zeile(z_room, nur_room) == 1, "  Room_Heater_State wird Free");
   pruefe(wert_der_zeile(z_dhw, nur_room) == 0, "  DHW_Heater_State bleibt Blocked");
 
-  byte nur_dhw = merge(b9, 0x0C, 1, 4); // set/DHWHeaterState 1
+  byte nur_dhw = merge(b9, "DHWHeaterState", 1); // set/DHWHeaterState 1
   snprintf(text, sizeof text, "0x05 + DHWHeaterState 1 -> 0x%02X (erwartet 0x09)", nur_dhw);
   pruefe(nur_dhw == 0x09, text);
   pruefe(wert_der_zeile(z_dhw, nur_dhw) == 1, "  DHW_Heater_State wird Free");
@@ -172,7 +207,7 @@ int main()
   printf("\n== Fall 4: Byte 5 - ForceHeater neben HolidayMode und Zeitprogramm ==\n");
   // Ausgangslage: Urlaubsmodus gesetzt (SET2 HolidayMode 1) und Zeitprogramm
   // aktiv, wie es die Waermepumpe im Antworttelegramm melden kann.
-  byte b5 = merge(0, 0x30, 1, 16); // SET2 HolidayMode 1 -> 0x20
+  byte b5 = merge(0, "HolidayMode", 1); // SET2 -> 0x20
   b5 = (byte)((b5 & ~0xC0) | 0x80); // Zeitprogramm 'Enabled', kein Set-Kommando
   const int holiday_vorher = wert_der_zeile(z_holiday, b5);
   const int schedule_vorher = wert_der_zeile(z_schedule, b5);
@@ -182,7 +217,7 @@ int main()
 
   for (int force = 0; force <= 1; force++)
   {
-    byte b = merge(b5, 0x0C, force, 4); // SET39 ForceHeater
+    byte b = merge(b5, "ForceHeater", force); // SET39
     snprintf(text, sizeof text, "ForceHeater %d -> 0x%02X, gelesen %d (%s)",
              force, b, wert_der_zeile(z_force, b), text_der_zeile(z_force, b));
     pruefe(wert_der_zeile(z_force, b) == force, text);
@@ -192,19 +227,19 @@ int main()
     pruefe(wert_der_zeile(z_schedule, b) == schedule_vorher, "  Main_Schedule_State unveraendert");
   }
   // Gegenrichtung: das aeltere Kommando darf die neue Freigabe nicht umlegen
-  byte mit_force = merge(b5, 0x0C, 1, 4);
-  byte dann_holiday = merge(mit_force, 0x30, 0, 16); // set/HolidayMode 0
+  byte mit_force = merge(b5, "ForceHeater", 1);
+  byte dann_holiday = merge(mit_force, "HolidayMode", 0); // set/HolidayMode 0
   pruefe(wert_der_zeile(z_force, dann_holiday) == 1, "HolidayMode 0 laesst Force_Heater_State Active");
   pruefe(wert_der_zeile(z_holiday, dann_holiday) == 0, "  Holiday_Mode_State wird Off");
 
   printf("\n== Fall 5: Gegenprobe - ohne Maske faellt genau das um ==\n");
-  byte b9_roh = merge(b9, 0xFF, 1, 1); // wie SET37, aber Maske 0xFF
+  byte b9_roh = merge_mit_maske(b9, "RoomHeaterState", 0xFF, 1); // wie SET37, aber Maske 0xFF
   snprintf(text, sizeof text, "0x05 + RoomHeaterState 1 ohne Maske -> 0x%02X (erwartet 0x02)", b9_roh);
   pruefe(b9_roh == 0x02, text);
   pruefe(wert_der_zeile(z_dhw, b9_roh) == -1, "  DHW_Heater_State waere zerstoert (-1)");
   pruefe(strcmp(text_der_zeile(z_dhw, b9_roh), "") == 0, "  und zeigt in der Weboberflaeche leer statt Blocked");
 
-  byte b5_roh = merge(b5, 0xFF, 1, 4); // wie SET39, aber Maske 0xFF
+  byte b5_roh = merge_mit_maske(b5, "ForceHeater", 0xFF, 1); // wie SET39, aber Maske 0xFF
   snprintf(text, sizeof text, "0xA0 + ForceHeater 1 ohne Maske -> 0x%02X (erwartet 0x08)", b5_roh);
   pruefe(b5_roh == 0x08, text);
   pruefe(wert_der_zeile(z_holiday, b5_roh) == -1, "  Holiday_Mode_State waere zerstoert (-1)");
@@ -213,19 +248,23 @@ int main()
   printf("\n== Fall 6: keine Kodierung tritt aus ihrer Maske heraus ==\n");
   // Traefe eine Kodierung Bits ausserhalb ihrer Maske, wuerde die Maske sie
   // still abschneiden - das Kommando kaeme verstuemmelt an der Waermepumpe an.
-  struct { const char *name; byte mask; int param; } kommandos[] = {
-      {"SET37 RoomHeaterState", 0x03, 1},
-      {"SET38 DHWHeaterState",  0x0C, 4},
-      {"SET39 ForceHeater",     0x0C, 4},
-  };
-  for (auto &k : kommandos)
+  const char *kommandos[] = {"RoomHeaterState", "DHWHeaterState", "ForceHeater"}; // SET37-SET39
+  for (const char *name : kommandos)
   {
-    for (int v = 0; v <= 1; v++) // min..max aus setCommands[]
+    // Bereich, Maske und Parameter kommen aus der Tabelle, nicht aus Konstanten im Test
+    const SetCommand *c = setcommand_finden(name);
+    if (!c)
     {
-      byte set_byte = (byte)((v + 1) * k.param);
+      snprintf(text, sizeof text, "%s steht in setCommands[]", name);
+      pruefe(false, text);
+      continue;
+    }
+    for (int v = c->min; v <= c->max; v++)
+    {
+      byte set_byte = setcommand_kodieren(*c, v);
       snprintf(text, sizeof text, "%s Wert %d -> 0x%02X liegt ganz in Maske 0x%02X",
-               k.name, v, set_byte, k.mask);
-      pruefe((set_byte & (byte)~k.mask) == 0, text);
+               name, v, set_byte, c->mask);
+      pruefe((set_byte & (byte)~c->mask) == 0, text);
     }
   }
 

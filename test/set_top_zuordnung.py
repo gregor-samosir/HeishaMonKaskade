@@ -2,7 +2,7 @@
 """Ordnet jedem Set-Kommando das State-Topic zu, das es zurueckliest.
 
 Zweck: die Tabellen in SET-TOP-Zuordnung.md erzeugen, statt sie von Hand zu
-pflegen. Aendert sich eine Zeile in commands.cpp oder decode.cpp, faellt der
+pflegen. Aendert sich eine Zeile in setcommands.h oder decode.cpp, faellt der
 Unterschied hier auf - die Doku laesst sich gegen die Ausgabe diffen.
 
   ./set_top_zuordnung.py                  # alle Tabellen nach stdout
@@ -25,7 +25,7 @@ beschriebene Maske eines Kommandos entsteht aus seinem Wertebereich - fuer
 jeden erlaubten Wert das Protokollbyte bilden, alle gesetzten Bits verodern.
 Nur so werden die Faelle sichtbar, in denen die Tabellenmaske 0xFF lautet, das
 Kommando aber nur eine Bitgruppe belegt (QuietMode und PowerfulMode auf Byte 7
-teilen sich das Byte, siehe Kommentarblock in commands.cpp).
+teilen sich das Byte, siehe Kommentarblock in setcommands.h).
 
 Nur Standardbibliothek, kein Geraeteeingriff - es wird ausschliesslich der
 Quelltext im Repository gelesen.
@@ -49,8 +49,9 @@ DECODER_MASK = {
     "getOpMode": 0x3F,
 }
 
-# Protokollbytes fuer OperationMode 0-6, Spiegel von opModeBytes[] in commands.cpp
-OPMODE_BYTES = [18, 19, 24, 33, 34, 35, 40]
+# Protokollbytes fuer OperationMode 0-6 stehen NICHT mehr hier: opmode_bytes()
+# liest opModeBytes[] aus setcommands.h. Bis 3.25.0 war das eine zweite Kopie,
+# die beim Aendern der Tabelle von Hand nachzuziehen war.
 
 # Laenge des Kommandotelegramms (QUERYSIZE in HeishaMon.h): Indizes 0..109.
 # Ein State-Topic ab Byte 110 kann grundsaetzlich kein Set-Kommando haben,
@@ -83,13 +84,26 @@ def tabelle_lesen(datei, muster, klammer):
     return list(re.finditer(muster, treffer.group(1)))
 
 
+def opmode_bytes():
+    """opModeBytes[] aus setcommands.h - die Umrechnung von OperationMode 0-6."""
+    try:
+        text = (SRC / "setcommands.h").read_text()
+    except OSError as fehler:
+        sys.exit(f"Fehler: setcommands.h nicht lesbar - {fehler}")
+    treffer = re.search(r"opModeBytes\[\]\s*=\s*\{([^}]*)\}", text)
+    if not treffer:
+        sys.exit("Fehler: opModeBytes[] in setcommands.h nicht gefunden - Aufbau geaendert?")
+    return [int(x) for x in re.findall(r"\d+", treffer.group(1))]
+
+
 def set_kommandos():
-    """setCommands[] aus commands.cpp, je Zeile mit effektiv belegter Maske."""
+    """setCommands[] aus setcommands.h, je Zeile mit effektiv belegter Maske."""
+    opmode = opmode_bytes()
     zeilen = tabelle_lesen(
-        "commands.cpp",
+        "setcommands.h",
         r"\{\s*(\d+),\s*(\d+),\s*(0x[0-9A-Fa-f]+),\s*(CONV_\w+),\s*\"(\w+)\","
         r"\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\}",
-        r"static const SetCommand setCommands\[\] = \{(.*?)\n\};",
+        r"inline constexpr SetCommand setCommands\[\] = \{(.*?)\n\};",
     )
     ergebnis = []
     for t in zeilen:
@@ -106,7 +120,7 @@ def set_kommandos():
             elif conv == "CONV_MUL_INC":
                 byte = (wert + 1) * eintrag["param"]
             elif conv == "CONV_OPMODE":
-                byte = OPMODE_BYTES[wert]
+                byte = opmode[wert]
             else:
                 sys.exit(f"Fehler: unbekannte Umrechnung {conv} bei SET{nr}")
             eff |= (byte & 0xFF) & eintrag["mask"]

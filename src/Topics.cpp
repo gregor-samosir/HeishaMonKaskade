@@ -14,7 +14,7 @@ static const std::string s = "/";
 static const std::string infTopicPrefix = mqttPrefix + s + "info";
 
 // Wurzeln der Pfade. Die Topic-Namen dahinter haengen decode.cpp (state) und
-// commands.cpp (set) aus ihren Tabellen an.
+// setcommands.h (set) aus ihren Tabellen an.
 const std::string Topics::STATE = mqttPrefix + s + "state";
 const std::string Topics::SET = mqttPrefix + s + "set";
 const std::string Topics::LOG = infTopicPrefix + s + "log";

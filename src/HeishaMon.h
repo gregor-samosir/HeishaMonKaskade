@@ -10,6 +10,7 @@
 #include "knxtunnel.h"  // KNX-Tunnel und Rueckleseregel A des Vorderhausschritts
 #include "serielle_strecke.h" // Zaehler und Alter der seriellen Strecke zur WP (3.25.0)
 #include "setpayload.h" // Ganzzahlregel der Set-Befehle und Buchfuehrung ueber abgelehnte (3.25.0)
+#include "setcommands.h" // Tabelle der Set-Kommandos, Umrechnung, Maske, leere Vorlage (3.25.1; definiert QUERYSIZE)
 #include "decode.h"     // MAXVALUELEN/NUMBEROFTOPICS fuer actual_data-Parameter
 
 // platform layer: the official HeishaMon ESP32-S3 board. Until 3.15.0 the same
@@ -44,7 +45,7 @@ typedef HTTPUpdateServer HTTPUpdateServerClass;
 #define TIME_ZONE "CET-1CEST,M3.5.0,M10.5.0/3"
 
 #define MAXDATASIZE 256
-#define QUERYSIZE 110
+// QUERYSIZE steht seit 3.25.1 in setcommands.h (die Tabellenpruefung braucht sie)
 
 #define UPDATEALLTIME 300000 // time to resend all to mqtt
 #define MQTT_RETAIN_VALUES 1
@@ -101,7 +102,7 @@ void write_wert_log(char *);
 void write_telnet_log(char *);
 void register_new_command(void);
 
-// Global command buffer plus the bits already claimed in it (see commands.cpp)
+// Global command buffer plus the bits already claimed in it (see setcommands.h)
 extern byte mainCommand[QUERYSIZE];
 extern byte usedMask[QUERYSIZE];
 

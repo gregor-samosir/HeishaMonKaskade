@@ -27,7 +27,9 @@ command -v c++ >/dev/null || { echo "FEHLER: c++ nicht gefunden (Xcode Command L
 # stillschweigend mituebersetzt werden
 rm -rf "$BAU"
 mkdir -p "$BAU"
-cp "$REPO"/src/decode.cpp "$REPO"/src/decode.h "$REPO"/src/Topics.cpp "$REPO"/src/Topics.h "$BAU/"
+# setcommands.h ist arduino-frei und wird von byte9/byte20_test als der echte
+# Kommandopfad eingebunden (seit 3.25.1)
+cp "$REPO"/src/decode.cpp "$REPO"/src/decode.h "$REPO"/src/Topics.cpp "$REPO"/src/Topics.h "$REPO"/src/setcommands.h "$BAU/"
 cp "$REPO"/test/stubs/*.h "$BAU/"
 
 NAME=$(basename "$TEST" .cpp)

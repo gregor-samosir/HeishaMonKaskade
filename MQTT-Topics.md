@@ -633,13 +633,13 @@ beschreiben. Die Regel für reine Lese-Topics bleibt davon unberührt.*
 
 Published to `<prefix>/set/<Topic>`, e.g. `panasonic_heat_pump/set/Heatpump`.
 The payload is a plain integer; values outside the range are rejected and
-logged. Ranges and byte positions below are generated from `commands.cpp` -
+logged. Ranges and byte positions below are generated from `setcommands.h` -
 that table is the single source of truth.
 
 *Deutsch: Gesendet wird an `<prefix>/set/<Topic>`, also z. B.
 `panasonic_heat_pump/set/Heatpump`. Die Nutzlast ist eine einfache ganze Zahl;
 Werte außerhalb des Bereichs werden abgewiesen und protokolliert. Bereiche und
-Byte-Positionen unten sind aus `commands.cpp` nachgezogen – diese Tabelle ist
+Byte-Positionen unten sind aus `setcommands.h` nachgezogen – diese Tabelle ist
 die einzige Quelle der Wahrheit.*
 
 Which state topic reads each command back — and which four commands have no
