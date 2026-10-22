@@ -130,6 +130,23 @@ Eichgrundlage für die Schwellwerte des Wächters:
 `uxTaskGetStackHighWaterMark` liefert **Bytes** — 4 184 von 8 192 ist
 plausibel, Wörter wären mehr als der Stack selbst.
 
+**Erste Zahlen aus dem Dauerbetrieb** (nach dem Rollout, an den produktiven
+Stufen mit angeschlossener Wärmepumpe; hierher aus der README umgezogen, die
+nur noch das Geltende beschreibt):
+
+| Topic | Stufe 1 | Stufe 2 |
+| --- | --- | --- |
+| `heap_min` (Tiefpunkt) | 188 916 | 220 676 |
+| `heap_maxblock` | 172 020 | 176 116 |
+| `stack` (Rest, von 8 192) | 4 184 | 4 036 |
+
+Der Unterschied zwischen den Stufen ist der volle Dekodierpfad; das Testboard
+ohne Wärmepumpe lag rund 25 KB höher. Deshalb eicht sich der Wächter auf der
+ioBroker-Seite pro Gerät selbst, statt feste Grenzen aus einer Labormessung zu
+benutzen. Kosten der Änderung: RAM 57 528 → 61 608 Byte (davon 4 096 der
+Ringpuffer; der Rest hebt sich mit dem Wegfall der Zeitbibliothek auf), Flash
+1 211 105 → 1 213 049 Byte.
+
 Der Bootzähler zählt wie entworfen: Kaltstart → 1, OTA (Software-Reset) → 2
 mit Grund `SW`, `/reboot` → 3, Rollenwechsel → zurück auf 1.
 

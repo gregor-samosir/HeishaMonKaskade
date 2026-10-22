@@ -396,6 +396,37 @@ vor der Naht aus Schritt 1 abgeschlossen sein.**
       DRINGEND-Punkt entfällt).
     - `/abschluss`.
 
+## Anhang: Feldnachweis des Karenzfensters (3.6.1, 2026-08-17)
+
+Aus der README hierher umgezogen; sie beschreibt nur noch die geltende Regel.
+Bis dahin war das Verwerfen nur für den Neustart nachgewiesen, der häufigere
+Fall ist aber der Reconnect ohne Reboot. Ein Update der Synology nahm die
+gesamte ioBroker-Umgebung für einige Minuten vom Netz, das WLAN blieb dabei
+durchgehend stehen. Telnet-Mitschnitt der Wiederverbindung, gekürzt:
+
+```text
+16:59:18  Mqtt reconnect
+16:59:18  Verworfen (Wiedereinspielung nach Connect): .../set/QuietMode
+16:59:18  … 30 weitere Topics in derselben Sekunde …
+16:59:18  Verworfen (Wiedereinspielung nach Connect): .../set/Z1CoolCurveOutsideHighTemp
+16:59:23  32 wiedereingespielte Set-Kommandos nach dem Verbinden verworfen
+```
+
+Alle 32 Topics kamen in **derselben Sekunde** wie das SUBACK; die 5 s Karenz
+haben also reichlich Reserve, die Bilanzzeile fällt auf 16:59:23, genau beim
+Zufallen des Fensters. Gewollt war in diesen Sekunden nichts (reiner
+Broker-Ausfall, die Steuerung hat nicht geschaltet) — es ging kein echtes
+Kommando verloren.
+
+Mitbelegt ist die zweite Anforderung an den Filter: Das Verwerfen passiert
+**vor** `Send_Pana_Mainquery_Timer.stop()` und fasst keinen Timer an. Der
+Abfragezyklus lief im 6-Sekunden-Raster ununterbrochen weiter (…:09, :15, :21,
+:27, :33, :39, :45); ohne diese Reihenfolge hätten 32 Callbacks am Stück den
+Zyklus zerhackt.
+
+Der Anlass der Regel (Neustartversuch 2026-08-13, Quiet-Mode- und
+55-Grad-Fall) steht im Changelog von `src/version.h`, Eintrag 3.6.1.
+
 ## Rückweg
 
 Nach dem Skill `/rollout`, Abschnitt „Rückweg“. **Achtung:** Ein Rückfall auf
