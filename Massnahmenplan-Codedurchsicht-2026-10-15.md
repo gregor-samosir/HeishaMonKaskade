@@ -577,10 +577,10 @@ Entschieden vom Owner am 2026-10-22, nach Vorlage der Optionen:
       Wertebereichs-Tabelle, stand schon in `Vorhaben-HeaterSet.md`,
       `MQTT-Topics.md`, `Ablauf-Notbetrieb.md`, `test/README.md` und `version.h`.
       Nicht übernommen wurde die veraltete Angabe „Hydraulik-Request blockiert
-      `loop()` bis 1,5 s“. Beim Erstflash-Abschnitt stand die README im Widerspruch
-      zu `Ablauf-Backup-Boards.md` (WLAN-Daten der Original-Firmware): Die Aussage ist
-      jetzt als boardabhängig gefasst. Die Statusfloskeln der Aufbau-Tabelle („in
-      Arbeit“, „offen, zu übergeben“) sind wie bei D2 gefasst, dass sie nicht
+      `loop()` bis 1,5 s“. Der README-Abschnitt zum Erstflash eines Boards mit Original-Firmware
+      und die zugehörige Einrichtungsanleitung in `Ablauf-Backup-Boards.md` sind
+      ersatzlos entfernt (Owner 2026-10-22: Der Fall tritt nicht mehr auf). Die
+      Statusfloskeln der Aufbau-Tabelle („in Arbeit“, „offen, zu übergeben“) sind wie bei D2 gefasst, dass sie nicht
       veralten. **Länge:** Das Ziel von rund 400 Zeilen ist knapp verfehlt; die
       Aufbau-Tabelle (rund 60 Zeilen, vom `repo_konsistenz_test` erzwungen) und die
       Besonderheiten sind der Rest.

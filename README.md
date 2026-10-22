@@ -311,7 +311,7 @@ blockiert nicht, und ein WLAN-Watchdog reconnectet nach 30 s und startet nach
 | [`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md) | ESP8266-Pfad aus Code, Build, CI und Doku entfernt — Planung und Entscheidungen; erledigt in 3.16.0 |
 | [`Vorhaben-Notbetrieb-Weboberflaeche.md`](Vorhaben-Notbetrieb-Weboberflaeche.md) | Notbetrieb per Browser — Entwurf, Messungen und die Protokolle der Läufe an der Anlage; erledigt in 3.12.0 |
 | [`Vorhaben-Doku-Konsistenz.md`](Vorhaben-Doku-Konsistenz.md) | Doku, Memory und Code beisammenhalten — Prüfungen, pre-commit-Hook, Memory-Umbau und Abschluss-Skill, erledigt (2026-09-18) |
-| [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Einrichtung, Pflege bei jeder Änderung, Tausch im Ernstfall |
+| [`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md) | Die zwei Ersatzplatinen: Pflege bei jeder Änderung, Tausch im Ernstfall |
 | [`Ablauf-Notbetrieb.md`](Ablauf-Notbetrieb.md) | Was beim Druck auf den Knopf und bei der Rückkehr der Steuerung Schritt für Schritt passiert, mit Zeiten |
 | [`Anlauf-H1-2026-09-19.md`](Anlauf-H1-2026-09-19.md) | Ein vollständiger Kaltstart der Stufe 1, mit `top_watch.py` mitgeschnitten: Frequenz, therm. Leistung, Vor- und Rücklauf auf dem Zeitstrahl |
 | [`Vorhaben-Hydraulik-Notbetrieb.md`](Vorhaben-Hydraulik-Notbetrieb.md) | Warum der Notbetrieb die Hydraulik selbst auf 1-stufig stellt — Entwurf und Entscheidungen; erledigt in 3.15.0 |
@@ -368,7 +368,7 @@ aufbauend die Envs. Die Werte sind die dieser Anlage und dienen als Beispiel:
 | Env | Zweck |
 | --- | --- |
 | `heishamon_esp32_h1_ota`, `heishamon_esp32_h2_ota` | Produktiv: Stufe 1 an WP1, Stufe 2 an WP2, Update per OTA |
-| `heishamon_esp32_h1_usb`, `heishamon_esp32_h2_usb` | Erstflash per USB (s. u.) |
+| `heishamon_esp32_h1_usb`, `heishamon_esp32_h2_usb` | Flash per USB |
 | `heishamon_esp32_usb` / `_ota` | Prüfstand mit eigenem MQTT-Präfix (`panasonic_heat_pump32`) |
 
 ```bash
@@ -419,24 +419,6 @@ Beobachtungsweg: Logausgabe, die Umschalter `L` (MQTT-Log), `D` (Debug), `H`
 (trennen). `R` antwortet nur mit dem Verweis auf `http://<ip>/reboot` hinter dem
 Web-Login: Ein Neustart trennt die Wärmepumpe für die Dauer des Boots von der
 Steuerung, das soll niemand ohne Anmeldung auslösen können.
-
-### Erstflash eines ESP32-Boards, das noch die Original-Firmware trägt
-
-Der erste Flash muss **über USB** laufen: Die Original-Firmware bringt eine
-andere Partitionstabelle mit, die sich per OTA nicht tauschen lässt. Der
-erprobte Ablauf — erst Testfirmware mit eigenem Präfix, MQTT stilllegen, dann
-die Stufen-Firmware per OTA — steht in
-[`Ablauf-Backup-Boards.md`](Ablauf-Backup-Boards.md), Abschnitt „Einrichtung
-eines neuen Backup-Boards“. Zwei Punkte daraus:
-
-* **Ob die WLAN-Daten der Original-Firmware übernommen werden, hängt vom Board
-  ab:** Die beiden Backup-Boards übernahmen deren `config.json` und gingen ohne
-  Portal ins Netz, ein früher Erstflash an Stufe 2 landete im Setup-Hotspot
-  `HeishaMon-Setup` (WPA2, `http://192.168.4.1`). Beim Erstflash deshalb die
-  serielle Konsole mitlesen.
-* **Der Hostname aus der `config.json` gewinnt gegen das Build-Flag**
-  `HEISHA_HOSTNAME`, das nur der Default ohne Konfiguration ist. Er ist zugleich
-  die MQTT-Client-ID; zwei Geräte dürfen sie nicht teilen.
 
 ## MQTT-Schnittstelle
 

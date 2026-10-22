@@ -3,11 +3,10 @@
 Zwei ESP32-S3-Boards liegen als fertige Ersatzplatinen bereit, eines je Stufe.
 Sie tragen die produktive Firmware ihrer Stufe und sind bis auf zwei Felder in
 der `config.json` mit dem laufenden Board identisch. Dieses Dokument hält fest,
-wie sie eingerichtet werden, was bei jeder Firmware-Änderung mit ihnen passiert
-und was im Ernstfall zu tun ist.
+was bei jeder Firmware-Änderung mit ihnen passiert und was im Ernstfall zu tun
+ist.
 
-**Stand:** 2026-08-24, fortgeschrieben am 2026-08-27 nach der
-Erstinbetriebnahme. Ersetzt die bisherige Rückfallebene aus ESP8266-Boards und
+**Stand:** 2026-08-24, zuletzt fortgeschrieben am 2026-08-27. Ersetzt die bisherige Rückfallebene aus ESP8266-Boards und
 einem Vollarchiv aller `firmware.bin` — beides wird nicht mehr gepflegt. Der
 ESP8266-Pfad ist mit **3.16.0** aus dem Repo entfernt
 ([`Vorhaben-Nur-ESP32-Pfad.md`](Vorhaben-Nur-ESP32-Pfad.md)).
@@ -55,96 +54,15 @@ Board — es darf den Broker deshalb nie erreichen, solange es Backup ist.
 Das LWT-Topic hängt am Prefix, nicht am Hostnamen. Der abweichende Hostname darf
 deshalb auch im Ernstfall stehen bleiben; ioBroker merkt davon nichts.
 
-## Einrichtung eines neuen Backup-Boards
+## Kennwerte der Boards
 
-> **Korrigiert am 2026-08-27 an den zwei echten Boards.** Hier stand bis dahin,
-> der USB-Erstflash lasse ein leeres LittleFS zurück und das Board komme im
-> Setup-Hotspot hoch, die WLAN-Daten der Original-Firmware würden **nicht**
-> übernommen. **Das stimmt nicht.** Beide Boards übernahmen die `config.json`
-> der Original-Firmware samt WLAN-Zugang, gingen ohne Portal direkt ins Netz
-> und waren sofort per HTTP erreichbar. Der Ablauf unten ist der nachgemessene.
-
-Der Erstflash über USB ist zwingend: Die Original-Firmware bringt eine andere
-Partitionstabelle mit, die per OTA nicht getauscht werden kann. Das LittleFS
-liegt bei beiden an derselben Stelle und überlebt den Flash — deshalb greift
-`resetSettings()` in [`src/webfunctions.cpp`](src/webfunctions.cpp) nicht, und
-deshalb ist der erste Flash **nicht** der der Stufe:
-
-**Erster Flash ist die Test-Firmware.** Sie trägt das Prefix
-`panasonic_heat_pump32`; das Board kann damit nichts anrichten, egal was in der
-übernommenen `config.json` steht. Die Stufen-Firmware kommt erst, wenn Port und
-Hostname nachweislich stehen.
-
-1. **Test-Firmware über USB:**
-   `pio run -e heishamon_esp32_usb -t upload --upload-port /dev/cu.usbmodemXXXXX`
-2. **Serielle Konsole mitlesen** (115200 Baud). Das Board gibt die geladene
-   `config.json` und seine IP aus. Nur wenn die Datei unbrauchbar ist, ruft die
-   Firmware `resetSettings()` und öffnet den Setup-Hotspot `HeishaMon-Setup`
-   (Portal `192.168.4.1`, Timeout 180 s, WPA2-Passwort aus der
-   Notfallunterlage) — dann sind WLAN und die Felder aus Schritt 3 dort
-   einzutragen.
-3. **Einstellungen per HTTP setzen, in zwei Schritten.** Die Reihenfolge ist
-   kein Formalismus: Nach Schritt 3a ist der Port tot, erst 3b trägt den Broker
-   ein. So gibt es keinen Moment, in dem eine Broker-Adresse steht und der Port
-   noch auf dem Default 1883 hängt.
-
-   ```bash
-   # 3a - Sperre und Identität (Werte für Stufe 2: HeishaMon32_h2b)
-   curl -u admin:<ota-pw> "http://<IP>/settings?mqtt_port=1884&wifi_hostname=HeishaMon32_h1b&hydraulik_switch=<Tasmota-IP>&knx_schnittstelle=<KNX-IP>"
-   # 3b - erst jetzt der Broker
-   curl -u admin:<ota-pw> "http://<IP>/settings?mqtt_server=<Broker-IP>"
-   ```
-
-   `/settings` schreibt die `config.json` bei jedem Aufruf vollständig neu und
-   übernimmt dabei nur die acht bekannten Felder — die Reste der
-   Original-Firmware (`ntp_servers`, `use_1wire`, `s0_*` …) verschwinden von
-   selbst. Nicht übergebene Felder behalten ihren Wert. `new_ota_password`
-   deshalb **nicht** mitschicken, sonst verlangt der Handler das aktuelle
-   Passwort zur Gegenprobe. Jeder Aufruf startet das Gerät neu.
-4. **Nachweis, dass die Sperre wirkt** — in der seriellen Konsole:
-   `NetworkClient.cpp:278] connect(): socket error … "Connection reset by peer"`
-   im 10-Sekunden-Takt. Vor Schritt 3b steht dort `DNS Failed for ''`, danach
-   das Connection-refused. Beides heißt: kein Publish, kein Subscribe.
-5. **Stufen-Firmware per OTA**, nicht über USB:
-   `pio run -e heishamon_esp32_h1_ota -t upload --upload-port <IP>` (bzw. `_h2_ota`).
-   OTA fasst das LittleFS garantiert nicht an, und der Weg ist derselbe, den
-   das Nachziehen später braucht — er ist damit gleich mitgeprüft.
-6. **Gegenprobe über HTTP**, bevor das Board weggelegt wird:
-   `/settings` muss Port **1884**, den Hostnamen `…_h1b`/`…_h2b` und — seit
-   3.22.0 an **beiden** Boards Pflicht — die KNX-Schnittstelle zeigen, die
-   Startseite die richtige Stufe (`Heisha Stufe 1`/`2`) und die Version.
-7. **DHCP-Reservierung** im Router auf die MAC setzen.
-8. **Etikett mit IP und Einbauposition auf das Board.** Blatt 3 (unten) wählt das
-   richtige Ersatz-Board über genau diese IP aus — ein Board ohne Etikett ist im
-   Ernstfall nicht zuzuordnen. IP und Notbetriebspasswort außerdem auf das
-   ausgedruckte Notfallblatt der Familie. Das **`admin`-Passwort (OTA)** gehört in
-   den Umschlag „Passwörter" der Notfallbox: Blatt 3 stellt damit den MQTT-Port um,
-   und `/settings` nimmt das Notbetriebspasswort nicht an. Erst damit ist das Board
-   fertig.
-9. Stromlos in die **Notfallbox**, zu den ausgedruckten Blättern (Stand
-   2026-09-09; Blatt 3 schickt die Familie genau dorthin). Der Funktionsnachweis
-   kommt bei jeder Änderung ohnehin von selbst (Schritt 5 unten).
-
-### Warum der Umweg über die Test-Firmware
-
-Ohne ihn wäre der erste Flash die Stufen-Firmware — und das Board käme mit
-**produktivem Prefix** im WLAN hoch, konfiguriert nach einer `config.json`, die
-niemand gesehen hat. Ob es dann den Broker erreicht, entscheidet allein, was die
-Original-Firmware dort hinterlassen hat. Am 2026-08-27 war `mqtt_server` bei
-beiden Boards leer, der Port stand auf dem Default 1883. Das ging gut — aber es
-ging gut aus Zufall, nicht aus Konstruktion. Ein Board mit eingetragenem Broker
-hätte sofort auf den produktiven Topics gesessen, ohne an einer Wärmepumpe zu
-hängen.
-
-### Protokoll der Erstinbetriebnahme (2026-08-27)
-
-Board | USB-Port | MAC | IP | Ergebnis
+Board | USB-Port | MAC | IP | Einstellung
 :--- | :--- | :--- | :--- | :---
-`HeishaMon32_h1b` | `usbmodem11301` | `e8:f6:0a:80:1d:48` | 192.168.2.194 | 3.16.0, Heisha Stufe 1, Port 1884
-`HeishaMon32_h2b` | `usbmodem11401` | `1c:db:d4:bc:61:c8` | 192.168.2.166 | 3.16.0, Heisha Stufe 2, Port 1884
+`HeishaMon32_h1b` | `usbmodem11301` | `e8:f6:0a:80:1d:48` | 192.168.2.194 | Heisha Stufe 1, Port 1884
+`HeishaMon32_h2b` | `usbmodem11401` | `1c:db:d4:bc:61:c8` | 192.168.2.166 | Heisha Stufe 2, Port 1884
 
-Seither bei jeder Version nachgezogen, zum ersten Mal mit **3.17.0**
-(2026-08-28), immer per OTA über die reservierte IP, ohne die Boards zu öffnen.
+Bei jeder Version nachgezogen, immer per OTA über die reservierte IP, ohne die
+Boards zu öffnen.
 Die Prüfung nach dem Nachziehen ist immer dieselbe: Version, Hostname,
 `mqtt_port = 1884`, seit 3.22.0 dazu die KNX-Schnittstelle.
 Ein Board ohne Broker meldet auf `/notbetrieb/status` erwartungsgemäß fehlende
@@ -153,8 +71,7 @@ Werte und Sperre 1 — das ist der stillgelegte Zustand, kein Befund.
 Beide gemeinsame Werte: Broker `192.168.2.147`, Hydraulik-Switch
 `192.168.2.180`, KNX-Schnittstelle `192.168.2.127` (seit 3.22.0 an beiden
 Stufen Pflicht, weil der Vorderhausschritt in beiden Folgen steht), MQTT-Benutzer und -Passwort leer — abgelesen an den laufenden
-Boards `.120` und `.122`, die während der ganzen Inbetriebnahme unberührt
-weiterliefen (gegengeprüft über `/tablerefresh` an Stufe 1).
+Boards `.120` und `.122`.
 
 ## Bei jeder Firmware-Änderung
 
