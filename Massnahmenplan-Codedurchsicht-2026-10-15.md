@@ -38,13 +38,13 @@ nachgetragen.
 | S6 | Abgelehnte Set-Befehle (Nicht-Ganzzahl, außerhalb der Grenzen) sind nirgends dauerhaft sichtbar | mittel | P4 | **erledigt in 3.25.0** zusammen mit S4 (ausgerollt 2026-10-17) — [Arbeitsplan](Arbeitsplan-Serielle-Strecke-3.25.0.md); aufgenommen auf Wunsch des Owners 2026-10-15 |
 | C1 | Kommandopfad nicht im Header-Muster; Tests prüfen Nachbildungen statt des echten Codes | hoch | P5 | **erledigt in 3.25.1** (ausgerollt 2026-10-18, alle vier Boards, Releases angelegt) — [Arbeitsplan](Arbeitsplan-Kommandopfad-3.25.1.md) |
 | C2 | Compiler-Warnungen abgeschaltet | mittel | P2 | **erledigt in 3.23.2**, mit `-Werror` und Klassenliste |
-| C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft und Rest offen (P7) |
+| C3 | Kommentare erzählen Geschichte und veralten | mittel | laufend, P7 | die Beispiele aus dem Befund **erledigt in 3.23.2**; Regel für die Zukunft **in `CLAUDE.md` aufgenommen** (2026-10-22); der Rest läuft mit — Dateien werden bereinigt, wenn sie ohnehin angefasst werden |
 | C4 | Formatierung uneinheitlich | niedrig | P7 | offen |
 | C5 | Kleinpunkte a–f | niedrig | P2, P5, P6 | a und f **erledigt in 3.23.2**; b, c **erledigt in 3.25.1**; d **bewusst nicht geändert** (Owner 2026-10-18, siehe P6); e (P6) **vorgemerkt** für den nächsten Firmware-Durchlauf |
 | D1 | README-Einstieg falsch (Zahlen, LWT- und Log-Pfad) | hoch für Dritte | P1 | **erledigt** 2026-10-16 (README, `MQTT-Topics.md`, `repo_konsistenz_test` Prüfung 3b) |
 | D2 | Veraltete Stände in Kopfzeilen | niedrig | P1 | **erledigt** 2026-10-16 |
 | D3 | Widerspruch zum Re-Assert, auf dem eine Sicherheitsbegründung ruht | mittel | P1 | **erledigt** 2026-10-16 — kein Widerspruch (mehr), siehe D3 unten; Kommentare in `src/` stimmen |
-| D4 | Umfang und Struktur der Doku arbeiten gegen das Ziel Wartbarkeit | mittel | P7 | offen |
+| D4 | Umfang und Struktur der Doku arbeiten gegen das Ziel Wartbarkeit | mittel | P7 | **README gekürzt** (2026-10-22, 1464 → rund 560 Zeilen, ohne Versionsabschnitte); Ordnerumbau `doku/…` und `Betrieb.md`-Einseiter **zurückgestellt** |
 | N1 | Beifang aus der Abnahme von 3.23.1: Der Notbetriebswerte-Sender schickte Dezimalwerte (33.5, 25.5), die die Firmware komplett verwirft | mittel | `nodered-flows` V1.1 | **erledigt** 2026-10-15 — [Auftrag](Auftrag-Notbetriebssender-Ganzzahl.md) |
 
 ## Reihenfolge der Pakete (Empfehlung)
@@ -58,7 +58,7 @@ nachgetragen.
 | 5 | **P4** Serielle Strecke (3.25.0) | S4 | Ausbau | Owner-Wortlaut für die Notfallseite, Auftrag an `nodered-flows` |
 | 6 | **P5** Kommandopfad als Header | C1, C5b, C5c | ohne Funktionsänderung | Vorher/Nachher-Liste aller Kodierungen |
 | 7 | **P6** Weboberfläche | C5d, C5e | Härtung | d entschieden: bleibt GET (2026-10-18); e wartet auf den nächsten Firmware-Durchlauf |
-| 8 | **P7** Struktur | D4, C3, C4 | Umbau Doku/Format | Owner-Entscheid über Umfang |
+| 8 | **P7** Struktur | D4, C3, C4 | Umbau Doku/Format | D4 (README) und C3 am 2026-10-22 erledigt; C4 offen für einen späteren Firmware-Durchlauf |
 
 Warum diese Reihenfolge: Risiko zuerst. P1 ist billig und beseitigt falsche
 Angaben, nach denen jemand handeln könnte. P2 vor P3, damit beim Umbau von
@@ -557,12 +557,40 @@ Zusatztest der Notbetriebs-Tabellen).
       nächsten Firmware-Paket mitgenommen, das ohnehin ausgerollt wird;
       einen eigenen Rollout dafür gibt es nicht.
 
-### P7 — Struktur (Owner-Entscheid nötig)
+### P7 — Struktur (README und Kommentarregel erledigt 2026-10-22)
 
-- [ ] D4: Umfang entscheiden (nur Betriebsseite, oder auch README kürzen und
-      Ordner); ausgedruckte Blätter auf Pfadangaben prüfen.
-- [ ] C4: `.clang-format` und Hook; einmal alles oder nur Neues.
-- [ ] C3: Kommentarregel in `CLAUDE.md` aufnehmen.
+Entschieden vom Owner am 2026-10-22, nach Vorlage der Optionen:
+(1) Der Text der README-Versionsabschnitte wird gegen das übrige Repo abgeglichen,
+**Exklusives umgehängt, der Rest gestrichen** — keine Archivdatei, kein
+`doku/geschichte.md`; der alte Stand bleibt im Tag `rettungsanker-2026-10-22`.
+(2) Umfang der README: Ziel rund 400 Zeilen.
+(3) Geltungsbereich: README und C3-Regel; Ordnerumbau, `Betrieb.md` und C4 bleiben offen.
+
+- [x] D4, README: von 1464 auf 564 Zeilen. Die Versionsabschnitte (Zeilen
+      219–1080) sind durch „Besonderheiten im Ist-Zustand“ ersetzt: geltende Regel,
+      Grund, Verweis. **Abgleich:** Von der Planannahme „README-exklusiv“ waren nur
+      drei Dinge wirklich exklusiv — die Dauerbetriebswerte Heap/Stack (jetzt in
+      `Arbeitsplan-Robustheit-3.20.0.md`), der Feldnachweis des Karenzfensters vom
+      2026-08-17 (Anhang in `Arbeitsplan-Karenzfenster-3.23.1.md`) und der
+      Wartungshinweis zum Karenzfenster (bleibt in der README, einziger Ort, an dem
+      ein Betreiber ihn sucht). Alles andere, auch die Heizstab-Messtafeln und die
+      Wertebereichs-Tabelle, stand schon in `Vorhaben-HeaterSet.md`,
+      `MQTT-Topics.md`, `Ablauf-Notbetrieb.md`, `test/README.md` und `version.h`.
+      Nicht übernommen wurde die veraltete Angabe „Hydraulik-Request blockiert
+      `loop()` bis 1,5 s“. Beim Erstflash-Abschnitt stand die README im Widerspruch
+      zu `Ablauf-Backup-Boards.md` (WLAN-Daten der Original-Firmware): Die Aussage ist
+      jetzt als boardabhängig gefasst. Die Statusfloskeln der Aufbau-Tabelle („in
+      Arbeit“, „offen, zu übergeben“) sind wie bei D2 gefasst, dass sie nicht
+      veralten. **Länge:** Das Ziel von rund 400 Zeilen ist knapp verfehlt; die
+      Aufbau-Tabelle (rund 60 Zeilen, vom `repo_konsistenz_test` erzwungen) und die
+      Besonderheiten sind der Rest.
+- [x] C3: Kommentarregel in `CLAUDE.md` aufgenommen („Konventionen beim Ändern“).
+- [ ] D4, Rest: Ordnerumbau (`doku/vorhaben/`, `doku/betrieb/`) und neue
+      `Betrieb.md` als Einseiter für die Familie; ausgedruckte Blätter auf
+      Pfadangaben prüfen. **Zurückgestellt** (Owner 2026-10-22).
+- [ ] C4: `.clang-format` und Hook; einmal alles oder nur Neues. Ändert Quelltext
+      und braucht den vollen Firmware-Durchlauf (Rettungsanker, Branch, Version,
+      Rollout) — mit dem nächsten Firmware-Paket (siehe auch C5e) entscheiden.
 
 ---
 

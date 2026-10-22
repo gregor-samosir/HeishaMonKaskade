@@ -33,8 +33,11 @@ aufgeschlagen hat.
 
 ## Wo was steht
 
-`README.md` ist lang; steuere es über seine `##`-Überschriften an, besonders
-**„Aufbau"** — dort steht die vollständige Tabelle Datei → Inhalt.
+`README.md` beschreibt den **Ist-Zustand** (Zweck, Besonderheiten, Aufbau,
+Bauen, MQTT-Schnittstelle), nicht die Entstehung; steuere sie über ihre
+`##`-Überschriften an, besonders **„Aufbau"** — dort steht die vollständige
+Tabelle Datei → Inhalt. Wie etwas entstanden ist, steht in `src/version.h` und
+den Fachdateien der Tabelle unten.
 
 | Frage | Datei |
 | --- | --- |
@@ -106,6 +109,12 @@ gegen den Stand davor abgenommen.
   die Firmware und Hosttest gemeinsam einbinden. Alles mit Zeitbezug muss den
   `millis()`-Überlauf nach 49,7 Tagen aushalten — an der Anlage wäre er nicht
   abzuwarten.
+- **Kommentare und README nennen die geltende Regel**, ihren Grund in wenigen
+  Zeilen und einen Verweis (Version oder Entscheid). Datierte Entstehungsgeschichte,
+  Messungen und verworfene Entwürfe gehören in `src/version.h` bzw. die
+  Vorhaben-Dateien — dieselbe Begründung an vielen Stellen veraltet an jeder
+  einzeln. Kein Gesamtumbau: Dateien werden bereinigt, wenn sie ohnehin
+  angefasst werden. Keine Zahlen, Versionen oder Topics, die der Code trägt.
 - **Inline-Kommentare je Abschnitt**, und zwar zum Warum. Race Conditions und
   Timing-Fragen werden ausgeschrieben, nicht stillschweigend gelöst.
 - **Bounds-Checking bei jeder Rechnung**; Werte, die nicht negativ werden
