@@ -106,8 +106,9 @@ um weitere 24,86 Tage, behebt aber nichts.
    (Variable), 750–752 (Reconnect), 803–820 (Prüfung im Callback), 1367–1388
    (zweite Armierung am Ende von `setup()`), 1481–1495 (Bilanz). Dazu
    `SUBSCRIBE_GRACE` in [`src/HeishaMon.h`](src/HeishaMon.h), Zeilen 66–72.
-4. [`README.md`](README.md), „Der Broker spielt beim Verbinden alles wieder
-   ein (3.6.1)“, und [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md),
+4. [`README.md`](README.md), „Besonderheiten im Ist-Zustand“, Absatz Karenzfenster
+   (bei Anlage dieses Plans noch der Abschnitt „Der Broker spielt beim Verbinden
+   alles wieder ein (3.6.1)“, Wortlaut im Tag `rettungsanker-2026-10-22`), und [`Arbeitsplan-Robustheit-3.20.0.md`](Arbeitsplan-Robustheit-3.20.0.md),
    M1 — warum das Fenster am Ende von `setup()` **ein zweites Mal** geöffnet
    wird. Das muss erhalten bleiben.
 5. [`src/sendwindow.h`](src/sendwindow.h) und

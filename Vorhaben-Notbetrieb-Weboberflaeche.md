@@ -835,7 +835,8 @@ unkritisch, aber hier nicht getrennt gemessen.
 dieses Repos, die unten ausdrücklich als offen markiert sind.
 
 * ✔ [`README.md`](README.md) — eigener Abschnitt „Der Notbetrieb ist ein Knopf
-  im Browser (3.12.0)", dazu `notbetrieb.h`/`notbetrieb.cpp` in der Dateitabelle.
+  im Browser (3.12.0)" (seit 2026-10-22 in „Besonderheiten im Ist-Zustand“
+  aufgegangen), dazu `notbetrieb.h`/`notbetrieb.cpp` in der Dateitabelle.
 * ✔ [`src/version.h`](src/version.h) — Changelog zu 3.12.0 mit Problem, Regeln,
   Freigabebedingung, eigenem Zugang und den vier Läufen an der Anlage.
 * ✔ [`MQTT-Topics.md`](MQTT-Topics.md) — der neue Zweig `<prefix>/notbetrieb/`,

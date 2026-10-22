@@ -61,8 +61,10 @@ sichtbare Wirkungsnachweis.
 5. [`test/README.md`](test/README.md), „Heizstab schalten (Byte 9 und Byte 5,
    2026-08-28, WP1)“ — der jüngste gleichartige Anlagentest, nach dessen Muster
    der Funktionstest hier läuft.
-6. [`README.md`](README.md), „Der Broker spielt beim Verbinden alles wieder ein
-   (3.6.1)“ — daraus folgt die Bedienregel E2.
+6. [`README.md`](README.md), „Besonderheiten im Ist-Zustand“, Absatz Karenzfenster
+   (bei Anlage dieses Plans der Abschnitt „Der Broker spielt beim Verbinden alles
+   wieder ein (3.6.1)“, Wortlaut im Tag `rettungsanker-2026-10-22`) — daraus folgt
+   die Bedienregel E2.
 7. Die Skills `/pruefen-vor-merge` und `/rollout` (`.claude/skills/`) — dieser
    Plan ergänzt sie nur um den Funktionstest und das Aufräumen von TOP66.
 

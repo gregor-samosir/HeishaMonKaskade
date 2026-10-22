@@ -250,8 +250,8 @@ am Inhalt festmachen (Sequenznummer oder Zeitstempel im Payload) statt an der
 Zeit; das ist ein Protokollumbau auf beiden Seiten für ein Problem, das einmal
 aufgetreten und über die Bilanzmeldung sichtbar ist.
 
-**Beobachtungsauftrag — steht jetzt in der README** („Der Broker spielt beim
-Verbinden alles wieder ein", als Wartungshinweis): Nach jedem ioBroker-Update
+**Beobachtungsauftrag — steht jetzt in der README** (Abschnitt „Besonderheiten
+im Ist-Zustand", Absatz Karenzfenster, als Wartungshinweis): Nach jedem ioBroker-Update
 einen Reconnect über Telnet mitschneiden und prüfen, ob die Bilanzzeile **vor**
 den ersten echten Kommandos kommt und die verworfenen Topics noch alle in
 derselben Sekunde wie das SUBACK eintreffen. Er steht dort statt nur hier,
